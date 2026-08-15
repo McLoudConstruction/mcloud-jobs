@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
+import { useSettings } from '../../lib/useSettings';
 
 const STAGES = ['all', 'proposal', 'contract', 'active', 'invoice', 'complete'];
 const STAGE_LABELS = {
@@ -17,6 +18,7 @@ const STAGE_LABELS = {
 
 export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
+  const { settings } = useSettings();
   const router = useRouter();
   const [jobs, setJobs] = useState([]);
   const [stage, setStage] = useState('all');
@@ -68,8 +70,11 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="topbar">
-        <div className="brand">McLoud <span>Jobs</span></div>
+        {settings.logo_url
+          ? <img src={settings.logo_url} alt="Logo" style={{ height: 32, width: 'auto' }} />
+          : <div className="brand">McLoud <span>Jobs</span></div>}
         <div className="topbar-actions">
+          <Link href="/settings" className="btn btn-sm">Settings</Link>
           <button className="btn btn-sm" onClick={handleSignOut}>Sign out</button>
         </div>
       </div>
