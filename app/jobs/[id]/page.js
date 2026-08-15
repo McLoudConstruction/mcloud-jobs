@@ -4,6 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
+import AppShell from '../../../components/AppShell';
+import { STANDARD_ASSUMPTIONS } from '../../../lib/constants';
 
 const STAGE_ORDER = ['proposal', 'contract', 'active', 'invoice', 'complete'];
 const STAGE_LABELS = { proposal: 'Proposal', contract: 'Contract', active: 'Active', invoice: 'Invoice', complete: 'Complete' };
@@ -76,20 +78,15 @@ export default function JobDetailPage() {
   async function deleteJob() {
     if (!confirm('Permanently delete this job? This cannot be undone.')) return;
     await supabase.from('jobs').delete().eq('id', id);
-    router.push('/dashboard');
+    router.push('/jobs');
   }
 
   if (loading || !session) return null;
-  if (notFound) return <div className="container">Job not found. <Link href="/dashboard">Back to dashboard</Link></div>;
+  if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Job Tracker</Link></div>;
   if (!job) return null;
 
   return (
-    <div>
-      <div className="topbar">
-        <div className="brand">McLoud <span>Jobs</span></div>
-        <Link href="/dashboard" className="btn btn-sm">← Dashboard</Link>
-      </div>
-
+    <AppShell>
       <div className="container">
         <div className="top-actions">
           <div>
@@ -98,8 +95,8 @@ export default function JobDetailPage() {
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
           <div className="section-actions">
-            <Link href={`/jobs/${id}/proposal`} className="btn">📄 View / Print Proposal</Link>
-            <Link href={`/jobs/${id}/contract`} className="btn">✍️ View / Print / Sign Contract</Link>
+            <Link href={`/jobs/${id}/proposal`} className="btn">View / Print Proposal</Link>
+            <Link href={`/jobs/${id}/contract`} className="btn">View / Print / Sign Contract</Link>
             {job.stage !== 'complete' && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
@@ -122,7 +119,7 @@ export default function JobDetailPage() {
           <InvoiceCard job={job} onSave={saveJob} />
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
 
@@ -137,9 +134,21 @@ function JobInfoCard({ job, onSave }) {
     project_address: job.project_address || '',
     description: job.description || '',
     governing_state: job.governing_state || 'Missouri',
+    job_type: job.job_type || '',
+    expected_close_date: job.expected_close_date || '',
   });
+  const [sameAsBilling, setSameAsBilling] = useState(
+    Boolean(job.billing_address) && job.billing_address === job.project_address
+  );
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  function updateBilling(value) {
+    setForm(prev => ({ ...prev, billing_address: value, project_address: sameAsBilling ? value : prev.project_address }));
+  }
+  function toggleSameAsBilling(checked) {
+    setSameAsBilling(checked);
+    if (checked) setForm(prev => ({ ...prev, project_address: prev.billing_address }));
+  }
 
   return (
     <div className="card">
@@ -149,11 +158,17 @@ function JobInfoCard({ job, onSave }) {
         <div><label>Contact person</label><input value={form.customer_contact} onChange={e => update('customer_contact', e.target.value)} /></div>
         <div><label>Email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
         <div><label>Phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} /></div>
+        <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
+        <div><label>Expected close date</label><input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} /></div>
       </div>
       <label>Billing address</label>
-      <input value={form.billing_address} onChange={e => update('billing_address', e.target.value)} />
+      <input value={form.billing_address} onChange={e => updateBilling(e.target.value)} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+        <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
+        Project address same as billing address
+      </label>
       <label>Project / jobsite address</label>
-      <input value={form.project_address} onChange={e => update('project_address', e.target.value)} />
+      <input value={form.project_address} onChange={e => update('project_address', e.target.value)} disabled={sameAsBilling} />
       <label>Description</label>
       <textarea value={form.description} onChange={e => update('description', e.target.value)} />
       <label>Governing state</label>
@@ -234,16 +249,24 @@ function PriceCard({ job, onSave }) {
 
 /* ---------------- Additional terms ---------------- */
 function TermsCard({ job, onSave }) {
-  const [items, setItems] = useState((job.additional_terms || []).map(i => i.text || ''));
+  const existing = (job.additional_terms || []).map(i => i.text || '');
+  const [items, setItems] = useState(existing.length ? existing : STANDARD_ASSUMPTIONS);
 
   function add() { setItems(prev => [...prev, '']); }
   function update(i, v) { setItems(prev => prev.map((t, idx) => idx === i ? v : t)); }
   function remove(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function save() { onSave({ additional_terms: items.filter(t => t.trim()).map(text => ({ text })) }); }
+  function restoreStandard() {
+    setItems(prev => {
+      const existingSet = new Set(prev.map(t => t.trim()));
+      const toAdd = STANDARD_ASSUMPTIONS.filter(t => !existingSet.has(t.trim()));
+      return [...prev, ...toAdd];
+    });
+  }
 
   return (
     <div className="card">
-      <h3>Additional terms</h3>
+      <h3>Project Assumptions &amp; Exclusions</h3>
       {items.length === 0 && <div className="empty-state">None added.</div>}
       {items.map((text, i) => (
         <div className="list-row" key={i}>
@@ -252,8 +275,9 @@ function TermsCard({ job, onSave }) {
         </div>
       ))}
       <div className="section-actions">
-        <button className="btn btn-sm" onClick={add}>+ Add term</button>
-        <button className="btn btn-primary btn-sm" onClick={save}>Save terms</button>
+        <button className="btn btn-sm" onClick={add}>+ Add item</button>
+        <button className="btn btn-sm" onClick={restoreStandard}>↺ Restore standard list</button>
+        <button className="btn btn-primary btn-sm" onClick={save}>Save assumptions &amp; exclusions</button>
       </div>
     </div>
   );
@@ -322,7 +346,7 @@ function UpdatesCard({ jobId, updates }) {
           {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
           {u.estimated_completion && <><div className="update-field-label">Estimated completion</div><p>{fmtDate(u.estimated_completion)}</p></>}
           <div className="section-actions">
-            <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">📄 View / print</Link>
+            <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">View / print</Link>
             <button className="btn btn-sm btn-danger" onClick={() => removeUpdate(u.id)}>Delete</button>
           </div>
         </div>

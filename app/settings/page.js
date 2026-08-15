@@ -1,33 +1,36 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
+import AppShell from '../../components/AppShell';
 
 const INTEGRATIONS = [
   { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
   { key: 'stripe', name: 'Payment processor (Stripe)', description: 'Accept card payments on invoices.' },
-  { key: 'email', name: 'Transactional email', description: 'Auto-send proposals, contracts, and updates by email.' },
+  { key: 'email', name: 'Transactional email (your SMTP server)', description: 'Auto-send proposals, contracts, and updates by email.' },
+];
+
+const FONT_OPTIONS = [
+  { value: 'system', label: 'System sans-serif (default)' },
+  { value: 'serif', label: 'Serif' },
+  { value: 'mono', label: 'Monospace' },
+  { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
 export default function SettingsPage() {
   const { session, loading } = useRequireAuth();
   const { settings, refresh } = useSettings();
 
-  const [colorBg, setColorBg] = useState(settings.color_bg);
-  const [colorHeading, setColorHeading] = useState(settings.color_heading);
-  const [colorAccent, setColorAccent] = useState(settings.color_accent);
+  const [form, setForm] = useState(settings);
   const [uploading, setUploading] = useState(false);
-  const [savingColors, setSavingColors] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    setColorBg(settings.color_bg);
-    setColorHeading(settings.color_heading);
-    setColorAccent(settings.color_accent);
-  }, [settings]);
+  useEffect(() => { setForm(settings); }, [settings]);
+
+  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
   function showFlash(msg) {
     setFlash(msg);
@@ -59,33 +62,47 @@ export default function SettingsPage() {
     refresh();
   }
 
-  async function saveColors() {
-    setSavingColors(true);
+  async function saveAll() {
+    setSaving(true);
     const { error: updateError } = await supabase
       .from('app_settings')
-      .update({ color_bg: colorBg, color_heading: colorHeading, color_accent: colorAccent })
+      .update({
+        color_bg: form.color_bg,
+        color_heading: form.color_heading,
+        color_accent: form.color_accent,
+        color_panel: form.color_panel,
+        font_choice: form.font_choice,
+        logo_size_desktop: form.logo_size_desktop,
+        logo_size_mobile: form.logo_size_mobile,
+        signout_bg: form.signout_bg,
+        signout_text: form.signout_text,
+      })
       .eq('id', 1);
-    setSavingColors(false);
+    setSaving(false);
     if (updateError) { setError(updateError.message); return; }
-    showFlash('Theme saved');
+    showFlash('Settings saved');
     refresh();
   }
 
-  function resetColors() {
-    setColorBg('#dbd8bf');
-    setColorHeading('#49402a');
-    setColorAccent('#8a3d14');
+  function resetToDefault() {
+    setForm(prev => ({
+      ...prev,
+      color_bg: '#dbd8bf',
+      color_heading: '#49402a',
+      color_accent: '#8a3d14',
+      color_panel: '#d3d0b5',
+      font_choice: 'system',
+      logo_size_desktop: 180,
+      logo_size_mobile: 120,
+      signout_bg: 'transparent',
+      signout_text: '#49402a',
+    }));
   }
 
   if (loading || !session) return null;
 
   return (
-    <div>
-      <div className="topbar">
-        <div className="brand">McLoud <span>Jobs</span></div>
-        <Link href="/dashboard" className="btn btn-sm">← Dashboard</Link>
-      </div>
-
+    <AppShell>
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Settings</h2>
@@ -103,6 +120,18 @@ export default function SettingsPage() {
           <label htmlFor="logoUpload">Upload a new logo (PNG or SVG, transparent background works best)</label>
           <input id="logoUpload" type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={handleLogoUpload} disabled={uploading} />
           {uploading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Uploading…</div>}
+
+          <div className="two-col" style={{ marginTop: 16 }}>
+            <div>
+              <label>Logo height on desktop (px)</label>
+              <input type="number" value={form.logo_size_desktop} onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 0)} />
+            </div>
+            <div>
+              <label>Logo height on mobile (px)</label>
+              <input type="number" value={form.logo_size_mobile} onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 0)} />
+            </div>
+          </div>
+
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
             This updates the logo shown in the app. Proposal, contract, and update documents still use the original letterhead logo for now — let me know if you want those switched over too.
           </div>
@@ -113,21 +142,46 @@ export default function SettingsPage() {
           <div className="two-col">
             <div>
               <label htmlFor="colorBg">Background</label>
-              <input id="colorBg" type="color" value={colorBg} onChange={e => setColorBg(e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorBg" type="color" value={form.color_bg} onChange={e => update('color_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
+            </div>
+            <div>
+              <label htmlFor="colorPanel">Sidebar / panel background</label>
+              <input id="colorPanel" type="color" value={form.color_panel} onChange={e => update('color_panel', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="colorHeading">Headings &amp; text</label>
-              <input id="colorHeading" type="color" value={colorHeading} onChange={e => setColorHeading(e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorHeading" type="color" value={form.color_heading} onChange={e => update('color_heading', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="colorAccent">Accent (buttons, badges)</label>
-              <input id="colorAccent" type="color" value={colorAccent} onChange={e => setColorAccent(e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorAccent" type="color" value={form.color_accent} onChange={e => update('color_accent', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
           </div>
-          <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={saveColors} disabled={savingColors}>{savingColors ? 'Saving…' : 'Save theme'}</button>
-            <button className="btn btn-sm" onClick={resetColors}>Reset to default</button>
+
+          <label htmlFor="fontChoice" style={{ marginTop: 16 }}>Font</label>
+          <select id="fontChoice" value={form.font_choice} onChange={e => update('font_choice', e.target.value)}>
+            {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+        </div>
+
+        <div className="card">
+          <h3>Sign-out button</h3>
+          <div className="two-col">
+            <div>
+              <label htmlFor="signoutBg">Background</label>
+              <input id="signoutBg" type="color" value={form.signout_bg === 'transparent' ? '#ffffff' : form.signout_bg} onChange={e => update('signout_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
+            </div>
+            <div>
+              <label htmlFor="signoutText">Text &amp; border color</label>
+              <input id="signoutText" type="color" value={form.signout_text} onChange={e => update('signout_text', e.target.value)} style={{ height: 42, padding: 4 }} />
+            </div>
           </div>
+          <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => update('signout_bg', 'transparent')}>Use transparent background</button>
+        </div>
+
+        <div className="section-actions" style={{ marginBottom: 20 }}>
+          <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
+          <button className="btn" onClick={resetToDefault}>Reset colors to default</button>
         </div>
 
         <div className="card">
@@ -142,10 +196,10 @@ export default function SettingsPage() {
             </div>
           ))}
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 14 }}>
-            These need their own accounts (QuickBooks, Stripe, an email service) set up before I can wire them in — happy to start whichever one's most useful next.
+            These need their own accounts/credentials set up before I can wire them in.
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

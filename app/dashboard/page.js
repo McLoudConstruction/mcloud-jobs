@@ -1,123 +1,95 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
-import { useSettings } from '../../lib/useSettings';
+import AppShell from '../../components/AppShell';
 
-const STAGES = ['all', 'proposal', 'contract', 'active', 'invoice', 'complete'];
-const STAGE_LABELS = {
-  all: 'All',
-  proposal: 'Proposal',
-  contract: 'Contract',
-  active: 'Active',
-  invoice: 'Invoice',
-  complete: 'Complete',
-};
+const STAGE_LABELS = { proposal: 'Proposal', contract: 'Contract', active: 'Active', invoice: 'Invoice', complete: 'Complete' };
+
+function fmtMoney(n) {
+  if (!n) return '$0';
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0 });
+}
 
 export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
-  const { settings } = useSettings();
-  const router = useRouter();
   const [jobs, setJobs] = useState([]);
-  const [stage, setStage] = useState('all');
-  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (!session) return;
-
     let mounted = true;
-    supabase.from('jobs').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-      if (mounted && data) setJobs(data);
-    });
-
-    const channel = supabase
-      .channel('jobs-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
-        supabase.from('jobs').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-          if (mounted && data) setJobs(data);
-        });
-      })
-      .subscribe();
-
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
+    const load = () => supabase.from('jobs').select('*').then(({ data }) => { if (mounted && data) setJobs(data); });
+    load();
+    const channel = supabase.channel('jobs-stats').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).subscribe();
+    return () => { mounted = false; supabase.removeChannel(channel); };
   }, [session]);
 
-  const filtered = useMemo(() => {
-    return jobs.filter(j => {
-      if (stage !== 'all' && j.stage !== stage) return false;
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return (
-        (j.job_number || '').toLowerCase().includes(q) ||
-        (j.customer_name || '').toLowerCase().includes(q) ||
-        (j.project_address || '').toLowerCase().includes(q)
-      );
-    });
-  }, [jobs, stage, search]);
+  const stats = useMemo(() => {
+    const byStage = {};
+    Object.keys(STAGE_LABELS).forEach(s => { byStage[s] = jobs.filter(j => j.stage === s).length; });
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.replace('/login');
-  }
+    const thisYear = new Date().getFullYear();
+    const invoicedThisYear = jobs.filter(j =>
+      (j.stage === 'invoice' || j.stage === 'complete') &&
+      j.invoice_amount &&
+      new Date(j.updated_at).getFullYear() === thisYear
+    );
+    const totalInvoicedAmount = invoicedThisYear.reduce((sum, j) => sum + (parseFloat(j.invoice_amount) || 0), 0);
+
+    const overdue = jobs.filter(j =>
+      j.expected_close_date &&
+      new Date(j.expected_close_date) < new Date() &&
+      j.stage !== 'complete'
+    );
+
+    return { byStage, invoicedCount: invoicedThisYear.length, totalInvoicedAmount, overdue };
+  }, [jobs]);
 
   if (loading || !session) return null;
 
   return (
-    <div>
-      <div className="topbar">
-        {settings.logo_url
-          ? <img src={settings.logo_url} alt="Logo" style={{ height: 32, width: 'auto' }} />
-          : <div className="brand">McLoud <span>Jobs</span></div>}
-        <div className="topbar-actions">
-          <Link href="/settings" className="btn btn-sm">Settings</Link>
-          <button className="btn btn-sm" onClick={handleSignOut}>Sign out</button>
-        </div>
-      </div>
-
+    <AppShell>
       <div className="container">
-        <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Jobs</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New job</Link>
+        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Dashboard</h2>
+
+        <div className="two-col" style={{ marginBottom: 20 }}>
+          <div className="card">
+            <h3>Job counts by stage</h3>
+            {Object.entries(STAGE_LABELS).map(([key, label]) => (
+              <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}>
+                <span>{label}</span>
+                <span style={{ fontWeight: 700 }}>{stats.byStage[key] || 0}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0', fontWeight: 700, fontSize: 14 }}>
+              <span>Total jobs</span>
+              <span>{jobs.length}</span>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Invoiced this year</h3>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalInvoicedAmount)}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>{stats.invoicedCount} invoiced project{stats.invoicedCount === 1 ? '' : 's'}</div>
+          </div>
         </div>
 
-        <div className="search-bar">
-          <input
-            placeholder="Search by job #, customer, or address…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="stage-tabs">
-          {STAGES.map(s => (
-            <button
-              key={s}
-              className={`stage-tab ${stage === s ? 'active' : ''}`}
-              onClick={() => setStage(s)}
-            >
-              {STAGE_LABELS[s]} {s !== 'all' ? `(${jobs.filter(j => j.stage === s).length})` : `(${jobs.length})`}
-            </button>
+        <div className="card">
+          <h3>Overdue expected close dates</h3>
+          {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
+          {stats.overdue.map(job => (
+            <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
+              <div className="job-main">
+                <span className="job-number">#{job.job_number}</span>
+                <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
+                <span className="job-address">Expected close: {job.expected_close_date}</span>
+              </div>
+              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+            </Link>
           ))}
         </div>
-
-        {filtered.length === 0 && <div className="empty-state">No jobs here yet.</div>}
-
-        {filtered.map(job => (
-          <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
-            <div className="job-main">
-              <span className="job-number">#{job.job_number}</span>
-              <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
-              <span className="job-address">{job.project_address || 'No address yet'}</span>
-            </div>
-            <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-          </Link>
-        ))}
       </div>
-    </div>
+    </AppShell>
   );
 }

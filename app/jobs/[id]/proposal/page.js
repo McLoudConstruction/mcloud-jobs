@@ -41,7 +41,43 @@ export default function ProposalDocumentPage() {
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
   function printDocument() {
+    const PAGE_HEIGHT_PX = 979;
+    const preview = document.getElementById('doc-preview');
+    const header = preview.querySelector('.doc-header');
+    const body = preview.querySelector('.doc-body');
+    if (header && body) {
+      const blocks = [header, ...Array.from(body.children)];
+      let runningHeight = 0;
+      blocks.forEach((el, i) => {
+        if (i === 0) { runningHeight = el.offsetHeight; return; }
+        const cs = window.getComputedStyle(el);
+        const h = el.offsetHeight + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
+        if (runningHeight + h > PAGE_HEIGHT_PX) {
+          const note = document.createElement('div');
+          note.className = 'continued-note print-injected';
+          note.textContent = '— continued on next page —';
+          el.parentNode.insertBefore(note, el);
+          el.classList.add('print-injected');
+          el.style.pageBreakBefore = 'always';
+          el.style.breakBefore = 'page';
+          runningHeight = h;
+        } else {
+          runningHeight += h;
+        }
+      });
+    }
     window.print();
+    window.addEventListener('afterprint', clearPagination, { once: true });
+    setTimeout(clearPagination, 3000);
+  }
+
+  function clearPagination() {
+    document.querySelectorAll('.continued-note.print-injected').forEach(el => el.remove());
+    document.querySelectorAll('.print-injected').forEach(el => {
+      el.style.pageBreakBefore = '';
+      el.style.breakBefore = '';
+      el.classList.remove('print-injected');
+    });
   }
 
   if (loading || !session || !job) return null;
@@ -124,12 +160,14 @@ export default function ProposalDocumentPage() {
         .doc-list li::before { content: "—"; position: absolute; left: 0; color: #dbd8bf; }
         .doc-list li.empty { color: #a8a29a; font-style: italic; }
         .doc-list li.empty::before { content: ""; }
-        .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+        .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
+        .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
 
         @media print {
+          .continued-note { display: block; }
           .no-print { display: none !important; }
           body { background: #fff; }
           .doc-outer { padding: 0; }

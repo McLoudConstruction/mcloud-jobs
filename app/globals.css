@@ -12,6 +12,7 @@
   --ink-soft: #6b6350;
   --line: #ded7c0;
   --paper: #fbf9f4;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }
 
 html, body{
@@ -19,7 +20,7 @@ html, body{
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  font-family: var(--font-family);
 }
 
 a { color: inherit; text-decoration: none; }
@@ -180,3 +181,71 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .section-actions{ display:flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 
 .saved-flash{ font-size: 12px; color: #3a6b45; margin-left: 10px; }
+
+/* ---------- App shell (hamburger sidebar) ---------- */
+.shell{ min-height: 100vh; }
+.shell-topbar{
+  display: grid;
+  grid-template-columns: 60px 1fr 100px;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.shell-logo{ display: flex; justify-content: center; }
+.shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--heading); text-transform: uppercase; font-size: 14px; }
+.shell-logo .brand span{ color: var(--gold); }
+
+.hamburger-btn{
+  width: 38px; height: 38px;
+  background: transparent; border: 1px solid var(--panel-line); border-radius: 5px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer;
+}
+.hamburger-btn span{ width: 18px; height: 2px; background: var(--heading); display: block; }
+
+.signout-btn{ justify-self: end; }
+
+.shell-sidebar{
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 240px;
+  background: var(--panel);
+  border-right: 1px solid var(--panel-line);
+  padding: 80px 0 20px;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  z-index: 30;
+}
+.shell-sidebar.open{ transform: translateX(0); }
+.shell-nav-link{
+  display: block;
+  padding: 13px 24px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--heading);
+}
+.shell-nav-link:hover{ background: rgba(255,255,255,0.4); }
+.shell-nav-link.active{ background: var(--heading); color: #f2ede1; }
+
+.shell-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 25;
+}
+
+.shell-content{ }
+
+@media (min-width: 900px){
+  .shell-sidebar{ transform: translateX(0); position: sticky; top: 57px; height: calc(100vh - 57px); }
+  .shell-overlay{ display: none; }
+  .shell-body{ display: grid; grid-template-columns: 240px 1fr; }
+}
+
+.contact-card{
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 7px; margin-bottom: 10px;
+}
+.contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
+.contact-card .contact-meta{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.6; }

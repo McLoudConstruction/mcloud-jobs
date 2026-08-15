@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
+import AppShell from '../../../components/AppShell';
+import { STANDARD_ASSUMPTIONS } from '../../../lib/constants';
 
 export default function NewJobPage() {
   const { session, loading } = useRequireAuth();
@@ -19,18 +20,40 @@ export default function NewJobPage() {
     project_address: '',
     description: '',
     contract_price: '',
+    job_type: '',
+    expected_close_date: '',
   });
+  const [sameAsBilling, setSameAsBilling] = useState(false);
   const [scopeItems, setScopeItems] = useState([]);
+  const [termItems, setTermItems] = useState([...STANDARD_ASSUMPTIONS]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   function update(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
   }
+  function updateBilling(value) {
+    setForm(prev => ({ ...prev, billing_address: value, project_address: sameAsBilling ? value : prev.project_address }));
+  }
+  function toggleSameAsBilling(checked) {
+    setSameAsBilling(checked);
+    if (checked) setForm(prev => ({ ...prev, project_address: prev.billing_address }));
+  }
 
   function addScopeItem() { setScopeItems(prev => [...prev, '']); }
   function updateScopeItem(i, value) { setScopeItems(prev => prev.map((t, idx) => idx === i ? value : t)); }
   function removeScopeItem(i) { setScopeItems(prev => prev.filter((_, idx) => idx !== i)); }
+
+  function addTerm() { setTermItems(prev => [...prev, '']); }
+  function updateTerm(i, value) { setTermItems(prev => prev.map((t, idx) => idx === i ? value : t)); }
+  function removeTerm(i) { setTermItems(prev => prev.filter((_, idx) => idx !== i)); }
+  function restoreStandardTerms() {
+    setTermItems(prev => {
+      const existingSet = new Set(prev.map(t => t.trim()));
+      const toAdd = STANDARD_ASSUMPTIONS.filter(t => !existingSet.has(t.trim()));
+      return [...prev, ...toAdd];
+    });
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,6 +65,8 @@ export default function NewJobPage() {
       ...form,
       contract_price: form.contract_price ? parseFloat(form.contract_price.replace(/[^0-9.]/g, '')) : null,
       scope_items: scopeItems.filter(t => t.trim()).map(text => ({ text })),
+      additional_terms: termItems.filter(t => t.trim()).map(text => ({ text })),
+      expected_close_date: form.expected_close_date || null,
       stage: 'proposal',
     };
 
@@ -58,12 +83,7 @@ export default function NewJobPage() {
   if (loading || !session) return null;
 
   return (
-    <div>
-      <div className="topbar">
-        <div className="brand">McLoud <span>Jobs</span></div>
-        <Link href="/dashboard" className="btn btn-sm">← Dashboard</Link>
-      </div>
-
+    <AppShell>
       <div className="container">
         <h2 style={{ color: 'var(--heading)' }}>New job — Proposal stage</h2>
 
@@ -78,6 +98,14 @@ export default function NewJobPage() {
               <div>
                 <label>Estimated contract price ($)</label>
                 <input value={form.contract_price} onChange={e => update('contract_price', e.target.value)} placeholder="e.g. 42,500" />
+              </div>
+              <div>
+                <label>Job type</label>
+                <input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" />
+              </div>
+              <div>
+                <label>Expected close date</label>
+                <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
               </div>
             </div>
           </div>
@@ -103,9 +131,13 @@ export default function NewJobPage() {
               </div>
             </div>
             <label>Billing address</label>
-            <input value={form.billing_address} onChange={e => update('billing_address', e.target.value)} />
+            <input value={form.billing_address} onChange={e => updateBilling(e.target.value)} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
+              Project address same as billing address
+            </label>
             <label>Project / jobsite address</label>
-            <input value={form.project_address} onChange={e => update('project_address', e.target.value)} />
+            <input value={form.project_address} onChange={e => update('project_address', e.target.value)} disabled={sameAsBilling} />
           </div>
 
           <div className="card">
@@ -126,6 +158,20 @@ export default function NewJobPage() {
             </div>
           </div>
 
+          <div className="card">
+            <h3>Project Assumptions &amp; Exclusions</h3>
+            {termItems.map((text, i) => (
+              <div className="list-row" key={i}>
+                <textarea value={text} onChange={e => updateTerm(i, e.target.value)} />
+                <button type="button" className="row-remove" onClick={() => removeTerm(i)}>×</button>
+              </div>
+            ))}
+            <div className="section-actions">
+              <button type="button" className="btn btn-sm" onClick={addTerm}>+ Add item</button>
+              <button type="button" className="btn btn-sm" onClick={restoreStandardTerms}>↺ Restore standard list</button>
+            </div>
+          </div>
+
           {error && <div className="error-text">{error}</div>}
 
           <button className="btn btn-primary" type="submit" disabled={saving}>
@@ -133,6 +179,6 @@ export default function NewJobPage() {
           </button>
         </form>
       </div>
-    </div>
+    </AppShell>
   );
 }

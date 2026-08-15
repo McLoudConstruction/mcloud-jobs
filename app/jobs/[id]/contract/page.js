@@ -34,7 +34,45 @@ export default function ContractDocumentPage() {
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
-  function printDocument() { window.print(); }
+  function printDocument() {
+    const PAGE_HEIGHT_PX = 979;
+    const preview = document.getElementById('doc-preview');
+    const header = preview.querySelector('.doc-header');
+    const body = preview.querySelector('.doc-body');
+    if (header && body) {
+      const blocks = [header, ...Array.from(body.children)];
+      let runningHeight = 0;
+      blocks.forEach((el, i) => {
+        if (i === 0) { runningHeight = el.offsetHeight; return; }
+        const cs = window.getComputedStyle(el);
+        const h = el.offsetHeight + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
+        if (runningHeight + h > PAGE_HEIGHT_PX) {
+          const note = document.createElement('div');
+          note.className = 'continued-note print-injected';
+          note.textContent = '— continued on next page —';
+          el.parentNode.insertBefore(note, el);
+          el.classList.add('print-injected');
+          el.style.pageBreakBefore = 'always';
+          el.style.breakBefore = 'page';
+          runningHeight = h;
+        } else {
+          runningHeight += h;
+        }
+      });
+    }
+    window.print();
+    window.addEventListener('afterprint', clearPagination, { once: true });
+    setTimeout(clearPagination, 3000);
+  }
+
+  function clearPagination() {
+    document.querySelectorAll('.continued-note.print-injected').forEach(el => el.remove());
+    document.querySelectorAll('.print-injected').forEach(el => {
+      el.style.pageBreakBefore = '';
+      el.style.breakBefore = '';
+      el.classList.remove('print-injected');
+    });
+  }
 
   if (loading || !session || !job) return null;
 
@@ -235,7 +273,7 @@ export default function ContractDocumentPage() {
         .group-heading { margin: 32px 0 18px; padding-top: 20px; border-top: 2px solid #49402a; break-after: avoid; }
         .group-heading h2 { font-weight: 700; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; color: #49402a; margin: 0 0 4px; }
         .group-heading p { font-size: 11px; color: #6b6350; font-style: italic; margin: 0; }
-        .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .milestone-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -243,7 +281,18 @@ export default function ContractDocumentPage() {
         .milestone-table td { padding: 7px 0; border-bottom: 1px solid #f0ece0; color: #221f16; }
         .milestone-table td.amt { text-align: right; white-space: nowrap; padding-left: 12px; }
         .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
-        @media print { .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } .sig-editing { display: none !important; } }
+        .party-grid { break-inside: avoid; }
+        .milestone-table { break-inside: avoid; }
+        @media (max-width: 700px) {
+          .doc-outer { padding: 12px; }
+          .doc-header { padding: 18px 20px; flex-wrap: wrap; }
+          .doc-body { padding: 20px 20px 40px; }
+          .party-grid { grid-template-columns: 1fr; }
+          .sig-block { grid-template-columns: 1fr; gap: 20px; }
+          .doc-logo { width: 130px; }
+        }
+        .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
+        @media print { .continued-note { display: block; } .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } .sig-editing { display: none !important; } }
         @page { margin: 0.4in 0.5in; }
       `}</style>
     </div>

@@ -30,7 +30,45 @@ export default function UpdateDocumentPage() {
 
   useEffect(() => { if (session) load(); }, [session, load]);
 
-  function printDocument() { window.print(); }
+  function printDocument() {
+    const PAGE_HEIGHT_PX = 979;
+    const preview = document.getElementById('doc-preview');
+    const header = preview.querySelector('.doc-header');
+    const body = preview.querySelector('.doc-body');
+    if (header && body) {
+      const blocks = [header, ...Array.from(body.children)];
+      let runningHeight = 0;
+      blocks.forEach((el, i) => {
+        if (i === 0) { runningHeight = el.offsetHeight; return; }
+        const cs = window.getComputedStyle(el);
+        const h = el.offsetHeight + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
+        if (runningHeight + h > PAGE_HEIGHT_PX) {
+          const note = document.createElement('div');
+          note.className = 'continued-note print-injected';
+          note.textContent = '— continued on next page —';
+          el.parentNode.insertBefore(note, el);
+          el.classList.add('print-injected');
+          el.style.pageBreakBefore = 'always';
+          el.style.breakBefore = 'page';
+          runningHeight = h;
+        } else {
+          runningHeight += h;
+        }
+      });
+    }
+    window.print();
+    window.addEventListener('afterprint', clearPagination, { once: true });
+    setTimeout(clearPagination, 3000);
+  }
+
+  function clearPagination() {
+    document.querySelectorAll('.continued-note.print-injected').forEach(el => el.remove());
+    document.querySelectorAll('.print-injected').forEach(el => {
+      el.style.pageBreakBefore = '';
+      el.style.breakBefore = '';
+      el.classList.remove('print-injected');
+    });
+  }
 
   if (loading || !session || !job || !update) return null;
 
@@ -49,7 +87,7 @@ export default function UpdateDocumentPage() {
       </div>
 
       <div className="doc-outer">
-        <div className="doc-page">
+        <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
             <div className="doc-brand-tag">Project Update</div>
@@ -89,7 +127,8 @@ export default function UpdateDocumentPage() {
         .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
         .section p { font-size: 13.5px; line-height: 1.6; color: #221f16; margin: 0; white-space: pre-wrap; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
-        @media print { .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } }
+        .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
+        @media print { .continued-note { display: block; } .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } }
         @page { margin: 0.4in 0.5in; }
       `}</style>
     </div>
