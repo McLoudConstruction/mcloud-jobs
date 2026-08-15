@@ -98,6 +98,8 @@ export default function JobDetailPage() {
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
           <div className="section-actions">
+            <Link href={`/jobs/${id}/proposal`} className="btn">📄 View / Print Proposal</Link>
+            <Link href={`/jobs/${id}/contract`} className="btn">✍️ View / Print / Sign Contract</Link>
             {job.stage !== 'complete' && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
@@ -320,6 +322,7 @@ function UpdatesCard({ jobId, updates }) {
           {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
           {u.estimated_completion && <><div className="update-field-label">Estimated completion</div><p>{fmtDate(u.estimated_completion)}</p></>}
           <div className="section-actions">
+            <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">📄 View / print</Link>
             <button className="btn btn-sm btn-danger" onClick={() => removeUpdate(u.id)}>Delete</button>
           </div>
         </div>
