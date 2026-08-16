@@ -3,8 +3,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import AddressFields, { formatAddress } from '../../components/AddressFields';
 
-const EMPTY_FORM = { name: '', management_company: '', contact_phone: '', contact_email: '', property: '', notes: '' };
+const EMPTY_FORM = {
+  name: '', management_company: '', contact_phone: '', contact_email: '', property: '', notes: '',
+  billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
+};
 
 export default function CustomersPage() {
   const { session, loading } = useRequireAuth();
@@ -72,7 +76,13 @@ export default function CustomersPage() {
             </div>
             <label>Property</label>
             <input value={form.property} onChange={e => update('property', e.target.value)} />
-            <label>Notes</label>
+
+            <label style={{ marginTop: 16 }}>Billing email</label>
+            <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
+            <label style={{ marginTop: 4 }}>Billing address</label>
+            <AddressFields prefix="billing" values={form} onChange={update} />
+
+            <label style={{ marginTop: 16 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save contact'}</button>
@@ -93,7 +103,8 @@ export default function CustomersPage() {
                 {c.management_company && <>{c.management_company}<br /></>}
                 {c.contact_phone && <>{c.contact_phone}<br /></>}
                 {c.contact_email && <>{c.contact_email}<br /></>}
-                {c.property && <>{c.property}</>}
+                {c.property && <>{c.property}<br /></>}
+                {formatAddress(c, 'billing') && <>{formatAddress(c, 'billing')}</>}
               </div>
             </div>
             <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>

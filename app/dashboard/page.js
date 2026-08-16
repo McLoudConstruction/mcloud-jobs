@@ -31,9 +31,9 @@ export default function DashboardPage() {
 
     const thisYear = new Date().getFullYear();
     const invoicedThisYear = jobs.filter(j =>
-      (j.stage === 'invoice' || j.stage === 'complete') &&
-      j.invoice_amount &&
-      new Date(j.updated_at).getFullYear() === thisYear
+      (j.invoice_status === 'sent' || j.invoice_status === 'paid') &&
+      j.invoiced_at &&
+      new Date(j.invoiced_at).getFullYear() === thisYear
     );
     const totalInvoicedAmount = invoicedThisYear.reduce((sum, j) => sum + (parseFloat(j.invoice_amount) || 0), 0);
 

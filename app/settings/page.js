@@ -18,6 +18,10 @@ const FONT_OPTIONS = [
   { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
+function safeColor(value, fallback) {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
 export default function SettingsPage() {
   const { session, loading } = useRequireAuth();
   const { settings, refresh } = useSettings();
@@ -43,45 +47,51 @@ export default function SettingsPage() {
     setError('');
     setUploading(true);
 
-    const ext = file.name.split('.').pop();
-    const path = `logo-${Date.now()}.${ext}`;
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `logo-${Date.now()}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage.from('branding').upload(path, file, { upsert: true });
-    if (uploadError) {
+      const { error: uploadError } = await supabase.storage.from('branding').upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('branding').getPublicUrl(path);
+      const { error: updateError } = await supabase.from('app_settings').update({ logo_url: urlData.publicUrl }).eq('id', 1);
+      if (updateError) throw updateError;
+
+      showFlash('Logo updated');
+      refresh();
+    } catch (err) {
+      setError(err.message || 'Upload failed. Make sure migration 003 (storage bucket) has been run in Supabase.');
+    } finally {
       setUploading(false);
-      setError(uploadError.message);
-      return;
     }
-
-    const { data: urlData } = supabase.storage.from('branding').getPublicUrl(path);
-    const { error: updateError } = await supabase.from('app_settings').update({ logo_url: urlData.publicUrl }).eq('id', 1);
-
-    setUploading(false);
-    if (updateError) { setError(updateError.message); return; }
-    showFlash('Logo updated');
-    refresh();
   }
 
   async function saveAll() {
     setSaving(true);
-    const { error: updateError } = await supabase
-      .from('app_settings')
-      .update({
-        color_bg: form.color_bg,
-        color_heading: form.color_heading,
-        color_accent: form.color_accent,
-        color_panel: form.color_panel,
-        font_choice: form.font_choice,
-        logo_size_desktop: form.logo_size_desktop,
-        logo_size_mobile: form.logo_size_mobile,
-        signout_bg: form.signout_bg,
-        signout_text: form.signout_text,
-      })
-      .eq('id', 1);
-    setSaving(false);
-    if (updateError) { setError(updateError.message); return; }
-    showFlash('Settings saved');
-    refresh();
+    try {
+      const { error: updateError } = await supabase
+        .from('app_settings')
+        .update({
+          color_bg: form.color_bg,
+          color_heading: form.color_heading,
+          color_accent: form.color_accent,
+          color_panel: form.color_panel,
+          font_choice: form.font_choice,
+          logo_size_desktop: form.logo_size_desktop,
+          logo_size_mobile: form.logo_size_mobile,
+          signout_bg: form.signout_bg,
+          signout_text: form.signout_text,
+        })
+        .eq('id', 1);
+      if (updateError) throw updateError;
+      showFlash('Settings saved');
+      refresh();
+    } catch (err) {
+      setError(err.message || 'Save failed. Make sure migration 004 has been run in Supabase.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function resetToDefault() {
@@ -124,11 +134,11 @@ export default function SettingsPage() {
           <div className="two-col" style={{ marginTop: 16 }}>
             <div>
               <label>Logo height on desktop (px)</label>
-              <input type="number" value={form.logo_size_desktop} onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 0)} />
+              <input type="number" value={form.logo_size_desktop ?? 180} onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 0)} />
             </div>
             <div>
               <label>Logo height on mobile (px)</label>
-              <input type="number" value={form.logo_size_mobile} onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 0)} />
+              <input type="number" value={form.logo_size_mobile ?? 120} onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 0)} />
             </div>
           </div>
 
@@ -142,24 +152,24 @@ export default function SettingsPage() {
           <div className="two-col">
             <div>
               <label htmlFor="colorBg">Background</label>
-              <input id="colorBg" type="color" value={form.color_bg} onChange={e => update('color_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorBg" type="color" value={safeColor(form.color_bg, "#dbd8bf")} onChange={e => update('color_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="colorPanel">Sidebar / panel background</label>
-              <input id="colorPanel" type="color" value={form.color_panel} onChange={e => update('color_panel', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorPanel" type="color" value={safeColor(form.color_panel, "#d3d0b5")} onChange={e => update('color_panel', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="colorHeading">Headings &amp; text</label>
-              <input id="colorHeading" type="color" value={form.color_heading} onChange={e => update('color_heading', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorHeading" type="color" value={safeColor(form.color_heading, "#49402a")} onChange={e => update('color_heading', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="colorAccent">Accent (buttons, badges)</label>
-              <input id="colorAccent" type="color" value={form.color_accent} onChange={e => update('color_accent', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="colorAccent" type="color" value={safeColor(form.color_accent, "#8a3d14")} onChange={e => update('color_accent', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
           </div>
 
           <label htmlFor="fontChoice" style={{ marginTop: 16 }}>Font</label>
-          <select id="fontChoice" value={form.font_choice} onChange={e => update('font_choice', e.target.value)}>
+          <select id="fontChoice" value={form.font_choice || 'system'} onChange={e => update('font_choice', e.target.value)}>
             {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
         </div>
@@ -169,11 +179,11 @@ export default function SettingsPage() {
           <div className="two-col">
             <div>
               <label htmlFor="signoutBg">Background</label>
-              <input id="signoutBg" type="color" value={form.signout_bg === 'transparent' ? '#ffffff' : form.signout_bg} onChange={e => update('signout_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="signoutBg" type="color" value={form.signout_bg === 'transparent' ? '#ffffff' : safeColor(form.signout_bg, '#ffffff')} onChange={e => update('signout_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
             <div>
               <label htmlFor="signoutText">Text &amp; border color</label>
-              <input id="signoutText" type="color" value={form.signout_text} onChange={e => update('signout_text', e.target.value)} style={{ height: 42, padding: 4 }} />
+              <input id="signoutText" type="color" value={safeColor(form.signout_text, '#49402a')} onChange={e => update('signout_text', e.target.value)} style={{ height: 42, padding: 4 }} />
             </div>
           </div>
           <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => update('signout_bg', 'transparent')}>Use transparent background</button>

@@ -1,43 +1,95 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS } from '../../../lib/constants';
+
+const EMPTY_FORM = {
+  job_number: '',
+  contract_price: '',
+  job_type: '',
+  expected_close_date: '',
+  project_type: '', // 'residential' | 'commercial'
+  customer_name: '',
+  customer_contact: '',
+  customer_email: '',
+  customer_phone: '',
+  billing_email: '',
+  billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '',
+  project_street: '', project_unit: '', project_city: '', project_state: '', project_zip: '',
+  description: '',
+};
 
 export default function NewJobPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    job_number: '',
-    customer_name: '',
-    customer_contact: '',
-    customer_email: '',
-    customer_phone: '',
-    billing_address: '',
-    project_address: '',
-    description: '',
-    contract_price: '',
-    job_type: '',
-    expected_close_date: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [scopeItems, setScopeItems] = useState([]);
   const [termItems, setTermItems] = useState([...STANDARD_ASSUMPTIONS]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimer = useRef(null);
+
   function update(field, value) {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
+        const projectField = field.replace('billing_', 'project_');
+        next[projectField] = value;
+      }
+      return next;
+    });
   }
-  function updateBilling(value) {
-    setForm(prev => ({ ...prev, billing_address: value, project_address: sameAsBilling ? value : prev.project_address }));
-  }
+
   function toggleSameAsBilling(checked) {
     setSameAsBilling(checked);
-    if (checked) setForm(prev => ({ ...prev, project_address: prev.billing_address }));
+    if (checked) {
+      setForm(prev => ({
+        ...prev,
+        project_street: prev.billing_street,
+        project_unit: prev.billing_unit,
+        project_city: prev.billing_city,
+        project_state: prev.billing_state,
+        project_zip: prev.billing_zip,
+      }));
+    }
+  }
+
+  // ---- Customer name autofill suggestions ----
+  function handleNameChange(value) {
+    update('customer_name', value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    searchTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from('contacts').select('*').ilike('name', `%${value.trim()}%`).limit(5);
+      setSuggestions(data || []);
+      setShowSuggestions((data || []).length > 0);
+    }, 250);
+  }
+
+  function applySuggestion(contact) {
+    setForm(prev => ({
+      ...prev,
+      customer_name: contact.name || prev.customer_name,
+      customer_contact: contact.management_company ? prev.customer_contact : prev.customer_contact,
+      customer_email: contact.contact_email || prev.customer_email,
+      customer_phone: contact.contact_phone || prev.customer_phone,
+      billing_email: contact.billing_email || prev.billing_email,
+      billing_street: contact.billing_street || prev.billing_street,
+      billing_unit: contact.billing_unit || prev.billing_unit,
+      billing_city: contact.billing_city || prev.billing_city,
+      billing_state: contact.billing_state || prev.billing_state,
+      billing_zip: contact.billing_zip || prev.billing_zip,
+    }));
+    setShowSuggestions(false);
   }
 
   function addScopeItem() { setScopeItems(prev => [...prev, '']); }
@@ -55,10 +107,29 @@ export default function NewJobPage() {
     });
   }
 
+  function validate() {
+    if (!form.job_number.trim()) return 'Job number is required.';
+    if (!form.project_type) return 'Please select Residential or Commercial.';
+    if (!form.customer_email.trim()) return 'Contact email is required.';
+    if (!form.customer_phone.trim()) return 'Contact phone is required.';
+    if (!form.project_street.trim() || !form.project_city.trim()) return 'Project/jobsite address is required.';
+
+    if (form.project_type === 'commercial') {
+      if (!form.customer_name.trim()) return 'Customer/Company name is required.';
+      if (!form.customer_contact.trim()) return 'Contact person is required.';
+      if (!form.billing_email.trim()) return 'Billing email is required.';
+      if (!form.billing_street.trim() || !form.billing_city.trim()) return 'Billing address is required.';
+    } else {
+      if (!form.customer_name.trim()) return 'Customer name is required.';
+    }
+    return '';
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+    const validationError = validate();
+    if (validationError) { setError(validationError); return; }
     setError('');
-    if (!form.job_number.trim()) { setError('Job number is required.'); return; }
     setSaving(true);
 
     const payload = {
@@ -67,6 +138,8 @@ export default function NewJobPage() {
       scope_items: scopeItems.filter(t => t.trim()).map(text => ({ text })),
       additional_terms: termItems.filter(t => t.trim()).map(text => ({ text })),
       expected_close_date: form.expected_close_date || null,
+      billing_address: formatAddress(form, 'billing'),
+      project_address: formatAddress(form, 'project'),
       stage: 'proposal',
     };
 
@@ -81,6 +154,9 @@ export default function NewJobPage() {
   }
 
   if (loading || !session) return null;
+
+  const isCommercial = form.project_type === 'commercial';
+  const isResidential = form.project_type === 'residential';
 
   return (
     <AppShell>
@@ -112,32 +188,73 @@ export default function NewJobPage() {
 
           <div className="card">
             <h3>Customer</h3>
-            <div className="two-col">
-              <div>
-                <label>Customer / company name</label>
-                <input value={form.customer_name} onChange={e => update('customer_name', e.target.value)} />
-              </div>
-              <div>
-                <label>Contact person</label>
-                <input value={form.customer_contact} onChange={e => update('customer_contact', e.target.value)} />
-              </div>
-              <div>
-                <label>Email</label>
-                <input type="email" value={form.customer_email} onChange={e => update('customer_email', e.target.value)} />
-              </div>
-              <div>
-                <label>Phone</label>
-                <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} />
-              </div>
-            </div>
-            <label>Billing address</label>
-            <input value={form.billing_address} onChange={e => updateBilling(e.target.value)} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-              <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
-              Project address same as billing address
-            </label>
-            <label>Project / jobsite address</label>
-            <input value={form.project_address} onChange={e => update('project_address', e.target.value)} disabled={sameAsBilling} />
+
+            <label>Project type *</label>
+            <select value={form.project_type} onChange={e => update('project_type', e.target.value)} required>
+              <option value="">Select…</option>
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+            </select>
+
+            {form.project_type && (
+              <>
+                <div style={{ position: 'relative', marginTop: 12 }}>
+                  <label>{isCommercial ? 'Customer / Company name *' : 'Customer name *'}</label>
+                  <input
+                    value={form.customer_name}
+                    onChange={e => handleNameChange(e.target.value)}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    autoComplete="off"
+                  />
+                  {showSuggestions && (
+                    <div style={{ position: 'absolute', zIndex: 10, background: '#fff', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                      {suggestions.map(s => (
+                        <div
+                          key={s.id}
+                          onMouseDown={() => applySuggestion(s)}
+                          style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}
+                        >
+                          <b>{s.name}</b>{s.management_company ? ` — ${s.management_company}` : ''}
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Click to autofill contact &amp; billing info</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="two-col" style={{ marginTop: 12 }}>
+                  <div>
+                    <label>Contact person {isCommercial ? '*' : '(optional)'}</label>
+                    <input value={form.customer_contact} onChange={e => update('customer_contact', e.target.value)} required={isCommercial} />
+                  </div>
+                  <div>
+                    <label>Contact email *</label>
+                    <input type="email" value={form.customer_email} onChange={e => update('customer_email', e.target.value)} required />
+                  </div>
+                  <div>
+                    <label>Contact phone *</label>
+                    <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} required />
+                  </div>
+                  {isCommercial && (
+                    <div>
+                      <label>Billing email *</label>
+                      <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} required />
+                    </div>
+                  )}
+                </div>
+
+                <label style={{ marginTop: 16 }}>Billing address {isCommercial ? '*' : ''}</label>
+                <AddressFields prefix="billing" values={form} onChange={update} required={isCommercial} />
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
+                  Project address same as billing address
+                </label>
+                <label>Project / jobsite address *</label>
+                <AddressFields prefix="project" values={form} onChange={update} required={!sameAsBilling} />
+              </>
+            )}
           </div>
 
           <div className="card">

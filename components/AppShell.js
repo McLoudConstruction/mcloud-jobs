@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
@@ -17,15 +17,26 @@ export default function AppShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    function checkSize() {
+      setIsMobile(window.innerWidth < 900);
+    }
+    checkSize();
+    setNavOpen(window.innerWidth >= 900); // open by default on desktop, closed on mobile
+    setMounted(true);
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/login');
   }
 
-  const logoSize = typeof window !== 'undefined' && window.innerWidth < 700
-    ? settings.logo_size_mobile
-    : settings.logo_size_desktop;
+  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   return (
     <div className="shell">
@@ -36,7 +47,7 @@ export default function AppShell({ children }) {
 
         <div className="shell-logo">
           {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize ? logoSize / 4 : 32, width: 'auto' }} />
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
 
@@ -50,20 +61,29 @@ export default function AppShell({ children }) {
       </div>
 
       <div className="shell-body">
-        <div className={`shell-sidebar ${navOpen ? 'open' : ''}`}>
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
-              onClick={() => setNavOpen(false)}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <div
+          className="shell-sidebar"
+          style={mounted ? {
+            width: navOpen ? 240 : 0,
+            transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+            position: isMobile ? 'fixed' : 'sticky',
+          } : { width: 0 }}
+        >
+          <div style={{ width: 240 }}>
+            {NAV_ITEMS.map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
+                onClick={() => { if (isMobile) setNavOpen(false); }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
 
-        {navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
+        {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
 
         <div className="shell-content">{children}</div>
       </div>
