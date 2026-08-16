@@ -5,10 +5,21 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
-import { STANDARD_ASSUMPTIONS } from '../../../lib/constants';
+import AddressFields, { formatAddress } from '../../../components/AddressFields';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL } from '../../../lib/constants';
 
 const STAGE_ORDER = ['proposal', 'contract', 'active', 'invoice', 'complete'];
 const STAGE_LABELS = { proposal: 'Proposal', contract: 'Contract', active: 'Active', invoice: 'Invoice', complete: 'Complete' };
+const TABS = ['Customer', 'Project', 'Financials', 'Photos', 'Documents'];
+
+// Which document types make sense to generate at each stage.
+const STAGE_DOCS = {
+  proposal: ['proposal', 'contract'],
+  contract: ['proposal', 'contract'],
+  active: ['contract', 'update'],
+  invoice: ['contract', 'invoice'],
+  complete: ['contract', 'invoice'],
+};
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -21,6 +32,9 @@ function fmtDate(v) {
   const d = new Date(v.length === 10 ? v + 'T00:00:00' : v);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
+function standardListFor(type) {
+  return type === 'commercial' ? STANDARD_ASSUMPTIONS_COMMERCIAL : STANDARD_ASSUMPTIONS_RESIDENTIAL;
+}
 
 export default function JobDetailPage() {
   const { session, loading } = useRequireAuth();
@@ -31,6 +45,7 @@ export default function JobDetailPage() {
   const [updates, setUpdates] = useState([]);
   const [flash, setFlash] = useState('');
   const [notFound, setNotFound] = useState(false);
+  const [tab, setTab] = useState('Customer');
 
   const loadJob = useCallback(async () => {
     const { data, error } = await supabase.from('jobs').select('*').eq('id', id).single();
@@ -95,8 +110,6 @@ export default function JobDetailPage() {
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
           <div className="section-actions">
-            <Link href={`/jobs/${id}/proposal`} className="btn">View / Print Proposal</Link>
-            <Link href={`/jobs/${id}/contract`} className="btn">View / Print / Sign Contract</Link>
             {job.stage !== 'complete' && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
@@ -106,78 +119,153 @@ export default function JobDetailPage() {
           </div>
         </div>
 
-        <JobInfoCard job={job} onSave={saveJob} />
-        <ScopeCard job={job} onSave={saveJob} />
-        <PriceCard job={job} onSave={saveJob} />
-        <TermsCard job={job} onSave={saveJob} />
+        <div className="stage-tabs">
+          {TABS.map(t => (
+            <button key={t} className={`stage-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
+          ))}
+        </div>
 
-        {(job.stage === 'active' || job.stage === 'invoice' || job.stage === 'complete') && (
-          <UpdatesCard jobId={id} updates={updates} />
+        {tab === 'Customer' && <CustomerInfoCard job={job} onSave={saveJob} />}
+
+        {tab === 'Project' && (
+          <>
+            <ProjectInfoCard job={job} onSave={saveJob} />
+            <ScopeCard job={job} onSave={saveJob} />
+            <PriceCard job={job} onSave={saveJob} />
+            <TermsCard job={job} onSave={saveJob} />
+          </>
         )}
 
-        {(job.stage === 'invoice' || job.stage === 'complete') && (
-          <InvoiceCard job={job} onSave={saveJob} />
+        {tab === 'Financials' && (
+          <div className="card"><div className="empty-state">Financials tracking is coming in a future update.</div></div>
+        )}
+
+        {tab === 'Photos' && (
+          <div className="card"><div className="empty-state">Photo upload is coming in a future update.</div></div>
+        )}
+
+        {tab === 'Documents' && (
+          <>
+            <DocumentsCard jobId={id} job={job} />
+            {(job.stage === 'active' || job.stage === 'invoice' || job.stage === 'complete') && (
+              <UpdatesCard jobId={id} updates={updates} />
+            )}
+            {(job.stage === 'invoice' || job.stage === 'complete') && (
+              <InvoiceCard job={job} onSave={saveJob} />
+            )}
+          </>
         )}
       </div>
     </AppShell>
   );
 }
 
-/* ---------------- Job info ---------------- */
-function JobInfoCard({ job, onSave }) {
+/* ---------------- Customer tab ---------------- */
+function CustomerInfoCard({ job, onSave }) {
   const [form, setForm] = useState({
     customer_name: job.customer_name || '',
     customer_contact: job.customer_contact || '',
     customer_email: job.customer_email || '',
     customer_phone: job.customer_phone || '',
-    billing_address: job.billing_address || '',
-    project_address: job.project_address || '',
-    description: job.description || '',
-    governing_state: job.governing_state || 'Missouri',
-    job_type: job.job_type || '',
-    expected_close_date: job.expected_close_date || '',
+    billing_email: job.billing_email || '',
+    billing_street: job.billing_street || '', billing_unit: job.billing_unit || '', billing_city: job.billing_city || '', billing_state: job.billing_state || '', billing_zip: job.billing_zip || '',
+    project_street: job.project_street || '', project_unit: job.project_unit || '', project_city: job.project_city || '', project_state: job.project_state || '', project_zip: job.project_zip || '',
   });
   const [sameAsBilling, setSameAsBilling] = useState(
-    Boolean(job.billing_address) && job.billing_address === job.project_address
+    Boolean(job.billing_street) && job.billing_street === job.project_street && job.billing_city === job.project_city
   );
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
-  function updateBilling(value) {
-    setForm(prev => ({ ...prev, billing_address: value, project_address: sameAsBilling ? value : prev.project_address }));
+  function update(field, value) {
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
+        next[field.replace('billing_', 'project_')] = value;
+      }
+      return next;
+    });
   }
   function toggleSameAsBilling(checked) {
     setSameAsBilling(checked);
-    if (checked) setForm(prev => ({ ...prev, project_address: prev.billing_address }));
+    if (checked) {
+      setForm(prev => ({
+        ...prev,
+        project_street: prev.billing_street, project_unit: prev.billing_unit,
+        project_city: prev.billing_city, project_state: prev.billing_state, project_zip: prev.billing_zip,
+      }));
+    }
+  }
+  function save() {
+    onSave({
+      ...form,
+      billing_address: formatAddress(form, 'billing'),
+      project_address: formatAddress(form, 'project'),
+    });
   }
 
   return (
     <div className="card">
-      <h3>Job info</h3>
+      <h3>Customer</h3>
       <div className="two-col">
         <div><label>Customer / company name</label><input value={form.customer_name} onChange={e => update('customer_name', e.target.value)} /></div>
         <div><label>Contact person</label><input value={form.customer_contact} onChange={e => update('customer_contact', e.target.value)} /></div>
-        <div><label>Email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
-        <div><label>Phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} /></div>
-        <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
-        <div><label>Expected close date</label><input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} /></div>
+        <div><label>Contact email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
+        <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} /></div>
+        <div><label>Billing email</label><input value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
       </div>
-      <label>Billing address</label>
-      <input value={form.billing_address} onChange={e => updateBilling(e.target.value)} />
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+
+      <label style={{ marginTop: 16 }}>Billing address</label>
+      <AddressFields prefix="billing" values={form} onChange={update} />
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
         <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
         Project address same as billing address
       </label>
       <label>Project / jobsite address</label>
-      <input value={form.project_address} onChange={e => update('project_address', e.target.value)} disabled={sameAsBilling} />
+      <AddressFields prefix="project" values={form} onChange={update} />
+
+      <div className="section-actions">
+        <button className="btn btn-primary btn-sm" onClick={save}>Save customer info</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Project tab: overview ---------------- */
+function ProjectInfoCard({ job, onSave }) {
+  const [form, setForm] = useState({
+    job_type: job.job_type || '',
+    expected_close_date: job.expected_close_date || '',
+    description: job.description || '',
+    governing_state: job.governing_state || 'Missouri',
+    project_type: job.project_type || 'residential',
+  });
+  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+
+  return (
+    <div className="card">
+      <h3>Project overview</h3>
+      <div className="two-col">
+        <div>
+          <label>Project type</label>
+          <select value={form.project_type} onChange={e => update('project_type', e.target.value)}>
+            <option value="residential">Residential</option>
+            <option value="commercial">Commercial</option>
+          </select>
+        </div>
+        <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
+        <div><label>Expected close date</label><input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} /></div>
+        <div>
+          <label>Governing state</label>
+          <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
+            <option value="Missouri">Missouri</option>
+            <option value="Kansas">Kansas</option>
+          </select>
+        </div>
+      </div>
       <label>Description</label>
       <textarea value={form.description} onChange={e => update('description', e.target.value)} />
-      <label>Governing state</label>
-      <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
-        <option value="Missouri">Missouri</option>
-        <option value="Kansas">Kansas</option>
-      </select>
       <div className="section-actions">
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(form)}>Save job info</button>
+        <button className="btn btn-primary btn-sm" onClick={() => onSave(form)}>Save project overview</button>
       </div>
     </div>
   );
@@ -247,19 +335,20 @@ function PriceCard({ job, onSave }) {
   );
 }
 
-/* ---------------- Additional terms ---------------- */
+/* ---------------- Assumptions & exclusions ---------------- */
 function TermsCard({ job, onSave }) {
   const existing = (job.additional_terms || []).map(i => i.text || '');
-  const [items, setItems] = useState(existing.length ? existing : STANDARD_ASSUMPTIONS);
+  const [items, setItems] = useState(existing.length ? existing : standardListFor(job.project_type));
 
   function add() { setItems(prev => [...prev, '']); }
   function update(i, v) { setItems(prev => prev.map((t, idx) => idx === i ? v : t)); }
   function remove(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function save() { onSave({ additional_terms: items.filter(t => t.trim()).map(text => ({ text })) }); }
   function restoreStandard() {
+    const standard = standardListFor(job.project_type);
     setItems(prev => {
       const existingSet = new Set(prev.map(t => t.trim()));
-      const toAdd = STANDARD_ASSUMPTIONS.filter(t => !existingSet.has(t.trim()));
+      const toAdd = standard.filter(t => !existingSet.has(t.trim()));
       return [...prev, ...toAdd];
     });
   }
@@ -267,6 +356,9 @@ function TermsCard({ job, onSave }) {
   return (
     <div className="card">
       <h3>Project Assumptions &amp; Exclusions</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+        Standard list matches this job's project type ({job.project_type === 'commercial' ? 'Commercial' : 'Residential'}) — change project type on the Project tab if needed.
+      </div>
       {items.length === 0 && <div className="empty-state">None added.</div>}
       {items.map((text, i) => (
         <div className="list-row" key={i}>
@@ -279,6 +371,38 @@ function TermsCard({ job, onSave }) {
         <button className="btn btn-sm" onClick={restoreStandard}>↺ Restore standard list</button>
         <button className="btn btn-primary btn-sm" onClick={save}>Save assumptions &amp; exclusions</button>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Documents tab ---------------- */
+function DocumentsCard({ jobId, job }) {
+  const relevantDocs = STAGE_DOCS[job.stage] || [];
+  const DOC_META = {
+    proposal: { label: 'Proposal', href: `/jobs/${jobId}/proposal` },
+    contract: { label: 'Contract', href: `/jobs/${jobId}/contract` },
+    invoice: { label: 'Invoice', href: `/jobs/${jobId}/invoice` },
+    update: { label: 'Project Update (post one below)', href: null },
+  };
+
+  return (
+    <div className="card">
+      <h3>Documents — {STAGE_LABELS[job.stage]} stage</h3>
+      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        Documents available at this stage:
+      </div>
+      <div className="section-actions" style={{ marginTop: 0 }}>
+        {relevantDocs.map(docType => {
+          const meta = DOC_META[docType];
+          if (!meta.href) return null;
+          return <Link key={docType} href={meta.href} className="btn btn-primary">{meta.label} — Generate PDF</Link>;
+        })}
+      </div>
+      {relevantDocs.includes('update') && (
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+          Project updates are posted and generated individually below.
+        </div>
+      )}
     </div>
   );
 }
@@ -346,7 +470,7 @@ function UpdatesCard({ jobId, updates }) {
           {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
           {u.estimated_completion && <><div className="update-field-label">Estimated completion</div><p>{fmtDate(u.estimated_completion)}</p></>}
           <div className="section-actions">
-            <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">View / print</Link>
+            <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">Generate PDF</Link>
             <button className="btn btn-sm btn-danger" onClick={() => removeUpdate(u.id)}>Delete</button>
           </div>
         </div>
@@ -363,7 +487,6 @@ function InvoiceCard({ job, onSave }) {
 
   function onStatusChange(newStatus) {
     setStatus(newStatus);
-    // Auto-fill today's date the moment an invoice is marked sent/paid, if not already set
     if ((newStatus === 'sent' || newStatus === 'paid') && !invoicedAt) {
       setInvoicedAt(new Date().toISOString().slice(0, 10));
     }
@@ -400,7 +523,7 @@ function InvoiceCard({ job, onSave }) {
       <label>Invoiced date {status === 'not_sent' ? '' : '(auto-set — edit if needed)'}</label>
       <input type="date" value={invoicedAt} onChange={e => setInvoicedAt(e.target.value)} disabled={status === 'not_sent'} />
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-        Only counts toward the dashboard's "Invoiced this year" total once status is Sent or Paid — a project amount alone never counts on its own.
+        Only counts toward the dashboard's "Invoiced this year" total once status is Sent or Paid.
       </div>
       <div className="section-actions">
         <button className="btn btn-primary btn-sm" onClick={save}>Save invoice</button>

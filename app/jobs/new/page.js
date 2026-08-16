@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL } from '../../../lib/constants';
 
 const EMPTY_FORM = {
   job_number: '',
@@ -30,7 +30,8 @@ export default function NewJobPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [scopeItems, setScopeItems] = useState([]);
-  const [termItems, setTermItems] = useState([...STANDARD_ASSUMPTIONS]);
+  const [termItems, setTermItems] = useState([]);
+  const [termsTouched, setTermsTouched] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -96,16 +97,25 @@ export default function NewJobPage() {
   function updateScopeItem(i, value) { setScopeItems(prev => prev.map((t, idx) => idx === i ? value : t)); }
   function removeScopeItem(i) { setScopeItems(prev => prev.filter((_, idx) => idx !== i)); }
 
-  function addTerm() { setTermItems(prev => [...prev, '']); }
-  function updateTerm(i, value) { setTermItems(prev => prev.map((t, idx) => idx === i ? value : t)); }
-  function removeTerm(i) { setTermItems(prev => prev.filter((_, idx) => idx !== i)); }
+  function addTerm() { setTermsTouched(true); setTermItems(prev => [...prev, '']); }
+  function updateTerm(i, value) { setTermsTouched(true); setTermItems(prev => prev.map((t, idx) => idx === i ? value : t)); }
+  function removeTerm(i) { setTermsTouched(true); setTermItems(prev => prev.filter((_, idx) => idx !== i)); }
+  function standardListFor(type) { return type === 'commercial' ? STANDARD_ASSUMPTIONS_COMMERCIAL : STANDARD_ASSUMPTIONS_RESIDENTIAL; }
   function restoreStandardTerms() {
+    const standard = standardListFor(form.project_type);
+    setTermsTouched(true);
     setTermItems(prev => {
       const existingSet = new Set(prev.map(t => t.trim()));
-      const toAdd = STANDARD_ASSUMPTIONS.filter(t => !existingSet.has(t.trim()));
+      const toAdd = standard.filter(t => !existingSet.has(t.trim()));
       return [...prev, ...toAdd];
     });
   }
+
+  useEffect(() => {
+    if (form.project_type && !termsTouched && termItems.length === 0) {
+      setTermItems([...standardListFor(form.project_type)]);
+    }
+  }, [form.project_type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function validate() {
     if (!form.job_number.trim()) return 'Job number is required.';
@@ -216,7 +226,9 @@ export default function NewJobPage() {
                           style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}
                         >
                           <b>{s.name}</b>{s.management_company ? ` — ${s.management_company}` : ''}
-                          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Click to autofill contact &amp; billing info</div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                            {[s.contact_email, s.contact_phone].filter(Boolean).join(' · ') || 'Click to autofill contact & billing info'}
+                          </div>
                         </div>
                       ))}
                     </div>

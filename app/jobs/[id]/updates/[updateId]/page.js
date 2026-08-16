@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../../../lib/useAuth';
+import SendDocModal from '../../../../../components/SendDocModal';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -18,6 +19,7 @@ export default function UpdateDocumentPage() {
   const { id, updateId } = useParams();
   const [job, setJob] = useState(null);
   const [update, setUpdate] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     const [{ data: jobData }, { data: updateData }] = await Promise.all([
@@ -79,11 +81,25 @@ export default function UpdateDocumentPage() {
     </div>
   ) : null;
 
+  const recipientEmail = job.billing_email || job.customer_email || '';
+  const emailSubject = `Project Update${job.project_address ? ' — ' + job.project_address : ''}`;
+  const emailHtml = `
+    <div style="font-family:sans-serif;color:#221f16;">
+      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
+      <p>Here's the latest update on your project${job.project_address ? ' at ' + job.project_address : ''}.</p>
+      ${update.work_completed ? `<p><b>Work completed:</b> ${update.work_completed}</p>` : ''}
+      ${update.upcoming_work ? `<p><b>Upcoming work:</b> ${update.upcoming_work}</p>` : ''}
+      ${update.issues_notes ? `<p><b>Issues / notes:</b> ${update.issues_notes}</p>` : ''}
+      ${update.next_steps ? `<p><b>Next steps:</b> ${update.next_steps}</p>` : ''}
+      <p>Thanks,<br>Stachys — McLoud Construction</p>
+    </div>`;
+  const emailText = `Project Update\n\n${update.work_completed ? 'Work completed: ' + update.work_completed + '\n' : ''}${update.upcoming_work ? 'Upcoming work: ' + update.upcoming_work + '\n' : ''}\nThanks,\nMcLoud Construction`;
+
   return (
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
         <Link href={`/jobs/${id}`} className="btn btn-sm">← Back to job</Link>
-        <button className="btn btn-primary btn-sm" onClick={printDocument}>↓ Download / Print as PDF</button>
+        <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
       </div>
 
       <div className="doc-outer">
@@ -112,6 +128,17 @@ export default function UpdateDocumentPage() {
           </div>
         </div>
       </div>
+
+      <SendDocModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        docLabel="Project Update"
+        defaultEmail={recipientEmail}
+        subject={emailSubject}
+        bodyHtml={emailHtml}
+        bodyText={emailText}
+        onPrint={printDocument}
+      />
 
       <style jsx global>{`
         body { background: #dbd8bf; margin: 0; }

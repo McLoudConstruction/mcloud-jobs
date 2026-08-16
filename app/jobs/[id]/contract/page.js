@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../../lib/useAuth';
+import SendDocModal from '../../../../components/SendDocModal';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -26,6 +27,7 @@ export default function ContractDocumentPage() {
   const [job, setJob] = useState(null);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
 
   const loadJob = useCallback(async () => {
     const { data } = await supabase.from('jobs').select('*').eq('id', id).single();
@@ -80,6 +82,18 @@ export default function ContractDocumentPage() {
   const milestones = job.milestones || [];
   const extraTerms = (job.additional_terms || []).filter(t => t.text && t.text.trim());
   const sigs = job.contract_signatures || {};
+  const recipientEmail = job.billing_email || job.customer_email || '';
+  const emailSubject = `Contract #${job.job_number}${job.project_address ? ' — ' + job.project_address : ''}`;
+  const emailHtml = `
+    <div style="font-family:sans-serif;color:#221f16;">
+      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
+      <p>Attached is a summary of your commercial construction contract${job.project_address ? ' for ' + job.project_address : ''}.</p>
+      <p><b>Total contract price:</b> ${fmtMoney(job.contract_price)}</p>
+      <p><b>Scope of work:</b></p>
+      <ul>${scope.map(s => `<li>${s.text}</li>`).join('') || '<li>—</li>'}</ul>
+      <p>Thanks,<br>Stachys — McLoud Construction</p>
+    </div>`;
+  const emailText = `Contract #${job.job_number}\n\nTotal contract price: ${fmtMoney(job.contract_price)}\n\nThanks,\nMcLoud Construction`;
 
   async function saveSignature(role, payload) {
     const updatedSigs = { ...sigs, [role]: payload };
@@ -106,7 +120,7 @@ export default function ContractDocumentPage() {
         <Link href={`/jobs/${id}`} className="btn btn-sm">← Back to job</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
-          <button className="btn btn-primary btn-sm" onClick={printDocument}>↓ Download / Print as PDF</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
         </div>
       </div>
 
@@ -247,6 +261,17 @@ export default function ContractDocumentPage() {
           </div>
         </div>
       </div>
+
+      <SendDocModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        docLabel={`Contract #${job.job_number}`}
+        defaultEmail={recipientEmail}
+        subject={emailSubject}
+        bodyHtml={emailHtml}
+        bodyText={emailText}
+        onPrint={printDocument}
+      />
 
       <style jsx global>{`
         body { background: #dbd8bf; margin: 0; }
