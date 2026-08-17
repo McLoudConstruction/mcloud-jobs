@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
+import RouteBuilderModal from '../../components/RouteBuilderModal';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage } from '../../lib/constants';
 
 function fmtMoney(n) {
@@ -16,7 +17,7 @@ export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
   const { settings } = useSettings();
   const [jobs, setJobs] = useState([]);
-  const [unansweredQuestions, setUnansweredQuestions] = useState([]);
+  const [routeModalOpen, setRouteModalOpen] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -24,20 +25,6 @@ export default function DashboardPage() {
     const load = () => supabase.from('jobs').select('*').then(({ data }) => { if (mounted && data) setJobs(data); });
     load();
     const channel = supabase.channel('jobs-stats').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).subscribe();
-    return () => { mounted = false; supabase.removeChannel(channel); };
-  }, [session]);
-
-  useEffect(() => {
-    if (!session) return;
-    let mounted = true;
-    const loadQuestions = () => supabase
-      .from('job_questions')
-      .select('*, jobs(job_number, customer_name)')
-      .is('response', null)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { if (mounted && data) setUnansweredQuestions(data); });
-    loadQuestions();
-    const channel = supabase.channel('dashboard-questions').on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions' }, loadQuestions).subscribe();
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [session]);
 
@@ -147,27 +134,12 @@ export default function DashboardPage() {
             </div>
           )}
           {show('sales_route_ai') && (
-            <div className="card">
+            <div className="card sales-route-card" onClick={() => setRouteModalOpen(true)}>
               <h3>Sales route</h3>
-              <button className="btn" disabled title="Coming in a future update">Create My Sales Route (AI)</button>
+              <div className="empty-state" style={{ padding: '8px 0' }}>Click to build a route based on your area, stop count, and property types.</div>
             </div>
           )}
         </div>
-
-        {show('customer_questions') && (
-          <div className="card">
-            <h3>Customer questions {unansweredQuestions.length > 0 ? `(${unansweredQuestions.length} unanswered)` : ''}</h3>
-            {unansweredQuestions.length === 0 && <div className="empty-state">No unanswered questions.</div>}
-            {unansweredQuestions.map(q => (
-              <Link key={q.id} href={`/jobs/${q.job_id}`} className="job-row">
-                <div className="job-main">
-                  <span className="job-number">#{q.jobs?.job_number} — {q.jobs?.customer_name}</span>
-                  <span className="job-customer" style={{ fontSize: 13, fontWeight: 400 }}>{q.message}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
 
         {show('overdue_opportunities') && (
           <div className="card">
@@ -186,6 +158,8 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      <RouteBuilderModal open={routeModalOpen} onClose={() => setRouteModalOpen(false)} />
     </AppShell>
   );
 }

@@ -89,16 +89,24 @@ export default function ContractDocumentPage() {
     const updatedSigs = { ...sigs, [role]: payload };
     const patch = { contract_signatures: updatedSigs };
 
-    // Once the owner has signed a job still in the contract stage, auto-advance to Active
-    if (role === 'owner' && job.stage === 'contract') {
-      patch.stage = 'active';
+    // Once the owner signs a job still pre-signature, auto-advance to Approved.
+    const preSignatureStages = ['new', 'inspected', 'proposal_delivered'];
+    const advancing = role === 'owner' && preSignatureStages.includes(job.stage);
+    if (advancing) {
+      patch.stage = 'approved';
     }
 
     setSaving(true);
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
+    if (!error && advancing) {
+      await supabase.from('notifications').insert({
+        message: `Job #${job.job_number} (${job.customer_name || 'customer'}) was signed and auto-advanced to Approved.`,
+        job_id: job.id,
+      });
+    }
     setSaving(false);
     if (!error) {
-      setFlash(patch.stage ? 'Signed — job moved to Active' : 'Signature saved');
+      setFlash(advancing ? 'Signed — job moved to Approved' : 'Signature saved');
       setTimeout(() => setFlash(''), 2500);
       loadJob();
     }

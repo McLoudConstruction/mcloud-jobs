@@ -140,6 +140,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .badge-paid{ background: #3a6b45; }
 
 .stepper{ display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.stepper-flat{ gap: 8px; }
 .stepper-phase{ flex: 1; min-width: 180px; }
 .stepper-phase-label{ font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
 .stepper-stages{ display: flex; flex-wrap: wrap; gap: 6px; }
@@ -223,6 +224,22 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--heading); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
+.shell-header-right{ display: flex; align-items: center; gap: 14px; }
+.notif-bell{
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  color: var(--heading);
+}
+.notif-badge{
+  position: absolute; top: -2px; right: -4px;
+  background: var(--rust); color: #fff;
+  font-size: 10px; font-weight: 700;
+  min-width: 16px; height: 16px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+}
+
 .hamburger-btn{
   width: 34px; height: 34px;
   background: transparent; border: 1px solid var(--panel-line); border-radius: 5px;
@@ -287,6 +304,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
 .contact-card .contact-meta{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.6; }
+
+.sales-route-card{ cursor: pointer; }
+.sales-route-card:hover{ border-color: var(--rust); }
 
 .breadcrumb-link{
   display: inline-block;

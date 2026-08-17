@@ -22,14 +22,13 @@ const FONT_OPTIONS = [
 const DASHBOARD_WIDGETS = [
   { key: 'sold_job_count', label: 'Sold Job Count Total' },
   { key: 'job_counts_by_stage', label: 'Job Counts by Stage' },
-  { key: 'customer_questions', label: 'Customer Questions' },
   { key: 'overdue_opportunities', label: 'Overdue Opportunities' },
   { key: 'total_ar', label: 'Total AR Dollars' },
   { key: 'total_paid', label: 'Total Paid Dollars' },
   { key: 'revenue_ytd', label: 'Total Revenue YTD' },
   { key: 'revenue_mtd', label: 'Total Revenue MTD' },
   { key: 'total_profit', label: 'Total Profit Dollars' },
-  { key: 'sales_route_ai', label: 'Create My Sales Route (AI)' },
+  { key: 'sales_route_ai', label: 'Create My Sales Route' },
   { key: 'new_opportunity_button', label: 'New Opportunity Button' },
 ];
 

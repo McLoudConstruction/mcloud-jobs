@@ -178,24 +178,17 @@ export default function JobDetailPage() {
 function StageStepper({ currentStage }) {
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
   return (
-    <div className="stepper">
-      {PHASES.map(phase => (
-        <div key={phase.key} className="stepper-phase">
-          <div className="stepper-phase-label">{phase.label}</div>
-          <div className="stepper-stages">
-            {phase.stages.map(stage => {
-              const stageIndex = STAGE_ORDER.indexOf(stage);
-              const isCurrent = stage === currentStage;
-              const isPast = stageIndex < currentIndex;
-              return (
-                <div key={stage} className={`stepper-stage ${isCurrent ? 'current' : ''} ${isPast ? 'past' : ''}`}>
-                  {STAGE_LABELS[stage]}
-                </div>
-              );
-            })}
+    <div className="stepper stepper-flat">
+      {STAGE_ORDER.map(stage => {
+        const stageIndex = STAGE_ORDER.indexOf(stage);
+        const isCurrent = stage === currentStage;
+        const isPast = stageIndex < currentIndex;
+        return (
+          <div key={stage} className={`stepper-stage ${isCurrent ? 'current' : ''} ${isPast ? 'past' : ''}`}>
+            {STAGE_LABELS[stage]}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -546,6 +539,11 @@ function DocumentsCard({ jobId, job }) {
       {relevantDocs.includes('update') && (
         <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
           Project updates are posted and generated individually below.
+        </div>
+      )}
+      {!relevantDocs.includes('contract') && phaseForStage(job.stage) !== 'opportunity' && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <Link href={`/jobs/${jobId}/contract`} className="btn btn-sm">View signed contract</Link>
         </div>
       )}
     </div>

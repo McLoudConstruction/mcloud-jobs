@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
@@ -35,6 +35,27 @@ export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(47);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const topbarRef = useRef(null);
+
+  useEffect(() => {
+    let mounted2 = true;
+    async function loadUnread() {
+      const [{ count: notifCount }, { count: questionCount }] = await Promise.all([
+        supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('read', false),
+        supabase.from('job_questions').select('*', { count: 'exact', head: true }).is('response', null),
+      ]);
+      if (mounted2) setUnreadCount((notifCount || 0) + (questionCount || 0));
+    }
+    loadUnread();
+    const channel = supabase
+      .channel('shell-unread')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, loadUnread)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions' }, loadUnread)
+      .subscribe();
+    return () => { mounted2 = false; supabase.removeChannel(channel); };
+  }, []);
 
   useEffect(() => {
     function checkSize() {
@@ -45,6 +66,16 @@ export default function AppShell({ children }) {
     setMounted(true);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
+  }, []);
+
+  useEffect(() => {
+    if (!topbarRef.current) return;
+    const el = topbarRef.current;
+    const update = () => setHeaderHeight(el.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   async function handleSignOut() {
@@ -60,15 +91,25 @@ export default function AppShell({ children }) {
 
   return (
     <div className="shell">
-      <div className="shell-topbar">
+      <div className="shell-topbar" ref={topbarRef}>
         <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
           <span /><span /><span />
         </button>
 
-        <div className="shell-logo">
-          {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
-            : <span className="brand">McLoud <span>Jobs</span></span>}
+        <div className="shell-header-right">
+          <div className="shell-logo">
+            {settings.logo_url
+              ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
+              : <span className="brand">McLoud <span>Jobs</span></span>}
+          </div>
+
+          <Link href="/notifications" className="notif-bell" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+          </Link>
         </div>
       </div>
 
@@ -78,6 +119,8 @@ export default function AppShell({ children }) {
           style={mounted ? {
             width: sidebarWidth,
             transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+            top: headerHeight,
+            height: `calc(100dvh - ${headerHeight}px)`,
           } : { width: 0 }}
         >
           <div className="shell-sidebar-inner">
