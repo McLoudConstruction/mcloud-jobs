@@ -5,15 +5,17 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
+import { PROPERTY_TYPES } from '../../lib/constants';
 
 const EMPTY_FORM = {
-  name: '', management_company: '', contact_phone: '', contact_email: '', property: '', notes: '',
+  name: '', contact_type: '', management_company: '', contact_phone: '', contact_email: '', property: '', notes: '',
   billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
 };
 
 // Maps common spreadsheet header variations to our contact fields
 const HEADER_MAP = {
   name: ['name', 'contact name', 'customer name', 'full name'],
+  contact_type: ['type', 'contact type', 'property type', 'category'],
   management_company: ['company', 'management company', 'organization', 'business'],
   contact_phone: ['phone', 'contact phone', 'phone number', 'mobile'],
   contact_email: ['email', 'contact email', 'e-mail'],
@@ -174,6 +176,13 @@ export default function CustomersPage() {
             <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
             <div className="two-col">
               <div><label>Name *</label><input value={form.name} onChange={e => update('name', e.target.value)} required /></div>
+              <div>
+                <label>Type</label>
+                <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)}>
+                  <option value="">Select…</option>
+                  {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
               <div><label>Management company</label><input value={form.management_company} onChange={e => update('management_company', e.target.value)} /></div>
               <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
@@ -203,6 +212,7 @@ export default function CustomersPage() {
           <div className="contact-card" key={c.id}>
             <div>
               <div className="contact-name">{c.name}</div>
+              {c.contact_type && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', margin: '2px 0 4px' }}>{c.contact_type}</div>}
               <div className="contact-meta">
                 {c.management_company && <>{c.management_company}<br /></>}
                 {c.contact_phone && <>{c.contact_phone}<br /></>}

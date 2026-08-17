@@ -8,6 +8,8 @@ import { useSettings } from '../lib/useSettings';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/customers', label: 'Customer Information' },
+  { href: '/sales', label: 'Sales Dashboard' },
+  { href: '/properties', label: 'Property Database' },
   { href: '/jobs', label: 'Job Tracker' },
   { href: '/settings', label: 'Settings' },
 ];
