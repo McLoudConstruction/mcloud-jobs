@@ -15,6 +15,7 @@ function fmtMoney(n) {
 export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
   const [jobs, setJobs] = useState([]);
+  const [unansweredQuestions, setUnansweredQuestions] = useState([]);
 
   useEffect(() => {
     if (!session) return;
@@ -22,6 +23,20 @@ export default function DashboardPage() {
     const load = () => supabase.from('jobs').select('*').then(({ data }) => { if (mounted && data) setJobs(data); });
     load();
     const channel = supabase.channel('jobs-stats').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).subscribe();
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    let mounted = true;
+    const loadQuestions = () => supabase
+      .from('job_questions')
+      .select('*, jobs(job_number, customer_name)')
+      .is('response', null)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { if (mounted && data) setUnansweredQuestions(data); });
+    loadQuestions();
+    const channel = supabase.channel('dashboard-questions').on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions' }, loadQuestions).subscribe();
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [session]);
 
@@ -73,6 +88,19 @@ export default function DashboardPage() {
             <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalInvoicedAmount)}</div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>{stats.invoicedCount} invoiced project{stats.invoicedCount === 1 ? '' : 's'}</div>
           </div>
+        </div>
+
+        <div className="card">
+          <h3>Customer questions {unansweredQuestions.length > 0 ? `(${unansweredQuestions.length} unanswered)` : ''}</h3>
+          {unansweredQuestions.length === 0 && <div className="empty-state">No unanswered questions.</div>}
+          {unansweredQuestions.map(q => (
+            <Link key={q.id} href={`/jobs/${q.job_id}`} className="job-row">
+              <div className="job-main">
+                <span className="job-number">#{q.jobs?.job_number} — {q.jobs?.customer_name}</span>
+                <span className="job-customer" style={{ fontSize: 13, fontWeight: 400 }}>{q.message}</span>
+              </div>
+            </Link>
+          ))}
         </div>
 
         <div className="card">

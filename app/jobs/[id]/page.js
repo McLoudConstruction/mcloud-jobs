@@ -133,7 +133,12 @@ export default function JobDetailPage() {
           ))}
         </div>
 
-        {tab === 'Customer' && <CustomerInfoCard job={job} onSave={saveJob} />}
+        {tab === 'Customer' && (
+          <>
+            <CustomerInfoCard job={job} onSave={saveJob} />
+            <PortalCard job={job} onSave={saveJob} />
+          </>
+        )}
 
         {tab === 'Project' && (
           <>
@@ -171,7 +176,112 @@ export default function JobDetailPage() {
   );
 }
 
-/* ---------------- Customer tab ---------------- */
+/* ---------------- Customer portal invite + questions ---------------- */
+function PortalCard({ job, onSave }) {
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState('');
+  const [questions, setQuestions] = useState([]);
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replyingId, setReplyingId] = useState(null);
+
+  const recipientEmail = job.customer_email || job.billing_email || '';
+
+  const loadQuestions = useCallback(async () => {
+    const { data } = await supabase.from('job_questions').select('*').eq('job_id', job.id).order('created_at', { ascending: false });
+    if (data) setQuestions(data);
+  }, [job.id]);
+
+  useEffect(() => {
+    loadQuestions();
+    const channel = supabase
+      .channel(`portal-questions-${job.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions', filter: `job_id=eq.${job.id}` }, loadQuestions)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [job.id, loadQuestions]);
+
+  async function invite() {
+    if (!recipientEmail) return;
+    setInviting(true);
+    setInviteResult('');
+    const { error } = await supabase.auth.signInWithOtp({
+      email: recipientEmail,
+      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+    });
+    setInviting(false);
+    if (error) {
+      setInviteResult(error.message);
+    } else {
+      setInviteResult(`Invite sent to ${recipientEmail}.`);
+      onSave({ portal_invited_at: new Date().toISOString() });
+    }
+  }
+
+  async function sendReply(questionId) {
+    const text = replyDrafts[questionId] || '';
+    if (!text.trim()) return;
+    await supabase.from('job_questions').update({ response: text, responded_at: new Date().toISOString() }).eq('id', questionId);
+    setReplyingId(null);
+  }
+
+  return (
+    <div className="card">
+      <h3>Customer portal</h3>
+      {!recipientEmail && (
+        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Add a contact email above before inviting the customer.</div>
+      )}
+      {recipientEmail && (
+        <>
+          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+            {job.portal_invited_at
+              ? `Invited on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}. You can resend the link anytime.`
+              : 'Send this customer a secure link to view project updates and their invoice.'}
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={invite} disabled={inviting}>
+            {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite customer to portal'}
+          </button>
+          {inviteResult && <div style={{ fontSize: 12.5, marginTop: 8, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>{inviteResult}</div>}
+        </>
+      )}
+
+      {questions.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <h4 style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 10px' }}>Customer questions</h4>
+          {questions.map(q => (
+            <div className="update-entry" key={q.id}>
+              <div className="update-date">{new Date(q.created_at).toLocaleDateString('en-US')}</div>
+              <p>{q.message}</p>
+              {q.response ? (
+                <>
+                  <div className="update-field-label">Your reply</div>
+                  <p>{q.response}</p>
+                </>
+              ) : replyingId === q.id ? (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    value={replyDrafts[q.id] || ''}
+                    onChange={e => setReplyDrafts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                    placeholder="Type your reply…"
+                  />
+                  <div className="section-actions">
+                    <button className="btn btn-primary btn-sm" onClick={() => sendReply(q.id)}>Send reply</button>
+                    <button className="btn btn-sm" onClick={() => setReplyingId(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="section-actions">
+                  <button className="btn btn-sm" onClick={() => setReplyingId(q.id)}>Reply</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function CustomerInfoCard({ job, onSave }) {
   const [form, setForm] = useState({
     customer_name: job.customer_name || '',
