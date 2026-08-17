@@ -105,14 +105,23 @@ export default function ProposalDocumentPage() {
 
           <div className="doc-body">
             <h1 className="doc-title">Project Proposal</h1>
-            <div className="doc-meta">
-              <span><b>{job.customer_name || 'Customer name'}</b></span>
-              <span>{job.project_address || 'Project address'}</span>
-              <span>Date: <b>{fmtDate(new Date().toISOString().slice(0, 10))}</b></span>
+
+            <div className="party-grid">
+              <div>
+                <h4>Contractor</h4>
+                <p>McLoud Construction</p>
+              </div>
+              <div>
+                <h4>Customer</h4>
+                <p>{job.customer_name || 'Customer name'}</p>
+                <p className="dim">{job.customer_contact || '—'}</p>
+              </div>
             </div>
 
             <div className="section">
-              <h3>Overview</h3>
+              <h3>Project</h3>
+              <p style={{ marginBottom: 4 }}><b>Jobsite:</b> {job.project_address || '—'}</p>
+              <p style={{ marginBottom: 12 }}><b>Proposal date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</p>
               <p className={job.description ? '' : 'empty'}>{job.description || 'No description entered yet.'}</p>
             </div>
 
@@ -165,6 +174,10 @@ export default function ProposalDocumentPage() {
         .doc-num { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: 0.05em; color: #6b6350; text-transform: none; margin-top: 3px; }
         .doc-body { padding: 38px 48px 56px; }
         .doc-title { font-weight: 700; font-size: 24px; color: #9b773d; margin: 0 0 18px; }
+        .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-bottom: 20px; margin-bottom: 10px; border-bottom: 1px solid #ded7c0; break-inside: avoid; }
+        .party-grid h4 { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #9b773d; margin: 0 0 6px; }
+        .party-grid p { font-size: 12.5px; line-height: 1.55; color: #221f16; margin: 0; }
+        .party-grid p.dim { color: #6b6350; }
         .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: 12.5px; color: #6b6350; padding-bottom: 18px; margin-bottom: 34px; border-bottom: 1px solid #ded7c0; }
         .section { margin-bottom: 24px; break-inside: avoid; }
         .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 10px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
@@ -180,6 +193,14 @@ export default function ProposalDocumentPage() {
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
         .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
+
+        @media (max-width: 700px) {
+          .doc-outer { padding: 12px; }
+          .doc-header { padding: 18px 20px; flex-wrap: wrap; }
+          .doc-body { padding: 20px 20px 40px; }
+          .party-grid { grid-template-columns: 1fr; }
+          .doc-logo { width: 130px; }
+        }
 
         @media print {
           .continued-note { display: block; }

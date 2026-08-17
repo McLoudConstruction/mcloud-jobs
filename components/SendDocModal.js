@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { generatePdfBase64 } from '../lib/generatePdf';
 import { buildDocEmail } from '../lib/emailTemplates';
 
@@ -7,8 +8,21 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
   const [email, setEmail] = useState(defaultEmail || '');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
+  const [mounted, setMounted] = useState(false);
 
-  if (!open) return null;
+  useEffect(() => { setMounted(true); }, []);
+
+  // Lock background scroll while the modal is open, so the page can't
+  // scroll independently underneath a fixed-position overlay on mobile.
+  useEffect(() => {
+    if (open) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prevOverflow; };
+    }
+  }, [open]);
+
+  if (!open || !mounted) return null;
 
   async function send() {
     setSending(true);
@@ -35,7 +49,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
     }
   }
 
-  return (
+  return createPortal(
     <div style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{docLabel}</h3>
@@ -60,15 +74,19 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
           <button className="btn btn-sm" onClick={onClose}>Close</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 const overlayStyle = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20,
+  position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
+  background: 'rgba(0,0,0,0.45)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
+  overflowY: 'auto',
 };
 const modalStyle = {
   background: '#fff', borderRadius: 8, padding: 26, width: '100%', maxWidth: 420,
   boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+  margin: 'auto',
 };

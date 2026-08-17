@@ -41,22 +41,14 @@ export default function AppShell({ children }) {
   return (
     <div className="shell">
       <div className="shell-topbar">
-        <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
-          <span /><span /><span />
-        </button>
-
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
 
-        <button
-          className="btn btn-sm signout-btn"
-          onClick={handleSignOut}
-          style={{ background: settings.signout_bg, color: settings.signout_text, borderColor: settings.signout_text }}
-        >
-          Sign out
+        <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
+          <span /><span /><span />
         </button>
       </div>
 
@@ -69,17 +61,26 @@ export default function AppShell({ children }) {
             position: isMobile ? 'fixed' : 'sticky',
           } : { width: 0 }}
         >
-          <div style={{ width: 240 }}>
-            {NAV_ITEMS.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
-                onClick={() => { if (isMobile) setNavOpen(false); }}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="shell-sidebar-inner">
+            <div className="shell-nav-links">
+              {NAV_ITEMS.map(item => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
+                  onClick={() => { if (isMobile) setNavOpen(false); }}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+            <button
+              className="btn btn-sm signout-btn"
+              onClick={handleSignOut}
+              style={{ background: settings.signout_bg, color: settings.signout_text, borderColor: settings.signout_text }}
+            >
+              Sign out
+            </button>
           </div>
         </div>
 

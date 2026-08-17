@@ -186,8 +186,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 /* ---------- App shell (hamburger sidebar) ---------- */
 .shell{ min-height: 100vh; }
 .shell-topbar{
-  display: grid;
-  grid-template-columns: 60px 1fr 100px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
   background: var(--header-bg);
@@ -196,7 +196,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   top: 0;
   z-index: 40;
 }
-.shell-logo{ display: flex; justify-content: center; }
+.shell-logo{ display: flex; justify-content: flex-start; align-items: center; }
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--heading); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
@@ -205,10 +205,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   background: transparent; border: 1px solid var(--panel-line); border-radius: 5px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .hamburger-btn span{ width: 18px; height: 2px; background: var(--heading); display: block; }
 
-.signout-btn{ justify-self: end; }
+.signout-btn{ width: calc(100% - 32px); margin: 0 16px; justify-content: center; }
 
 .shell-body{ display: flex; align-items: flex-start; }
 
@@ -223,7 +224,18 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   bottom: 0;
   z-index: 30;
   height: calc(100vh - 57px);
+  height: calc(100dvh - 57px);
 }
+.shell-sidebar-inner{
+  width: 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 0 16px;
+  box-sizing: border-box;
+}
+.shell-nav-links{ display: flex; flex-direction: column; }
 .shell-nav-link{
   display: block;
   padding: 13px 24px;
