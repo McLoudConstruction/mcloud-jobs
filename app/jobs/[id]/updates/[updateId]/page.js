@@ -82,18 +82,6 @@ export default function UpdateDocumentPage() {
   ) : null;
 
   const recipientEmail = job.billing_email || job.customer_email || '';
-  const emailSubject = `Project Update${job.project_address ? ' — ' + job.project_address : ''}`;
-  const emailHtml = `
-    <div style="font-family:sans-serif;color:#221f16;">
-      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
-      <p>Here's the latest update on your project${job.project_address ? ' at ' + job.project_address : ''}.</p>
-      ${update.work_completed ? `<p><b>Work completed:</b> ${update.work_completed}</p>` : ''}
-      ${update.upcoming_work ? `<p><b>Upcoming work:</b> ${update.upcoming_work}</p>` : ''}
-      ${update.issues_notes ? `<p><b>Issues / notes:</b> ${update.issues_notes}</p>` : ''}
-      ${update.next_steps ? `<p><b>Next steps:</b> ${update.next_steps}</p>` : ''}
-      <p>Thanks,<br>Stachys — McLoud Construction</p>
-    </div>`;
-  const emailText = `Project Update\n\n${update.work_completed ? 'Work completed: ' + update.work_completed + '\n' : ''}${update.upcoming_work ? 'Upcoming work: ' + update.upcoming_work + '\n' : ''}\nThanks,\nMcLoud Construction`;
 
   return (
     <div>
@@ -133,10 +121,11 @@ export default function UpdateDocumentPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         docLabel="Project Update"
+        docType="project update"
+        customerName={job.customer_contact || job.customer_name}
+        docElementId="doc-preview"
+        pdfFilename={`Project-Update-${job.job_number}-${update.update_date}.pdf`}
         defaultEmail={recipientEmail}
-        subject={emailSubject}
-        bodyHtml={emailHtml}
-        bodyText={emailText}
         onPrint={printDocument}
       />
 

@@ -3,6 +3,7 @@
 :root{
   --bg: #dbd8bf;
   --panel: #d3d0b5;
+  --header-bg: #d3d0b5;
   --panel-line: #c4c1a6;
   --heading: #49402a;
   --gold: #9b773d;
@@ -189,7 +190,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   grid-template-columns: 60px 1fr 100px;
   align-items: center;
   padding: 12px 20px;
-  background: var(--panel);
+  background: var(--header-bg);
   border-bottom: 1px solid var(--panel-line);
   position: sticky;
   top: 0;

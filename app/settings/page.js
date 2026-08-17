@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
+import ColorField from '../../components/ColorField';
 
 const INTEGRATIONS = [
   { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
@@ -18,9 +19,6 @@ const FONT_OPTIONS = [
   { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
-function safeColor(value, fallback) {
-  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
-}
 
 export default function SettingsPage() {
   const { session, loading } = useRequireAuth();
@@ -77,6 +75,7 @@ export default function SettingsPage() {
           color_heading: form.color_heading,
           color_accent: form.color_accent,
           color_panel: form.color_panel,
+          color_header: form.color_header,
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
@@ -101,6 +100,7 @@ export default function SettingsPage() {
       color_heading: '#49402a',
       color_accent: '#8a3d14',
       color_panel: '#d3d0b5',
+      color_header: '#d3d0b5',
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 120,
@@ -150,22 +150,11 @@ export default function SettingsPage() {
         <div className="card">
           <h3>Color theme</h3>
           <div className="two-col">
-            <div>
-              <label htmlFor="colorBg">Background</label>
-              <input id="colorBg" type="color" value={safeColor(form.color_bg, "#dbd8bf")} onChange={e => update('color_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
-            <div>
-              <label htmlFor="colorPanel">Sidebar / panel background</label>
-              <input id="colorPanel" type="color" value={safeColor(form.color_panel, "#d3d0b5")} onChange={e => update('color_panel', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
-            <div>
-              <label htmlFor="colorHeading">Headings &amp; text</label>
-              <input id="colorHeading" type="color" value={safeColor(form.color_heading, "#49402a")} onChange={e => update('color_heading', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
-            <div>
-              <label htmlFor="colorAccent">Accent (buttons, badges)</label>
-              <input id="colorAccent" type="color" value={safeColor(form.color_accent, "#8a3d14")} onChange={e => update('color_accent', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
+            <ColorField label="Page background" id="colorBg" value={form.color_bg} fallback="#dbd8bf" onChange={v => update('color_bg', v)} />
+            <ColorField label="Header bar background" id="colorHeader" value={form.color_header} fallback="#d3d0b5" onChange={v => update('color_header', v)} />
+            <ColorField label="Sidebar background" id="colorPanel" value={form.color_panel} fallback="#d3d0b5" onChange={v => update('color_panel', v)} />
+            <ColorField label="Headings & text" id="colorHeading" value={form.color_heading} fallback="#49402a" onChange={v => update('color_heading', v)} />
+            <ColorField label="Accent (buttons, badges)" id="colorAccent" value={form.color_accent} fallback="#8a3d14" onChange={v => update('color_accent', v)} />
           </div>
 
           <label htmlFor="fontChoice" style={{ marginTop: 16 }}>Font</label>
@@ -177,14 +166,8 @@ export default function SettingsPage() {
         <div className="card">
           <h3>Sign-out button</h3>
           <div className="two-col">
-            <div>
-              <label htmlFor="signoutBg">Background</label>
-              <input id="signoutBg" type="color" value={form.signout_bg === 'transparent' ? '#ffffff' : safeColor(form.signout_bg, '#ffffff')} onChange={e => update('signout_bg', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
-            <div>
-              <label htmlFor="signoutText">Text &amp; border color</label>
-              <input id="signoutText" type="color" value={safeColor(form.signout_text, '#49402a')} onChange={e => update('signout_text', e.target.value)} style={{ height: 42, padding: 4 }} />
-            </div>
+            <ColorField label="Background" id="signoutBg" value={form.signout_bg === 'transparent' ? '#ffffff' : form.signout_bg} fallback="#ffffff" onChange={v => update('signout_bg', v)} />
+            <ColorField label="Text & border color" id="signoutText" value={form.signout_text} fallback="#49402a" onChange={v => update('signout_text', v)} />
           </div>
           <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => update('signout_bg', 'transparent')}>Use transparent background</button>
         </div>

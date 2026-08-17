@@ -88,18 +88,6 @@ export default function ProposalDocumentPage() {
   const extraTerms = (job.additional_terms || []).filter(t => t.text && t.text.trim());
   const allTerms = extraTerms.length ? extraTerms : STANDARD_EXCLUSIONS.map(text => ({ text, standard: true }));
   const recipientEmail = job.billing_email || job.customer_email || '';
-  const emailSubject = `Proposal #${job.job_number}${job.project_address ? ' — ' + job.project_address : ''}`;
-  const emailHtml = `
-    <div style="font-family:sans-serif;color:#221f16;">
-      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
-      <p>Please find your project proposal${job.project_address ? ' for ' + job.project_address : ''} summarized below.</p>
-      <p><b>Overview:</b> ${job.description || '—'}</p>
-      <p><b>Total investment:</b> ${fmtMoney(job.contract_price)}</p>
-      <p><b>Scope of work:</b></p>
-      <ul>${scope.map(s => `<li>${s.text}</li>`).join('') || '<li>—</li>'}</ul>
-      <p>Thanks,<br>Stachys — McLoud Construction</p>
-    </div>`;
-  const emailText = `Proposal #${job.job_number}\n\nOverview: ${job.description || '—'}\nTotal investment: ${fmtMoney(job.contract_price)}\n\nThanks,\nMcLoud Construction`;
 
   return (
     <div>
@@ -159,10 +147,11 @@ export default function ProposalDocumentPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         docLabel={`Proposal #${job.job_number}`}
+        docType="proposal"
+        customerName={job.customer_contact || job.customer_name}
+        docElementId="doc-preview"
+        pdfFilename={`Proposal-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
-        subject={emailSubject}
-        bodyHtml={emailHtml}
-        bodyText={emailText}
         onPrint={printDocument}
       />
 

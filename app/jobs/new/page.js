@@ -80,7 +80,7 @@ export default function NewJobPage() {
     setForm(prev => ({
       ...prev,
       customer_name: contact.name || prev.customer_name,
-      customer_contact: contact.management_company ? prev.customer_contact : prev.customer_contact,
+      customer_contact: prev.customer_contact,
       customer_email: contact.contact_email || prev.customer_email,
       customer_phone: contact.contact_phone || prev.customer_phone,
       billing_email: contact.billing_email || prev.billing_email,
@@ -89,7 +89,16 @@ export default function NewJobPage() {
       billing_city: contact.billing_city || prev.billing_city,
       billing_state: contact.billing_state || prev.billing_state,
       billing_zip: contact.billing_zip || prev.billing_zip,
+      // The contact only has one address on file, so use it for the
+      // project address too — same-as-billing below reflects this and
+      // stays fully editable if the job site is actually somewhere else.
+      project_street: contact.billing_street || prev.project_street,
+      project_unit: contact.billing_unit || prev.project_unit,
+      project_city: contact.billing_city || prev.project_city,
+      project_state: contact.billing_state || prev.project_state,
+      project_zip: contact.billing_zip || prev.project_zip,
     }));
+    if (contact.billing_street) setSameAsBilling(true);
     setShowSuggestions(false);
   }
 

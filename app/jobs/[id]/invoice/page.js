@@ -78,18 +78,6 @@ export default function InvoiceDocumentPage() {
   const recipientEmail = job.billing_email || job.customer_email || '';
   const dueLabel = { not_sent: 'Not sent', sent: 'Sent', paid: 'Paid' }[job.invoice_status || 'not_sent'];
 
-  const emailSubject = `Invoice #${job.job_number}${job.project_address ? ' — ' + job.project_address : ''}`;
-  const emailHtml = `
-    <div style="font-family:sans-serif;color:#221f16;">
-      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
-      <p>Please find your invoice for job #${job.job_number}${job.project_address ? ' at ' + job.project_address : ''} below.</p>
-      <p><b>Invoice amount:</b> ${fmtMoney(job.invoice_amount)}</p>
-      <p><b>Status:</b> ${dueLabel}</p>
-      <p>Thank you for your business.</p>
-      <p>McLoud Construction</p>
-    </div>`;
-  const emailText = `Invoice #${job.job_number}\n\nAmount: ${fmtMoney(job.invoice_amount)}\nStatus: ${dueLabel}\n\nThank you,\nMcLoud Construction`;
-
   return (
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
@@ -149,10 +137,11 @@ export default function InvoiceDocumentPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         docLabel={`Invoice #${job.job_number}`}
+        docType="invoice"
+        customerName={job.customer_contact || job.customer_name}
+        docElementId="doc-preview"
+        pdfFilename={`Invoice-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
-        subject={emailSubject}
-        bodyHtml={emailHtml}
-        bodyText={emailText}
         onPrint={printDocument}
       />
 

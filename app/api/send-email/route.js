@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 
 export async function POST(request) {
   try {
-    const { to, subject, html, text } = await request.json();
+    const { to, subject, html, text, attachmentBase64, attachmentFilename } = await request.json();
 
     if (!to || !to.trim()) {
       return Response.json({ error: 'No recipient email is on file for this job yet.' }, { status: 400 });
@@ -22,12 +22,17 @@ export async function POST(request) {
       },
     });
 
+    const attachments = attachmentBase64
+      ? [{ filename: attachmentFilename || 'document.pdf', content: attachmentBase64, encoding: 'base64' }]
+      : undefined;
+
     await transporter.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to,
       subject,
       text,
       html,
+      attachments,
     });
 
     return Response.json({ success: true });

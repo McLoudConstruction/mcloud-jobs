@@ -83,17 +83,6 @@ export default function ContractDocumentPage() {
   const extraTerms = (job.additional_terms || []).filter(t => t.text && t.text.trim());
   const sigs = job.contract_signatures || {};
   const recipientEmail = job.billing_email || job.customer_email || '';
-  const emailSubject = `Contract #${job.job_number}${job.project_address ? ' — ' + job.project_address : ''}`;
-  const emailHtml = `
-    <div style="font-family:sans-serif;color:#221f16;">
-      <p>Hi ${(job.customer_contact || job.customer_name || 'there').split(' ')[0]},</p>
-      <p>Attached is a summary of your commercial construction contract${job.project_address ? ' for ' + job.project_address : ''}.</p>
-      <p><b>Total contract price:</b> ${fmtMoney(job.contract_price)}</p>
-      <p><b>Scope of work:</b></p>
-      <ul>${scope.map(s => `<li>${s.text}</li>`).join('') || '<li>—</li>'}</ul>
-      <p>Thanks,<br>Stachys — McLoud Construction</p>
-    </div>`;
-  const emailText = `Contract #${job.job_number}\n\nTotal contract price: ${fmtMoney(job.contract_price)}\n\nThanks,\nMcLoud Construction`;
 
   async function saveSignature(role, payload) {
     const updatedSigs = { ...sigs, [role]: payload };
@@ -266,10 +255,11 @@ export default function ContractDocumentPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         docLabel={`Contract #${job.job_number}`}
+        docType="contract"
+        customerName={job.customer_contact || job.customer_name}
+        docElementId="doc-preview"
+        pdfFilename={`Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
-        subject={emailSubject}
-        bodyHtml={emailHtml}
-        bodyText={emailText}
         onPrint={printDocument}
       />
 

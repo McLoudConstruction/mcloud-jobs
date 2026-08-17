@@ -45,6 +45,7 @@ export default function CustomersPage() {
   const { session, loading } = useRequireAuth();
   const [contacts, setContacts] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -99,9 +100,27 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
-    await supabase.from('contacts').insert(form);
+    if (editingId) {
+      await supabase.from('contacts').update(form).eq('id', editingId);
+    } else {
+      await supabase.from('contacts').insert(form);
+    }
     setSaving(false);
     setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startEdit(contact) {
+    setForm({ ...EMPTY_FORM, ...contact });
+    setEditingId(contact.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelForm() {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
     setShowForm(false);
   }
 
@@ -135,7 +154,7 @@ export default function CustomersPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
-            <button className="btn btn-primary" onClick={() => setShowForm(s => !s)}>
+            <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
               {showForm ? 'Cancel' : '+ Add new contact'}
             </button>
           </div>
@@ -152,7 +171,7 @@ export default function CustomersPage() {
 
         {showForm && (
           <form className="card" onSubmit={submit}>
-            <h3>New contact</h3>
+            <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
             <div className="two-col">
               <div><label>Name *</label><input value={form.name} onChange={e => update('name', e.target.value)} required /></div>
               <div><label>Management company</label><input value={form.management_company} onChange={e => update('management_company', e.target.value)} /></div>
@@ -170,7 +189,7 @@ export default function CustomersPage() {
             <label style={{ marginTop: 16 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
             <div className="section-actions">
-              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save contact'}</button>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
             </div>
           </form>
         )}
@@ -192,7 +211,10 @@ export default function CustomersPage() {
                 {formatAddress(c, 'billing') && <>{formatAddress(c, 'billing')}</>}
               </div>
             </div>
-            <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>
+            <div className="section-actions" style={{ marginTop: 0 }}>
+              <button className="btn btn-sm" onClick={() => startEdit(c)}>Edit</button>
+              <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>
+            </div>
           </div>
         ))}
       </div>
