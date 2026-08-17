@@ -13,6 +13,10 @@
   --ink-soft: #6b6350;
   --line: #ded7c0;
   --paper: #fbf9f4;
+  --sidebar-inactive-text: #49402a;
+  --sidebar-active-bg: #49402a;
+  --sidebar-active-text: #f2ede1;
+  --signout-hover-bg: #302a1a;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }
 
@@ -125,11 +129,30 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   border-radius: 20px;
   color: #fff;
 }
-.badge-proposal{ background: #8a8264; }
-.badge-contract{ background: #a17c3f; }
+.badge-new{ background: #a3a077; }
+.badge-inspected{ background: #9a8f5f; }
+.badge-proposal_delivered{ background: #a17c3f; }
+.badge-approved{ background: #7d5a2e; }
+.badge-scheduled{ background: #8a5a3f; }
 .badge-active{ background: #8a3d14; }
-.badge-invoice{ background: #49402a; }
-.badge-complete{ background: #3a6b45; }
+.badge-completed{ background: #6e3010; }
+.badge-invoiced{ background: #49402a; }
+.badge-paid{ background: #3a6b45; }
+
+.stepper{ display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.stepper-phase{ flex: 1; min-width: 180px; }
+.stepper-phase-label{ font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+.stepper-stages{ display: flex; flex-wrap: wrap; gap: 6px; }
+.stepper-stage{
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: #f0ece0;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+.stepper-stage.past{ background: #e2ddc8; color: var(--ink); }
+.stepper-stage.current{ background: var(--heading); color: #f2ede1; border-color: var(--heading); font-weight: 700; }
 
 .job-row{
   display: flex;
@@ -189,7 +212,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
+  padding: 7px 20px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--panel-line);
   position: sticky;
@@ -201,7 +224,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-logo .brand span{ color: var(--gold); }
 
 .hamburger-btn{
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   background: transparent; border: 1px solid var(--panel-line); border-radius: 5px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer;
@@ -210,6 +233,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .hamburger-btn span{ width: 18px; height: 2px; background: var(--heading); display: block; }
 
 .signout-btn{ width: calc(100% - 32px); margin: 0 16px; justify-content: center; }
+.signout-btn:hover{ background: var(--signout-hover-bg) !important; }
 
 .shell-body{ display: flex; align-items: flex-start; }
 
@@ -219,12 +243,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   overflow: hidden;
   flex-shrink: 0;
   transition: width 0.2s ease, transform 0.2s ease;
-  top: 57px;
+  position: fixed;
+  top: 47px;
   left: 0;
   bottom: 0;
   z-index: 30;
-  height: calc(100vh - 57px);
-  height: calc(100dvh - 57px);
+  height: calc(100vh - 47px);
+  height: calc(100dvh - 47px);
 }
 .shell-sidebar-inner{
   width: 240px;
@@ -234,6 +259,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   justify-content: space-between;
   padding: 12px 0 16px;
   box-sizing: border-box;
+  overflow-y: hidden;
 }
 .shell-nav-links{ display: flex; flex-direction: column; }
 .shell-nav-children{ display: flex; flex-direction: column; }
@@ -243,11 +269,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   padding: 13px 24px;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--heading);
+  color: var(--sidebar-inactive-text);
   white-space: nowrap;
 }
 .shell-nav-link:hover{ background: rgba(255,255,255,0.4); }
-.shell-nav-link.active{ background: var(--heading); color: #f2ede1; }
+.shell-nav-link.active{ background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
 
 .shell-overlay{
   position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 25;
@@ -261,3 +287,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
 .contact-card .contact-meta{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.6; }
+
+.breadcrumb-link{
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+}
+.breadcrumb-link:hover{ color: var(--rust); }
+
+@media print{
+  .send-doc-overlay{ display: none !important; }
+}

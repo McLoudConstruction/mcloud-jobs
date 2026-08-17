@@ -4,16 +4,10 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import { STAGE_ORDER, STAGE_LABELS } from '../../lib/constants';
 
-const STAGES = ['all', 'proposal', 'contract', 'active', 'invoice', 'complete'];
-const STAGE_LABELS = {
-  all: 'All',
-  proposal: 'Proposal',
-  contract: 'Contract',
-  active: 'Active',
-  invoice: 'Invoice',
-  complete: 'Complete',
-};
+const STAGES = ['all', ...STAGE_ORDER];
+const TAB_LABELS = { all: 'All', ...STAGE_LABELS };
 
 export default function JobTrackerPage() {
   const { session, loading } = useRequireAuth();
@@ -63,8 +57,10 @@ export default function JobTrackerPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Job Tracker</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New job</Link>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Job Dashboard</h2>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -8, marginBottom: 16 }}>
+          New projects are created from the Sales Dashboard — this page tracks jobs already underway.
         </div>
 
         <div className="search-bar">
@@ -82,7 +78,7 @@ export default function JobTrackerPage() {
               className={`stage-tab ${stage === s ? 'active' : ''}`}
               onClick={() => setStage(s)}
             >
-              {STAGE_LABELS[s]} {s !== 'all' ? `(${jobs.filter(j => j.stage === s).length})` : `(${jobs.length})`}
+              {TAB_LABELS[s]} {s !== 'all' ? `(${jobs.filter(j => j.stage === s).length})` : `(${jobs.length})`}
             </button>
           ))}
         </div>

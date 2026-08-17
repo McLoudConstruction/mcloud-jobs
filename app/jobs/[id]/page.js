@@ -5,21 +5,17 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import Breadcrumb from '../../../components/Breadcrumb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage } from '../../../lib/constants';
 
-const STAGE_ORDER = ['proposal', 'contract', 'active', 'invoice', 'complete'];
-const STAGE_LABELS = { proposal: 'Proposal', contract: 'Contract', active: 'Active', invoice: 'Invoice', complete: 'Complete' };
-const TABS = ['Customer', 'Project', 'Financials', 'Photos', 'Documents'];
-
-// Which document types make sense to generate at each stage.
-const STAGE_DOCS = {
-  proposal: ['proposal', 'contract'],
-  contract: ['proposal', 'contract'],
-  active: ['contract', 'update'],
-  invoice: ['contract', 'invoice'],
-  complete: ['contract', 'invoice'],
-};
+const TABS = [
+  { key: 'Customer', label: 'Customer Details' },
+  { key: 'Project', label: 'Project Details' },
+  { key: 'Financials', label: 'Financials' },
+  { key: 'Photos', label: 'Photos' },
+  { key: 'Documents', label: 'Documentation' },
+];
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -111,6 +107,7 @@ export default function JobDetailPage() {
   return (
     <AppShell>
       <div className="container">
+        <Breadcrumb href="/jobs" label="Back to Job Tracker" />
         <div className="top-actions">
           <div>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>#{job.job_number} — {job.customer_name || 'Unnamed customer'}</h2>
@@ -118,7 +115,7 @@ export default function JobDetailPage() {
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
           <div className="section-actions">
-            {job.stage !== 'complete' && (
+            {job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
               </button>
@@ -127,9 +124,11 @@ export default function JobDetailPage() {
           </div>
         </div>
 
+        <StageStepper currentStage={job.stage} />
+
         <div className="stage-tabs">
           {TABS.map(t => (
-            <button key={t} className={`stage-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
+            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
           ))}
         </div>
 
@@ -159,20 +158,45 @@ export default function JobDetailPage() {
 
         {tab === 'Documents' && (
           <>
-            <DocumentsCard jobId={id} job={job} />
-            {(job.stage === 'active' || job.stage === 'invoice' || job.stage === 'complete') && (
+            {phaseForStage(job.stage) !== 'completed_phase' && <DocumentsCard jobId={id} job={job} />}
+            {phaseForStage(job.stage) !== 'opportunity' && (
               <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
             )}
-            {(job.stage === 'active' || job.stage === 'invoice' || job.stage === 'complete') && (
+            {phaseForStage(job.stage) !== 'opportunity' && (
               <UpdatesCard jobId={id} updates={updates} />
             )}
-            {(job.stage === 'invoice' || job.stage === 'complete') && (
-              <InvoiceCard job={job} onSave={saveJob} />
+            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
+              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
             )}
           </>
         )}
       </div>
     </AppShell>
+  );
+}
+
+function StageStepper({ currentStage }) {
+  const currentIndex = STAGE_ORDER.indexOf(currentStage);
+  return (
+    <div className="stepper">
+      {PHASES.map(phase => (
+        <div key={phase.key} className="stepper-phase">
+          <div className="stepper-phase-label">{phase.label}</div>
+          <div className="stepper-stages">
+            {phase.stages.map(stage => {
+              const stageIndex = STAGE_ORDER.indexOf(stage);
+              const isCurrent = stage === currentStage;
+              const isPast = stageIndex < currentIndex;
+              return (
+                <div key={stage} className={`stepper-stage ${isCurrent ? 'current' : ''} ${isPast ? 'past' : ''}`}>
+                  {STAGE_LABELS[stage]}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -665,7 +689,8 @@ function UpdatesCard({ jobId, updates }) {
 }
 
 /* ---------------- Invoice ---------------- */
-function InvoiceCard({ job, onSave }) {
+function InvoiceCard({ job, onSave, jobId }) {
+  const router = useRouter();
   const [amount, setAmount] = useState(job.invoice_amount ?? job.contract_price ?? '');
   const [status, setStatus] = useState(job.invoice_status || 'not_sent');
   const [invoicedAt, setInvoicedAt] = useState(job.invoiced_at ? job.invoiced_at.slice(0, 10) : '');
@@ -680,12 +705,17 @@ function InvoiceCard({ job, onSave }) {
     }
   }
 
-  function save() {
+  function saveOnly() {
     onSave({
       invoice_amount: amount ? parseFloat(String(amount).replace(/[^0-9.]/g, '')) : null,
       invoice_status: status,
       invoiced_at: invoicedAt || null,
     });
+  }
+
+  function generateInvoice() {
+    saveOnly();
+    router.push(`/jobs/${jobId}/invoice`);
   }
 
   return (
@@ -711,7 +741,7 @@ function InvoiceCard({ job, onSave }) {
         Only counts toward the dashboard's "Invoiced this year" total once status is Sent or Paid.
       </div>
       <div className="section-actions">
-        <button className="btn btn-primary btn-sm" onClick={save}>Save invoice</button>
+        <button className="btn btn-primary btn-sm" onClick={generateInvoice}>Generate Invoice</button>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
-import { useRequireAuth } from '../../../../../lib/useAuth';
+import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
 
 const LOGO_SRC = '/mcloud-logo.png';
@@ -15,7 +15,7 @@ function fmtDate(v) {
 }
 
 export default function UpdateDocumentPage() {
-  const { session, loading } = useRequireAuth();
+  const { session, loading } = useDocumentAuth();
   const { id, updateId } = useParams();
   const [job, setJob] = useState(null);
   const [update, setUpdate] = useState(null);
@@ -86,7 +86,7 @@ export default function UpdateDocumentPage() {
   return (
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
-        <Link href={`/jobs/${id}`} className="btn btn-sm">← Back to job</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
       </div>
 

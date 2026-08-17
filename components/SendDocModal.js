@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { generatePdfBase64 } from '../lib/generatePdf';
 import { buildDocEmail } from '../lib/emailTemplates';
 
-export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, onPrint }) {
+export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, onPrint, onSendSuccess }) {
   const [email, setEmail] = useState(defaultEmail || '');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
@@ -42,6 +42,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send.');
       setResult({ ok: true, message: `Sent to ${email}, with the PDF attached.` });
+      if (onSendSuccess) onSendSuccess();
     } catch (err) {
       setResult({ ok: false, message: err.message });
     } finally {
@@ -50,7 +51,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
   }
 
   return createPortal(
-    <div style={overlayStyle} onClick={onClose}>
+    <div className="send-doc-overlay" style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{docLabel}</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 18px' }}>

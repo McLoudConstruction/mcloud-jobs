@@ -19,6 +19,20 @@ const FONT_OPTIONS = [
   { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
+const DASHBOARD_WIDGETS = [
+  { key: 'sold_job_count', label: 'Sold Job Count Total' },
+  { key: 'job_counts_by_stage', label: 'Job Counts by Stage' },
+  { key: 'customer_questions', label: 'Customer Questions' },
+  { key: 'overdue_opportunities', label: 'Overdue Opportunities' },
+  { key: 'total_ar', label: 'Total AR Dollars' },
+  { key: 'total_paid', label: 'Total Paid Dollars' },
+  { key: 'revenue_ytd', label: 'Total Revenue YTD' },
+  { key: 'revenue_mtd', label: 'Total Revenue MTD' },
+  { key: 'total_profit', label: 'Total Profit Dollars' },
+  { key: 'sales_route_ai', label: 'Create My Sales Route (AI)' },
+  { key: 'new_opportunity_button', label: 'New Opportunity Button' },
+];
+
 
 export default function SettingsPage() {
   const { session, loading } = useRequireAuth();
@@ -33,6 +47,15 @@ export default function SettingsPage() {
   useEffect(() => { setForm(settings); }, [settings]);
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+
+  function toggleWidget(key) {
+    setForm(prev => {
+      const widgets = { ...(prev.dashboard_widgets || {}) };
+      const currentlyOn = widgets[key] !== false;
+      widgets[key] = !currentlyOn;
+      return { ...prev, dashboard_widgets: widgets };
+    });
+  }
 
   function showFlash(msg) {
     setFlash(msg);
@@ -73,14 +96,20 @@ export default function SettingsPage() {
         .update({
           color_bg: form.color_bg,
           color_heading: form.color_heading,
+          color_section_heading: form.color_section_heading,
           color_accent: form.color_accent,
           color_panel: form.color_panel,
           color_header: form.color_header,
+          sidebar_inactive_text: form.sidebar_inactive_text,
+          sidebar_active_bg: form.sidebar_active_bg,
+          sidebar_active_text: form.sidebar_active_text,
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
           signout_bg: form.signout_bg,
           signout_text: form.signout_text,
+          signout_hover_bg: form.signout_hover_bg,
+          dashboard_widgets: form.dashboard_widgets,
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -98,14 +127,19 @@ export default function SettingsPage() {
       ...prev,
       color_bg: '#dbd8bf',
       color_heading: '#49402a',
+      color_section_heading: '#9b773d',
       color_accent: '#8a3d14',
       color_panel: '#d3d0b5',
       color_header: '#d3d0b5',
+      sidebar_inactive_text: '#49402a',
+      sidebar_active_bg: '#49402a',
+      sidebar_active_text: '#f2ede1',
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 120,
       signout_bg: 'transparent',
       signout_text: '#49402a',
+      signout_hover_bg: '#302a1a',
     }));
   }
 
@@ -151,9 +185,13 @@ export default function SettingsPage() {
           <h3>Color theme</h3>
           <div className="two-col">
             <ColorField label="Page background" id="colorBg" value={form.color_bg} fallback="#dbd8bf" onChange={v => update('color_bg', v)} />
-            <ColorField label="Header bar background" id="colorHeader" value={form.color_header} fallback="#d3d0b5" onChange={v => update('color_header', v)} />
+            <ColorField label="Header background" id="colorHeader" value={form.color_header} fallback="#d3d0b5" onChange={v => update('color_header', v)} />
             <ColorField label="Sidebar background" id="colorPanel" value={form.color_panel} fallback="#d3d0b5" onChange={v => update('color_panel', v)} />
-            <ColorField label="Headings & text" id="colorHeading" value={form.color_heading} fallback="#49402a" onChange={v => update('color_heading', v)} />
+            <ColorField label="Sidebar inactive text" id="sidebarInactive" value={form.sidebar_inactive_text} fallback="#49402a" onChange={v => update('sidebar_inactive_text', v)} />
+            <ColorField label="Sidebar active background" id="sidebarActiveBg" value={form.sidebar_active_bg} fallback="#49402a" onChange={v => update('sidebar_active_bg', v)} />
+            <ColorField label="Sidebar active text" id="sidebarActiveText" value={form.sidebar_active_text} fallback="#f2ede1" onChange={v => update('sidebar_active_text', v)} />
+            <ColorField label="Main headings" id="colorHeading" value={form.color_heading} fallback="#49402a" onChange={v => update('color_heading', v)} />
+            <ColorField label="Section headings" id="colorSectionHeading" value={form.color_section_heading} fallback="#9b773d" onChange={v => update('color_section_heading', v)} />
             <ColorField label="Accent (buttons, badges)" id="colorAccent" value={form.color_accent} fallback="#8a3d14" onChange={v => update('color_accent', v)} />
           </div>
 
@@ -167,9 +205,28 @@ export default function SettingsPage() {
           <h3>Sign-out button</h3>
           <div className="two-col">
             <ColorField label="Background" id="signoutBg" value={form.signout_bg === 'transparent' ? '#ffffff' : form.signout_bg} fallback="#ffffff" onChange={v => update('signout_bg', v)} />
+            <ColorField label="Hover background" id="signoutHover" value={form.signout_hover_bg} fallback="#302a1a" onChange={v => update('signout_hover_bg', v)} />
             <ColorField label="Text & border color" id="signoutText" value={form.signout_text} fallback="#49402a" onChange={v => update('signout_text', v)} />
           </div>
           <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => update('signout_bg', 'transparent')}>Use transparent background</button>
+        </div>
+
+        <div className="card">
+          <h3>Main Dashboard widgets</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Choose what shows up on your Dashboard page.
+          </div>
+          {DASHBOARD_WIDGETS.map(w => (
+            <label key={w.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto' }}
+                checked={(form.dashboard_widgets || {})[w.key] !== false}
+                onChange={() => toggleWidget(w.key)}
+              />
+              {w.label}
+            </label>
+          ))}
         </div>
 
         <div className="section-actions" style={{ marginBottom: 20 }}>

@@ -16,7 +16,15 @@ const NAV_ITEMS = [
       { href: '/companies', label: 'Companies' },
     ],
   },
-  { href: '/jobs', label: 'Job Tracker' },
+  { href: '/jobs', label: 'Job Dashboard' },
+  {
+    href: '/financials',
+    label: 'Financial Dashboard',
+    children: [
+      { href: '/financials/payable', label: 'Accounts Payable' },
+      { href: '/financials/receivable', label: 'Accounts Receivable' },
+    ],
+  },
   { href: '/settings', label: 'Settings' },
 ];
 
@@ -48,6 +56,8 @@ export default function AppShell({ children }) {
 
   function closeOnMobile() { if (isMobile) setNavOpen(false); }
 
+  const sidebarWidth = navOpen ? 240 : 0;
+
   return (
     <div className="shell">
       <div className="shell-topbar">
@@ -66,9 +76,8 @@ export default function AppShell({ children }) {
         <div
           className="shell-sidebar"
           style={mounted ? {
-            width: navOpen ? 240 : 0,
+            width: sidebarWidth,
             transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-            position: isMobile ? 'fixed' : 'sticky',
           } : { width: 0 }}
         >
           <div className="shell-sidebar-inner">
@@ -111,7 +120,9 @@ export default function AppShell({ children }) {
 
         {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
 
-        <div className="shell-content">{children}</div>
+        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0, transition: 'margin-left 0.2s ease' }}>
+          {children}
+        </div>
       </div>
     </div>
   );

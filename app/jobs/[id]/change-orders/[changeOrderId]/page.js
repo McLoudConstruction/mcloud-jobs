@@ -3,8 +3,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
-import { useRequireAuth } from '../../../../../lib/useAuth';
+import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import SignaturePad from '../../../../../components/SignaturePad';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -21,11 +22,13 @@ function fmtMoney(v) {
 }
 
 export default function ChangeOrderDocumentPage() {
-  const { session, loading } = useRequireAuth();
+  const { session, loading } = useDocumentAuth();
   const { id, changeOrderId } = useParams();
   const [job, setJob] = useState(null);
   const [co, setCo] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signFlash, setSignFlash] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: jobData }, { data: coData }] = await Promise.all([
@@ -40,6 +43,19 @@ export default function ChangeOrderDocumentPage() {
 
   function printDocument() { window.print(); }
 
+  async function saveSignature(role, payload) {
+    const sigs = co.co_signatures || {};
+    const updated = { ...sigs, [role]: payload };
+    setSigning(true);
+    const { error } = await supabase.from('change_orders').update({ co_signatures: updated }).eq('id', changeOrderId);
+    setSigning(false);
+    if (!error) {
+      setSignFlash('Signature saved');
+      setTimeout(() => setSignFlash(''), 2500);
+      load();
+    }
+  }
+
   if (loading || !session || !job || !co) return null;
 
   const recipientEmail = job.billing_email || job.customer_email || '';
@@ -47,7 +63,7 @@ export default function ChangeOrderDocumentPage() {
   return (
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
-        <Link href={`/jobs/${id}`} className="btn btn-sm">← Back to job</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
       </div>
 
@@ -80,6 +96,30 @@ export default function ChangeOrderDocumentPage() {
               <p style={{ fontSize: 11.5, color: '#6b6350' }}>
                 This change order modifies the original scope of work and contract price. Signature or written approval confirms acceptance of the additional cost and any related schedule impact.
               </p>
+            </div>
+
+            <div className="section">
+              <h3>Signatures</h3>
+              {signFlash && <div style={{ fontSize: 11.5, color: '#3a6b45', marginBottom: 8 }}>{signFlash}</div>}
+              <div className="sig-block">
+                <SignaturePad
+                  label="Contractor"
+                  saved={(co.co_signatures || {}).contractor}
+                  onSave={(payload) => saveSignature('contractor', payload)}
+                  saving={signing}
+                  defaultName="Stachys"
+                  defaultTitle="Owner, McLoud Construction"
+                />
+                <SignaturePad
+                  label="Owner"
+                  saved={(co.co_signatures || {}).owner}
+                  onSave={(payload) => saveSignature('owner', payload)}
+                  saving={signing}
+                  defaultName={job.customer_contact || ''}
+                  defaultTitle=""
+                  note="Customer signs here (touch or mouse)"
+                />
+              </div>
             </div>
 
             <div className="doc-footer">
@@ -119,7 +159,15 @@ export default function ChangeOrderDocumentPage() {
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
-        @media print { .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } }
+        .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
+        @media (max-width: 700px) {
+          .doc-outer { padding: 12px; }
+          .doc-header { padding: 18px 20px; flex-wrap: wrap; }
+          .doc-body { padding: 20px 20px 40px; }
+          .sig-block { grid-template-columns: 1fr; gap: 20px; }
+          .doc-logo { width: 130px; }
+        }
+        @media print { .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } .sig-editing { display: none !important; } }
         @page { margin: 0.4in 0.5in; }
       `}</style>
     </div>

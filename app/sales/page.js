@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
@@ -91,9 +92,15 @@ export default function SalesDashboardPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales Dashboard</h2>
-          <button className="btn btn-primary" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
-            {showForm ? 'Cancel' : '+ New opportunity'}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
+              {showForm ? 'Cancel' : '+ New sales lead'}
+            </button>
+            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          </div>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
+          "New sales lead" tracks a prospect in your pipeline below. "New Opportunity" creates an actual project — this is the only way to start one.
         </div>
 
         <div className="card">

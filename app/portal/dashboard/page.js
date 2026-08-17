@@ -2,8 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
-
-const STAGE_LABELS = { proposal: 'Proposal', contract: 'Contract', active: 'Active', invoice: 'Invoice', complete: 'Complete' };
+import { STAGE_LABELS, phaseForStage } from '../../../lib/constants';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -26,7 +25,11 @@ export default function PortalDashboardPage() {
   const [flash, setFlash] = useState('');
 
   const loadJobs = useCallback(async () => {
-    const { data } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('jobs')
+      .select('*')
+      .not('portal_invited_at', 'is', null)
+      .order('created_at', { ascending: false });
     if (data) {
       setJobs(data);
       setSelectedJobId(prev => prev || (data[0] && data[0].id));
@@ -115,7 +118,29 @@ export default function PortalDashboardPage() {
               <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>{job.project_address}</p>
             </div>
 
-            {(job.stage === 'invoice' || job.stage === 'complete') && job.invoice_amount && (
+            {phaseForStage(job.stage) === 'opportunity' && (
+              <div className="card">
+                <h3>Documents</h3>
+                <div className="section-actions" style={{ marginTop: 0 }}>
+                  <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Proposal ↗</a>
+                  <a href={`/jobs/${job.id}/contract`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
+                </div>
+              </div>
+            )}
+
+            {phaseForStage(job.stage) !== 'opportunity' && (
+              <div className="card">
+                <h3>Documents</h3>
+                <div className="section-actions" style={{ marginTop: 0 }}>
+                  <a href={`/jobs/${job.id}/contract`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
+                  {phaseForStage(job.stage) === 'completed_phase' && job.invoice_amount && (
+                    <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {phaseForStage(job.stage) === 'completed_phase' && job.invoice_amount && (
               <div className="card">
                 <h3>Invoice</h3>
                 <div style={{ background: '#faf6ec', border: '1px solid var(--line)', borderRadius: 6, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -137,6 +162,9 @@ export default function PortalDashboardPage() {
                   {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
                   {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
                   {u.issues_notes && <><div className="update-field-label">Notes</div><p>{u.issues_notes}</p></>}
+                  <div className="section-actions">
+                    <a href={`/jobs/${job.id}/updates/${u.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View ↗</a>
+                  </div>
                 </div>
               ))}
             </div>

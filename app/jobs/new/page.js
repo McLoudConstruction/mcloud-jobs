@@ -76,6 +76,8 @@ export default function NewJobPage() {
     }, 250);
   }
 
+  const [autofillNote, setAutofillNote] = useState('');
+
   function applySuggestion(contact) {
     setForm(prev => ({
       ...prev,
@@ -100,6 +102,13 @@ export default function NewJobPage() {
     }));
     if (contact.billing_street) setSameAsBilling(true);
     setShowSuggestions(false);
+
+    const filled = [];
+    if (contact.contact_email) filled.push('email');
+    if (contact.contact_phone) filled.push('phone');
+    if (contact.billing_street) filled.push('address'); else filled.push('no address on file for this contact');
+    setAutofillNote(`Filled from ${contact.name}: ${filled.join(', ')}.`);
+    setTimeout(() => setAutofillNote(''), 6000);
   }
 
   function addScopeItem() { setScopeItems(prev => [...prev, '']); }
@@ -159,7 +168,7 @@ export default function NewJobPage() {
       expected_close_date: form.expected_close_date || null,
       billing_address: formatAddress(form, 'billing'),
       project_address: formatAddress(form, 'project'),
-      stage: 'proposal',
+      stage: 'new',
     };
 
     const { data, error: insertError } = await supabase.from('jobs').insert(payload).select().single();
@@ -180,7 +189,7 @@ export default function NewJobPage() {
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ color: 'var(--heading)' }}>New job — Proposal stage</h2>
+        <h2 style={{ color: 'var(--heading)' }}>New Opportunity</h2>
 
         <form onSubmit={handleSubmit}>
           <div className="card">
@@ -243,6 +252,7 @@ export default function NewJobPage() {
                     </div>
                   )}
                 </div>
+                {autofillNote && <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 6 }}>{autofillNote}</div>}
 
                 <div className="two-col" style={{ marginTop: 12 }}>
                   <div>
@@ -313,7 +323,7 @@ export default function NewJobPage() {
           {error && <div className="error-text">{error}</div>}
 
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Creating…' : 'Create job'}
+            {saving ? 'Creating…' : 'Create Opportunity'}
           </button>
         </form>
       </div>
