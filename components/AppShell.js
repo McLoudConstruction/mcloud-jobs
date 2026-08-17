@@ -7,9 +7,15 @@ import { useSettings } from '../lib/useSettings';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
-  { href: '/customers', label: 'Customer Information' },
-  { href: '/sales', label: 'Sales Dashboard' },
-  { href: '/properties', label: 'Property Database' },
+  {
+    href: '/sales',
+    label: 'Sales Dashboard',
+    children: [
+      { href: '/customers', label: 'Contacts' },
+      { href: '/properties', label: 'Properties' },
+      { href: '/companies', label: 'Companies' },
+    ],
+  },
   { href: '/jobs', label: 'Job Tracker' },
   { href: '/settings', label: 'Settings' },
 ];
@@ -40,18 +46,20 @@ export default function AppShell({ children }) {
 
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
+  function closeOnMobile() { if (isMobile) setNavOpen(false); }
+
   return (
     <div className="shell">
       <div className="shell-topbar">
+        <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
+          <span /><span /><span />
+        </button>
+
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
-
-        <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
-          <span /><span /><span />
-        </button>
       </div>
 
       <div className="shell-body">
@@ -66,14 +74,29 @@ export default function AppShell({ children }) {
           <div className="shell-sidebar-inner">
             <div className="shell-nav-links">
               {NAV_ITEMS.map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
-                  onClick={() => { if (isMobile) setNavOpen(false); }}
-                >
-                  {item.label}
-                </Link>
+                <div key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
+                    onClick={closeOnMobile}
+                  >
+                    {item.label}
+                  </Link>
+                  {item.children && (
+                    <div className="shell-nav-children">
+                      {item.children.map(child => (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={`shell-nav-link shell-nav-child ${pathname === child.href ? 'active' : ''}`}
+                          onClick={closeOnMobile}
+                        >
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
             <button

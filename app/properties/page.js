@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
@@ -12,6 +13,34 @@ const EMPTY_FORM = {
   management_company: '', contact_name: '', contact_phone: '', contact_email: '',
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
 };
+
+const HEADER_MAP = {
+  property_name: ['property', 'property name', 'name', 'building'],
+  property_type: ['type', 'property type', 'category'],
+  management_company: ['company', 'management company', 'management', 'organization'],
+  contact_name: ['contact', 'contact name'],
+  contact_phone: ['phone', 'contact phone', 'phone number'],
+  contact_email: ['email', 'contact email'],
+  property_street: ['street', 'address', 'street address'],
+  property_unit: ['unit', 'suite'],
+  property_city: ['city'],
+  property_state: ['state'],
+  property_zip: ['zip', 'zip code', 'postal code'],
+  year_built: ['year built', 'built'],
+  sq_ft: ['sq ft', 'square feet', 'square footage', 'sqft'],
+  target_value: ['target value', 'value'],
+  notes: ['notes', 'note', 'comments'],
+};
+function normalizeHeader(h) { return (h || '').toString().trim().toLowerCase(); }
+function mapRow(row) {
+  const out = {};
+  const keys = Object.keys(row);
+  for (const [field, variants] of Object.entries(HEADER_MAP)) {
+    const match = keys.find(k => variants.includes(normalizeHeader(k)));
+    if (match && row[match] !== undefined && row[match] !== null) out[field] = String(row[match]).trim();
+  }
+  return out;
+}
 
 function fmtMoney(v) {
   if (!v) return '—';
@@ -29,6 +58,9 @@ export default function PropertiesPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState('');
+  const fileInputRef = useRef(null);
 
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
@@ -73,6 +105,32 @@ export default function PropertiesPage() {
     setShowForm(false);
   }
 
+  async function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult('');
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const mapped = rows.map(mapRow).filter(p => p.property_name && p.property_name.trim());
+      if (mapped.length === 0) {
+        setImportResult('No rows with a recognizable property name column were found.');
+        return;
+      }
+      const { error } = await supabase.from('properties').insert(mapped);
+      if (error) throw error;
+      setImportResult(`Imported ${mapped.length} propert${mapped.length === 1 ? 'y' : 'ies'}.`);
+    } catch (err) {
+      setImportResult(`Import failed: ${err.message}`);
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   async function removeProperty(id) {
     if (!confirm('Delete this property?')) return;
     await supabase.from('properties').delete().eq('id', id);
@@ -92,10 +150,25 @@ export default function PropertiesPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Property Database</h2>
-          <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
-            {showForm ? 'Cancel' : '+ Add property'}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+              {importing ? 'Importing…' : '↑ Import from Excel'}
+            </button>
+            <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
+              {showForm ? 'Cancel' : '+ Add property'}
+            </button>
+          </div>
         </div>
+
+        {importResult && (
+          <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
+            {importResult}
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
+              Recognized columns: Property Name, Type, Management Company, Contact Name/Phone/Email, Street/Unit/City/State/Zip, Year Built, Sq Ft, Target Value, Notes.
+            </div>
+          </div>
+        )}
 
         {showForm && (
           <form className="card" onSubmit={submit}>
