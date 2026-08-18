@@ -24,12 +24,15 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
 
   if (!open || !mounted) return null;
 
-  async function send() {
+  async function send(withAttachment) {
     setSending(true);
     setResult(null);
     try {
-      setResult({ ok: true, message: 'Generating PDF…' });
-      const attachmentBase64 = await generatePdfBase64(docElementId, pdfFilename);
+      let attachmentBase64 = null;
+      if (withAttachment) {
+        setResult({ ok: true, message: 'Generating PDF…' });
+        attachmentBase64 = await generatePdfBase64(docElementId, pdfFilename);
+      }
 
       setResult({ ok: true, message: 'Sending…' });
       const { subject, html, text } = buildDocEmail({ customerName, docType });
@@ -37,11 +40,14 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: email, subject, html, text, attachmentBase64, attachmentFilename: pdfFilename }),
+        body: JSON.stringify({
+          to: email, subject, html, text,
+          ...(withAttachment ? { attachmentBase64, attachmentFilename: pdfFilename } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send.');
-      setResult({ ok: true, message: `Sent to ${email}, with the PDF attached.` });
+      setResult({ ok: true, message: withAttachment ? `Sent to ${email}, with the PDF attached.` : `Sent to ${email} — they'll find it waiting in the Customer Portal.` });
       if (onSendSuccess) onSendSuccess();
     } catch (err) {
       setResult({ ok: false, message: err.message });
@@ -55,7 +61,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>Send to Customer</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 18px' }}>
-          Emails {docLabel} straight to the customer with the PDF attached.
+          Choose how to send {docLabel} to the customer.
         </p>
 
         <label>Customer email</label>
@@ -67,9 +73,12 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={send} disabled={sending || !email.trim()}>
-            {sending ? 'Working…' : 'Send to Customer'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => send(false)} disabled={sending || !email.trim()}>
+            {sending ? 'Working…' : 'Send to Customer Portal (email notification only)'}
+          </button>
+          <button className="btn btn-sm" onClick={() => send(true)} disabled={sending || !email.trim()}>
+            {sending ? 'Working…' : 'Email with PDF Attached'}
           </button>
           <button className="btn btn-sm" onClick={onClose}>Close</button>
         </div>
