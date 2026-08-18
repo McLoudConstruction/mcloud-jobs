@@ -7,7 +7,7 @@ function fmtDate(v) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function SignaturePad({ label, saved, onSave, saving, defaultName, defaultTitle, note }) {
+export default function SignaturePad({ label, saved, onSave, saving, defaultName, defaultTitle, note, locked }) {
   const canvasRef = useRef(null);
   const [name, setName] = useState(saved?.name || defaultName || '');
   const [title, setTitle] = useState(saved?.title || defaultTitle || '');
@@ -69,7 +69,7 @@ export default function SignaturePad({ label, saved, onSave, saving, defaultName
             {saved.name || 'Printed name'}{saved.title ? `, ${saved.title}` : ''}<br />
             Date: {fmtDate(saved.date)}
           </div>
-          <button className="btn btn-sm no-print" style={{ marginTop: 8 }} onClick={() => onSave(null)}>Clear &amp; re-sign</button>
+          {!locked && <button className="btn btn-sm no-print" style={{ marginTop: 8 }} onClick={() => onSave(null)}>Clear &amp; re-sign</button>}
         </div>
       ) : (
         <div className="sig-editing">

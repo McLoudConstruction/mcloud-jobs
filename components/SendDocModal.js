@@ -53,9 +53,9 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
   return createPortal(
     <div className="send-doc-overlay" style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
-        <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{docLabel}</h3>
+        <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>Send to Customer</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 18px' }}>
-          Download a copy for yourself, or email it straight to the customer with the PDF attached.
+          Emails {docLabel} straight to the customer with the PDF attached.
         </p>
 
         <label>Customer email</label>
@@ -68,7 +68,6 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
         )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={onPrint}>Download / Print PDF</button>
           <button className="btn btn-primary btn-sm" onClick={send} disabled={sending || !email.trim()}>
             {sending ? 'Working…' : 'Send to Customer'}
           </button>

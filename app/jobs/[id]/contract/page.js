@@ -6,6 +6,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
 import SignaturePad from '../../../../components/SignaturePad';
+import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -37,44 +38,18 @@ export default function ContractDocumentPage() {
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
-  function printDocument() {
-    const PAGE_HEIGHT_PX = 979;
-    const preview = document.getElementById('doc-preview');
-    const header = preview.querySelector('.doc-header');
-    const body = preview.querySelector('.doc-body');
-    if (header && body) {
-      const blocks = [header, ...Array.from(body.children)];
-      let runningHeight = 0;
-      blocks.forEach((el, i) => {
-        if (i === 0) { runningHeight = el.offsetHeight; return; }
-        const cs = window.getComputedStyle(el);
-        const h = el.offsetHeight + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
-        if (runningHeight + h > PAGE_HEIGHT_PX) {
-          const note = document.createElement('div');
-          note.className = 'continued-note print-injected';
-          note.textContent = '— continued on next page —';
-          el.parentNode.insertBefore(note, el);
-          el.classList.add('print-injected');
-          el.style.pageBreakBefore = 'always';
-          el.style.breakBefore = 'page';
-          runningHeight = h;
-        } else {
-          runningHeight += h;
-        }
-      });
-    }
-    window.print();
-    window.addEventListener('afterprint', clearPagination, { once: true });
-    setTimeout(clearPagination, 3000);
-  }
+  const [downloading, setDownloading] = useState(false);
 
-  function clearPagination() {
-    document.querySelectorAll('.continued-note.print-injected').forEach(el => el.remove());
-    document.querySelectorAll('.print-injected').forEach(el => {
-      el.style.pageBreakBefore = '';
-      el.style.breakBefore = '';
-      el.classList.remove('print-injected');
-    });
+  async function downloadDocument() {
+    setDownloading(true);
+    try {
+      const base64 = await generatePdfBase64('doc-preview', `Contract-${job.job_number}.pdf`);
+      window.open(base64ToPdfUrl(base64), '_blank');
+    } catch (err) {
+      alert('Failed to generate PDF: ' + err.message);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (loading || !session || !job) return null;
@@ -87,27 +62,37 @@ export default function ContractDocumentPage() {
 
   async function saveSignature(role, payload) {
     const updatedSigs = { ...sigs, [role]: payload };
-    const patch = { contract_signatures: updatedSigs };
-
-    // Once the owner signs a job still pre-signature, auto-advance to Approved.
-    const preSignatureStages = ['new', 'inspected', 'proposal_delivered'];
-    const advancing = role === 'owner' && preSignatureStages.includes(job.stage);
-    if (advancing) {
-      patch.stage = 'approved';
+    setSaving(true);
+    const { error } = await supabase.from('jobs').update({ contract_signatures: updatedSigs }).eq('id', id);
+    setSaving(false);
+    if (!error) {
+      setFlash('Signature saved — click Submit below to finalize');
+      setTimeout(() => setFlash(''), 3000);
+      loadJob();
     }
+  }
+
+  async function submitContract() {
+    if (!sigs.owner?.signature) return;
+    if (!confirm('Submit this contract? Once submitted, the signature can no longer be changed.')) return;
+
+    const preSignatureStages = ['new', 'inspected', 'proposal_delivered'];
+    const advancing = preSignatureStages.includes(job.stage);
+    const patch = { contract_finalized_at: new Date().toISOString() };
+    if (advancing) patch.stage = 'approved';
 
     setSaving(true);
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
-    if (!error && advancing) {
+    if (!error) {
       await supabase.from('notifications').insert({
-        message: `Job #${job.job_number} (${job.customer_name || 'customer'}) was signed and auto-advanced to Approved.`,
+        message: `Job #${job.job_number} (${job.customer_name || 'customer'}) contract was submitted${advancing ? ' and auto-advanced to Approved' : ''}.`,
         job_id: job.id,
       });
     }
     setSaving(false);
     if (!error) {
-      setFlash(advancing ? 'Signed — job moved to Approved' : 'Signature saved');
-      setTimeout(() => setFlash(''), 2500);
+      setFlash('Contract submitted and finalized');
+      setTimeout(() => setFlash(''), 3000);
       loadJob();
     }
   }
@@ -118,7 +103,10 @@ export default function ContractDocumentPage() {
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
-          <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
+          <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download/Print Document'}
+          </button>
+          <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
         </div>
       </div>
 
@@ -233,28 +221,35 @@ export default function ContractDocumentPage() {
             </div>
 
             <div className="section">
-              <h3>Signatures</h3>
-              <div className="sig-block">
+              <h3>Signature</h3>
+              {job.contract_finalized_at && (
+                <div style={{ fontSize: 11.5, color: '#3a6b45', marginBottom: 10 }}>
+                  This document was submitted and finalized on {fmtDate(job.contract_finalized_at.slice(0, 10))}. It can no longer be edited.
+                </div>
+              )}
+              <div className="sig-block" style={{ gridTemplateColumns: '1fr', maxWidth: 340 }}>
                 <SignaturePad
-                  role="contractor"
-                  label="Contractor"
-                  saved={sigs.contractor}
-                  onSave={(payload) => saveSignature('contractor', payload)}
-                  saving={saving}
-                  defaultName="Stachys"
-                  defaultTitle="Owner, McLoud Construction"
-                />
-                <SignaturePad
-                  role="owner"
-                  label="Owner"
+                  label="Customer"
                   saved={sigs.owner}
                   onSave={(payload) => saveSignature('owner', payload)}
                   saving={saving}
-                  defaultName={job.customer_contact || ''}
+                  defaultName={job.customer_contact || job.customer_name || ''}
                   defaultTitle=""
-                  note="Customer signs here (touch or mouse) — saving will move this job to Active."
+                  note="Customer signs here (touch or mouse)"
+                  locked={Boolean(job.contract_finalized_at)}
                 />
               </div>
+
+              {!job.contract_finalized_at && sigs.owner?.signature && (
+                <div className="no-print" style={{ marginTop: 14 }}>
+                  <button className="btn btn-primary btn-sm" onClick={submitContract} disabled={saving}>
+                    {saving ? 'Submitting…' : 'Submit'}
+                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                    You can still clear and re-sign above until you click Submit — after that, this document is locked.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -269,7 +264,6 @@ export default function ContractDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
-        onPrint={printDocument}
       />
 
       <style jsx global>{`

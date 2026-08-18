@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
+import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -34,6 +35,7 @@ export default function ProposalDocumentPage() {
   const { id } = useParams();
   const [job, setJob] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const loadJob = useCallback(async () => {
     const { data } = await supabase.from('jobs').select('*').eq('id', id).single();
@@ -42,44 +44,16 @@ export default function ProposalDocumentPage() {
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
-  function printDocument() {
-    const PAGE_HEIGHT_PX = 979;
-    const preview = document.getElementById('doc-preview');
-    const header = preview.querySelector('.doc-header');
-    const body = preview.querySelector('.doc-body');
-    if (header && body) {
-      const blocks = [header, ...Array.from(body.children)];
-      let runningHeight = 0;
-      blocks.forEach((el, i) => {
-        if (i === 0) { runningHeight = el.offsetHeight; return; }
-        const cs = window.getComputedStyle(el);
-        const h = el.offsetHeight + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
-        if (runningHeight + h > PAGE_HEIGHT_PX) {
-          const note = document.createElement('div');
-          note.className = 'continued-note print-injected';
-          note.textContent = '— continued on next page —';
-          el.parentNode.insertBefore(note, el);
-          el.classList.add('print-injected');
-          el.style.pageBreakBefore = 'always';
-          el.style.breakBefore = 'page';
-          runningHeight = h;
-        } else {
-          runningHeight += h;
-        }
-      });
+  async function downloadDocument() {
+    setDownloading(true);
+    try {
+      const base64 = await generatePdfBase64('doc-preview', `Proposal-${job.job_number}.pdf`);
+      window.open(base64ToPdfUrl(base64), '_blank');
+    } catch (err) {
+      alert('Failed to generate PDF: ' + err.message);
+    } finally {
+      setDownloading(false);
     }
-    window.print();
-    window.addEventListener('afterprint', clearPagination, { once: true });
-    setTimeout(clearPagination, 3000);
-  }
-
-  function clearPagination() {
-    document.querySelectorAll('.continued-note.print-injected').forEach(el => el.remove());
-    document.querySelectorAll('.print-injected').forEach(el => {
-      el.style.pageBreakBefore = '';
-      el.style.breakBefore = '';
-      el.classList.remove('print-injected');
-    });
   }
 
   if (loading || !session || !job) return null;
@@ -93,7 +67,12 @@ export default function ProposalDocumentPage() {
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
-        <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download/Print Document'}
+          </button>
+          <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+        </div>
       </div>
 
       <div className="doc-outer">
@@ -161,7 +140,6 @@ export default function ProposalDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Proposal-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
-        onPrint={printDocument}
       />
 
       <style jsx global>{`

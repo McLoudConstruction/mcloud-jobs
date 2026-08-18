@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
 import SignaturePad from '../../../../../components/SignaturePad';
 
 const LOGO_SRC = '/mcloud-logo.png';
@@ -41,7 +42,19 @@ export default function ChangeOrderDocumentPage() {
 
   useEffect(() => { if (session) load(); }, [session, load]);
 
-  function printDocument() { window.print(); }
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadDocument() {
+    setDownloading(true);
+    try {
+      const base64 = await generatePdfBase64('doc-preview', `Change-Order-${job.job_number}-${co.co_date}.pdf`);
+      window.open(base64ToPdfUrl(base64), '_blank');
+    } catch (err) {
+      alert('Failed to generate PDF: ' + err.message);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function saveSignature(role, payload) {
     const sigs = co.co_signatures || {};
@@ -64,7 +77,12 @@ export default function ChangeOrderDocumentPage() {
     <div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
-        <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Generate PDF</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download/Print Document'}
+          </button>
+          <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+        </div>
       </div>
 
       <div className="doc-outer">
@@ -139,7 +157,6 @@ export default function ChangeOrderDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Change-Order-${job.job_number}-${co.co_date}.pdf`}
         defaultEmail={recipientEmail}
-        onPrint={printDocument}
       />
 
       <style jsx global>{`
