@@ -19,6 +19,14 @@ function fmtMoney(v) {
 export default function PortalDashboardPage() {
   const { session, loading } = usePortalAuth();
   const { settings } = useSettings();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [updates, setUpdates] = useState([]);
@@ -110,7 +118,7 @@ export default function PortalDashboardPage() {
     <div>
       <div className="topbar">
         {settings.logo_url
-          ? <img src={settings.logo_url} alt="Logo" style={{ height: 300, width: 'auto' }} />
+          ? <img src={settings.logo_url} alt="Logo" style={{ height: ((isMobile ? settings.logo_size_mobile : settings.logo_size_desktop) || 32) / 4, width: 'auto' }} />
           : <div className="brand">McLoud <span>Portal</span></div>}
         <button className="btn btn-sm" onClick={handleSignOut}>Sign out</button>
       </div>
