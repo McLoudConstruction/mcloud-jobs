@@ -351,6 +351,18 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table tbody tr:hover{ background: #faf8f0; }
 .data-table tbody tr:last-child td{ border-bottom: none; }
 .data-table-wrap{ overflow-x: auto; }
+.data-table th{ position: relative; }
+.col-resize-handle{
+  position: absolute; top: 0; right: 0; bottom: 0; width: 6px;
+  cursor: col-resize; user-select: none;
+  border-right: 2px solid transparent;
+}
+.col-resize-handle:hover, .col-resize-handle:active{ border-right-color: var(--rust); }
+.data-table-filter-row th{ padding: 4px 6px; background: #fff; }
+.data-table-filter-input{
+  width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 7px;
+  border: 1px solid var(--line); border-radius: 4px; font-family: inherit;
+}
 .photo-tile{ border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #f5f2e8; }
 .photo-tile img{ width: 100%; height: 120px; object-fit: cover; display: block; }
 .photo-tile-loading{ width: 100%; height: 120px; background: #ece7d6; }

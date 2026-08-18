@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
+import DataTable from '../../components/DataTable';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS } from '../../lib/constants';
 
 const EMPTY_FORM = {
@@ -328,36 +329,27 @@ export default function PropertiesPage() {
         {filtered.length === 0 && <div className="empty-state">No properties yet.</div>}
 
         {filtered.length > 0 && (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Property Name</th>
-                  <th>Property Type</th>
-                  <th>City</th>
-                  <th>ZIP</th>
-                  <th>Management Company</th>
-                  <th>Prospect Stage</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(p => (
-                  <tr key={p.id} onClick={() => startEdit(p)}>
-                    <td>{p.property_name}{!p.active && ' (inactive)'}</td>
-                    <td>{p.property_type || '—'}</td>
-                    <td>{p.property_city || '—'}</td>
-                    <td>{p.property_zip || '—'}</td>
-                    <td>{p.management_company || '—'}</td>
-                    <td>{PROSPECT_STAGE_LABELS[p.prospect_stage] || '—'}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            getRowKey={p => p.id}
+            onRowClick={startEdit}
+            rows={filtered}
+            columns={[
+              { key: 'property_name', label: 'Property Name', defaultWidth: 220, render: p => <>{p.property_name}{!p.active && ' (inactive)'}</> },
+              { key: 'property_type', label: 'Property Type', defaultWidth: 170, render: p => p.property_type || '—' },
+              { key: 'property_city', label: 'City', defaultWidth: 130, render: p => p.property_city || '—' },
+              { key: 'property_zip', label: 'ZIP', defaultWidth: 90, render: p => p.property_zip || '—' },
+              { key: 'management_company', label: 'Management Company', defaultWidth: 180, render: p => p.management_company || '—' },
+              {
+                key: 'prospect_stage', label: 'Prospect Stage', defaultWidth: 140,
+                filterValue: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '',
+                render: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '—',
+              },
+              {
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
+                render: p => <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>,
+              },
+            ]}
+          />
         )}
       </div>
     </AppShell>
