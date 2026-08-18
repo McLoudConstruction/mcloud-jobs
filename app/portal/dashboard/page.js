@@ -67,7 +67,7 @@ export default function PortalDashboardPage() {
   const loadJobDetails = useCallback(async () => {
     if (!selectedJobId) return;
     const [{ data: u }, { data: q }] = await Promise.all([
-      supabase.from('job_updates').select('*').eq('job_id', selectedJobId).order('update_date', { ascending: false }),
+      supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }),
       supabase.from('job_questions').select('*').eq('job_id', selectedJobId).order('created_at', { ascending: false }),
     ]);
     if (u) setUpdates(u);
@@ -171,23 +171,26 @@ export default function PortalDashboardPage() {
               <div className="card">
                 <h3>Documents</h3>
                 <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
-                  {phaseForStage(job.stage) === 'opportunity' && (
-                    <>
-                      <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Proposal ↗</a>
-                      <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
-                    </>
+                  {job.proposal_sent_at && (
+                    <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Proposal ↗</a>
                   )}
-                  {phaseForStage(job.stage) !== 'opportunity' && (
-                    <>
-                      <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
-                      {phaseForStage(job.stage) === 'completed_phase' && job.invoice_amount && (
-                        <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
-                      )}
-                    </>
+                  {job.proposal_sent_at && !job.contract_finalized_at && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: -4 }}>
+                      Ready to move forward? Open the proposal and use the "Sign the Contract" button inside it.
+                    </div>
+                  )}
+                  {job.contract_sent_at && (
+                    <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
+                  )}
+                  {job.invoice_status !== 'not_sent' && job.invoice_amount && (
+                    <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
+                  )}
+                  {!job.proposal_sent_at && !job.contract_sent_at && (job.invoice_status === 'not_sent' || !job.invoice_amount) && (
+                    <div className="empty-state" style={{ padding: '4px 0' }}>Nothing has been sent yet.</div>
                   )}
                 </div>
 
-                {phaseForStage(job.stage) === 'completed_phase' && job.invoice_amount && (
+                {job.invoice_status !== 'not_sent' && job.invoice_amount && (
                   <div style={{ background: '#faf6ec', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>Invoice Amount</span>

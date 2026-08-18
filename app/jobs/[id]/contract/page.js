@@ -266,6 +266,9 @@ export default function ContractDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
+        onSendSuccess={async () => {
+          await supabase.from('jobs').update({ contract_sent_at: new Date().toISOString() }).eq('id', id);
+        }}
       />
 
       <style jsx global>{`

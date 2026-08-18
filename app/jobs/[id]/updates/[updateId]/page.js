@@ -133,6 +133,9 @@ export default function UpdateDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Project-Update-${job.job_number}-${update.update_date}.pdf`}
         defaultEmail={recipientEmail}
+        onSendSuccess={async () => {
+          await supabase.from('job_updates').update({ sent_at: new Date().toISOString() }).eq('id', updateId);
+        }}
       />
 
       <style jsx global>{`

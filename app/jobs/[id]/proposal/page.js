@@ -6,6 +6,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
+import { contractPathFor } from '../../../../lib/constants';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -111,6 +112,13 @@ export default function ProposalDocumentPage() {
               <span className="price-amount">{fmtMoney(job.contract_price)}</span>
             </div>
 
+            {!job.contract_finalized_at && (
+              <a href={contractPathFor(job)} className="no-print proposal-cta">
+                <span className="proposal-cta-text">Ready to move forward?</span>
+                <span className="proposal-cta-action">Sign the Contract →</span>
+              </a>
+            )}
+
             <div className="section">
               <h3>Scope of work</h3>
               {scope.length === 0 ? (
@@ -142,6 +150,9 @@ export default function ProposalDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Proposal-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
+        onSendSuccess={async () => {
+          await supabase.from('jobs').update({ proposal_sent_at: new Date().toISOString() }).eq('id', id);
+        }}
       />
 
       <style jsx global>{`
@@ -169,6 +180,15 @@ export default function ProposalDocumentPage() {
         .doc-list li.empty { color: #a8a29a; font-style: italic; }
         .doc-list li.empty::before { content: ""; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
+        .proposal-cta {
+          display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+          background: #8a3d14; color: #fff; text-decoration: none;
+          border-radius: 8px; padding: 18px 22px; margin-bottom: 28px;
+        }
+        .proposal-cta:hover { background: #6e3010; }
+        .proposal-cta-text { font-size: 14px; font-weight: 500; opacity: 0.9; }
+        .proposal-cta-action { font-size: 16px; font-weight: 700; }
+        @media (max-width: 500px) { .proposal-cta { flex-direction: column; align-items: flex-start; } }
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
