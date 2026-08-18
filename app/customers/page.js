@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
+import DataTable from '../../components/DataTable';
 import { PROPERTY_TYPES, formatPhone } from '../../lib/constants';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
@@ -140,7 +141,7 @@ export default function CustomersPage() {
   }
 
   function startEdit(contact) {
-    setForm({ ...EMPTY_FORM, ...contact });
+    setForm({ ...EMPTY_FORM, ...contact, contact_phone: formatPhone(contact.contact_phone) });
     setSameAsBilling(Boolean(contact.billing_street) && contact.billing_street === contact.address_street);
     setEditingId(contact.id);
     setShowForm(true);
@@ -290,25 +291,25 @@ export default function CustomersPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No contacts yet.</div>}
-        {filtered.map(c => (
-          <div className="contact-card" key={c.id}>
-            <div>
-              <div className="contact-name">{c.name}{c.position ? ` — ${c.position}` : ''}</div>
-              {c.contact_type && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', margin: '2px 0 4px' }}>{c.contact_type}</div>}
-              <div className="contact-meta">
-                {c.management_company && <>{c.management_company}<br /></>}
-                {c.contact_phone && <>{c.contact_phone}<br /></>}
-                {c.contact_email && <>{c.contact_email}<br /></>}
-                {c.property && <>{c.property}<br /></>}
-                {formatAddress(c, 'address') && <>{formatAddress(c, 'address')}</>}
-              </div>
-            </div>
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={() => startEdit(c)}>Edit</button>
-              <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>
-            </div>
-          </div>
-        ))}
+        {filtered.length > 0 && (
+          <DataTable
+            getRowKey={c => c.id}
+            onRowClick={startEdit}
+            rows={filtered}
+            columns={[
+              { key: 'name', label: 'Name', defaultWidth: 180, render: c => c.name },
+              { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },
+              { key: 'management_company', label: 'Company', defaultWidth: 170, render: c => c.management_company || '—' },
+              { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },
+              { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
+              { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
+              {
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
+                render: c => <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>,
+              },
+            ]}
+          />
+        )}
       </div>
     </AppShell>
   );

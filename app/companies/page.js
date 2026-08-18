@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
+import DataTable from '../../components/DataTable';
 import { formatPhone } from '../../lib/constants';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
@@ -85,7 +86,7 @@ export default function CompaniesPage() {
   }
 
   function startEdit(c) {
-    setForm({ ...EMPTY_FORM, ...c });
+    setForm({ ...EMPTY_FORM, ...c, contact_phone: formatPhone(c.contact_phone) });
     setEditingId(c.id);
     setShowForm(true);
   }
@@ -190,23 +191,25 @@ export default function CompaniesPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No companies yet.</div>}
-        {filtered.map(c => (
-          <div className="contact-card" key={c.id}>
-            <div>
-              <div className="contact-name">{c.company_name}</div>
-              {c.company_type && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', margin: '2px 0 4px' }}>{c.company_type}</div>}
-              <div className="contact-meta">
-                {formatAddress(c, '') && <>{formatAddress(c, '')}<br /></>}
-                {c.contact_name && <>{c.contact_name}{c.contact_phone ? ' · ' + c.contact_phone : ''}<br /></>}
-                {c.contact_email && <>{c.contact_email}</>}
-              </div>
-            </div>
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={() => startEdit(c)}>Edit</button>
-              <button className="btn btn-sm btn-danger" onClick={() => removeCompany(c.id)}>Delete</button>
-            </div>
-          </div>
-        ))}
+        {filtered.length > 0 && (
+          <DataTable
+            getRowKey={c => c.id}
+            onRowClick={startEdit}
+            rows={filtered}
+            columns={[
+              { key: 'company_name', label: 'Company Name', defaultWidth: 220, render: c => c.company_name },
+              { key: 'company_type', label: 'Type', defaultWidth: 170, render: c => c.company_type || '—' },
+              { key: 'city', label: 'City', defaultWidth: 130, render: c => c.city || '—' },
+              { key: 'contact_name', label: 'Contact Name', defaultWidth: 160, render: c => c.contact_name || '—' },
+              { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
+              { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
+              {
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
+                render: c => <button className="btn btn-sm btn-danger" onClick={() => removeCompany(c.id)}>Delete</button>,
+              },
+            ]}
+          />
+        )}
       </div>
     </AppShell>
   );

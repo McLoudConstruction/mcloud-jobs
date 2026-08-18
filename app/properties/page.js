@@ -7,7 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import DataTable from '../../components/DataTable';
 import PopupModal from '../../components/PopupModal';
-import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS } from '../../lib/constants';
+import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
@@ -83,7 +83,10 @@ export default function PropertiesPage() {
     if (data) setPropertyContacts(data);
   }, []);
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  function update(field, value) {
+    if (field === 'contact_phone') value = formatPhone(value);
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
 
   async function findOrCreateCompany(companyName) {
     const trimmed = (companyName || '').trim();
@@ -119,7 +122,7 @@ export default function PropertiesPage() {
   }
 
   function startEdit(p) {
-    setForm({ ...EMPTY_FORM, ...p, target_value: p.target_value ?? '' });
+    setForm({ ...EMPTY_FORM, ...p, target_value: p.target_value ?? '', contact_phone: formatPhone(p.contact_phone) });
     setEditingId(p.id);
     setShowForm(true);
     loadPropertyContacts(p.id);
@@ -138,7 +141,10 @@ export default function PropertiesPage() {
     await supabase.from('properties').delete().eq('id', id);
   }
 
-  function updateContactForm(field, value) { setContactForm(prev => ({ ...prev, [field]: value })); }
+  function updateContactForm(field, value) {
+    if (field === 'contact_phone') value = formatPhone(value);
+    setContactForm(prev => ({ ...prev, [field]: value }));
+  }
 
   async function submitPropertyContact(e) {
     e.preventDefault();
@@ -329,7 +335,7 @@ export default function PropertiesPage() {
                 {propertyContacts.length === 0 && <div className="empty-state">No contacts linked to this property yet.</div>}
                 {propertyContacts.map(c => (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-                    <span><b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${c.contact_phone}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}</span>
+                    <span><b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${formatPhone(c.contact_phone)}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}</span>
                     <button type="button" className="btn btn-sm btn-danger" onClick={() => removePropertyContact(c.id, c.name)}>Remove</button>
                   </div>
                 ))}

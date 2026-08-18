@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, formatPhone } from '../../../lib/constants';
 
 const EMPTY_FORM = {
   job_number: '',
@@ -260,7 +260,7 @@ export default function NewJobPage() {
                         >
                           <b>{s.name}</b>{s.management_company ? ` — ${s.management_company}` : ''}
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                            {[s.contact_email, s.contact_phone].filter(Boolean).join(' · ') || 'Click to autofill contact & billing info'}
+                            {[s.contact_email, s.contact_phone ? formatPhone(s.contact_phone) : null].filter(Boolean).join(' · ') || 'Click to autofill contact & billing info'}
                           </div>
                         </div>
                       ))}
