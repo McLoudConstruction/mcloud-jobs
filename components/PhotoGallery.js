@@ -10,6 +10,9 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [urls, setUrls] = useState({});
   const [uploading, setUploading] = useState(false);
   const [uploadNote, setUploadNote] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [generalPhotos, setGeneralPhotos] = useState([]);
+  const [generalUrls, setGeneralUrls] = useState({});
   const fileInputRef = useRef(null);
 
   const loadPhotos = useCallback(async () => {
@@ -49,7 +52,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
     for (const file of files) {
       try {
-        const watermarked = await watermarkImage(file, settings.logo_url);
+        const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
         const path = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
         const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, watermarked, {
           contentType: 'image/jpeg',
@@ -80,6 +83,25 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     await supabase.from('job_photos').delete().eq('id', photo.id);
   }
 
+  async function openPicker() {
+    const { data } = await supabase.from('job_photos').select('*').eq('job_id', jobId).is('update_id', null).order('created_at', { ascending: false });
+    const list = data || [];
+    setGeneralPhotos(list);
+    const entries = await Promise.all(
+      list.map(async p => {
+        const { data: signed } = await supabase.storage.from('job-photos').createSignedUrl(p.storage_path, 3600);
+        return [p.id, signed?.signedUrl];
+      })
+    );
+    setGeneralUrls(Object.fromEntries(entries));
+    setPickerOpen(true);
+  }
+
+  async function attachPhoto(photoId) {
+    await supabase.from('job_photos').update({ update_id: updateId }).eq('id', photoId);
+    setGeneralPhotos(prev => prev.filter(p => p.id !== photoId));
+  }
+
   const content = (
     <>
       {!bare && <h3>{title || 'Photos'}</h3>}
@@ -99,10 +121,32 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             <button className="btn btn-primary btn-sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
               {uploading ? 'Uploading…' : 'Take / Add Photos'}
             </button>
+            {updateId && (
+              <button className="btn btn-sm" onClick={openPicker} type="button">Attach existing photo</button>
+            )}
           </div>
           {uploadNote && (
             <div style={{ fontSize: 12, color: uploadNote.startsWith('Upload failed') ? '#a13f3f' : '#3a6b45', marginBottom: 12 }}>
               {uploadNote}
+            </div>
+          )}
+          {pickerOpen && (
+            <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 12, marginBottom: 14, background: '#faf8f0' }}>
+              <div className="section-actions" style={{ marginTop: 0, marginBottom: 10 }}>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Click a photo from the job's general library to attach it here.</span>
+                <button className="btn btn-sm" onClick={() => setPickerOpen(false)} type="button">Close</button>
+              </div>
+              {generalPhotos.length === 0 && <div className="empty-state" style={{ padding: '10px 0' }}>No unattached photos in the job library.</div>}
+              <div className="photo-grid">
+                {generalPhotos.map(p => (
+                  <div className="photo-tile" key={p.id} style={{ cursor: 'pointer' }} onClick={() => attachPhoto(p.id)}>
+                    {generalUrls[p.id] ? <img src={generalUrls[p.id]} alt="" /> : <div className="photo-tile-loading" />}
+                    <div className="photo-tile-actions">
+                      <span className="btn btn-sm" style={{ flex: 1, textAlign: 'center' }}>Attach</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

@@ -224,15 +224,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--heading); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
-.shell-header-right{ display: flex; align-items: center; gap: 14px; }
+.shell-header-left{ display: flex; align-items: center; gap: 8px; }
 .notif-bell{
   position: relative;
-  display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px;
   color: var(--heading);
 }
 .notif-badge{
-  position: absolute; top: -2px; right: -4px;
+  position: absolute; top: -5px; right: -5px;
   background: var(--rust); color: #fff;
   font-size: 10px; font-weight: 700;
   min-width: 16px; height: 16px; border-radius: 8px;

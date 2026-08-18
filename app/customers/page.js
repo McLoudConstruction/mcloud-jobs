@@ -7,26 +7,36 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import { PROPERTY_TYPES } from '../../lib/constants';
 
+const HOMEOWNER_TYPE = 'Residential - Homeowner';
+
 const EMPTY_FORM = {
-  name: '', contact_type: '', management_company: '', contact_phone: '', contact_email: '', property: '', notes: '',
+  contact_type: '', first_name: '', last_name: '', management_company: '',
+  contact_phone: '', contact_email: '', property: '', notes: '',
+  address_street: '', address_unit: '', address_city: '', address_state: '', address_zip: '',
   billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
 };
 
 // Maps common spreadsheet header variations to our contact fields
 const HEADER_MAP = {
-  name: ['name', 'contact name', 'customer name', 'full name'],
   contact_type: ['type', 'contact type', 'property type', 'category'],
+  first_name: ['first name', 'firstname', 'first'],
+  last_name: ['last name', 'lastname', 'last'],
   management_company: ['company', 'management company', 'organization', 'business'],
   contact_phone: ['phone', 'contact phone', 'phone number', 'mobile'],
   contact_email: ['email', 'contact email', 'e-mail'],
   billing_email: ['billing email', 'invoice email'],
   property: ['property', 'property name'],
   notes: ['notes', 'note', 'comments'],
-  billing_street: ['street', 'address', 'billing street', 'billing address', 'street address'],
-  billing_unit: ['unit', 'suite', 'billing unit'],
-  billing_city: ['city', 'billing city'],
-  billing_state: ['state', 'billing state'],
-  billing_zip: ['zip', 'zip code', 'postal code', 'billing zip'],
+  address_street: ['street', 'address', 'street address'],
+  address_unit: ['unit', 'suite'],
+  address_city: ['city'],
+  address_state: ['state'],
+  address_zip: ['zip', 'zip code', 'postal code'],
+  billing_street: ['billing street', 'billing address'],
+  billing_unit: ['billing unit'],
+  billing_city: ['billing city'],
+  billing_state: ['billing state'],
+  billing_zip: ['billing zip'],
 };
 
 function normalizeHeader(h) { return (h || '').toString().trim().toLowerCase(); }
@@ -40,6 +50,9 @@ function mapRow(row) {
       contact[field] = String(row[match]).trim();
     }
   }
+  if (contact.first_name || contact.last_name) {
+    contact.name = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+  }
   return contact;
 }
 
@@ -49,6 +62,7 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [sameAsBilling, setSameAsBilling] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
@@ -67,7 +81,79 @@ export default function CustomersPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadContacts]);
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  const isHomeowner = form.contact_type === HOMEOWNER_TYPE;
+
+  function update(field, value) {
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
+        const addrField = field.replace('billing_', 'address_');
+        next[addrField] = value;
+      }
+      return next;
+    });
+  }
+
+  function toggleSameAsBilling(checked) {
+    setSameAsBilling(checked);
+    if (checked) {
+      setForm(prev => ({
+        ...prev,
+        address_street: prev.billing_street,
+        address_unit: prev.billing_unit,
+        address_city: prev.billing_city,
+        address_state: prev.billing_state,
+        address_zip: prev.billing_zip,
+      }));
+    }
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.first_name.trim() && !form.last_name.trim()) return;
+    setSaving(true);
+
+    const payload = {
+      ...form,
+      name: [form.first_name, form.last_name].filter(Boolean).join(' '),
+    };
+    if (isHomeowner) {
+      payload.management_company = '';
+      payload.billing_street = ''; payload.billing_unit = ''; payload.billing_city = '';
+      payload.billing_state = ''; payload.billing_zip = ''; payload.billing_email = '';
+    }
+
+    if (editingId) {
+      await supabase.from('contacts').update(payload).eq('id', editingId);
+    } else {
+      await supabase.from('contacts').insert(payload);
+    }
+    setSaving(false);
+    setForm(EMPTY_FORM);
+    setSameAsBilling(false);
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startEdit(contact) {
+    setForm({ ...EMPTY_FORM, ...contact });
+    setSameAsBilling(Boolean(contact.billing_street) && contact.billing_street === contact.address_street);
+    setEditingId(contact.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelForm() {
+    setForm(EMPTY_FORM);
+    setSameAsBilling(false);
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  async function removeContact(id) {
+    if (!confirm('Delete this contact?')) return;
+    await supabase.from('contacts').delete().eq('id', id);
+  }
 
   async function handleImportFile(e) {
     const file = e.target.files[0];
@@ -83,7 +169,7 @@ export default function CustomersPage() {
 
       const mapped = rows.map(mapRow).filter(c => c.name && c.name.trim());
       if (mapped.length === 0) {
-        setImportResult('No rows with a recognizable name column were found. Expected a header like "Name" or "Customer Name".');
+        setImportResult('No rows with a recognizable name column were found. Expected headers like "First Name" and "Last Name".');
         return;
       }
 
@@ -96,39 +182,6 @@ export default function CustomersPage() {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    setSaving(true);
-    if (editingId) {
-      await supabase.from('contacts').update(form).eq('id', editingId);
-    } else {
-      await supabase.from('contacts').insert(form);
-    }
-    setSaving(false);
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowForm(false);
-  }
-
-  function startEdit(contact) {
-    setForm({ ...EMPTY_FORM, ...contact });
-    setEditingId(contact.id);
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function cancelForm() {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowForm(false);
-  }
-
-  async function removeContact(id) {
-    if (!confirm('Delete this contact?')) return;
-    await supabase.from('contacts').delete().eq('id', id);
   }
 
   const filtered = contacts.filter(c => {
@@ -151,7 +204,6 @@ export default function CustomersPage() {
               accept=".xlsx,.xls,.csv"
               onChange={handleImportFile}
               style={{ display: 'none' }}
-              id="excelImport"
             />
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
@@ -166,7 +218,7 @@ export default function CustomersPage() {
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
             {importResult}
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-              Recognized columns: Name, Company, Phone, Email, Billing Email, Street, Unit, City, State, Zip, Property, Notes (header names are flexible — "Customer Name" or "Phone Number" work too).
+              Recognized columns: Type, First Name, Last Name, Company, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
             </div>
           </div>
         )}
@@ -174,32 +226,60 @@ export default function CustomersPage() {
         {showForm && (
           <form className="card" onSubmit={submit}>
             <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
-            <div className="two-col">
-              <div><label>Name *</label><input value={form.name} onChange={e => update('name', e.target.value)} required /></div>
-              <div>
-                <label>Type</label>
-                <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)}>
-                  <option value="">Select…</option>
-                  {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div><label>Management company</label><input value={form.management_company} onChange={e => update('management_company', e.target.value)} /></div>
-              <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
-              <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-            </div>
-            <label>Property</label>
-            <input value={form.property} onChange={e => update('property', e.target.value)} />
 
-            <label style={{ marginTop: 16 }}>Billing email</label>
-            <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
-            <label style={{ marginTop: 4 }}>Billing address</label>
-            <AddressFields prefix="billing" values={form} onChange={update} />
+            <label>Contact type *</label>
+            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required>
+              <option value="">Select…</option>
+              {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
 
-            <label style={{ marginTop: 16 }}>Notes</label>
-            <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
-            </div>
+            {form.contact_type && (
+              <>
+                <div className="two-col" style={{ marginTop: 12 }}>
+                  <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
+                  <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
+                  <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
+                  <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                </div>
+
+                {!isHomeowner && (
+                  <div style={{ marginTop: 12 }}>
+                    <label>Management company</label>
+                    <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
+                  </div>
+                )}
+
+                <label style={{ marginTop: 12 }}>Property</label>
+                <input value={form.property} onChange={e => update('property', e.target.value)} />
+
+                {isHomeowner ? (
+                  <>
+                    <label style={{ marginTop: 16 }}>Address</label>
+                    <AddressFields prefix="address" values={form} onChange={update} />
+                  </>
+                ) : (
+                  <>
+                    <label style={{ marginTop: 16 }}>Billing email</label>
+                    <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
+                    <label style={{ marginTop: 4 }}>Billing address</label>
+                    <AddressFields prefix="billing" values={form} onChange={update} />
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                      <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
+                      Address same as billing address
+                    </label>
+                    <label>Address</label>
+                    <AddressFields prefix="address" values={form} onChange={update} />
+                  </>
+                )}
+
+                <label style={{ marginTop: 16 }}>Notes</label>
+                <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+                <div className="section-actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
+                </div>
+              </>
+            )}
           </form>
         )}
 
@@ -218,7 +298,7 @@ export default function CustomersPage() {
                 {c.contact_phone && <>{c.contact_phone}<br /></>}
                 {c.contact_email && <>{c.contact_email}<br /></>}
                 {c.property && <>{c.property}<br /></>}
-                {formatAddress(c, 'billing') && <>{formatAddress(c, 'billing')}</>}
+                {formatAddress(c, 'address') && <>{formatAddress(c, 'address')}</>}
               </div>
             </div>
             <div className="section-actions" style={{ marginTop: 0 }}>

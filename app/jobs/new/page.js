@@ -86,27 +86,27 @@ export default function NewJobPage() {
       customer_email: contact.contact_email || prev.customer_email,
       customer_phone: contact.contact_phone || prev.customer_phone,
       billing_email: contact.billing_email || prev.billing_email,
-      billing_street: contact.billing_street || prev.billing_street,
-      billing_unit: contact.billing_unit || prev.billing_unit,
-      billing_city: contact.billing_city || prev.billing_city,
-      billing_state: contact.billing_state || prev.billing_state,
-      billing_zip: contact.billing_zip || prev.billing_zip,
-      // The contact only has one address on file, so use it for the
-      // project address too — same-as-billing below reflects this and
-      // stays fully editable if the job site is actually somewhere else.
-      project_street: contact.billing_street || prev.project_street,
-      project_unit: contact.billing_unit || prev.project_unit,
-      project_city: contact.billing_city || prev.project_city,
-      project_state: contact.billing_state || prev.project_state,
-      project_zip: contact.billing_zip || prev.project_zip,
+      billing_street: contact.billing_street || contact.address_street || prev.billing_street,
+      billing_unit: contact.billing_unit || contact.address_unit || prev.billing_unit,
+      billing_city: contact.billing_city || contact.address_city || prev.billing_city,
+      billing_state: contact.billing_state || contact.address_state || prev.billing_state,
+      billing_zip: contact.billing_zip || contact.address_zip || prev.billing_zip,
+      // Prefer the contact's actual property/mailing address for the
+      // project address; fall back to their billing address if that's
+      // all that's on file (e.g. a homeowner contact only has one address).
+      project_street: contact.address_street || contact.billing_street || prev.project_street,
+      project_unit: contact.address_unit || contact.billing_unit || prev.project_unit,
+      project_city: contact.address_city || contact.billing_city || prev.project_city,
+      project_state: contact.address_state || contact.billing_state || prev.project_state,
+      project_zip: contact.address_zip || contact.billing_zip || prev.project_zip,
     }));
-    if (contact.billing_street) setSameAsBilling(true);
+    if (contact.billing_street || contact.address_street) setSameAsBilling(true);
     setShowSuggestions(false);
 
     const filled = [];
     if (contact.contact_email) filled.push('email');
     if (contact.contact_phone) filled.push('phone');
-    if (contact.billing_street) filled.push('address'); else filled.push('no address on file for this contact');
+    if (contact.billing_street || contact.address_street) filled.push('address'); else filled.push('no address on file for this contact');
     setAutofillNote(`Filled from ${contact.name}: ${filled.join(', ')}.`);
     setTimeout(() => setAutofillNote(''), 6000);
   }

@@ -178,9 +178,10 @@ export default function JobDetailPage() {
 
 function StageStepper({ currentStage }) {
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
+  const currentPhase = PHASES.find(p => p.stages.includes(currentStage)) || PHASES[0];
   return (
     <div className="stepper stepper-flat">
-      {STAGE_ORDER.map(stage => {
+      {currentPhase.stages.map(stage => {
         const stageIndex = STAGE_ORDER.indexOf(stage);
         const isCurrent = stage === currentStage;
         const isPast = stageIndex < currentIndex;

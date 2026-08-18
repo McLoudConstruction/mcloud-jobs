@@ -92,24 +92,24 @@ export default function AppShell({ children }) {
   return (
     <div className="shell">
       <div className="shell-topbar" ref={topbarRef}>
-        <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
-          <span /><span /><span />
-        </button>
+        <div className="shell-header-left">
+          <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
+            <span /><span /><span />
+          </button>
 
-        <div className="shell-header-right">
-          <div className="shell-logo">
-            {settings.logo_url
-              ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
-              : <span className="brand">McLoud <span>Jobs</span></span>}
-          </div>
-
-          <Link href="/notifications" className="notif-bell" aria-label="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <Link href="/notifications" className="hamburger-btn notif-bell" aria-label="Notifications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </Link>
+        </div>
+
+        <div className="shell-logo">
+          {settings.logo_url
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
+            : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
       </div>
 

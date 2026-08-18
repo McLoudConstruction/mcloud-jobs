@@ -61,7 +61,7 @@ export default function SettingsPage() {
     setTimeout(() => setFlash(''), 2000);
   }
 
-  async function handleLogoUpload(e) {
+  async function handleLogoUpload(e, field = 'logo_url') {
     const file = e.target.files[0];
     if (!file) return;
     setError('');
@@ -69,16 +69,17 @@ export default function SettingsPage() {
 
     try {
       const ext = file.name.split('.').pop();
-      const path = `logo-${Date.now()}.${ext}`;
+      const prefix = field === 'watermark_logo_url' ? 'watermark' : 'logo';
+      const path = `${prefix}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage.from('branding').upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('branding').getPublicUrl(path);
-      const { error: updateError } = await supabase.from('app_settings').update({ logo_url: urlData.publicUrl }).eq('id', 1);
+      const { error: updateError } = await supabase.from('app_settings').update({ [field]: urlData.publicUrl }).eq('id', 1);
       if (updateError) throw updateError;
 
-      showFlash('Logo updated');
+      showFlash(field === 'watermark_logo_url' ? 'Watermark logo updated' : 'Logo updated');
       refresh();
     } catch (err) {
       setError(err.message || 'Upload failed. Make sure migration 003 (storage bucket) has been run in Supabase.');
@@ -178,6 +179,29 @@ export default function SettingsPage() {
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
             This updates the logo shown in the app. Proposal, contract, and update documents still use the original letterhead logo for now — let me know if you want those switched over too.
           </div>
+        </div>
+
+        <div className="card">
+          <h3>Photo watermark</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Stamped onto every photo you upload. Leave this empty to use your main logo above instead.
+          </div>
+          {settings.watermark_logo_url && (
+            <div style={{ marginBottom: 14 }}>
+              <img src={settings.watermark_logo_url} alt="Current watermark logo" style={{ maxWidth: 220, height: 'auto', display: 'block' }} />
+            </div>
+          )}
+          <label htmlFor="watermarkUpload">Upload a watermark logo (PNG with transparent background recommended)</label>
+          <input id="watermarkUpload" type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={e => handleLogoUpload(e, 'watermark_logo_url')} disabled={uploading} />
+          {settings.watermark_logo_url && (
+            <button
+              className="btn btn-sm"
+              style={{ marginTop: 10 }}
+              onClick={async () => { await supabase.from('app_settings').update({ watermark_logo_url: null }).eq('id', 1); refresh(); }}
+            >
+              Use main logo instead
+            </button>
+          )}
         </div>
 
         <div className="card">
