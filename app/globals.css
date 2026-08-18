@@ -308,6 +308,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .sales-route-card{ cursor: pointer; }
 .sales-route-card:hover{ border-color: var(--rust); }
 
+.photo-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.photo-tile{ border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #f5f2e8; }
+.photo-tile img{ width: 100%; height: 120px; object-fit: cover; display: block; }
+.photo-tile-loading{ width: 100%; height: 120px; background: #ece7d6; }
+.photo-tile-actions{ display: flex; gap: 4px; padding: 6px; }
+.photo-tile-actions .btn{ flex: 1; font-size: 10.5px; padding: 5px 6px; }
+
 .breadcrumb-link{
   display: inline-block;
   font-size: 12.5px;

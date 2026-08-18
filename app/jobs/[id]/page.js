@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
+import PhotoGallery from '../../../components/PhotoGallery';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage } from '../../../lib/constants';
 
@@ -153,7 +154,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Photos' && (
-          <div className="card"><div className="empty-state">Photo upload is coming in a future update.</div></div>
+          <PhotoGallery jobId={id} title="Job Photos" />
         )}
 
         {tab === 'Documents' && (
@@ -676,6 +677,8 @@ function UpdatesCard({ jobId, updates }) {
           {u.issues_notes && <><div className="update-field-label">Issues / notes</div><p>{u.issues_notes}</p></>}
           {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
           {u.estimated_completion && <><div className="update-field-label">Estimated completion</div><p>{fmtDate(u.estimated_completion)}</p></>}
+          <div className="update-field-label" style={{ marginTop: 10 }}>Photos</div>
+          <PhotoGallery jobId={jobId} updateId={u.id} bare />
           <div className="section-actions">
             <Link href={`/jobs/${jobId}/updates/${u.id}`} className="btn btn-sm">Generate PDF</Link>
             <button className="btn btn-sm btn-danger" onClick={() => removeUpdate(u.id)}>Delete</button>

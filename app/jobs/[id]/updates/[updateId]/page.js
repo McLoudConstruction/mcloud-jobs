@@ -20,6 +20,7 @@ export default function UpdateDocumentPage() {
   const [job, setJob] = useState(null);
   const [update, setUpdate] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState([]);
 
   const load = useCallback(async () => {
     const [{ data: jobData }, { data: updateData }] = await Promise.all([
@@ -28,6 +29,19 @@ export default function UpdateDocumentPage() {
     ]);
     if (jobData) setJob(jobData);
     if (updateData) setUpdate(updateData);
+
+    const { data: photos } = await supabase.from('job_photos').select('*').eq('update_id', updateId).order('created_at', { ascending: true });
+    if (photos && photos.length) {
+      const urls = await Promise.all(
+        photos.map(async p => {
+          const { data } = await supabase.storage.from('job-photos').createSignedUrl(p.storage_path, 3600);
+          return data?.signedUrl;
+        })
+      );
+      setPhotoUrls(urls.filter(Boolean));
+    } else {
+      setPhotoUrls([]);
+    }
   }, [id, updateId]);
 
   useEffect(() => { if (session) load(); }, [session, load]);
@@ -109,6 +123,17 @@ export default function UpdateDocumentPage() {
             {field('Issues / notes', update.issues_notes)}
             {field('Next steps', update.next_steps)}
 
+            {photoUrls.length > 0 && (
+              <div className="section">
+                <h3>Photos</h3>
+                <div className="doc-photo-grid">
+                  {photoUrls.map((url, i) => (
+                    <img key={i} src={url} alt="" className="doc-photo" />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
               <span>Est. completion: {fmtDate(update.estimated_completion)}</span>
@@ -142,6 +167,8 @@ export default function UpdateDocumentPage() {
         .section { margin-bottom: 22px; break-inside: avoid; }
         .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
         .section p { font-size: 13.5px; line-height: 1.6; color: #221f16; margin: 0; white-space: pre-wrap; }
+        .doc-photo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .doc-photo { width: 100%; height: 160px; object-fit: cover; border-radius: 4px; border: 1px solid #ded7c0; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
         .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
         @media print { .continued-note { display: block; } .no-print { display: none !important; } body { background: #fff; } .doc-outer { padding: 0; } .doc-page { box-shadow: none; max-width: none; } }
