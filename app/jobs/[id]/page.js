@@ -16,6 +16,7 @@ const TABS = [
   { key: 'Financials', label: 'Financials' },
   { key: 'Photos', label: 'Photos' },
   { key: 'Documents', label: 'Documentation' },
+  { key: 'Communications', label: 'Communications' },
 ];
 
 function fmtMoney(v) {
@@ -171,8 +172,73 @@ export default function JobDetailPage() {
             )}
           </>
         )}
+
+        {tab === 'Communications' && (
+          <CommunicationsCard job={job} jobId={id} updates={updates} changeOrders={changeOrders} />
+        )}
       </div>
     </AppShell>
+  );
+}
+
+function CommunicationsCard({ job, jobId, updates, changeOrders }) {
+  const entries = [];
+
+  if (job.portal_invited_at) {
+    entries.push({ at: job.portal_invited_at, label: 'Customer portal invite sent', href: null });
+  }
+  if (job.proposal_sent_at) {
+    entries.push({ at: job.proposal_sent_at, label: 'Proposal sent', href: `/jobs/${jobId}/proposal` });
+  }
+  if (job.contract_sent_at) {
+    entries.push({ at: job.contract_sent_at, label: 'Contract sent', href: contractPathFor(job) });
+  }
+  if (job.invoice_status !== 'not_sent' && job.invoiced_at) {
+    entries.push({ at: job.invoiced_at, label: `Invoice sent (${job.invoice_status === 'paid' ? 'now paid' : 'awaiting payment'})`, href: `/jobs/${jobId}/invoice` });
+  }
+  updates.forEach(u => {
+    if (u.sent_at) {
+      entries.push({ at: u.sent_at, label: `Progress update sent (${u.update_date})`, href: `/jobs/${jobId}/updates/${u.id}` });
+    }
+  });
+  changeOrders.forEach(co => {
+    if (co.sent_at) {
+      entries.push({ at: co.sent_at, label: `Change order sent (${co.co_date})`, href: `/jobs/${jobId}/change-orders/${co.id}` });
+    }
+  });
+
+  entries.sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  return (
+    <div className="card">
+      <h3>Communications log</h3>
+
+      <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--line)' }}>
+        <div className="update-field-label">Customer portal activity</div>
+        <p style={{ fontSize: 13, margin: '4px 0 0' }}>
+          {job.portal_invited_at
+            ? `Invited on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}.`
+            : 'Not invited to the portal yet.'}
+          {' '}
+          {job.portal_last_viewed_at
+            ? `Last viewed the portal on ${new Date(job.portal_last_viewed_at).toLocaleString('en-US')}.`
+            : (job.portal_invited_at ? 'Has not viewed the portal yet.' : '')}
+        </p>
+      </div>
+
+      {entries.length === 0 && <div className="empty-state">Nothing sent yet.</div>}
+      {entries.map((e, i) => (
+        <div className="update-entry" key={i}>
+          <div className="update-date">{new Date(e.at).toLocaleString('en-US')}</div>
+          <p style={{ margin: 0 }}>{e.label}</p>
+          {e.href && (
+            <div className="section-actions">
+              <Link href={e.href} className="btn btn-sm">View</Link>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -256,6 +322,13 @@ function PortalCard({ job, onSave }) {
               ? `Invited on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}. You can resend the link anytime.`
               : 'Send this customer a secure link to view project updates and their invoice.'}
           </div>
+          {job.portal_invited_at && (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+              {job.portal_last_viewed_at
+                ? `Last viewed the portal on ${new Date(job.portal_last_viewed_at).toLocaleString('en-US')}.`
+                : 'Has not viewed the portal yet.'}
+            </div>
+          )}
           <button className="btn btn-primary btn-sm" onClick={invite} disabled={inviting}>
             {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite customer to portal'}
           </button>

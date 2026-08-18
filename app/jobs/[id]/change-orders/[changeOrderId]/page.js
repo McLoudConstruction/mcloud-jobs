@@ -159,6 +159,9 @@ export default function ChangeOrderDocumentPage() {
         docElementId="doc-preview"
         pdfFilename={`Change-Order-${job.job_number}-${co.co_date}.pdf`}
         defaultEmail={recipientEmail}
+        onSendSuccess={async () => {
+          await supabase.from('change_orders').update({ sent_at: new Date().toISOString() }).eq('id', changeOrderId);
+        }}
       />
 
       <style jsx global>{`

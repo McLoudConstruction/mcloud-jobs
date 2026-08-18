@@ -59,9 +59,6 @@ export default function JobTrackerPage() {
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Job Dashboard</h2>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -8, marginBottom: 16 }}>
-          New projects are created from the Sales Dashboard — this page tracks jobs already underway.
-        </div>
 
         <div className="search-bar">
           <input
@@ -71,17 +68,13 @@ export default function JobTrackerPage() {
           />
         </div>
 
-        <div className="stage-tabs">
+        <select value={stage} onChange={e => setStage(e.target.value)} style={{ marginBottom: 18 }}>
           {STAGES.map(s => (
-            <button
-              key={s}
-              className={`stage-tab ${stage === s ? 'active' : ''}`}
-              onClick={() => setStage(s)}
-            >
-              {TAB_LABELS[s]} {s !== 'all' ? `(${jobs.filter(j => j.stage === s).length})` : `(${jobs.length})`}
-            </button>
+            <option key={s} value={s}>
+              {TAB_LABELS[s]} ({s !== 'all' ? jobs.filter(j => j.stage === s).length : jobs.length})
+            </option>
           ))}
-        </div>
+        </select>
 
         {filtered.length === 0 && <div className="empty-state">No jobs here yet.</div>}
 
@@ -92,7 +85,10 @@ export default function JobTrackerPage() {
               <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
               <span className="job-address">{job.project_address || 'No address yet'}</span>
             </div>
-            <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              {job.job_type && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{job.job_type}</span>}
+              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+            </div>
           </Link>
         ))}
       </div>

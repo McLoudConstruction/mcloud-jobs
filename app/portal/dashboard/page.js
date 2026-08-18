@@ -77,6 +77,7 @@ export default function PortalDashboardPage() {
   useEffect(() => {
     if (!session || !selectedJobId) return;
     loadJobDetails();
+    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId });
 
     const channel = supabase
       .channel(`portal-${selectedJobId}`)

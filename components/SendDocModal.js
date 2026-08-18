@@ -59,6 +59,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
   return createPortal(
     <div className="send-doc-overlay" style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} aria-label="Close" style={closeButtonStyle}>×</button>
         <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>Send to Customer</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 18px' }}>
           Choose how to send {docLabel} to the customer.
@@ -80,13 +81,18 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
           <button className="btn btn-sm" onClick={() => send(true)} disabled={sending || !email.trim()}>
             {sending ? 'Working…' : 'Email with PDF Attached'}
           </button>
-          <button className="btn btn-sm" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>,
     document.body
   );
 }
+
+const closeButtonStyle = {
+  position: 'absolute', top: 10, right: 14,
+  background: 'transparent', border: 'none', cursor: 'pointer',
+  fontSize: 26, lineHeight: 1, color: 'var(--ink-soft)', padding: 4,
+};
 
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
@@ -98,4 +104,5 @@ const modalStyle = {
   background: '#fff', borderRadius: 8, padding: 26, width: '100%', maxWidth: 420,
   boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
   margin: 'auto',
+  position: 'relative',
 };
