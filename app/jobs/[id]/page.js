@@ -43,6 +43,8 @@ export default function JobDetailPage() {
   const [updates, setUpdates] = useState([]);
   const [changeOrders, setChangeOrders] = useState([]);
   const [flash, setFlash] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState('Customer');
 
@@ -96,6 +98,24 @@ export default function JobDetailPage() {
     await saveJob({ stage: next });
   }
 
+  async function invitePortal() {
+    const recipientEmail = job.customer_email || job.billing_email || '';
+    if (!recipientEmail) { setInviteResult('Add a contact email before inviting the customer.'); return; }
+    setInviting(true);
+    setInviteResult('');
+    const { error } = await supabase.auth.signInWithOtp({
+      email: recipientEmail,
+      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+    });
+    setInviting(false);
+    if (error) {
+      setInviteResult(error.message);
+    } else {
+      setInviteResult(`Invite sent to ${recipientEmail}.`);
+      await saveJob({ portal_invited_at: new Date().toISOString() });
+    }
+  }
+
   async function deleteJob() {
     if (!confirm('Permanently delete this job? This cannot be undone.')) return;
     await supabase.from('jobs').delete().eq('id', id);
@@ -117,6 +137,9 @@ export default function JobDetailPage() {
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
           <div className="section-actions">
+            <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
+              {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
+            </button>
             {job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
@@ -125,6 +148,11 @@ export default function JobDetailPage() {
             <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
           </div>
         </div>
+        {inviteResult && (
+          <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
+            {inviteResult}
+          </div>
+        )}
 
         <StageStepper currentStage={job.stage} />
 
@@ -137,7 +165,7 @@ export default function JobDetailPage() {
         {tab === 'Customer' && (
           <>
             <CustomerInfoCard job={job} onSave={saveJob} />
-            <PortalCard job={job} onSave={saveJob} />
+            <PortalCard job={job} />
           </>
         )}
 
@@ -262,14 +290,10 @@ function StageStepper({ currentStage }) {
 }
 
 /* ---------------- Customer portal invite + questions ---------------- */
-function PortalCard({ job, onSave }) {
-  const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState('');
+function PortalCard({ job }) {
   const [questions, setQuestions] = useState([]);
   const [replyDrafts, setReplyDrafts] = useState({});
   const [replyingId, setReplyingId] = useState(null);
-
-  const recipientEmail = job.customer_email || job.billing_email || '';
 
   const loadQuestions = useCallback(async () => {
     const { data } = await supabase.from('job_questions').select('*').eq('job_id', job.id).order('created_at', { ascending: false });
@@ -285,23 +309,6 @@ function PortalCard({ job, onSave }) {
     return () => supabase.removeChannel(channel);
   }, [job.id, loadQuestions]);
 
-  async function invite() {
-    if (!recipientEmail) return;
-    setInviting(true);
-    setInviteResult('');
-    const { error } = await supabase.auth.signInWithOtp({
-      email: recipientEmail,
-      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
-    });
-    setInviting(false);
-    if (error) {
-      setInviteResult(error.message);
-    } else {
-      setInviteResult(`Invite sent to ${recipientEmail}.`);
-      onSave({ portal_invited_at: new Date().toISOString() });
-    }
-  }
-
   async function sendReply(questionId) {
     const text = replyDrafts[questionId] || '';
     if (!text.trim()) return;
@@ -309,32 +316,11 @@ function PortalCard({ job, onSave }) {
     setReplyingId(null);
   }
 
+  if (questions.length === 0) return null;
+
   return (
     <div className="card">
       <h3>Customer portal</h3>
-      {!recipientEmail && (
-        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Add a contact email above before inviting the customer.</div>
-      )}
-      {recipientEmail && (
-        <>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            {job.portal_invited_at
-              ? `Invited on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}. You can resend the link anytime.`
-              : 'Send this customer a secure link to view project updates and their invoice.'}
-          </div>
-          {job.portal_invited_at && (
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-              {job.portal_last_viewed_at
-                ? `Last viewed the portal on ${new Date(job.portal_last_viewed_at).toLocaleString('en-US')}.`
-                : 'Has not viewed the portal yet.'}
-            </div>
-          )}
-          <button className="btn btn-primary btn-sm" onClick={invite} disabled={inviting}>
-            {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite customer to portal'}
-          </button>
-          {inviteResult && <div style={{ fontSize: 12.5, marginTop: 8, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>{inviteResult}</div>}
-        </>
-      )}
 
       {questions.length > 0 && (
         <div style={{ marginTop: 20 }}>

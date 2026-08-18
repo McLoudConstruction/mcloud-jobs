@@ -343,6 +343,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .sales-route-card:hover{ border-color: var(--rust); }
 
 .photo-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+.data-table{ width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.data-table th{ text-align: left; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); background: var(--panel); padding: 8px 10px; border-bottom: 1px solid var(--panel-line); white-space: nowrap; }
+.data-table td{ padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.data-table tbody tr{ cursor: pointer; }
+.data-table tbody tr:hover{ background: #faf8f0; }
+.data-table tbody tr:last-child td{ border-bottom: none; }
+.data-table-wrap{ overflow-x: auto; }
 .photo-tile{ border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #f5f2e8; }
 .photo-tile img{ width: 100%; height: 120px; object-fit: cover; display: block; }
 .photo-tile-loading{ width: 100%; height: 120px; background: #ece7d6; }

@@ -5,18 +5,20 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
-import { PROPERTY_TYPES } from '../../lib/constants';
+import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS } from '../../lib/constants';
 
 const EMPTY_FORM = {
-  property_name: '', property_type: '',
+  property_name: '', property_type: '', prospect_stage: 'prospecting',
   property_street: '', property_unit: '', property_city: '', property_state: '', property_zip: '',
   management_company: '', contact_name: '', contact_phone: '', contact_email: '',
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
 };
+const EMPTY_CONTACT_FORM = { name: '', role: 'Property Contact', contact_phone: '', contact_email: '' };
 
 const HEADER_MAP = {
   property_name: ['property', 'property name', 'name', 'building'],
   property_type: ['type', 'property type', 'category'],
+  prospect_stage: ['prospect stage', 'stage'],
   management_company: ['company', 'management company', 'management', 'organization'],
   contact_name: ['contact', 'contact name'],
   contact_phone: ['phone', 'contact phone', 'phone number'],
@@ -42,13 +44,6 @@ function mapRow(row) {
   return out;
 }
 
-function fmtMoney(v) {
-  if (!v) return '—';
-  const n = parseFloat(v);
-  if (isNaN(n)) return '—';
-  return '$' + n.toLocaleString('en-US');
-}
-
 export default function PropertiesPage() {
   const { session, loading } = useRequireAuth();
   const [properties, setProperties] = useState([]);
@@ -62,6 +57,12 @@ export default function PropertiesPage() {
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
 
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactForm, setContactForm] = useState(EMPTY_CONTACT_FORM);
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactNote, setContactNote] = useState('');
+  const [propertyContacts, setPropertyContacts] = useState([]);
+
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
     if (data) setProperties(data);
@@ -74,13 +75,35 @@ export default function PropertiesPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadProperties]);
 
+  const loadPropertyContacts = useCallback(async (propertyId) => {
+    if (!propertyId) { setPropertyContacts([]); return; }
+    const { data } = await supabase.from('contacts').select('*').eq('property_id', propertyId).order('name', { ascending: true });
+    if (data) setPropertyContacts(data);
+  }, []);
+
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+
+  async function findOrCreateCompany(companyName) {
+    const trimmed = (companyName || '').trim();
+    if (!trimmed) return null;
+    const { data: existing } = await supabase.from('companies').select('id').ilike('company_name', trimmed).limit(1);
+    if (existing && existing.length > 0) return existing[0].id;
+    const { data: created } = await supabase.from('companies').insert({ company_name: trimmed, company_type: 'Management Company' }).select().single();
+    return created ? created.id : null;
+  }
 
   async function submit(e) {
     e.preventDefault();
     if (!form.property_name.trim()) return;
     setSaving(true);
-    const payload = { ...form, target_value: form.target_value ? parseFloat(String(form.target_value).replace(/[^0-9.]/g, '')) : null };
+
+    const companyId = await findOrCreateCompany(form.management_company);
+    const payload = {
+      ...form,
+      target_value: form.target_value ? parseFloat(String(form.target_value).replace(/[^0-9.]/g, '')) : null,
+      company_id: companyId,
+    };
+
     if (editingId) {
       await supabase.from('properties').update(payload).eq('id', editingId);
     } else {
@@ -90,12 +113,14 @@ export default function PropertiesPage() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    setShowContactForm(false);
   }
 
   function startEdit(p) {
     setForm({ ...EMPTY_FORM, ...p, target_value: p.target_value ?? '' });
     setEditingId(p.id);
     setShowForm(true);
+    loadPropertyContacts(p.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -103,6 +128,37 @@ export default function PropertiesPage() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    setShowContactForm(false);
+    setPropertyContacts([]);
+  }
+
+  async function removeProperty(id) {
+    if (!confirm('Delete this property?')) return;
+    await supabase.from('properties').delete().eq('id', id);
+  }
+
+  function updateContactForm(field, value) { setContactForm(prev => ({ ...prev, [field]: value })); }
+
+  async function submitPropertyContact(e) {
+    e.preventDefault();
+    if (!contactForm.name.trim() || !editingId) return;
+    setSavingContact(true);
+    await supabase.from('contacts').insert({
+      name: contactForm.name,
+      first_name: contactForm.name.split(' ')[0],
+      last_name: contactForm.name.split(' ').slice(1).join(' '),
+      role: contactForm.role,
+      contact_phone: contactForm.contact_phone,
+      contact_email: contactForm.contact_email,
+      property_id: editingId,
+      contact_type: form.property_type || null,
+    });
+    setSavingContact(false);
+    setContactForm(EMPTY_CONTACT_FORM);
+    setShowContactForm(false);
+    setContactNote(`${contactForm.name} added to Contacts.`);
+    setTimeout(() => setContactNote(''), 3000);
+    loadPropertyContacts(editingId);
   }
 
   async function handleImportFile(e) {
@@ -129,11 +185,6 @@ export default function PropertiesPage() {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }
-
-  async function removeProperty(id) {
-    if (!confirm('Delete this property?')) return;
-    await supabase.from('properties').delete().eq('id', id);
   }
 
   const filtered = properties.filter(p => {
@@ -164,9 +215,6 @@ export default function PropertiesPage() {
         {importResult && (
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
             {importResult}
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-              Recognized columns: Property Name, Type, Management Company, Contact Name/Phone/Email, Street/Unit/City/State/Zip, Year Built, Sq Ft, Target Value, Notes.
-            </div>
           </div>
         )}
 
@@ -182,13 +230,23 @@ export default function PropertiesPage() {
                   {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+              <div>
+                <label>Prospect stage</label>
+                <select value={form.prospect_stage} onChange={e => update('prospect_stage', e.target.value)}>
+                  {PROSPECT_STAGES.map(s => <option key={s} value={s}>{PROSPECT_STAGE_LABELS[s]}</option>)}
+                </select>
+              </div>
             </div>
 
             <label style={{ marginTop: 12 }}>Address</label>
             <AddressFields prefix="property" values={form} onChange={update} />
 
             <div className="two-col" style={{ marginTop: 12 }}>
-              <div><label>Management company</label><input value={form.management_company} onChange={e => update('management_company', e.target.value)} /></div>
+              <div>
+                <label>Management company</label>
+                <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>Automatically added to Companies if it doesn't already exist.</div>
+              </div>
               <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
               <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
@@ -196,7 +254,7 @@ export default function PropertiesPage() {
               <div><label>Square footage</label><input value={form.sq_ft} onChange={e => update('sq_ft', e.target.value)} /></div>
               <div><label>Target project value ($)</label><input value={form.target_value} onChange={e => update('target_value', e.target.value)} /></div>
               <div>
-                <label>Active prospect</label>
+                <label>Active</label>
                 <select value={form.active ? 'yes' : 'no'} onChange={e => update('active', e.target.value === 'yes')}>
                   <option value="yes">Active</option>
                   <option value="no">Inactive</option>
@@ -205,6 +263,48 @@ export default function PropertiesPage() {
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+            {editingId && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+                <div className="top-actions" style={{ marginBottom: 10 }}>
+                  <h4 style={{ margin: 0, fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>Property Contacts &amp; Influencers</h4>
+                  <button type="button" className="btn btn-sm" onClick={() => setShowContactForm(s => !s)}>
+                    {showContactForm ? 'Cancel' : '+ Add Contact / Influencer'}
+                  </button>
+                </div>
+
+                {contactNote && <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 10 }}>{contactNote}</div>}
+
+                {showContactForm && (
+                  <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginBottom: 14 }}>
+                    <div className="two-col">
+                      <div><label>Name *</label><input value={contactForm.name} onChange={e => updateContactForm('name', e.target.value)} required /></div>
+                      <div>
+                        <label>Role</label>
+                        <select value={contactForm.role} onChange={e => updateContactForm('role', e.target.value)}>
+                          <option value="Property Contact">Property Contact</option>
+                          <option value="Influencer">Influencer</option>
+                        </select>
+                      </div>
+                      <div><label>Phone</label><input value={contactForm.contact_phone} onChange={e => updateContactForm('contact_phone', e.target.value)} /></div>
+                      <div><label>Email</label><input type="email" value={contactForm.contact_email} onChange={e => updateContactForm('contact_email', e.target.value)} /></div>
+                    </div>
+                    <div className="section-actions">
+                      <button type="button" className="btn btn-primary btn-sm" onClick={submitPropertyContact} disabled={savingContact}>
+                        {savingContact ? 'Saving…' : 'Save contact'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {propertyContacts.length === 0 && <div className="empty-state">No contacts linked to this property yet.</div>}
+                {propertyContacts.map(c => (
+                  <div key={c.id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                    <b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${c.contact_phone}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
@@ -226,24 +326,39 @@ export default function PropertiesPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No properties yet.</div>}
-        {filtered.map(p => (
-          <div className="contact-card" key={p.id}>
-            <div>
-              <div className="contact-name">{p.property_name} {!p.active && <span style={{ fontSize: 10, color: 'var(--ink-soft)', fontWeight: 400 }}>(inactive)</span>}</div>
-              {p.property_type && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', margin: '2px 0 4px' }}>{p.property_type}</div>}
-              <div className="contact-meta">
-                {formatAddress(p, 'property') && <>{formatAddress(p, 'property')}<br /></>}
-                {p.management_company && <>{p.management_company}<br /></>}
-                {p.contact_name && <>{p.contact_name}{p.contact_phone ? ' · ' + p.contact_phone : ''}<br /></>}
-                {p.target_value && <>Target value: {fmtMoney(p.target_value)}</>}
-              </div>
-            </div>
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={() => startEdit(p)}>Edit</button>
-              <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
-            </div>
+
+        {filtered.length > 0 && (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Property Name</th>
+                  <th>Property Type</th>
+                  <th>City</th>
+                  <th>ZIP</th>
+                  <th>Management Company</th>
+                  <th>Prospect Stage</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <tr key={p.id} onClick={() => startEdit(p)}>
+                    <td>{p.property_name}{!p.active && ' (inactive)'}</td>
+                    <td>{p.property_type || '—'}</td>
+                    <td>{p.property_city || '—'}</td>
+                    <td>{p.property_zip || '—'}</td>
+                    <td>{p.management_company || '—'}</td>
+                    <td>{PROSPECT_STAGE_LABELS[p.prospect_stage] || '—'}</td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </div>
     </AppShell>
   );
