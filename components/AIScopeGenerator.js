@@ -1,0 +1,59 @@
+'use client';
+import { useState } from 'react';
+
+export default function AIScopeGenerator({ projectType, onGenerate }) {
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+
+  async function generate() {
+    if (!description.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/generate-scope', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, projectType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate scope.');
+      onGenerate(data.items || []);
+      setDescription('');
+      setOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {!open ? (
+        <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>Generate scope with AI</button>
+      ) : (
+        <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
+          <label>Describe the job in your own words</label>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="e.g. Replace kitchen cabinets"
+            rows={2}
+          />
+          {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
+          <div className="section-actions">
+            <button type="button" className="btn btn-primary btn-sm" onClick={generate} disabled={loading || !description.trim()}>
+              {loading ? 'Generating…' : 'Generate scope items'}
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => { setOpen(false); setError(''); }}>Cancel</button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
+            Items get added below for you to review, edit, or remove before saving — nothing goes to a customer automatically.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

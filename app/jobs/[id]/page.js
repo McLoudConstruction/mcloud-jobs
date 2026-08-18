@@ -7,6 +7,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import PhotoGallery from '../../../components/PhotoGallery';
+import AIScopeGenerator from '../../../components/AIScopeGenerator';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage, contractPathFor } from '../../../lib/constants';
 
@@ -494,6 +495,10 @@ function ScopeCard({ job, onSave }) {
   return (
     <div className="card">
       <h3>Scope of work</h3>
+      <AIScopeGenerator
+        projectType={job.project_type}
+        onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
+      />
       {items.length === 0 && <div className="empty-state">No scope items yet.</div>}
       {items.map((text, i) => (
         <div className="list-row" key={i}>

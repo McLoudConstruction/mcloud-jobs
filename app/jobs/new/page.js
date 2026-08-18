@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
+import AIScopeGenerator from '../../../components/AIScopeGenerator';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, formatPhone } from '../../../lib/constants';
 
 const EMPTY_FORM = {
@@ -310,6 +311,10 @@ export default function NewJobPage() {
 
           <div className="card">
             <h3>Scope of work</h3>
+            <AIScopeGenerator
+              projectType={form.project_type}
+              onGenerate={(items) => setScopeItems(prev => [...prev.filter(t => t.trim()), ...items])}
+            />
             {scopeItems.map((text, i) => (
               <div className="list-row" key={i}>
                 <textarea value={text} onChange={e => updateScopeItem(i, e.target.value)} placeholder="e.g. Remove and haul away existing cabinetry" />
