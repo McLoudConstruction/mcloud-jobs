@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
@@ -63,6 +64,8 @@ export default function PropertiesPage() {
   const [savingContact, setSavingContact] = useState(false);
   const [contactNote, setContactNote] = useState('');
   const [propertyContacts, setPropertyContacts] = useState([]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
@@ -122,7 +125,6 @@ export default function PropertiesPage() {
     setEditingId(p.id);
     setShowForm(true);
     loadPropertyContacts(p.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cancelForm() {
@@ -153,12 +155,27 @@ export default function PropertiesPage() {
       contact_email: contactForm.contact_email,
       property_id: editingId,
       contact_type: form.property_type || null,
+      // Carry the property's own info over so the contact isn't missing
+      // context just because it was created from this card.
+      property: form.property_name || null,
+      management_company: form.management_company || null,
+      address_street: form.property_street || null,
+      address_unit: form.property_unit || null,
+      address_city: form.property_city || null,
+      address_state: form.property_state || null,
+      address_zip: form.property_zip || null,
     });
     setSavingContact(false);
     setContactForm(EMPTY_CONTACT_FORM);
     setShowContactForm(false);
     setContactNote(`${contactForm.name} added to Contacts.`);
     setTimeout(() => setContactNote(''), 3000);
+    loadPropertyContacts(editingId);
+  }
+
+  async function removePropertyContact(contactId, name) {
+    if (!confirm(`Remove ${name} from this property? They'll stay in Contacts, just unlinked from here.`)) return;
+    await supabase.from('contacts').update({ property_id: null }).eq('id', contactId);
     loadPropertyContacts(editingId);
   }
 
@@ -219,8 +236,11 @@ export default function PropertiesPage() {
           </div>
         )}
 
-        {showForm && (
-          <form className="card" onSubmit={submit}>
+        {showForm && mounted && createPortal(
+          <div className="send-doc-overlay" style={propertyModalOverlayStyle} onClick={cancelForm}>
+            <div style={propertyModalStyle} onClick={e => e.stopPropagation()}>
+              <button onClick={cancelForm} aria-label="Close" style={propertyCloseButtonStyle}>×</button>
+              <form onSubmit={submit}>
             <h3>{editingId ? 'Edit property' : 'New property'}</h3>
             <div className="two-col">
               <div><label>Property name *</label><input value={form.property_name} onChange={e => update('property_name', e.target.value)} required /></div>
@@ -300,8 +320,9 @@ export default function PropertiesPage() {
 
                 {propertyContacts.length === 0 && <div className="empty-state">No contacts linked to this property yet.</div>}
                 {propertyContacts.map(c => (
-                  <div key={c.id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-                    <b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${c.contact_phone}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span><b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${c.contact_phone}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}</span>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => removePropertyContact(c.id, c.name)}>Remove</button>
                   </div>
                 ))}
               </div>
@@ -310,7 +331,10 @@ export default function PropertiesPage() {
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
             </div>
-          </form>
+              </form>
+            </div>
+          </div>,
+          document.body
         )}
 
         <div className="search-bar">
@@ -355,3 +379,20 @@ export default function PropertiesPage() {
     </AppShell>
   );
 }
+
+const propertyModalOverlayStyle = {
+  position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
+  background: 'rgba(0,0,0,0.45)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
+  overflowY: 'auto',
+};
+const propertyModalStyle = {
+  background: '#fff', borderRadius: 8, padding: 26, width: '100%', maxWidth: 640,
+  boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+  margin: 'auto', position: 'relative',
+};
+const propertyCloseButtonStyle = {
+  position: 'absolute', top: 10, right: 14,
+  background: 'transparent', border: 'none', cursor: 'pointer',
+  fontSize: 26, lineHeight: 1, color: 'var(--ink-soft)', padding: 4,
+};

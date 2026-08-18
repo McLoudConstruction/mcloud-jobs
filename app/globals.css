@@ -346,7 +346,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 
 .data-table{ width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .data-table th{ text-align: left; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); background: var(--panel); padding: 8px 10px; border-bottom: 1px solid var(--panel-line); white-space: nowrap; }
-.data-table td{ padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.data-table td{ padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.data-table th{ overflow: hidden; text-overflow: ellipsis; }
 .data-table tbody tr{ cursor: pointer; }
 .data-table tbody tr:hover{ background: #faf8f0; }
 .data-table tbody tr:last-child td{ border-bottom: none; }
