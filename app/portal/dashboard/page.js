@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useSettings } from '../../../lib/useSettings';
-import { STAGE_LABELS, phaseForStage } from '../../../lib/constants';
+import { STAGE_LABELS, phaseForStage, contractPathFor } from '../../../lib/constants';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -110,7 +110,7 @@ export default function PortalDashboardPage() {
     <div>
       <div className="topbar">
         {settings.logo_url
-          ? <img src={settings.logo_url} alt="Logo" style={{ height: 32, width: 'auto' }} />
+          ? <img src={settings.logo_url} alt="Logo" style={{ height: 300, width: 'auto' }} />
           : <div className="brand">McLoud <span>Portal</span></div>}
         <button className="btn btn-sm" onClick={handleSignOut}>Sign out</button>
       </div>
@@ -152,7 +152,10 @@ export default function PortalDashboardPage() {
                   <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
                 </div>
               </div>
-              <span className={`badge badge-${job.stage}`} style={{ marginTop: 12, display: 'inline-block' }}>{STAGE_LABELS[job.stage]}</span>
+              <div style={{ marginTop: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginRight: 8 }}>Status:</span>
+                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+              </div>
             </div>
 
             {/* Sections 2 & 3 — side by side */}
@@ -163,12 +166,12 @@ export default function PortalDashboardPage() {
                   {phaseForStage(job.stage) === 'opportunity' && (
                     <>
                       <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Proposal ↗</a>
-                      <a href={`/jobs/${job.id}/contract`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
+                      <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
                     </>
                   )}
                   {phaseForStage(job.stage) !== 'opportunity' && (
                     <>
-                      <a href={`/jobs/${job.id}/contract`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
+                      <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
                       {phaseForStage(job.stage) === 'completed_phase' && job.invoice_amount && (
                         <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
                       )}
@@ -183,7 +186,7 @@ export default function PortalDashboardPage() {
                       <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(job.invoice_amount)}</span>
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
-                      Status: {job.invoice_status === 'paid' ? 'Paid — thank you!' : job.invoice_status === 'sent' ? 'Sent, payment due' : 'Not yet sent'}
+                      Status: {job.invoice_status === 'paid' ? 'Paid' : 'Unpaid'}
                     </p>
                   </div>
                 )}
@@ -195,11 +198,8 @@ export default function PortalDashboardPage() {
                 {updates.map(u => (
                   <div className="update-entry" key={u.id}>
                     <div className="update-date">{fmtDate(u.update_date)}</div>
-                    {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
-                    {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
-                    {u.issues_notes && <><div className="update-field-label">Notes</div><p>{u.issues_notes}</p></>}
                     <div className="section-actions">
-                      <a href={`/jobs/${job.id}/updates/${u.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View ↗</a>
+                      <a href={`/jobs/${job.id}/updates/${u.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Progress Update ↗</a>
                     </div>
                   </div>
                 ))}

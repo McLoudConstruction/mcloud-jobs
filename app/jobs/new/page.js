@@ -28,6 +28,21 @@ export default function NewJobPage() {
   const router = useRouter();
 
   const [form, setForm] = useState(EMPTY_FORM);
+
+  useEffect(() => {
+    async function loadNextJobNumber() {
+      const { data } = await supabase.from('jobs').select('job_number').order('created_at', { ascending: false }).limit(1);
+      const last = data && data[0] && data[0].job_number;
+      if (!last) return;
+      const match = last.match(/^(.*?)(\d+)$/);
+      if (match) {
+        const [, prefix, digits] = match;
+        const next = (parseInt(digits, 10) + 1).toString().padStart(digits.length, '0');
+        setForm(prev => (prev.job_number ? prev : { ...prev, job_number: prefix + next }));
+      }
+    }
+    loadNextJobNumber();
+  }, []);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [scopeItems, setScopeItems] = useState([]);
   const [termItems, setTermItems] = useState([]);

@@ -43,7 +43,7 @@ export default function ContractDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `Contract-${job.job_number}.pdf`);
+      const base64 = await generatePdfBase64('doc-preview', `Residential-Contract-${job.job_number}.pdf`);
       window.open(base64ToPdfUrl(base64), '_blank');
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
@@ -99,6 +99,9 @@ export default function ContractDocumentPage() {
 
   return (
     <div>
+      <div className="no-print" style={{ padding: '10px 24px', background: '#faf6ec', borderBottom: '1px solid #c4c1a6', fontSize: 11.5, color: 'var(--ink-soft)' }}>
+        This is a general-purpose template, not legal advice — have it reviewed by an attorney, especially the lien notice, before relying on it as a binding agreement.
+      </div>
       <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -116,11 +119,11 @@ export default function ContractDocumentPage() {
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
-            <div className="doc-brand-tag">Commercial Contract<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Residential Contract<span className="doc-num">#{job.job_number}</span></div>
           </div>
 
           <div className="doc-body">
-            <h1 className="doc-title">Commercial Construction Contract</h1>
+            <h1 className="doc-title">Residential Construction Contract</h1>
 
             <div className="party-grid">
               <div>
@@ -128,7 +131,7 @@ export default function ContractDocumentPage() {
                 <p>McLoud Construction</p>
               </div>
               <div>
-                <h4>Owner</h4>
+                <h4>Homeowner</h4>
                 <p>{job.customer_name || 'Owner / client name'}</p>
                 <p className="dim">{job.customer_contact || '—'}</p>
                 <p className="dim">{job.billing_address || '—'}</p>
@@ -163,7 +166,7 @@ export default function ContractDocumentPage() {
 
             <div className="section clause">
               <h3>Scope of work and additional work</h3>
-              <p>McLoud Construction agrees to perform the Work referenced on page 1. Owner agrees that any supplements or additions to Work ("Additional Work") may be accomplished verbally or with a written change order. The Additional Work includes betterment, owner selected changes, and/or enforcement of code or requirements by municipality or building department ("Code Upgrade Work"). McLoud Construction is specifically authorized, and Owner agrees to pay for, all Code Upgrade Work as well as other Additional Work. The foregoing notwithstanding, McLoud Construction shall NOT be required to perform Code Upgrade or Additional Work without satisfactory payment arrangements.</p>
+              <p>McLoud Construction agrees to perform the Work referenced on page 1. Homeowner agrees that any supplements or additions to Work ("Additional Work") may be accomplished verbally or with a written change order. The Additional Work includes betterment, homeowner selected changes, and/or enforcement of code or requirements by municipality or building department ("Code Upgrade Work"). McLoud Construction is specifically authorized, and Homeowner agrees to pay for, all Code Upgrade Work as well as other Additional Work. The foregoing notwithstanding, McLoud Construction shall NOT be required to perform Code Upgrade or Additional Work without satisfactory payment arrangements.</p>
             </div>
 
             <div className="section clause">
@@ -173,17 +176,17 @@ export default function ContractDocumentPage() {
 
             <div className="section clause">
               <h3>Concealed &amp; unforeseen conditions</h3>
-              <p>The contract price is based on visible conditions and information available at the time of this agreement. If concealed or unforeseen conditions are discovered once work begins, Contractor will notify Owner promptly and the parties will address the additional cost and schedule impact through a written change order.</p>
+              <p>The contract price is based on visible conditions and information available at the time of this agreement. If concealed or unforeseen conditions are discovered once work begins (moisture, structural, electrical, etc.), Contractor will notify Homeowner promptly and the parties will address the additional cost and schedule impact through a written change order.</p>
             </div>
 
             <div className="section clause">
-              <h3>Insurance &amp; indemnification</h3>
-              <p>Contractor will maintain commercial general liability insurance and workers' compensation coverage as required by law, and will provide certificates of insurance upon request. Each party agrees to indemnify and hold the other harmless from claims arising from its own negligent acts or omissions, to the extent permitted by applicable law.</p>
+              <h3>Insurance</h3>
+              <p>Contractor will maintain general liability insurance and workers' compensation coverage as required by law for the duration of the project, and will provide certificates of insurance upon request.</p>
             </div>
 
             <div className="section clause">
               <h3>Warranty</h3>
-              <p>Contractor warrants its workmanship to be free from defects for one (1) year from the date of substantial completion. This warranty does not cover normal wear, misuse, lack of maintenance, or work performed by others.</p>
+              <p>Contractor warrants its workmanship to be free from defects for a period of one (1) year from the date of substantial completion. This warranty does not cover damage resulting from normal wear, misuse, lack of maintenance, or work performed by others. Manufacturer warranties on materials and equipment are passed through to Homeowner as applicable.</p>
             </div>
 
             <div className="section clause">
@@ -193,7 +196,11 @@ export default function ContractDocumentPage() {
 
             <div className="section clause">
               <h3>Mechanic's lien notice</h3>
-              <p>Under {job.governing_state || 'Missouri'} law, contractors, subcontractors, and material suppliers who furnish labor or materials for this project may have lien rights against the property if not paid in full.</p>
+              {job.governing_state === 'Kansas' ? (
+                <p>Under Kansas law, contractors, subcontractors, and material suppliers who furnish labor or materials for this project may file a lien against the property if not paid in full. A lien must generally be filed within four (4) months of the last date labor or materials were supplied. This notice does not waive or limit any party's statutory rights.</p>
+              ) : (
+                <p>Missouri law (RSMo § 429.012) requires this notice on residential improvement contracts: "Notice to Owner: Failure of this contractor or subcontractors to pay for labor or materials may result in the filing of a mechanic's lien against your property. Missouri law permits your contractor or a subcontractor or supplier to enforce such a claim against your property even if you have paid your contractor in full." Missouri generally allows lien claims to be filed within six (6) months of the last date labor or materials were supplied. This notice does not waive or limit any party's statutory rights.</p>
+              )}
             </div>
 
             <div className="section clause">
@@ -203,7 +210,7 @@ export default function ContractDocumentPage() {
 
             <div className="section clause">
               <h3>Termination</h3>
-              <p>Either party may terminate this contract for material breach not cured within fourteen (14) days of written notice. Owner will pay for all work completed and materials procured through the date of termination.</p>
+              <p>Either party may terminate this contract for material breach not cured within fourteen (14) days of written notice. Homeowner will pay for all work completed and materials procured through the date of termination.</p>
             </div>
 
             <div className="section">
@@ -264,7 +271,7 @@ export default function ContractDocumentPage() {
         docType="contract"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
-        pdfFilename={`Contract-${job.job_number}.pdf`}
+        pdfFilename={`Residential-Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
       />
 

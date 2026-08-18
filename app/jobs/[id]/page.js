@@ -8,7 +8,7 @@ import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import PhotoGallery from '../../../components/PhotoGallery';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage, contractPathFor } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
@@ -381,6 +381,15 @@ function ProjectInfoCard({ job, onSave }) {
   });
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
+  function save() {
+    const patch = { ...form };
+    // Filling in the scheduled start date while a job is Approved moves it to Scheduled automatically.
+    if (job.stage === 'approved' && !job.expected_close_date && form.expected_close_date) {
+      patch.stage = 'scheduled';
+    }
+    onSave(patch);
+  }
+
   return (
     <div className="card">
       <h3>Project overview</h3>
@@ -393,7 +402,10 @@ function ProjectInfoCard({ job, onSave }) {
           </select>
         </div>
         <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
-        <div><label>Expected close date</label><input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} /></div>
+        <div>
+          <label>{job.stage === 'new' || job.stage === 'inspected' || job.stage === 'proposal_delivered' ? 'Expected close date' : 'Scheduled start date'}</label>
+          <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
+        </div>
         <div>
           <label>Governing state</label>
           <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
@@ -405,7 +417,7 @@ function ProjectInfoCard({ job, onSave }) {
       <label>Description</label>
       <textarea value={form.description} onChange={e => update('description', e.target.value)} />
       <div className="section-actions">
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(form)}>Save project overview</button>
+        <button className="btn btn-primary btn-sm" onClick={save}>Save project overview</button>
       </div>
     </div>
   );
@@ -518,16 +530,26 @@ function TermsCard({ job, onSave }) {
 /* ---------------- Documents tab ---------------- */
 function DocumentsCard({ jobId, job }) {
   const relevantDocs = STAGE_DOCS[job.stage] || [];
+  const isActivePhase = phaseForStage(job.stage) === 'active_phase';
   const DOC_META = {
     proposal: { label: 'Proposal', href: `/jobs/${jobId}/proposal` },
-    contract: { label: 'Contract', href: `/jobs/${jobId}/contract` },
+    contract: { label: 'Contract', href: contractPathFor(job) },
     invoice: { label: 'Invoice', href: `/jobs/${jobId}/invoice` },
     update: { label: 'Project Update (post one below)', href: null },
   };
 
+  if (isActivePhase) {
+    return (
+      <div className="card">
+        <h3>Documents</h3>
+        <Link href={contractPathFor(job)} className="btn btn-sm">View signed contract</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
-      <h3>Documents — {STAGE_LABELS[job.stage]} stage</h3>
+      <h3>Documents</h3>
       <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 14 }}>
         Documents available at this stage:
       </div>
@@ -545,7 +567,7 @@ function DocumentsCard({ jobId, job }) {
       )}
       {!relevantDocs.includes('contract') && phaseForStage(job.stage) !== 'opportunity' && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <Link href={`/jobs/${jobId}/contract`} className="btn btn-sm">View signed contract</Link>
+          <Link href={contractPathFor(job)} className="btn btn-sm">View signed contract</Link>
         </div>
       )}
     </div>

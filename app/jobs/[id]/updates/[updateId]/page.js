@@ -80,7 +80,9 @@ export default function UpdateDocumentPage() {
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}
           </button>
-          <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+          {session?.user?.app_metadata?.role === 'admin' && (
+            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+          )}
         </div>
       </div>
 

@@ -73,8 +73,7 @@ export default function SignaturePad({ label, saved, onSave, saving, defaultName
         </div>
       ) : (
         <div className="sig-editing">
-          <input placeholder="Printed name" value={name} onChange={e => setName(e.target.value)} style={{ marginBottom: 6 }} />
-          <input placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8 }} />
+          <input placeholder="Printed name" value={name} onChange={e => setName(e.target.value)} style={{ marginBottom: 8 }} />
           <canvas
             ref={canvasRef}
             style={{ width: '100%', height: 110, background: '#fbf9f4', border: '1px solid #c4c1a6', borderRadius: 5, touchAction: 'none', display: 'block' }}
