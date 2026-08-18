@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import DataTable from '../../components/DataTable';
+import PopupModal from '../../components/PopupModal';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS } from '../../lib/constants';
 
 const EMPTY_FORM = {
@@ -64,8 +64,6 @@ export default function PropertiesPage() {
   const [savingContact, setSavingContact] = useState(false);
   const [contactNote, setContactNote] = useState('');
   const [propertyContacts, setPropertyContacts] = useState([]);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
 
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
@@ -165,6 +163,19 @@ export default function PropertiesPage() {
       address_state: form.property_state || null,
       address_zip: form.property_zip || null,
     });
+
+    // If this is the primary "Property Contact" role, reflect their name/phone/email
+    // on the property record's own contact fields too, so it doesn't need typing twice.
+    if (contactForm.role === 'Property Contact') {
+      const propertyPatch = {
+        contact_name: contactForm.name,
+        contact_phone: contactForm.contact_phone || form.contact_phone,
+        contact_email: contactForm.contact_email || form.contact_email,
+      };
+      await supabase.from('properties').update(propertyPatch).eq('id', editingId);
+      setForm(prev => ({ ...prev, ...propertyPatch }));
+    }
+
     setSavingContact(false);
     setContactForm(EMPTY_CONTACT_FORM);
     setShowContactForm(false);
@@ -236,10 +247,7 @@ export default function PropertiesPage() {
           </div>
         )}
 
-        {showForm && mounted && createPortal(
-          <div className="send-doc-overlay" style={propertyModalOverlayStyle} onClick={cancelForm}>
-            <div style={propertyModalStyle} onClick={e => e.stopPropagation()}>
-              <button onClick={cancelForm} aria-label="Close" style={propertyCloseButtonStyle}>×</button>
+        <PopupModal open={showForm} onClose={cancelForm}>
               <form onSubmit={submit}>
             <h3>{editingId ? 'Edit property' : 'New property'}</h3>
             <div className="two-col">
@@ -332,10 +340,7 @@ export default function PropertiesPage() {
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
             </div>
               </form>
-            </div>
-          </div>,
-          document.body
-        )}
+        </PopupModal>
 
         <div className="search-bar">
           <input placeholder="Search by property or management company…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -379,20 +384,3 @@ export default function PropertiesPage() {
     </AppShell>
   );
 }
-
-const propertyModalOverlayStyle = {
-  position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
-  background: 'rgba(0,0,0,0.45)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
-  overflowY: 'auto',
-};
-const propertyModalStyle = {
-  background: '#fff', borderRadius: 8, padding: 26, width: '100%', maxWidth: 640,
-  boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
-  margin: 'auto', position: 'relative',
-};
-const propertyCloseButtonStyle = {
-  position: 'absolute', top: 10, right: 14,
-  background: 'transparent', border: 'none', cursor: 'pointer',
-  fontSize: 26, lineHeight: 1, color: 'var(--ink-soft)', padding: 4,
-};

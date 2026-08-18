@@ -5,6 +5,8 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
+import PopupModal from '../../components/PopupModal';
+import { formatPhone } from '../../lib/constants';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 
@@ -62,7 +64,10 @@ export default function CompaniesPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadCompanies]);
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  function update(field, value) {
+    if (field === 'contact_phone') value = formatPhone(value);
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -83,7 +88,6 @@ export default function CompaniesPage() {
     setForm({ ...EMPTY_FORM, ...c });
     setEditingId(c.id);
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cancelForm() {
@@ -140,9 +144,7 @@ export default function CompaniesPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
-            <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
-              {showForm ? 'Cancel' : '+ Add company'}
-            </button>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add company</button>
           </div>
         </div>
 
@@ -155,9 +157,9 @@ export default function CompaniesPage() {
           </div>
         )}
 
-        {showForm && (
-          <form className="card" onSubmit={submit}>
+        <PopupModal open={showForm} onClose={cancelForm}>
             <h3>{editingId ? 'Edit company' : 'New company'}</h3>
+            <form onSubmit={submit}>
             <div className="two-col">
               <div><label>Company name *</label><input value={form.company_name} onChange={e => update('company_name', e.target.value)} required /></div>
               <div>
@@ -172,7 +174,7 @@ export default function CompaniesPage() {
             <AddressFields prefix="" values={form} onChange={update} />
             <div className="two-col" style={{ marginTop: 12 }}>
               <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
-              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
+              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
@@ -180,8 +182,8 @@ export default function CompaniesPage() {
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save company')}</button>
             </div>
-          </form>
-        )}
+            </form>
+        </PopupModal>
 
         <div className="search-bar">
           <input placeholder="Search by company name…" value={search} onChange={e => setSearch(e.target.value)} />

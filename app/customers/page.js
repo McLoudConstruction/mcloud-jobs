@@ -5,12 +5,13 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
-import { PROPERTY_TYPES } from '../../lib/constants';
+import PopupModal from '../../components/PopupModal';
+import { PROPERTY_TYPES, formatPhone } from '../../lib/constants';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
 const EMPTY_FORM = {
-  contact_type: '', first_name: '', last_name: '', management_company: '',
+  contact_type: '', first_name: '', last_name: '', management_company: '', position: '',
   contact_phone: '', contact_email: '', property: '', notes: '',
   address_street: '', address_unit: '', address_city: '', address_state: '', address_zip: '',
   billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
@@ -22,6 +23,7 @@ const HEADER_MAP = {
   first_name: ['first name', 'firstname', 'first'],
   last_name: ['last name', 'lastname', 'last'],
   management_company: ['company', 'management company', 'organization', 'business'],
+  position: ['position', 'title', 'job title'],
   contact_phone: ['phone', 'contact phone', 'phone number', 'mobile'],
   contact_email: ['email', 'contact email', 'e-mail'],
   billing_email: ['billing email', 'invoice email'],
@@ -53,6 +55,7 @@ function mapRow(row) {
   if (contact.first_name || contact.last_name) {
     contact.name = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
   }
+  if (contact.contact_phone) contact.contact_phone = formatPhone(contact.contact_phone);
   return contact;
 }
 
@@ -84,6 +87,7 @@ export default function CustomersPage() {
   const isHomeowner = form.contact_type === HOMEOWNER_TYPE;
 
   function update(field, value) {
+    if (field === 'contact_phone') value = formatPhone(value);
     setForm(prev => {
       const next = { ...prev, [field]: value };
       if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
@@ -140,7 +144,6 @@ export default function CustomersPage() {
     setSameAsBilling(Boolean(contact.billing_street) && contact.billing_street === contact.address_street);
     setEditingId(contact.id);
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cancelForm() {
@@ -208,9 +211,7 @@ export default function CustomersPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
-            <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
-              {showForm ? 'Cancel' : '+ Add new contact'}
-            </button>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add new contact</button>
           </div>
         </div>
 
@@ -218,14 +219,14 @@ export default function CustomersPage() {
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
             {importResult}
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-              Recognized columns: Type, First Name, Last Name, Company, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
+              Recognized columns: Type, First Name, Last Name, Company, Position, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
             </div>
           </div>
         )}
 
-        {showForm && (
-          <form className="card" onSubmit={submit}>
+        <PopupModal open={showForm} onClose={cancelForm}>
             <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
+            <form onSubmit={submit}>
 
             <label>Contact type *</label>
             <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required>
@@ -238,13 +239,14 @@ export default function CustomersPage() {
                 <div className="two-col" style={{ marginTop: 12 }}>
                   <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
                   <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
-                  <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
+                  <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
                   <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                  <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Property Manager" /></div>
                 </div>
 
                 {!isHomeowner && (
                   <div style={{ marginTop: 12 }}>
-                    <label>Management company</label>
+                    <label>Company</label>
                     <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
                   </div>
                 )}
@@ -280,8 +282,8 @@ export default function CustomersPage() {
                 </div>
               </>
             )}
-          </form>
-        )}
+            </form>
+        </PopupModal>
 
         <div className="search-bar">
           <input placeholder="Search by name or company…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -291,7 +293,7 @@ export default function CustomersPage() {
         {filtered.map(c => (
           <div className="contact-card" key={c.id}>
             <div>
-              <div className="contact-name">{c.name}</div>
+              <div className="contact-name">{c.name}{c.position ? ` — ${c.position}` : ''}</div>
               {c.contact_type && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', margin: '2px 0 4px' }}>{c.contact_type}</div>}
               <div className="contact-meta">
                 {c.management_company && <>{c.management_company}<br /></>}
