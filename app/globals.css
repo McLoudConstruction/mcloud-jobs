@@ -199,6 +199,21 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .login-card p.sub{ color: var(--ink-soft); font-size: 12.5px; margin: 0 0 20px; }
 .error-text{ color: #a13f3f; font-size: 12.5px; margin-top: 10px; }
 
+.portal-mode-tabs{ display: flex; gap: 8px; margin-bottom: 18px; }
+.portal-mode-tabs button{
+  flex: 1;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--panel-line);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.portal-mode-tabs button.active{ background: var(--heading); color: #f2ede1; border-color: var(--heading); }
+
 .search-bar{ margin-bottom: 18px; }
 
 .top-actions{ display:flex; justify-content: space-between; align-items:center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }

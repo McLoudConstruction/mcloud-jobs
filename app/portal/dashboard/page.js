@@ -23,6 +23,28 @@ export default function PortalDashboardPage() {
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
   const [flash, setFlash] = useState('');
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordResult, setPasswordResult] = useState('');
+
+  async function setupPassword(e) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPasswordResult('Password needs to be at least 6 characters.');
+      return;
+    }
+    setPasswordSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+    if (error) {
+      setPasswordResult(error.message);
+    } else {
+      setPasswordResult('Password set! You can now sign in with your email and password anytime.');
+      setNewPassword('');
+      setTimeout(() => { setShowPasswordSetup(false); setPasswordResult(''); }, 3000);
+    }
+  }
 
   const loadJobs = useCallback(async () => {
     const { data } = await supabase
@@ -96,6 +118,31 @@ export default function PortalDashboardPage() {
       </div>
 
       <div className="container">
+        <div className="card">
+          {showPasswordSetup ? (
+            <>
+              <h3>Set up a password</h3>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 12px' }}>
+                Once set, you can sign in with your email and password anytime — no need to wait on a new email link.
+              </p>
+              <form onSubmit={setupPassword}>
+                <label htmlFor="newPassword">New password</label>
+                <input id="newPassword" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required />
+                {passwordResult && <div style={{ fontSize: 12.5, color: passwordResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f', marginTop: 8 }}>{passwordResult}</div>}
+                <div className="section-actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={passwordSaving}>{passwordSaving ? 'Saving…' : 'Save password'}</button>
+                  <button className="btn btn-sm" type="button" onClick={() => setShowPasswordSetup(false)}>Cancel</button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <div className="section-actions" style={{ marginTop: 0, justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Want to skip the email link next time?</span>
+              <button className="btn btn-sm" onClick={() => setShowPasswordSetup(true)}>Set up a password</button>
+            </div>
+          )}
+        </div>
+
         {jobs.length === 0 && (
           <div className="empty-state">No projects are linked to this email yet. If you're expecting to see one, reach out to McLoud Construction.</div>
         )}
