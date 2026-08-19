@@ -54,7 +54,7 @@ export default function CompaniesPage() {
   const fileInputRef = useRef(null);
 
   const loadCompanies = useCallback(async () => {
-    const { data } = await supabase.from('companies').select('*').order('company_name', { ascending: true });
+    const { data } = await supabase.from('companies').select('*').or('company_type.is.null,company_type.neq.Subcontractor').order('company_name', { ascending: true });
     if (data) setCompanies(data);
   }, []);
 

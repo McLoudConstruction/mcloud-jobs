@@ -291,73 +291,84 @@ export default function SubcontractorsPage() {
           </div>
         )}
 
-        <PopupModal open={showForm} onClose={cancelForm}>
+        <PopupModal open={showForm} onClose={cancelForm} maxWidth={920}>
             <h3>{editingId ? 'Edit subcontractor' : 'New subcontractor'}</h3>
             <form onSubmit={submit}>
-            <label>Company / subcontractor name *</label>
-            <input value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
-            <label style={{ marginTop: 12 }}>Address</label>
-            <AddressFields prefix="" values={form} onChange={update} />
-            <div className="two-col" style={{ marginTop: 12 }}>
-              <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
-              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
-              <div><label>Admin email (login)</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-              <div><label>Crew email (optional, read-only login)</label><input type="email" value={form.crew_email} onChange={e => update('crew_email', e.target.value)} placeholder="shared crew inbox, if any" /></div>
-            </div>
-            <label style={{ marginTop: 12 }}>Notes</label>
-            <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+            <div className="sub-popup-grid">
+              <div className="sub-popup-main">
+                <label>Company / subcontractor name *</label>
+                <input value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
+                <label style={{ marginTop: 12 }}>Address</label>
+                <AddressFields prefix="" values={form} onChange={update} />
+                <div className="two-col" style={{ marginTop: 12 }}>
+                  <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
+                  <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
+                  <div><label>Admin email (login)</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                  <div><label>Crew email (optional, read-only login)</label><input type="email" value={form.crew_email} onChange={e => update('crew_email', e.target.value)} placeholder="shared crew inbox, if any" /></div>
+                </div>
+                <label style={{ marginTop: 12 }}>Notes</label>
+                <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
+              </div>
 
-            <label style={{ marginTop: 12 }}>Services offered</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: '#fff' }}>
-              {SERVICES_OFFERED.map(service => (
-                <label key={service} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 400, cursor: 'pointer' }}>
-                  <input type="checkbox" style={{ width: 'auto' }} checked={(form.services_offered || []).includes(service)} onChange={() => toggleService(service)} />
-                  {service}
-                </label>
-              ))}
-            </div>
-
-            {editingId ? (
-              <div className="two-col" style={{ marginTop: 12 }}>
-                <div>
-                  <label>W9 on file</label>
-                  {form.w9_storage_path ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.w9_storage_path)}>View</button>
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('w9')}>Remove</button>
-                    </div>
+              <div className="sub-popup-sidebar">
+                <div className="sub-popup-sidebar-block">
+                  <div className="sub-popup-sidebar-title">Documents</div>
+                  {editingId ? (
+                    <>
+                      <div style={{ marginBottom: 12 }}>
+                        <label>W9 on file</label>
+                        {form.w9_storage_path ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.w9_storage_path)}>View</button>
+                            <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('w9')}>Remove</button>
+                          </div>
+                        ) : (
+                          <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                            {uploadingW9 ? 'Uploading…' : 'Upload W9'}
+                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingW9} onChange={e => uploadDoc(e.target.files[0], 'w9')} />
+                          </label>
+                        )}
+                      </div>
+                      <div>
+                        <label>Certificate of Insurance</label>
+                        {form.coi_storage_path ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.coi_storage_path)}>View</button>
+                            <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('coi')}>Remove</button>
+                          </div>
+                        ) : (
+                          <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                            {uploadingCoi ? 'Uploading…' : 'Upload COI'}
+                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingCoi} onChange={e => uploadDoc(e.target.files[0], 'coi')} />
+                          </label>
+                        )}
+                      </div>
+                      {form.coi_storage_path && (
+                        <div style={{ marginTop: 10 }}>
+                          <label>COI expiration date</label>
+                          <input type="date" value={form.coi_expires_at || ''} onChange={e => update('coi_expires_at', e.target.value)} />
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                      {uploadingW9 ? 'Uploading…' : 'Upload W9'}
-                      <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingW9} onChange={e => uploadDoc(e.target.files[0], 'w9')} />
-                    </label>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Save this subcontractor first, then W9/COI can be uploaded here.</div>
                   )}
                 </div>
-                <div>
-                  <label>Certificate of Insurance</label>
-                  {form.coi_storage_path ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.coi_storage_path)}>View</button>
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('coi')}>Remove</button>
-                    </div>
-                  ) : (
-                    <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                      {uploadingCoi ? 'Uploading…' : 'Upload COI'}
-                      <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingCoi} onChange={e => uploadDoc(e.target.files[0], 'coi')} />
-                    </label>
-                  )}
+
+                <div className="sub-popup-sidebar-block">
+                  <div className="sub-popup-sidebar-title">Services offered</div>
+                  <div className="sub-popup-services">
+                    {SERVICES_OFFERED.map(service => (
+                      <label key={service} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 400, cursor: 'pointer', marginBottom: 5 }}>
+                        <input type="checkbox" style={{ width: 'auto' }} checked={(form.services_offered || []).includes(service)} onChange={() => toggleService(service)} />
+                        {service}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
-            ) : (
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 12 }}>Save this subcontractor first, then W9/COI can be uploaded from the edit view.</div>
-            )}
+            </div>
 
-            {form.coi_storage_path && (
-              <div style={{ marginTop: 10 }}>
-                <label>COI expiration date</label>
-                <input type="date" value={form.coi_expires_at || ''} onChange={e => update('coi_expires_at', e.target.value)} />
-              </div>
-            )}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save subcontractor')}</button>
               {editingId && (
