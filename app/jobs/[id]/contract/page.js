@@ -286,11 +286,11 @@ export default function ContractDocumentPage() {
         .party-grid p { font-size: 12.5px; line-height: 1.55; color: #221f16; margin: 0; }
         .party-grid p.dim { color: #6b6350; }
         .section { margin-bottom: 24px; break-inside: avoid; }
-        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 10px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
+        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 10px; padding-left: 11px; border-left: 3px solid #dbd8bf; break-after: avoid; }
         .section p { font-size: 12.5px; line-height: 1.65; color: #221f16; margin: 0 0 6px; }
         .section p.empty { color: #a8a29a; font-style: italic; }
         .doc-list { margin: 0; padding-left: 0; list-style: none; }
-        .doc-list li { font-size: 12.5px; line-height: 1.6; color: #221f16; padding-left: 20px; position: relative; margin-bottom: 7px; }
+        .doc-list li { font-size: 12.5px; line-height: 1.6; color: #221f16; padding-left: 20px; position: relative; margin-bottom: 7px; break-inside: avoid; }
         .doc-list li::before { content: "—"; position: absolute; left: 0; color: #dbd8bf; }
         .doc-list li.empty { color: #a8a29a; font-style: italic; }
         .group-heading { margin: 32px 0 18px; padding-top: 20px; border-top: 2px solid #49402a; break-after: avoid; }
