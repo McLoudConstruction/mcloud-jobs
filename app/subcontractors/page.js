@@ -307,12 +307,19 @@ export default function SubcontractorsPage() {
                   <div><label>Crew email (optional, read-only login)</label><input type="email" value={form.crew_email} onChange={e => update('crew_email', e.target.value)} placeholder="shared crew inbox, if any" /></div>
                 </div>
                 <label style={{ marginTop: 12 }}>Notes</label>
-                <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
+                <textarea className="sub-popup-notes" value={form.notes} onChange={e => update('notes', e.target.value)} />
               </div>
 
               <div className="sub-popup-sidebar">
+                {editingId && (
+                  <div className="sub-popup-invite-row">
+                    <button type="button" className="btn btn-sm" onClick={() => invitePortal(form)} disabled={inviting}>
+                      {inviting ? 'Inviting…' : (form.portal_invited_at ? 'Re-send Portal Invite' : 'Invite to Subcontractor Portal')}
+                    </button>
+                  </div>
+                )}
                 <div className="sub-popup-sidebar-block">
-                  <div className="sub-popup-sidebar-title">Documents</div>
+                  <div className="sub-popup-sidebar-title">Compliance</div>
                   {editingId ? (
                     <>
                       <div style={{ marginBottom: 12 }}>
@@ -355,7 +362,7 @@ export default function SubcontractorsPage() {
                   )}
                 </div>
 
-                <div className="sub-popup-sidebar-block">
+                <div className="sub-popup-sidebar-block sub-popup-services-block">
                   <div className="sub-popup-sidebar-title">Services offered</div>
                   <div className="sub-popup-services">
                     {SERVICES_OFFERED.map(service => (
@@ -371,15 +378,10 @@ export default function SubcontractorsPage() {
 
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save subcontractor')}</button>
-              {editingId && (
-                <button type="button" className="btn btn-sm" onClick={() => invitePortal(form)} disabled={inviting}>
-                  {inviting ? 'Inviting…' : (form.portal_invited_at ? 'Re-send Portal Invite' : 'Invite to Subcontractor Portal')}
-                </button>
-              )}
             </div>
             {inviteResult && <div style={{ fontSize: 12, color: inviteResult.startsWith('Failed') ? '#a13f3f' : '#3a6b45', marginTop: 8 }}>{inviteResult}</div>}
             </form>
-            {editingId && <SubcontractorStats companyId={editingId} />}
+            {editingId && <div style={{ marginTop: 24 }}><SubcontractorStats companyId={editingId} /></div>}
         </PopupModal>
 
         <div className="search-bar">
