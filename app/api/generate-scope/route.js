@@ -55,7 +55,6 @@ Respond with ONLY a JSON array of strings, one per scope item. No other text bef
       body: JSON.stringify({
         model: 'claude-sonnet-5',
         max_tokens: 2048,
-        temperature: 0,
         messages: [
           { role: 'user', content: prompt },
           { role: 'assistant', content: '[' }, // forces the response to continue straight into JSON, no preamble possible
