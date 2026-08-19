@@ -1,3 +1,27 @@
+// Tries increasingly forgiving strategies to pull a JSON array of strings
+// out of the model's response, so a stray preamble or trailing note
+// doesn't waste the whole (paid-for) API call.
+function extractItems(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.filter(x => typeof x === 'string' && x.trim());
+  } catch {}
+
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start !== -1 && end !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(parsed)) return parsed.filter(x => typeof x === 'string' && x.trim());
+    } catch {}
+  }
+
+  const quoted = [...text.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(m => m[1]).filter(s => s.trim());
+  if (quoted.length > 0) return quoted;
+
+  return null;
+}
+
 export async function POST(request) {
   try {
     const { description, projectType } = await request.json();
@@ -19,8 +43,7 @@ The contractor described the job like this:
 
 List every specific task a professional scope of work should include for this job — the obvious main task, plus everything it typically requires along with it (removal/haul-away, disconnecting and reconnecting fixtures, prep work, hookups, finish work, etc.). Be practical and specific, the way an experienced contractor would write it in a real proposal — not vague or generic.
 
-Respond with ONLY a JSON array of strings, one per scope item, no other text, no markdown formatting. Example shape:
-["Remove and haul away existing kitchen cabinets", "Disconnect and cap plumbing at sink location", "Install new cabinetry per selected layout"]`;
+Respond with ONLY a JSON array of strings, one per scope item. No other text before or after it, no markdown formatting, no code fences.`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -31,8 +54,12 @@ Respond with ONLY a JSON array of strings, one per scope item, no other text, no
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 2048,
+        temperature: 0,
+        messages: [
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: '[' }, // forces the response to continue straight into JSON, no preamble possible
+        ],
       }),
     });
 
@@ -42,17 +69,13 @@ Respond with ONLY a JSON array of strings, one per scope item, no other text, no
     }
 
     const data = await response.json();
-    const rawText = data.content?.[0]?.text || '[]';
-    const cleaned = rawText.replace(/```json|```/g, '').trim();
+    const continuation = data.content?.[0]?.text || '';
+    const fullText = '[' + continuation; // re-attach the prefilled opening bracket
 
-    let items;
-    try {
-      items = JSON.parse(cleaned);
-    } catch {
+    const items = extractItems(fullText);
+    if (!items || items.length === 0) {
       throw new Error('AI returned an unexpected format — try rephrasing the description.');
     }
-
-    if (!Array.isArray(items)) throw new Error('AI returned an unexpected format.');
 
     return Response.json({ items });
   } catch (err) {
