@@ -76,62 +76,44 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="two-col" style={{ marginBottom: 20 }}>
+        <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
           {show('sold_job_count') && (
             <div className="card">
               <h3>Sold jobs</h3>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--heading)' }}>{stats.soldCount}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{stats.soldCount}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
             </div>
           )}
-
-          {show('job_counts_by_stage') && (
-            <div className="card">
-              <h3>Job counts by stage</h3>
-              {STAGE_ORDER.map(key => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-                  <span>{STAGE_LABELS[key]}</span>
-                  <span style={{ fontWeight: 700 }}>{stats.byStage[key] || 0}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0', fontWeight: 700, fontSize: 14 }}>
-                <span>Total jobs</span>
-                <span>{jobs.length}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="two-col" style={{ marginBottom: 20 }}>
           {show('total_ar') && (
             <div className="card">
               <h3>Total AR (billed, unpaid)</h3>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</div>
             </div>
           )}
           {show('total_paid') && (
             <div className="card">
-              <h3>Total paid</h3>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</div>
+              <h3>Total paid (all-time)</h3>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</div>
             </div>
           )}
           {show('revenue_ytd') && (
             <div className="card">
-              <h3>Revenue YTD</h3>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</div>
+              <h3>Income YTD</h3>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Cash actually collected</div>
             </div>
           )}
           {show('revenue_mtd') && (
             <div className="card">
-              <h3>Revenue MTD</h3>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</div>
+              <h3>Income MTD</h3>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</div>
             </div>
           )}
           {show('total_profit') && (
-            <div className="card">
-              <h3>Total profit</h3>
-              <div className="empty-state">Needs job cost tracking, coming in a future update.</div>
-            </div>
+            <Link href="/financials" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+              <h3>Profit &amp; margin</h3>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Full breakdown on the Financial Dashboard →</div>
+            </Link>
           )}
           {show('sales_route_ai') && (
             <div className="card sales-route-card" onClick={() => setRouteModalOpen(true)}>
@@ -140,6 +122,24 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {show('job_counts_by_stage') && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3>Job counts by stage</h3>
+            <div className="dash-stage-strip">
+              {STAGE_ORDER.map(key => (
+                <div key={key} className="dash-stage-item">
+                  <div className="dash-stage-count">{stats.byStage[key] || 0}</div>
+                  <div className="dash-stage-label">{STAGE_LABELS[key]}</div>
+                </div>
+              ))}
+              <div className="dash-stage-item dash-stage-total">
+                <div className="dash-stage-count">{jobs.length}</div>
+                <div className="dash-stage-label">Total jobs</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {show('overdue_opportunities') && (
           <div className="card">

@@ -31,13 +31,39 @@ html, body{
 a { color: inherit; text-decoration: none; }
 
 .container{
-  max-width: 1000px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 32px 24px 80px;
 }
 .container-wide{
   max-width: 1400px;
 }
+
+.dash-kpi-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+.dash-stage-strip{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dash-stage-item{
+  flex: 1;
+  min-width: 100px;
+  text-align: center;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #faf8f0;
+}
+.dash-stage-total{
+  background: var(--panel);
+  font-weight: 700;
+}
+.dash-stage-count{ font-size: 20px; font-weight: 700; color: var(--heading); }
+.dash-stage-label{ font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin-top: 4px; }
 
 .portal-info-grid{
   display: grid;
