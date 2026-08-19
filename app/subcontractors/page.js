@@ -270,7 +270,7 @@ export default function SubcontractorsPage() {
 
   return (
     <AppShell>
-      <div className="container">
+      <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Subcontractors</h2>
           <div style={{ display: 'flex', gap: 10 }}>

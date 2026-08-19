@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import DataTable from '../../components/DataTable';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -215,36 +216,21 @@ export default function FinancialDashboardPage() {
           <h3>Jobs — Cost &amp; Margin</h3>
           {jobRows.length === 0 && <div className="empty-state">No job financial activity yet.</div>}
           {jobRows.length > 0 && (
-            <div className="data-table-wrap">
-              <table className="data-table" style={{ tableLayout: 'fixed' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 110 }}>Job #</th>
-                    <th style={{ width: 180 }}>Customer</th>
-                    <th style={{ width: 120 }}>Contract Price</th>
-                    <th style={{ width: 120 }}>Projected Cost</th>
-                    <th style={{ width: 110 }}>Committed</th>
-                    <th style={{ width: 110 }}>Actual</th>
-                    <th style={{ width: 120 }}>Est. Margin $</th>
-                    <th style={{ width: 100 }}>Margin %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {jobRows.map(j => (
-                    <tr key={j.id} onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`}>
-                      <td>#{j.job_number}</td>
-                      <td>{j.customer_name || 'Unnamed'}</td>
-                      <td>{fmtMoney(j.contract_price)}</td>
-                      <td>{fmtMoney(j.projected_cost)}</td>
-                      <td>{fmtMoney(j.committed)}</td>
-                      <td>{fmtMoney(j.actual)}</td>
-                      <td style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</td>
-                      <td style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>{j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              getRowKey={j => j.id}
+              onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Financials`}
+              rows={jobRows}
+              columns={[
+                { key: 'job_number', label: 'Job #', defaultWidth: 100, render: j => `#${j.job_number}` },
+                { key: 'customer_name', label: 'Customer', defaultWidth: 170, render: j => j.customer_name || 'Unnamed' },
+                { key: 'contract_price', label: 'Contract Price', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.contract_price) },
+                { key: 'projected_cost', label: 'Projected Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.projected_cost) },
+                { key: 'committed', label: 'Committed Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.committed) },
+                { key: 'actual', label: 'Actual Cost', defaultWidth: 120, filterable: false, render: j => fmtMoney(j.actual) },
+                { key: 'margin', label: 'Actual Margin', defaultWidth: 130, filterable: false, render: j => <span style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</span> },
+                { key: 'marginPercent', label: 'Margin %', defaultWidth: 100, filterable: false, render: j => <span style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>{j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}</span> },
+              ]}
+            />
           )}
         </div>
       </div>
