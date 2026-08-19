@@ -206,6 +206,9 @@ export default function JobDetailPage() {
         {tab === 'Financials' && (
           <>
             <DrawsCard jobId={id} />
+            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
+              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
+            )}
             <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
             <ReceiptsCard jobId={id} />
             <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} />
@@ -224,9 +227,6 @@ export default function JobDetailPage() {
             )}
             {phaseForStage(job.stage) !== 'opportunity' && (
               <UpdatesCard jobId={id} updates={updates} />
-            )}
-            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
             )}
           </>
         )}
@@ -851,6 +851,7 @@ function InvoiceCard({ job, onSave, jobId }) {
       </div>
       <div className="section-actions">
         <button className="btn btn-primary btn-sm" onClick={generateInvoice}>Generate Invoice</button>
+        <button className="btn btn-sm" onClick={saveOnly}>Save</button>
       </div>
     </div>
   );
