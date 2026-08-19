@@ -36,12 +36,19 @@ export async function POST(request) {
       );
     }
 
-    const prompt = `You are helping an experienced ${projectType === 'commercial' ? 'commercial' : 'residential'} construction contractor build a detailed, itemized scope of work for a client proposal.
+    const prompt = `You are helping an experienced ${projectType === 'commercial' ? 'commercial' : 'residential'} construction contractor write the scope of work section of a CLIENT-FACING proposal — the customer will read this document. It is not an internal crew checklist or a step-by-step work breakdown.
 
 The contractor described the job like this:
 "${description.trim()}"
 
-List every specific task a professional scope of work should include for this job — the obvious main task, plus everything it typically requires along with it (removal/haul-away, disconnecting and reconnecting fixtures, prep work, hookups, finish work, etc.). Be practical and specific, the way an experienced contractor would write it in a real proposal — not vague or generic.
+Write a concise, consolidated scope of work. Each line item should represent a meaningful phase or category of work, not a single micro-step — combine related tasks into one item wherever a client would naturally expect them bundled together.
+
+For example:
+- Instead of separate lines for disconnecting plumbing, disconnecting electrical, and disconnecting gas, write one line: "Disconnect and cap all plumbing, electrical, and gas lines in the work area."
+- Instead of separate lines for removing upper cabinets and removing lower cabinets, write one line: "Remove and haul away existing cabinetry."
+- Instead of separate lines for each reconnection step, write one line: "Reconnect and test all plumbing, electrical, and gas connections."
+
+Aim for roughly 8-15 total line items for a job like this — enough to be clear and complete, not exhaustive. Cover the major phases: preparation/protection, demolition/removal, any rough-in adjustments, installation, and finishing/cleanup.
 
 Respond with ONLY a JSON array of strings, one per scope item. Do not include any preamble, explanation, or markdown code fences — your entire response must be valid JSON starting with [ and ending with ].`;
 
