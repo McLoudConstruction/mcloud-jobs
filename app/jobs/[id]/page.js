@@ -106,7 +106,7 @@ export default function JobDetailPage() {
     if (idx >= STAGE_ORDER.length - 1) return;
     const next = STAGE_ORDER[idx + 1];
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
-    await saveJob({ stage: next });
+    await saveJob({ stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) });
     if (next === 'approved' && job.contract_price) {
       const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
       if (!existing || existing.length === 0) {
@@ -202,7 +202,7 @@ export default function JobDetailPage() {
         {tab === 'Financials' && (
           <>
             <DrawsCard jobId={id} />
-            <JobCostSummary jobId={id} contractPrice={job.contract_price} />
+            <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
             <ReceiptsCard jobId={id} />
             <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} />
           </>
@@ -542,6 +542,7 @@ function ScopeCard({ job, onSave }) {
 /* ---------------- Contract price + milestones ---------------- */
 function PriceCard({ job, onSave }) {
   const [price, setPrice] = useState(job.contract_price ?? '');
+  const [projectedCost, setProjectedCost] = useState(job.projected_cost ?? '');
   const [milestones, setMilestones] = useState(job.milestones || []);
 
   function add() { setMilestones(prev => [...prev, { desc: '', amount: '' }]); }
@@ -550,6 +551,7 @@ function PriceCard({ job, onSave }) {
   function save() {
     onSave({
       contract_price: price ? parseFloat(String(price).replace(/[^0-9.]/g, '')) : null,
+      projected_cost: projectedCost ? parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) : null,
       milestones,
     });
   }
@@ -559,6 +561,8 @@ function PriceCard({ job, onSave }) {
       <h3>Contract price &amp; payment schedule</h3>
       <label>Total contract price ($)</label>
       <input value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 185,000" />
+      <label style={{ marginTop: 12 }}>Projected cost ($)</label>
+      <input value={projectedCost} onChange={e => setProjectedCost(e.target.value)} placeholder="What you expect this job to cost, all-in" />
       <label style={{ marginTop: 16 }}>Payment milestones</label>
       {milestones.length === 0 && <div className="empty-state">No milestones yet.</div>}
       {milestones.map((m, i) => (

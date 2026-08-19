@@ -80,13 +80,19 @@ export default function FinancialDashboardPage() {
 
   const grossProfit = revenueYtd - totalActualCosts;
 
+  const salesBookedYtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear())
+    .reduce((s, j) => s + Number(j.contract_price || 0), 0);
+  const salesBookedMtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear() && new Date(j.approved_at).getMonth() === now.getMonth())
+    .reduce((s, j) => s + Number(j.contract_price || 0), 0);
+
   const jobRows = jobs.map(j => {
     const costs = jobCosts.filter(c => c.job_id === j.id);
     const actual = costs.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
     const committed = costs.filter(c => c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
     const total = actual + committed;
     const margin = j.contract_price != null ? Number(j.contract_price) - total : null;
-    return { ...j, actual, committed, total, margin };
+    const marginPercent = margin != null && j.contract_price ? (margin / Number(j.contract_price)) * 100 : null;
+    return { ...j, actual, committed, total, margin, marginPercent };
   }).filter(j => j.total > 0 || j.contract_price); // only show jobs with any financial activity
 
   return (
@@ -115,6 +121,19 @@ export default function FinancialDashboardPage() {
             <div className="portal-info-value">{fmtMoney(openAR)}</div>
             <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Owed by customers</div>
           </button>
+        </div>
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="portal-info-label">Sales Booked YTD</div>
+              <div className="portal-info-value" style={{ fontSize: 22 }}>{fmtMoney(salesBookedYtd)}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(salesBookedMtd)} this month</div>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', maxWidth: 280, textAlign: 'right' }}>
+              Counts a job's full contract price the month it's Approved — a sales/bookings figure, separate from Revenue YTD above which only counts cash actually collected.
+            </div>
+          </div>
         </div>
 
         <div className="card" style={{ marginTop: 16 }}>
@@ -197,11 +216,13 @@ export default function FinancialDashboardPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 110 }}>Job #</th>
-                    <th style={{ width: 200 }}>Customer</th>
-                    <th style={{ width: 130 }}>Contract Price</th>
-                    <th style={{ width: 130 }}>Committed</th>
-                    <th style={{ width: 130 }}>Actual</th>
-                    <th style={{ width: 130 }}>Est. Margin</th>
+                    <th style={{ width: 180 }}>Customer</th>
+                    <th style={{ width: 120 }}>Contract Price</th>
+                    <th style={{ width: 120 }}>Projected Cost</th>
+                    <th style={{ width: 110 }}>Committed</th>
+                    <th style={{ width: 110 }}>Actual</th>
+                    <th style={{ width: 120 }}>Est. Margin $</th>
+                    <th style={{ width: 100 }}>Margin %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,9 +231,11 @@ export default function FinancialDashboardPage() {
                       <td>#{j.job_number}</td>
                       <td>{j.customer_name || 'Unnamed'}</td>
                       <td>{fmtMoney(j.contract_price)}</td>
+                      <td>{fmtMoney(j.projected_cost)}</td>
                       <td>{fmtMoney(j.committed)}</td>
                       <td>{fmtMoney(j.actual)}</td>
                       <td style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</td>
+                      <td style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>{j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

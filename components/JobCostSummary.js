@@ -10,7 +10,7 @@ function fmtMoney(v) {
 
 const EMPTY_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
 
-export default function JobCostSummary({ jobId, contractPrice }) {
+export default function JobCostSummary({ jobId, contractPrice, projectedCost }) {
   const [costs, setCosts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -56,6 +56,7 @@ export default function JobCostSummary({ jobId, contractPrice }) {
   const totalActual = costs.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalCosts = totalCommitted + totalActual;
   const margin = contractPrice != null && contractPrice !== '' ? Number(contractPrice) - totalCosts : null;
+  const marginPercent = margin != null && contractPrice ? (margin / Number(contractPrice)) * 100 : null;
 
   return (
     <div className="card">
@@ -66,6 +67,10 @@ export default function JobCostSummary({ jobId, contractPrice }) {
           <div className="portal-info-value">{fmtMoney(contractPrice)}</div>
         </div>
         <div>
+          <div className="portal-info-label">Projected Cost</div>
+          <div className="portal-info-value">{fmtMoney(projectedCost)}</div>
+        </div>
+        <div>
           <div className="portal-info-label">Committed Costs</div>
           <div className="portal-info-value">{fmtMoney(totalCommitted)}</div>
         </div>
@@ -74,8 +79,12 @@ export default function JobCostSummary({ jobId, contractPrice }) {
           <div className="portal-info-value">{fmtMoney(totalActual)}</div>
         </div>
         <div>
-          <div className="portal-info-label">Est. Margin</div>
+          <div className="portal-info-label">Est. Margin $</div>
           <div className="portal-info-value" style={{ color: margin != null && margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(margin)}</div>
+        </div>
+        <div>
+          <div className="portal-info-label">Margin %</div>
+          <div className="portal-info-value" style={{ color: marginPercent != null && marginPercent < 0 ? '#a13f3f' : undefined }}>{marginPercent != null ? `${marginPercent.toFixed(1)}%` : '—'}</div>
         </div>
       </div>
 

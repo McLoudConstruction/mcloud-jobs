@@ -83,6 +83,7 @@ export default function NewJobPage() {
   // ---- Customer name autofill suggestions ----
   function handleNameChange(value) {
     update('customer_name', value);
+    setSelectedContactId(null);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
     searchTimer.current = setTimeout(async () => {
@@ -93,8 +94,10 @@ export default function NewJobPage() {
   }
 
   const [autofillNote, setAutofillNote] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState(null);
 
   function applySuggestion(contact) {
+    setSelectedContactId(contact.id);
     setForm(prev => ({
       ...prev,
       customer_name: contact.name || prev.customer_name,
@@ -188,6 +191,33 @@ export default function NewJobPage() {
     };
 
     const { data, error: insertError } = await supabase.from('jobs').insert(payload).select().single();
+
+    if (!insertError && !selectedContactId && form.customer_name.trim()) {
+      // No existing contact was picked from suggestions, so this is a brand
+      // new customer — log them as a contact now rather than letting their
+      // info live only on this one job with no record in the CRM.
+      const [first, ...rest] = form.customer_name.trim().split(' ');
+      await supabase.from('contacts').insert({
+        name: form.customer_name.trim(),
+        first_name: first || null,
+        last_name: rest.join(' ') || null,
+        contact_email: form.customer_email || null,
+        contact_phone: form.customer_phone || null,
+        billing_email: form.billing_email || null,
+        billing_street: form.billing_street || null,
+        billing_unit: form.billing_unit || null,
+        billing_city: form.billing_city || null,
+        billing_state: form.billing_state || null,
+        billing_zip: form.billing_zip || null,
+        address_street: form.project_street || null,
+        address_unit: form.project_unit || null,
+        address_city: form.project_city || null,
+        address_state: form.project_state || null,
+        address_zip: form.project_zip || null,
+        contact_type: isCommercial ? 'Commercial' : 'Residential',
+      });
+    }
+
     setSaving(false);
 
     if (insertError) {

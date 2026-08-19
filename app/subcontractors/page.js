@@ -7,7 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
-import { formatPhone } from '../../lib/constants';
+import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 
 const SUBCONTRACTOR_TYPE = 'Subcontractor';
 
@@ -15,6 +15,7 @@ const EMPTY_FORM = {
   company_name: '', company_type: SUBCONTRACTOR_TYPE,
   street: '', unit: '', city: '', state: '', zip: '',
   contact_name: '', contact_phone: '', contact_email: '', crew_email: '', notes: '',
+  w9_storage_path: '', coi_storage_path: '', coi_expires_at: '', services_offered: [],
 };
 
 const HEADER_MAP = {
@@ -40,6 +41,73 @@ function mapRow(row) {
   return out;
 }
 
+function fmtMoney(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function coiStatus(expiresAt) {
+  if (!expiresAt) return <span style={{ color: 'var(--ink-soft)' }}>Not on file</span>;
+  const days = Math.floor((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return <span style={{ color: '#a13f3f', fontWeight: 600 }}>Expired</span>;
+  if (days <= 30) return <span style={{ color: '#a17c3f', fontWeight: 600 }}>Expires soon</span>;
+  return <span style={{ color: '#3a6b45' }}>Current</span>;
+}
+
+function SubcontractorStats({ companyId }) {
+  const [workOrders, setWorkOrders] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    supabase.from('work_orders').select('*, jobs(job_number, project_address, customer_name)').eq('company_id', companyId).order('created_at', { ascending: false })
+      .then(({ data }) => { if (active) setWorkOrders(data || []); });
+    return () => { active = false; };
+  }, [companyId]);
+
+  if (workOrders === null) return <div className="card"><div className="empty-state">Loading history…</div></div>;
+
+  const completedJobIds = new Set(workOrders.filter(wo => wo.status === 'paid').map(wo => wo.job_id));
+  const lastFive = [];
+  const seenJobs = new Set();
+  for (const wo of workOrders) {
+    if (wo.status === 'paid' && !seenJobs.has(wo.job_id)) {
+      seenJobs.add(wo.job_id);
+      lastFive.push(wo);
+      if (lastFive.length >= 5) break;
+    }
+  }
+  const outstanding = workOrders.filter(wo => ['issued', 'accepted', 'completed', 'invoiced'].includes(wo.status));
+  const outstandingTotal = outstanding.reduce((s, wo) => s + Number(wo.invoiced_amount ?? wo.amount ?? 0), 0);
+
+  return (
+    <div className="card">
+      <h3>History with McLoud Construction</h3>
+      <div className="portal-info-grid" style={{ marginBottom: 16 }}>
+        <div>
+          <div className="portal-info-label">Jobs Completed</div>
+          <div className="portal-info-value">{completedJobIds.size}</div>
+        </div>
+        <div>
+          <div className="portal-info-label">Outstanding Invoices</div>
+          <div className="portal-info-value">{outstanding.length}</div>
+        </div>
+        <div>
+          <div className="portal-info-label">Outstanding Amount</div>
+          <div className="portal-info-value">{fmtMoney(outstandingTotal)}</div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 6 }}>Last 5 completed projects</div>
+      {lastFive.length === 0 && <div className="empty-state">No completed projects yet.</div>}
+      {lastFive.map(wo => (
+        <div key={wo.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+          {wo.jobs ? `#${wo.jobs.job_number} — ${wo.jobs.project_address || wo.jobs.customer_name}` : 'Job details unavailable'}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function SubcontractorsPage() {
   const { session, loading } = useRequireAuth();
   const [subs, setSubs] = useState([]);
@@ -52,7 +120,53 @@ export default function SubcontractorsPage() {
   const [importResult, setImportResult] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
+  const [uploadingW9, setUploadingW9] = useState(false);
+  const [uploadingCoi, setUploadingCoi] = useState(false);
   const fileInputRef = useRef(null);
+
+  function toggleService(service) {
+    setForm(prev => ({
+      ...prev,
+      services_offered: (prev.services_offered || []).includes(service)
+        ? prev.services_offered.filter(s => s !== service)
+        : [...(prev.services_offered || []), service],
+    }));
+  }
+
+  async function uploadDoc(file, kind) {
+    if (!file || !editingId) return;
+    const setUploading = kind === 'w9' ? setUploadingW9 : setUploadingCoi;
+    const field = kind === 'w9' ? 'w9_storage_path' : 'coi_storage_path';
+    setUploading(true);
+    try {
+      const path = `${editingId}/${kind}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from('subcontractor-docs').upload(path, file);
+      if (error) throw error;
+      const oldPath = form[field];
+      if (oldPath) await supabase.storage.from('subcontractor-docs').remove([oldPath]);
+      await supabase.from('companies').update({ [field]: path }).eq('id', editingId);
+      setForm(prev => ({ ...prev, [field]: path }));
+    } catch (err) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function viewDoc(path) {
+    const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  async function removeDoc(kind) {
+    const field = kind === 'w9' ? 'w9_storage_path' : 'coi_storage_path';
+    const path = form[field];
+    if (!path || !editingId) return;
+    if (!confirm(`Remove the ${kind.toUpperCase()} on file?`)) return;
+    await supabase.storage.from('subcontractor-docs').remove([path]);
+    await supabase.from('companies').update({ [field]: null }).eq('id', editingId);
+    setForm(prev => ({ ...prev, [field]: '' }));
+  }
 
   const loadSubs = useCallback(async () => {
     const { data } = await supabase.from('companies').select('*').eq('company_type', SUBCONTRACTOR_TYPE).order('company_name', { ascending: true });
@@ -75,7 +189,8 @@ export default function SubcontractorsPage() {
     e.preventDefault();
     if (!form.company_name.trim()) return;
     setSaving(true);
-    const payload = { ...form, company_type: SUBCONTRACTOR_TYPE };
+    const { w9_storage_path, coi_storage_path, ...rest } = form;
+    const payload = { ...rest, company_type: SUBCONTRACTOR_TYPE, coi_expires_at: form.coi_expires_at || null };
     if (editingId) {
       await supabase.from('companies').update(payload).eq('id', editingId);
     } else {
@@ -88,7 +203,7 @@ export default function SubcontractorsPage() {
   }
 
   function startEdit(c) {
-    setForm({ ...EMPTY_FORM, ...c, contact_phone: formatPhone(c.contact_phone) });
+    setForm({ ...EMPTY_FORM, ...c, contact_phone: formatPhone(c.contact_phone), services_offered: c.services_offered || [] });
     setEditingId(c.id);
     setShowForm(true);
   }
@@ -191,6 +306,58 @@ export default function SubcontractorsPage() {
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+            <label style={{ marginTop: 12 }}>Services offered</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: '#fff' }}>
+              {SERVICES_OFFERED.map(service => (
+                <label key={service} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 400, cursor: 'pointer' }}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={(form.services_offered || []).includes(service)} onChange={() => toggleService(service)} />
+                  {service}
+                </label>
+              ))}
+            </div>
+
+            {editingId ? (
+              <div className="two-col" style={{ marginTop: 12 }}>
+                <div>
+                  <label>W9 on file</label>
+                  {form.w9_storage_path ? (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.w9_storage_path)}>View</button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('w9')}>Remove</button>
+                    </div>
+                  ) : (
+                    <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                      {uploadingW9 ? 'Uploading…' : 'Upload W9'}
+                      <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingW9} onChange={e => uploadDoc(e.target.files[0], 'w9')} />
+                    </label>
+                  )}
+                </div>
+                <div>
+                  <label>Certificate of Insurance</label>
+                  {form.coi_storage_path ? (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.coi_storage_path)}>View</button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('coi')}>Remove</button>
+                    </div>
+                  ) : (
+                    <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                      {uploadingCoi ? 'Uploading…' : 'Upload COI'}
+                      <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingCoi} onChange={e => uploadDoc(e.target.files[0], 'coi')} />
+                    </label>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 12 }}>Save this subcontractor first, then W9/COI can be uploaded from the edit view.</div>
+            )}
+
+            {form.coi_storage_path && (
+              <div style={{ marginTop: 10 }}>
+                <label>COI expiration date</label>
+                <input type="date" value={form.coi_expires_at || ''} onChange={e => update('coi_expires_at', e.target.value)} />
+              </div>
+            )}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save subcontractor')}</button>
               {editingId && (
@@ -201,6 +368,7 @@ export default function SubcontractorsPage() {
             </div>
             {inviteResult && <div style={{ fontSize: 12, color: inviteResult.startsWith('Failed') ? '#a13f3f' : '#3a6b45', marginTop: 8 }}>{inviteResult}</div>}
             </form>
+            {editingId && <SubcontractorStats companyId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">
@@ -220,6 +388,7 @@ export default function SubcontractorsPage() {
               { key: 'contact_phone', label: 'Phone', defaultWidth: 150, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 220, render: c => c.contact_email || '—' },
               { key: 'portal', label: 'Portal', defaultWidth: 110, filterable: false, render: c => c.portal_invited_at ? <span style={{ color: '#3a6b45', fontWeight: 600 }}>Invited</span> : <span style={{ color: 'var(--ink-soft)' }}>Not invited</span> },
+              { key: 'coi', label: 'COI', defaultWidth: 130, filterable: false, render: c => coiStatus(c.coi_expires_at) },
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeSub(c.id)}>Delete</button>,
