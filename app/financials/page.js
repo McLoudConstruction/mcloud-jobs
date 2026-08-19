@@ -57,17 +57,17 @@ export default function FinancialDashboardPage() {
   const now = new Date();
   const jobsWithDraws = new Set(draws.map(d => d.job_id));
 
-  const revenueFromSingleInvoice = jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear())
+  const incomeFromSingleInvoice = jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear())
     .reduce((s, j) => s + Number(j.invoice_amount || 0), 0);
-  const revenueFromDraws = draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear())
+  const incomeFromDraws = draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear())
     .reduce((s, d) => s + Number(d.amount || 0), 0);
-  const revenueYtd = revenueFromSingleInvoice + revenueFromDraws;
+  const incomeYtd = incomeFromSingleInvoice + incomeFromDraws;
 
-  const revenueMtdSingle = jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear() && new Date(j.invoiced_at).getMonth() === now.getMonth())
+  const incomeMtdSingle = jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear() && new Date(j.invoiced_at).getMonth() === now.getMonth())
     .reduce((s, j) => s + Number(j.invoice_amount || 0), 0);
-  const revenueMtdDraws = draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear() && new Date(d.paid_at).getMonth() === now.getMonth())
+  const incomeMtdDraws = draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear() && new Date(d.paid_at).getMonth() === now.getMonth())
     .reduce((s, d) => s + Number(d.amount || 0), 0);
-  const revenueMtd = revenueMtdSingle + revenueMtdDraws;
+  const incomeMtd = incomeMtdSingle + incomeMtdDraws;
 
   const totalActualCosts = jobCosts.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalCommittedCosts = jobCosts.filter(c => c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
@@ -78,11 +78,11 @@ export default function FinancialDashboardPage() {
   const openAR = jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'sent').reduce((s, j) => s + Number(j.invoice_amount || 0), 0)
     + draws.filter(d => d.status === 'sent').reduce((s, d) => s + Number(d.amount || 0), 0);
 
-  const grossProfit = revenueYtd - totalActualCosts;
+  const grossProfit = incomeYtd - totalActualCosts;
 
-  const salesBookedYtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear())
+  const revenueYtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear())
     .reduce((s, j) => s + Number(j.contract_price || 0), 0);
-  const salesBookedMtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear() && new Date(j.approved_at).getMonth() === now.getMonth())
+  const revenueMtd = jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear() && new Date(j.approved_at).getMonth() === now.getMonth())
     .reduce((s, j) => s + Number(j.contract_price || 0), 0);
 
   const jobRows = jobs.map(j => {
@@ -106,6 +106,11 @@ export default function FinancialDashboardPage() {
             <div className="portal-info-value">{fmtMoney(revenueYtd)}</div>
             <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(revenueMtd)} this month</div>
           </button>
+          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'income' ? null : 'income')}>
+            <div className="portal-info-label">Income YTD</div>
+            <div className="portal-info-value">{fmtMoney(incomeYtd)}</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(incomeMtd)} this month</div>
+          </button>
           <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'costs' ? null : 'costs')}>
             <div className="portal-info-label">Total Job Costs</div>
             <div className="portal-info-value">{fmtMoney(totalActualCosts + totalCommittedCosts)}</div>
@@ -122,33 +127,32 @@ export default function FinancialDashboardPage() {
             <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Owed by customers</div>
           </button>
         </div>
-
-        <div className="card" style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <div className="portal-info-label">Sales Booked YTD</div>
-              <div className="portal-info-value" style={{ fontSize: 22 }}>{fmtMoney(salesBookedYtd)}</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(salesBookedMtd)} this month</div>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', maxWidth: 280, textAlign: 'right' }}>
-              Counts a job's full contract price the month it's Approved — a sales/bookings figure, separate from Revenue YTD above which only counts cash actually collected.
-            </div>
-          </div>
+        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
+          Revenue = contract price the month a job is Approved (sold). Income = cash actually collected.
         </div>
 
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="portal-info-label">Gross Profit YTD (Revenue − Actual Costs)</div>
+          <div className="portal-info-label">Gross Profit YTD (Income − Actual Costs)</div>
           <div className="portal-info-value" style={{ fontSize: 22, color: grossProfit < 0 ? '#a13f3f' : undefined }}>{fmtMoney(grossProfit)}</div>
         </div>
 
-        {drillDown === 'revenue' && (
+        {drillDown === 'income' && (
           <div className="card">
-            <h3>Paid Invoices This Year</h3>
+            <h3>Cash Collected This Year</h3>
             {jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear()).map(j => (
               <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.job_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
             ))}
             {draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear()).map(d => (
               <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.job_number}` : ''} — ${d.description || 'Draw'}`} value={fmtMoney(d.amount)} />
+            ))}
+          </div>
+        )}
+
+        {drillDown === 'revenue' && (
+          <div className="card">
+            <h3>Jobs Approved This Year</h3>
+            {jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear()).map(j => (
+              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.job_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.contract_price)} />
             ))}
           </div>
         )}

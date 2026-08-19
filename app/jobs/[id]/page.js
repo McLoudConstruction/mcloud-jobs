@@ -98,7 +98,12 @@ export default function JobDetailPage() {
 
   async function saveJob(patch) {
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
-    if (!error) flashSaved();
+    if (!error) {
+      flashSaved();
+    } else {
+      setFlash(`Save failed: ${error.message}`);
+      setTimeout(() => setFlash(''), 6000);
+    }
   }
 
   async function advanceStage() {
@@ -523,6 +528,7 @@ function ScopeCard({ job, onSave }) {
 function PriceCard({ job, onSave }) {
   const [price, setPrice] = useState(job.contract_price ?? '');
   const [projectedCost, setProjectedCost] = useState(job.projected_cost ?? '');
+  const [approvedDate, setApprovedDate] = useState(job.approved_at ? job.approved_at.slice(0, 10) : '');
   const [milestones, setMilestones] = useState(job.milestones || []);
 
   function add() { setMilestones(prev => [...prev, { desc: '', amount: '' }]); }
@@ -532,6 +538,7 @@ function PriceCard({ job, onSave }) {
     onSave({
       contract_price: price ? parseFloat(String(price).replace(/[^0-9.]/g, '')) : null,
       projected_cost: projectedCost ? parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) : null,
+      approved_at: approvedDate ? new Date(approvedDate + 'T12:00:00').toISOString() : null,
       milestones,
     });
   }
@@ -543,6 +550,11 @@ function PriceCard({ job, onSave }) {
       <input value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 185,000" />
       <label style={{ marginTop: 12 }}>Projected cost ($)</label>
       <input value={projectedCost} onChange={e => setProjectedCost(e.target.value)} placeholder="What you expect this job to cost, all-in" />
+      <label style={{ marginTop: 12 }}>Approved date</label>
+      <input type="date" value={approvedDate} onChange={e => setApprovedDate(e.target.value)} />
+      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+        Drives which month this job's contract price counts as Revenue on the Financial Dashboard. Set automatically when the job first moves to Approved — edit here if it's wrong.
+      </div>
       <label style={{ marginTop: 16 }}>Payment milestones</label>
       {milestones.length === 0 && <div className="empty-state">No milestones yet.</div>}
       {milestones.map((m, i) => (
