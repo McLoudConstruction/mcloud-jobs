@@ -31,6 +31,7 @@ export default function PortalDashboardPage() {
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [updates, setUpdates] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [draws, setDraws] = useState([]);
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
   const [flash, setFlash] = useState('');
@@ -66,12 +67,14 @@ export default function PortalDashboardPage() {
 
   const loadJobDetails = useCallback(async () => {
     if (!selectedJobId) return;
-    const [{ data: u }, { data: q }] = await Promise.all([
+    const [{ data: u }, { data: q }, { data: inv }] = await Promise.all([
       supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }),
       supabase.from('job_questions').select('*').eq('job_id', selectedJobId).order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*').eq('job_id', selectedJobId).order('created_at', { ascending: true }),
     ]);
     if (u) setUpdates(u);
     if (q) setQuestions(q);
+    if (inv) setDraws(inv);
   }, [selectedJobId]);
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export default function PortalDashboardPage() {
       .channel(`portal-${selectedJobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${selectedJobId}` }, loadJobDetails)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions', filter: `job_id=eq.${selectedJobId}` }, loadJobDetails)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${selectedJobId}` }, loadJobDetails)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${selectedJobId}` }, loadJobs)
       .subscribe();
 
@@ -186,15 +190,34 @@ export default function PortalDashboardPage() {
                   {job.contract_sent_at && (
                     <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
                   )}
-                  {job.invoice_status !== 'not_sent' && job.invoice_amount && (
+                  {draws.length === 0 && job.invoice_status !== 'not_sent' && job.invoice_amount && (
                     <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
                   )}
-                  {!job.proposal_sent_at && !job.contract_sent_at && (job.invoice_status === 'not_sent' || !job.invoice_amount) && (
+                  {draws.filter(d => d.status !== 'not_sent').map(d => (
+                    <a key={d.id} href={`/jobs/${job.id}/invoices/${d.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View {d.description || 'Draw'} ↗</a>
+                  ))}
+                  {!job.proposal_sent_at && !job.contract_sent_at && draws.length === 0 && (job.invoice_status === 'not_sent' || !job.invoice_amount) && (
                     <div className="empty-state" style={{ padding: '4px 0' }}>Nothing has been sent yet.</div>
                   )}
                 </div>
 
-                {job.invoice_status !== 'not_sent' && job.invoice_amount && (
+                {draws.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    {draws.map(d => (
+                      <div key={d.id} style={{ background: '#faf6ec', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>{d.description || 'Draw'}</span>
+                          <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(d.amount)}</span>
+                        </div>
+                        <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
+                          Status: {d.status === 'paid' ? 'Paid' : d.status === 'sent' ? 'Unpaid' : 'Not yet sent'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {draws.length === 0 && job.invoice_status !== 'not_sent' && job.invoice_amount && (
                   <div style={{ background: '#faf6ec', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>Invoice Amount</span>

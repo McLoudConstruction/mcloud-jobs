@@ -57,6 +57,13 @@ a { color: inherit; text-decoration: none; }
   .portal-two-col{ grid-template-columns: 1fr; }
 }
 
+.kpi-card{
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  padding: 16px 18px; text-align: left; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s;
+}
+.kpi-card:hover{ border-color: var(--rust); }
+
 .topbar{
   display: flex;
   align-items: center;
@@ -159,6 +166,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .badge-completed{ background: #6e3010; }
 .badge-invoiced{ background: #49402a; }
 .badge-paid{ background: #3a6b45; }
+.badge-draft{ background: #9a9488; }
+.badge-accepted{ background: #7d5a2e; }
+.badge-declined{ background: #a13f3f; }
 
 .stepper{ display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 .stepper-flat{ gap: 8px; }

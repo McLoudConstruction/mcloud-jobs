@@ -8,6 +8,10 @@ import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import PhotoGallery from '../../../components/PhotoGallery';
 import AIScopeGenerator from '../../../components/AIScopeGenerator';
+import JobCostSummary from '../../../components/JobCostSummary';
+import DrawsCard from '../../../components/DrawsCard';
+import ReceiptsCard from '../../../components/ReceiptsCard';
+import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage, contractPathFor } from '../../../lib/constants';
 
@@ -48,6 +52,12 @@ export default function JobDetailPage() {
   const [inviteResult, setInviteResult] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState('Customer');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested && TABS.some(t => t.key === requested)) setTab(requested);
+  }, []);
 
   const loadJob = useCallback(async () => {
     const { data, error } = await supabase.from('jobs').select('*').eq('id', id).single();
@@ -97,6 +107,16 @@ export default function JobDetailPage() {
     const next = STAGE_ORDER[idx + 1];
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
     await saveJob({ stage: next });
+    if (next === 'approved' && job.contract_price) {
+      const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
+      if (!existing || existing.length === 0) {
+        const half = Math.round((parseFloat(job.contract_price) / 2) * 100) / 100;
+        await supabase.from('invoices').insert([
+          { job_id: id, description: 'Draw 1 — Deposit', amount: half, status: 'not_sent' },
+          { job_id: id, description: 'Draw 2 — Final Payment', amount: parseFloat(job.contract_price) - half, status: 'not_sent' },
+        ]);
+      }
+    }
   }
 
   async function invitePortal() {
@@ -180,7 +200,12 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Financials' && (
-          <div className="card"><div className="empty-state">Financials tracking is coming in a future update.</div></div>
+          <>
+            <DrawsCard jobId={id} />
+            <JobCostSummary jobId={id} contractPrice={job.contract_price} />
+            <ReceiptsCard jobId={id} />
+            <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} />
+          </>
         )}
 
         {tab === 'Photos' && (

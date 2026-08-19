@@ -17,6 +17,7 @@ const NAV_ITEMS = [
     ],
   },
   { href: '/jobs', label: 'Job Dashboard' },
+  { href: '/subcontractors', label: 'Subcontractors' },
   {
     href: '/financials',
     label: 'Financial Dashboard',
