@@ -43,7 +43,7 @@ The contractor described the job like this:
 
 List every specific task a professional scope of work should include for this job — the obvious main task, plus everything it typically requires along with it (removal/haul-away, disconnecting and reconnecting fixtures, prep work, hookups, finish work, etc.). Be practical and specific, the way an experienced contractor would write it in a real proposal — not vague or generic.
 
-Respond with ONLY a JSON array of strings, one per scope item. No other text before or after it, no markdown formatting, no code fences.`;
+Respond with ONLY a JSON array of strings, one per scope item. Do not include any preamble, explanation, or markdown code fences — your entire response must be valid JSON starting with [ and ending with ].`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -55,10 +55,7 @@ Respond with ONLY a JSON array of strings, one per scope item. No other text bef
       body: JSON.stringify({
         model: 'claude-sonnet-5',
         max_tokens: 2048,
-        messages: [
-          { role: 'user', content: prompt },
-          { role: 'assistant', content: '[' }, // forces the response to continue straight into JSON, no preamble possible
-        ],
+        messages: [{ role: 'user', content: prompt }],
       }),
     });
 
@@ -68,8 +65,7 @@ Respond with ONLY a JSON array of strings, one per scope item. No other text bef
     }
 
     const data = await response.json();
-    const continuation = data.content?.[0]?.text || '';
-    const fullText = '[' + continuation; // re-attach the prefilled opening bracket
+    const fullText = data.content?.[0]?.text || '';
 
     const items = extractItems(fullText);
     if (!items || items.length === 0) {
