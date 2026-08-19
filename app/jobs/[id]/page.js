@@ -13,7 +13,7 @@ import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, PHASES, phaseForStage, contractPathFor } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
@@ -175,7 +175,6 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        <StageStepper currentStage={job.stage} />
 
         <div className="stage-tabs">
           {TABS.map(t => (
@@ -292,25 +291,6 @@ function CommunicationsCard({ job, jobId, updates, changeOrders }) {
           )}
         </div>
       ))}
-    </div>
-  );
-}
-
-function StageStepper({ currentStage }) {
-  const currentIndex = STAGE_ORDER.indexOf(currentStage);
-  const currentPhase = PHASES.find(p => p.stages.includes(currentStage)) || PHASES[0];
-  return (
-    <div className="stepper stepper-flat">
-      {currentPhase.stages.map(stage => {
-        const stageIndex = STAGE_ORDER.indexOf(stage);
-        const isCurrent = stage === currentStage;
-        const isPast = stageIndex < currentIndex;
-        return (
-          <div key={stage} className={`stepper-stage ${isCurrent ? 'current' : ''} ${isPast ? 'past' : ''}`}>
-            {STAGE_LABELS[stage]}
-          </div>
-        );
-      })}
     </div>
   );
 }
