@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon } from './icons';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -31,6 +31,16 @@ const NAV_ITEMS = [
   },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
+
+function isSectionActive(item, pathname) {
+  if (pathname === item.href) return true;
+  if (item.children && item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) return true;
+  return pathname.startsWith(item.href + '/');
+}
+
+function getCurrentSection(pathname) {
+  return NAV_ITEMS.find(item => item.children && isSectionActive(item, pathname)) || null;
+}
 
 export default function AppShell({ children }) {
   const { settings } = useSettings();
@@ -91,7 +101,8 @@ export default function AppShell({ children }) {
 
   function closeOnMobile() { if (isMobile) setNavOpen(false); }
 
-  const sidebarWidth = navOpen ? 240 : 0;
+  const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
+  const currentSection = getCurrentSection(pathname);
 
   return (
     <div className="shell">
@@ -119,7 +130,7 @@ export default function AppShell({ children }) {
 
       <div className="shell-body">
         <div
-          className="shell-sidebar"
+          className={`shell-sidebar ${!isMobile && !navOpen ? 'collapsed' : ''}`}
           style={mounted ? {
             width: sidebarWidth,
             transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
@@ -130,38 +141,25 @@ export default function AppShell({ children }) {
           <div className="shell-sidebar-inner">
             <div className="shell-nav-links">
               {NAV_ITEMS.map(item => (
-                <div key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
-                    onClick={closeOnMobile}
-                  >
-                    {item.icon && <item.icon className="shell-nav-icon" />}
-                    {item.label}
-                  </Link>
-                  {item.children && (
-                    <div className="shell-nav-children">
-                      {item.children.map(child => (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className={`shell-nav-link shell-nav-child ${pathname === child.href ? 'active' : ''}`}
-                          onClick={closeOnMobile}
-                        >
-                          {child.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`shell-nav-link ${isSectionActive(item, pathname) ? 'active' : ''}`}
+                  onClick={closeOnMobile}
+                  title={!isMobile && !navOpen ? item.label : undefined}
+                >
+                  {item.icon && <item.icon className="shell-nav-icon" />}
+                  <span className="shell-nav-label">{item.label}</span>
+                </Link>
               ))}
             </div>
             <button
               className="btn btn-sm signout-btn"
               onClick={handleSignOut}
               style={{ background: settings.signout_bg, color: settings.signout_text, borderColor: settings.signout_text }}
+              title={!isMobile && !navOpen ? 'Sign out' : undefined}
             >
-              Sign out
+              {!isMobile && !navOpen ? <SignOutIcon /> : 'Sign out'}
             </button>
           </div>
         </div>
@@ -169,6 +167,16 @@ export default function AppShell({ children }) {
         {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
 
         <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0, transition: 'margin-left 0.2s ease' }}>
+          {currentSection && (
+            <div className="section-subnav">
+              <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
+              {currentSection.children.map(child => (
+                <Link key={child.href} href={child.href} className={`stage-tab ${pathname === child.href || pathname.startsWith(child.href + '/') ? 'active' : ''}`}>
+                  {child.label}
+                </Link>
+              ))}
+            </div>
+          )}
           {children}
         </div>
       </div>

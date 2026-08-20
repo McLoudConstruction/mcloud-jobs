@@ -239,6 +239,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .stage-tab.active{ background: var(--heading); color: #f2ede1; border-color: var(--heading); }
 
+.section-subnav{
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 14px 24px 0;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.section-subnav .stage-tab{ text-decoration: none; }
+
 .badge{
   display: inline-block;
   font-size: 10.5px;
@@ -413,10 +421,10 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   padding: 12px 0 16px;
   box-sizing: border-box;
   overflow-y: hidden;
+  transition: width 0.2s ease;
 }
+.shell-sidebar.collapsed .shell-sidebar-inner{ width: 64px; }
 .shell-nav-links{ display: flex; flex-direction: column; }
-.shell-nav-children{ display: flex; flex-direction: column; }
-.shell-nav-child{ padding-left: 42px !important; font-size: 12.5px !important; font-weight: 500 !important; }
 .shell-nav-link{
   display: flex;
   align-items: center;
@@ -427,6 +435,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: var(--sidebar-inactive-text);
   white-space: nowrap;
 }
+.shell-sidebar.collapsed .shell-nav-link{ padding: 13px 0; justify-content: center; gap: 0; }
+.shell-sidebar.collapsed .shell-nav-label{ display: none; }
+.shell-sidebar.collapsed .signout-btn{ width: 40px; height: 40px; padding: 0; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .shell-nav-icon{ flex-shrink: 0; opacity: 0.8; }
 .shell-nav-link.active .shell-nav-icon{ opacity: 1; }
 .shell-nav-link:hover{ background: rgba(255,255,255,0.4); }

@@ -73,3 +73,13 @@ export function SettingsIcon(props) {
     </svg>
   );
 }
+
+export function SignOutIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M8 17H4.5a1 1 0 01-1-1V4a1 1 0 011-1H8" />
+      <path d="M13 14l4-4-4-4" />
+      <path d="M17 10H7.5" />
+    </svg>
+  );
+}
