@@ -5,10 +5,11 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 
-const STAGES = ['prospecting', 'contacted', 'proposal', 'won', 'lost'];
-const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', proposal: 'Proposal Sent', won: 'Won', lost: 'Lost' };
+const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
+const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
+const ACTIVE_STAGES = ['prospecting', 'contacted'];
 
-const EMPTY_FORM = { company: '', project: '', contact_name: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '' };
+const EMPTY_FORM = { company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '' };
 
 export default function SalesDashboardPage() {
   const { session, loading } = useRequireAuth();
@@ -66,6 +67,10 @@ export default function SalesDashboardPage() {
     await supabase.from('opportunities').update({ stage }).eq('id', id);
   }
 
+  function convertToJob(id) {
+    window.location.href = `/jobs/new?opp=${id}`;
+  }
+
   async function confirmLoss() {
     await supabase.from('opportunities').update({ stage: 'lost', loss_reason: lossReasonText }).eq('id', lossReasonPromptId);
     setLossReasonPromptId(null);
@@ -91,16 +96,16 @@ export default function SalesDashboardPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales Dashboard</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
-              {showForm ? 'Cancel' : '+ New sales lead'}
+              {showForm ? 'Cancel' : '+ New opportunity'}
             </button>
-            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+            <Link href="/jobs/new" className="btn btn-primary">+ New Job</Link>
           </div>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-          "New sales lead" tracks a prospect in your pipeline below. "New Opportunity" creates an actual project — this is the only way to start one.
+          "New opportunity" tracks an early-stage prospect below — convert it to a job once it's real. "New Job" skips the pipeline and starts a project directly.
         </div>
 
         <div className="card">
@@ -122,6 +127,8 @@ export default function SalesDashboardPage() {
               <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
               <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
               <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
+              <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
               <div><label>Date taken</label><input type="date" value={form.date_taken} onChange={e => update('date_taken', e.target.value)} /></div>
             </div>
@@ -162,9 +169,21 @@ export default function SalesDashboardPage() {
               {o.stage === 'lost' && o.loss_reason && <span className="job-address" style={{ color: '#a13f3f' }}>Loss reason: {o.loss_reason}</span>}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select value={o.stage} onChange={e => setStage(o.id, e.target.value)} style={{ width: 'auto' }}>
-                {STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-              </select>
+              {o.stage === 'converted' ? (
+                <>
+                  <span className="badge badge-approved">Converted</span>
+                  {o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>}
+                </>
+              ) : (
+                <>
+                  <select value={o.stage} onChange={e => setStage(o.id, e.target.value)} style={{ width: 'auto' }}>
+                    {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                  </select>
+                  {ACTIVE_STAGES.includes(o.stage) && (
+                    <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Job</button>
+                  )}
+                </>
+              )}
               <button className="btn btn-sm" onClick={() => startEdit(o)}>Edit</button>
               <button className="btn btn-sm btn-danger" onClick={() => removeOpp(o.id)}>Delete</button>
             </div>

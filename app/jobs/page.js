@@ -57,7 +57,7 @@ export default function JobTrackerPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Job Dashboard</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Jobs</h2>
         </div>
 
         <div className="search-bar">

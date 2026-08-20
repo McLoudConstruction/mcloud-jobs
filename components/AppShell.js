@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   {
     href: '/sales',
-    label: 'Sales Dashboard',
+    label: 'Sales',
     icon: SalesIcon,
     children: [
       { href: '/customers', label: 'Contacts' },
@@ -18,11 +18,11 @@ const NAV_ITEMS = [
       { href: '/companies', label: 'Companies' },
     ],
   },
-  { href: '/jobs', label: 'Job Dashboard', icon: JobDashboardIcon },
+  { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon },
   { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
   {
     href: '/financials',
-    label: 'Financial Dashboard',
+    label: 'Financials',
     icon: FinanceIcon,
     children: [
       { href: '/financials/payable', label: 'Accounts Payable' },

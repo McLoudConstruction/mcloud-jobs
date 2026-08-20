@@ -99,7 +99,7 @@ export default function FinancialDashboardPage() {
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Financial Dashboard</h2>
+        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Financials</h2>
 
         <div className="portal-info-grid" style={{ marginBottom: 4 }}>
           <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'revenue' ? null : 'revenue')}>

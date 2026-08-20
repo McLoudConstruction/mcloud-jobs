@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
@@ -24,9 +24,12 @@ const EMPTY_FORM = {
   description: '',
 };
 
-export default function NewJobPage() {
+function NewJobPageInner() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const oppId = searchParams.get('opp');
+  const [sourceOpp, setSourceOpp] = useState(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -44,6 +47,22 @@ export default function NewJobPage() {
     }
     loadNextJobNumber();
   }, []);
+
+  useEffect(() => {
+    if (!oppId) return;
+    supabase.from('opportunities').select('*').eq('id', oppId).single().then(({ data }) => {
+      if (!data) return;
+      setSourceOpp(data);
+      setForm(prev => ({
+        ...prev,
+        customer_name: data.contact_name || data.company || prev.customer_name,
+        customer_contact: data.contact_name || prev.customer_contact,
+        customer_email: data.contact_email || prev.customer_email,
+        customer_phone: data.contact_phone || prev.customer_phone,
+        description: [data.project, data.notes].filter(Boolean).join(' — ') || prev.description,
+      }));
+    });
+  }, [oppId]);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [scopeItems, setScopeItems] = useState([]);
   const [termItems, setTermItems] = useState([]);
@@ -224,6 +243,10 @@ export default function NewJobPage() {
       setError(insertError.message.includes('duplicate') ? 'That job number is already in use.' : insertError.message);
       return;
     }
+
+    if (oppId && data) {
+      await supabase.from('opportunities').update({ stage: 'converted', job_id: data.id }).eq('id', oppId);
+    }
     router.push(`/jobs/${data.id}`);
   }
 
@@ -235,7 +258,12 @@ export default function NewJobPage() {
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ color: 'var(--heading)' }}>New Opportunity</h2>
+        <h2 style={{ color: 'var(--heading)' }}>New Job</h2>
+        {sourceOpp && (
+          <div className="card" style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '12px 16px' }}>
+            Starting from opportunity: <b>{sourceOpp.company || sourceOpp.contact_name || 'Unnamed'}</b> — its details are prefilled below. Marking this job created will mark that opportunity Converted.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="card">
@@ -378,5 +406,13 @@ export default function NewJobPage() {
         </form>
       </div>
     </AppShell>
+  );
+}
+
+export default function NewJobPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewJobPageInner />
+    </Suspense>
   );
 }
