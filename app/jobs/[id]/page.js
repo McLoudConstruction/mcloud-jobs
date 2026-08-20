@@ -13,6 +13,7 @@ import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
+import PortalAccessCard from '../../../components/PortalAccessCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor } from '../../../lib/constants';
 
@@ -192,6 +193,7 @@ export default function JobDetailPage() {
           <>
             <CustomerInfoCard job={job} onSave={saveJob} />
             <PortalCard job={job} />
+            <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
           </>
         )}
 
@@ -425,14 +427,14 @@ function CustomerInfoCard({ job, onSave }) {
       </div>
 
       <label style={{ marginTop: 16 }}>Billing address</label>
-      <AddressFields prefix="billing" values={form} onChange={update} />
+      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
         <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
         Project address same as billing address
       </label>
       <label>Project / jobsite address</label>
-      <AddressFields prefix="project" values={form} onChange={update} />
+      <AddressFields prefix="project" values={form} onChange={update} placesEnabled />
 
       <div className="section-actions">
         <button className="btn btn-primary btn-sm" onClick={save}>Save customer info</button>

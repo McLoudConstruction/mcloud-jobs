@@ -237,6 +237,7 @@ export default function ContractDocumentPage() {
                   saving={saving}
                   defaultName={job.customer_contact || job.customer_name || ''}
                   defaultTitle=""
+                  showTitle={job.project_type === 'commercial'}
                   note="Customer signs here (touch or mouse)"
                   locked={Boolean(job.contract_finalized_at)}
                 />
@@ -264,6 +265,7 @@ export default function ContractDocumentPage() {
         docType="contract"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
+        jobId={id}
         pdfFilename={`Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {

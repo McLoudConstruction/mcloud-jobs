@@ -157,6 +157,7 @@ export default function ChangeOrderDocumentPage() {
         docType="change order"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
+        jobId={id}
         pdfFilename={`Change-Order-${job.job_number}-${co.co_date}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {

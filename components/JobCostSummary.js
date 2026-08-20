@@ -93,7 +93,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost }) 
       </div>
 
       {showForm && (
-        <form onSubmit={addManualCost} style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+        <form onSubmit={addManualCost} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
             <div>
               <label>Category</label>

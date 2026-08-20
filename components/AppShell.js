@@ -4,22 +4,25 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, PersonIcon, CalculatorIcon, MessagesIcon, InvoiceIcon, SunIcon, MoonIcon } from './icons';
+import { useTheme } from '../lib/useTheme';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   {
-    href: '/sales',
-    label: 'Sales',
-    icon: SalesIcon,
+    href: '/customers',
+    label: 'Contacts',
+    icon: PersonIcon,
     children: [
-      { href: '/customers', label: 'Contacts' },
       { href: '/properties', label: 'Properties' },
       { href: '/companies', label: 'Companies' },
     ],
   },
+  { href: '/sales', label: 'Sales', icon: SalesIcon },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon },
   { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
+  { href: '/messages', label: 'Messages', icon: MessagesIcon },
+  { href: '/invoices', label: 'Invoices', icon: InvoiceIcon },
   {
     href: '/financials',
     label: 'Financials',
@@ -30,6 +33,7 @@ const NAV_ITEMS = [
     ],
   },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
+  { href: '/estimating', label: 'Estimating', icon: CalculatorIcon },
 ];
 
 function isSectionActive(item, pathname) {
@@ -43,6 +47,7 @@ function getCurrentSection(pathname) {
 }
 
 export default function AppShell({ children }) {
+  const { theme, setTheme } = useTheme();
   const { settings } = useSettings();
   const pathname = usePathname();
   const router = useRouter();
@@ -119,6 +124,15 @@ export default function AppShell({ children }) {
             </svg>
             {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </Link>
+
+          <button
+            className="theme-toggle-btn"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label="Toggle light/dark mode"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
+          </button>
         </div>
 
         <div className="shell-logo">

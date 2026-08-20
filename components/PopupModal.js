@@ -26,7 +26,7 @@ const overlayStyle = {
   overflowY: 'auto',
 };
 const modalStyle = {
-  background: '#fff', borderRadius: 8, padding: 26, width: '100%',
+  background: 'var(--card-bg)', borderRadius: 8, padding: 26, width: '100%',
   boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
   margin: 'auto', position: 'relative',
 };

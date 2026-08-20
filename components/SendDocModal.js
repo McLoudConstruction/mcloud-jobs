@@ -3,14 +3,23 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { generatePdfBase64 } from '../lib/generatePdf';
 import { buildDocEmail } from '../lib/emailTemplates';
+import { supabase } from '../lib/supabaseClient';
 
-export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, onPrint, onSendSuccess }) {
+export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, jobId, onPrint, onSendSuccess }) {
   const [email, setEmail] = useState(defaultEmail || '');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [notifyList, setNotifyList] = useState([]);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!jobId || !open) return;
+    supabase.from('job_portal_access').select('email').eq('job_id', jobId).eq('notify', true).then(({ data }) => {
+      if (data) setNotifyList(data.map(r => r.email).filter(e => e && e !== defaultEmail));
+    });
+  }, [jobId, open, defaultEmail]);
 
   // Lock background scroll while the modal is open, so the page can't
   // scroll independently underneath a fixed-position overlay on mobile.
@@ -36,18 +45,21 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
 
       setResult({ ok: true, message: 'Sending…' });
       const { subject, html, text } = buildDocEmail({ customerName, docType });
+      const recipients = [email, ...notifyList].filter(Boolean).join(', ');
 
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: email, subject, html, text,
+          to: recipients, subject, html, text,
           ...(withAttachment ? { attachmentBase64, attachmentFilename: pdfFilename } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send.');
-      setResult({ ok: true, message: withAttachment ? `Sent to ${email}, with the PDF attached.` : `Sent to ${email} — they'll find it waiting in the Customer Portal.` });
+      const recipientCount = 1 + notifyList.length;
+      const recipientNote = recipientCount > 1 ? ` and ${notifyList.length} other contact${notifyList.length === 1 ? '' : 's'} on the notification list` : '';
+      setResult({ ok: true, message: withAttachment ? `Sent to ${email}${recipientNote}, with the PDF attached.` : `Sent to ${email}${recipientNote} — they'll find it waiting in the Customer Portal.` });
       if (onSendSuccess) onSendSuccess();
     } catch (err) {
       setResult({ ok: false, message: err.message });
@@ -101,7 +113,7 @@ const overlayStyle = {
   overflowY: 'auto',
 };
 const modalStyle = {
-  background: '#fff', borderRadius: 8, padding: 26, width: '100%', maxWidth: 420,
+  background: 'var(--card-bg)', borderRadius: 8, padding: 26, width: '100%', maxWidth: 420,
   boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
   margin: 'auto',
   position: 'relative',

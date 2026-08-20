@@ -119,6 +119,13 @@ export default function ProposalDocumentPage() {
               </a>
             )}
 
+            {!job.contract_finalized_at && (
+              <div className="proposal-cta-print">
+                <span className="proposal-cta-print-text">Ready to move forward?</span>
+                <span className="proposal-cta-print-action">Reply to your proposal email or call McLoud Construction to get started.</span>
+              </div>
+            )}
+
             <div className="section">
               <h3>Scope of work</h3>
               {scope.length === 0 ? (
@@ -148,6 +155,7 @@ export default function ProposalDocumentPage() {
         docType="proposal"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
+        jobId={id}
         pdfFilename={`Proposal-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
@@ -189,6 +197,14 @@ export default function ProposalDocumentPage() {
         .proposal-cta-text { font-size: 14px; font-weight: 500; opacity: 0.9; }
         .proposal-cta-action { font-size: 16px; font-weight: 700; }
         @media (max-width: 500px) { .proposal-cta { flex-direction: column; align-items: flex-start; } }
+
+        .proposal-cta-print {
+          background: #ffd400; color: #221f16;
+          border-radius: 8px; padding: 16px 22px; margin-bottom: 28px;
+          text-align: center;
+        }
+        .proposal-cta-print-text { display: block; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+        .proposal-cta-print-action { display: block; font-size: 14px; font-weight: 600; }
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }

@@ -128,6 +128,7 @@ export default function DrawInvoiceDocumentPage() {
         docType="invoice"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
+        jobId={id}
         pdfFilename={`${(draw.description || 'Draw').replace(/[^a-z0-9]+/gi, '-')}-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={markSent}

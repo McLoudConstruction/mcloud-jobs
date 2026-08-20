@@ -310,7 +310,7 @@ function NewJobPageInner() {
                     autoComplete="off"
                   />
                   {showSuggestions && (
-                    <div style={{ position: 'absolute', zIndex: 10, background: '#fff', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
                       {suggestions.map(s => (
                         <div
                           key={s.id}
@@ -350,14 +350,14 @@ function NewJobPageInner() {
                 </div>
 
                 <label style={{ marginTop: 16 }}>Billing address {isCommercial ? '*' : ''}</label>
-                <AddressFields prefix="billing" values={form} onChange={update} required={isCommercial} />
+                <AddressFields prefix="billing" values={form} onChange={update} required={isCommercial} placesEnabled />
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
                   <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
                   Project address same as billing address
                 </label>
                 <label>Project / jobsite address *</label>
-                <AddressFields prefix="project" values={form} onChange={update} required={!sameAsBilling} />
+                <AddressFields prefix="project" values={form} onChange={update} required={!sameAsBilling} placesEnabled />
               </>
             )}
           </div>

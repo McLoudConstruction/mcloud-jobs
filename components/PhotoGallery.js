@@ -160,7 +160,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             </div>
           )}
           {pickerOpen && (
-            <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 12, marginBottom: 14, background: '#faf8f0' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 12, marginBottom: 14, background: 'var(--panel)' }}>
               <div className="section-actions" style={{ marginTop: 0, marginBottom: 10 }}>
                 <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Click a photo from the job's general library to attach it here.</span>
                 <button className="btn btn-sm" onClick={() => setPickerOpen(false)} type="button">Close</button>

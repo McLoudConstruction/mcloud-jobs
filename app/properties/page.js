@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
+import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
 import PopupModal from '../../components/PopupModal';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
@@ -141,6 +142,10 @@ export default function PropertiesPage() {
     await supabase.from('properties').delete().eq('id', id);
   }
 
+  async function markVisited(id) {
+    await supabase.from('properties').update({ last_visited_at: new Date().toISOString() }).eq('id', id);
+  }
+
   function updateContactForm(field, value) {
     if (field === 'contact_phone') value = formatPhone(value);
     setContactForm(prev => ({ ...prev, [field]: value }));
@@ -257,7 +262,20 @@ export default function PropertiesPage() {
               <form onSubmit={submit}>
             <h3>{editingId ? 'Edit property' : 'New property'}</h3>
             <div className="two-col">
-              <div><label>Property name *</label><input value={form.property_name} onChange={e => update('property_name', e.target.value)} required /></div>
+              <div>
+                <label>Property name *</label>
+                <PlacesAutocompleteInput
+                  value={form.property_name}
+                  onChange={v => update('property_name', v)}
+                  onPlaceSelected={place => {
+                    update('property_street', place.street);
+                    update('property_city', place.city);
+                    update('property_state', place.state);
+                    update('property_zip', place.zip);
+                  }}
+                  required
+                />
+              </div>
               <div>
                 <label>Property type</label>
                 <select value={form.property_type} onChange={e => update('property_type', e.target.value)}>
@@ -274,7 +292,7 @@ export default function PropertiesPage() {
             </div>
 
             <label style={{ marginTop: 12 }}>Address</label>
-            <AddressFields prefix="property" values={form} onChange={update} />
+            <AddressFields prefix="property" values={form} onChange={update} placesEnabled />
 
             <div className="two-col" style={{ marginTop: 12 }}>
               <div>
@@ -311,7 +329,7 @@ export default function PropertiesPage() {
                 {contactNote && <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 10 }}>{contactNote}</div>}
 
                 {showContactForm && (
-                  <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginBottom: 14 }}>
+                  <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginBottom: 14 }}>
                     <div className="two-col">
                       <div><label>Name *</label><input value={contactForm.name} onChange={e => updateContactForm('name', e.target.value)} required /></div>
                       <div>
@@ -380,8 +398,17 @@ export default function PropertiesPage() {
                 render: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '—',
               },
               {
-                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
-                render: p => <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>,
+                key: 'last_visited_at', label: 'Last Visited', defaultWidth: 130, filterable: false,
+                render: p => p.last_visited_at ? new Date(p.last_visited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
+              },
+              {
+                key: 'actions', label: '', defaultWidth: 160, filterable: false, stopClickPropagation: true,
+                render: p => (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-sm" onClick={() => markVisited(p.id)}>Mark Visited</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
+                  </div>
+                ),
               },
             ]}
           />

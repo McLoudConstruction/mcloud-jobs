@@ -77,7 +77,7 @@ export default function TradeBreakdownCard({ jobId }) {
       </div>
 
       {showForm && (
-        <form onSubmit={save} style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+        <form onSubmit={save} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <label>Description</label>
           <input value={form.description} onChange={e => update('description', e.target.value)} required placeholder="e.g. Detach and reset kitchen faucet" />
           <div className="two-col" style={{ marginTop: 10 }}>

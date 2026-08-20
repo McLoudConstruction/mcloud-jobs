@@ -5,6 +5,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import ColorField from '../../components/ColorField';
+import { deriveThemeAccents } from '../../lib/deriveAccent';
 
 const INTEGRATIONS = [
   { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
@@ -94,15 +95,7 @@ export default function SettingsPage() {
       const { error: updateError } = await supabase
         .from('app_settings')
         .update({
-          color_bg: form.color_bg,
-          color_heading: form.color_heading,
-          color_section_heading: form.color_section_heading,
-          color_accent: form.color_accent,
-          color_panel: form.color_panel,
-          color_header: form.color_header,
-          sidebar_inactive_text: form.sidebar_inactive_text,
-          sidebar_active_bg: form.sidebar_active_bg,
-          sidebar_active_text: form.sidebar_active_text,
+          brand_color: form.brand_color,
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
@@ -125,15 +118,7 @@ export default function SettingsPage() {
   function resetToDefault() {
     setForm(prev => ({
       ...prev,
-      color_bg: '#dbd8bf',
-      color_heading: '#49402a',
-      color_section_heading: '#9b773d',
-      color_accent: '#8a3d14',
-      color_panel: '#d3d0b5',
-      color_header: '#d3d0b5',
-      sidebar_inactive_text: '#49402a',
-      sidebar_active_bg: '#49402a',
-      sidebar_active_text: '#f2ede1',
+      brand_color: '#8a3d14',
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 120,
@@ -205,18 +190,12 @@ export default function SettingsPage() {
         </div>
 
         <div className="card">
-          <h3>Color theme</h3>
-          <div className="two-col">
-            <ColorField label="Page background" id="colorBg" value={form.color_bg} fallback="#dbd8bf" onChange={v => update('color_bg', v)} />
-            <ColorField label="Header background" id="colorHeader" value={form.color_header} fallback="#d3d0b5" onChange={v => update('color_header', v)} />
-            <ColorField label="Sidebar background" id="colorPanel" value={form.color_panel} fallback="#d3d0b5" onChange={v => update('color_panel', v)} />
-            <ColorField label="Sidebar inactive text" id="sidebarInactive" value={form.sidebar_inactive_text} fallback="#49402a" onChange={v => update('sidebar_inactive_text', v)} />
-            <ColorField label="Sidebar active background" id="sidebarActiveBg" value={form.sidebar_active_bg} fallback="#49402a" onChange={v => update('sidebar_active_bg', v)} />
-            <ColorField label="Sidebar active text" id="sidebarActiveText" value={form.sidebar_active_text} fallback="#f2ede1" onChange={v => update('sidebar_active_text', v)} />
-            <ColorField label="Main headings" id="colorHeading" value={form.color_heading} fallback="#49402a" onChange={v => update('color_heading', v)} />
-            <ColorField label="Section headings" id="colorSectionHeading" value={form.color_section_heading} fallback="#9b773d" onChange={v => update('color_section_heading', v)} />
-            <ColorField label="Accent (buttons, badges)" id="colorAccent" value={form.color_accent} fallback="#8a3d14" onChange={v => update('color_accent', v)} />
+          <h3>Brand Accent Color</h3>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Page layout, backgrounds, and sidebar now follow Light/Dark mode automatically (toggle in the header). Enter one brand color here — buttons, links, and highlights are derived from it automatically, adjusted separately for each mode so it always stays legible.
           </div>
+          <ColorField label="Brand color" id="brandColor" value={form.brand_color} fallback="#8a3d14" onChange={v => update('brand_color', v)} />
+          <BrandColorPreview hex={form.brand_color} />
 
           <label htmlFor="fontChoice" style={{ marginTop: 16 }}>Font</label>
           <select id="fontChoice" value={form.font_choice || 'system'} onChange={e => update('font_choice', e.target.value)}>
@@ -274,5 +253,28 @@ export default function SettingsPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function BrandColorPreview({ hex }) {
+  const derived = deriveThemeAccents(hex);
+  if (!derived) return null;
+  return (
+    <div style={{ display: 'flex', gap: 20, marginTop: 14 }}>
+      <div>
+        <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 6 }}>On light mode</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentLight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Save</div>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentLightHover, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>hover</div>
+        </div>
+      </div>
+      <div style={{ background: '#1a1a1d', padding: '8px 10px', borderRadius: 6 }}>
+        <div style={{ fontSize: 10.5, color: '#9a968f', marginBottom: 6 }}>On dark mode</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentDark, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Save</div>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentDarkHover, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>hover</div>
+        </div>
+      </div>
+    </div>
   );
 }

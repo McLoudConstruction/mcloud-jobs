@@ -128,7 +128,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
       </div>
 
       {showForm && (
-        <form onSubmit={createWorkOrder} style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+        <form onSubmit={createWorkOrder} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
             <div>
               <label>Subcontractor</label>
@@ -153,7 +153,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
                   Pre-checked based on this subcontractor's trade — add or remove as needed.
                 </div>
               )}
-              <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
+              <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: 'var(--card-bg)', maxHeight: 180, overflowY: 'auto' }}>
                 {availableItems.map((item, i) => (
                   <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, fontWeight: 400, marginBottom: 6, cursor: 'pointer' }}>
                     <input type="checkbox" style={{ width: 'auto', marginTop: 2 }} checked={selectedScope.includes(item)} onChange={() => toggleScopeItem(item)} />

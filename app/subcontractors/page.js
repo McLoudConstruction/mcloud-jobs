@@ -299,7 +299,7 @@ export default function SubcontractorsPage() {
                 <label>Company / subcontractor name *</label>
                 <input value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
                 <label style={{ marginTop: 12 }}>Address</label>
-                <AddressFields prefix="" values={form} onChange={update} />
+                <AddressFields prefix="" values={form} onChange={update} placesEnabled />
                 <div className="two-col" style={{ marginTop: 12 }}>
                   <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
                   <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>

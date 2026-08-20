@@ -179,7 +179,7 @@ export default function ReceiptsCard({ jobId }) {
       )}
 
       {pendingFile && (
-        <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
             {scanning ? 'Reading receipt with AI…' : 'Confirm receipt details'}
           </div>

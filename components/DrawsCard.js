@@ -97,7 +97,7 @@ export default function DrawsCard({ jobId }) {
       </div>
 
       {showForm && (
-        <form onSubmit={addDraw} style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+        <form onSubmit={addDraw} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
             <div><label>Description</label><input value={form.description} onChange={e => update('description', e.target.value)} placeholder="e.g. Draw 3 — Rough-in complete" /></div>
             <div><label>Amount ($)</label><input value={form.amount} onChange={e => update('amount', e.target.value)} required /></div>

@@ -72,9 +72,9 @@ export default function SubPortalWorkOrderPage() {
   const scopeItems = Array.isArray(wo.included_scope_items) ? wo.included_scope_items : [];
 
   return (
-    <div style={{ background: '#f4f2e8', minHeight: '100vh' }}>
-      <div style={{ background: '#fff', borderBottom: '1px solid var(--line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
+    <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+      <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--header-line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Link href="/sub-portal/dashboard" className="btn btn-sm" style={{ color: 'var(--header-text)', borderColor: 'var(--header-line)' }}>← Back</Link>
         <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
       </div>
 

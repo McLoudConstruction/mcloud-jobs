@@ -1,5 +1,7 @@
 import './globals.css';
 import { SettingsProvider } from '../lib/useSettings';
+import { ThemeProvider } from '../lib/useTheme';
+import BrandAccentInjector from '../components/BrandAccentInjector';
 
 export const metadata = {
   title: 'McLoud Jobs',
@@ -10,7 +12,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <SettingsProvider>{children}</SettingsProvider>
+        <ThemeProvider>
+          <SettingsProvider>
+            <BrandAccentInjector />
+            {children}
+          </SettingsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

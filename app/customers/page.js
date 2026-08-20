@@ -294,25 +294,25 @@ export default function CustomersPage() {
                 {isHomeowner ? (
                   <>
                     <label style={{ marginTop: 16 }}>Address</label>
-                    <AddressFields prefix="address" values={form} onChange={update} />
+                    <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
                   </>
                 ) : (
                   <>
                     <label style={{ marginTop: 16 }}>Billing email</label>
                     <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
                     <label style={{ marginTop: 4 }}>Billing address</label>
-                    <AddressFields prefix="billing" values={form} onChange={update} />
+                    <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
 
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
                       Address same as billing address
                     </label>
                     <label>Address</label>
-                    <AddressFields prefix="address" values={form} onChange={update} />
+                    <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
                   </>
                 )}
 
-                <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16 }}>
+                <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
                     Automated Notifications
                   </div>

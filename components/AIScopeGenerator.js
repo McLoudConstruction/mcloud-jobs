@@ -37,7 +37,7 @@ export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTra
       {!open ? (
         <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>Generate scope with AI</button>
       ) : (
-        <div style={{ background: '#faf8f0', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
           <label>Describe the job in your own words</label>
           <textarea
             value={description}
