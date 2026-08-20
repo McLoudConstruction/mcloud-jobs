@@ -4,29 +4,32 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon } from './icons';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   {
     href: '/sales',
     label: 'Sales Dashboard',
+    icon: SalesIcon,
     children: [
       { href: '/customers', label: 'Contacts' },
       { href: '/properties', label: 'Properties' },
       { href: '/companies', label: 'Companies' },
     ],
   },
-  { href: '/jobs', label: 'Job Dashboard' },
-  { href: '/subcontractors', label: 'Subcontractors' },
+  { href: '/jobs', label: 'Job Dashboard', icon: JobDashboardIcon },
+  { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
   {
     href: '/financials',
     label: 'Financial Dashboard',
+    icon: FinanceIcon,
     children: [
       { href: '/financials/payable', label: 'Accounts Payable' },
       { href: '/financials/receivable', label: 'Accounts Receivable' },
     ],
   },
-  { href: '/settings', label: 'Settings' },
+  { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export default function AppShell({ children }) {
@@ -133,6 +136,7 @@ export default function AppShell({ children }) {
                     className={`shell-nav-link ${pathname === item.href ? 'active' : ''}`}
                     onClick={closeOnMobile}
                   >
+                    {item.icon && <item.icon className="shell-nav-icon" />}
                     {item.label}
                   </Link>
                   {item.children && (
