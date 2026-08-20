@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { RECEIPT_CATEGORIES } from '../lib/constants';
+import { compressImage } from '../lib/imageCompress';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -57,8 +58,9 @@ export default function ReceiptsCard({ jobId }) {
     setAiNote('');
     setUploading(true);
     try {
+      const compressed = await compressImage(file);
       const path = `${jobId}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from('receipts').upload(path, file);
+      const { error } = await supabase.storage.from('receipts').upload(path, compressed, { contentType: 'image/jpeg' });
       if (error) throw error;
       setPendingPath(path);
 
@@ -149,8 +151,9 @@ export default function ReceiptsCard({ jobId }) {
     if (!file) return;
     setReplacingId(receipt.id);
     try {
+      const compressed = await compressImage(file);
       const newPath = `${jobId}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from('receipts').upload(newPath, file);
+      const { error } = await supabase.storage.from('receipts').upload(newPath, compressed, { contentType: 'image/jpeg' });
       if (error) throw error;
       if (receipt.storage_path) await supabase.storage.from('receipts').remove([receipt.storage_path]);
       await supabase.from('receipts').update({ storage_path: newPath }).eq('id', receipt.id);

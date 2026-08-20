@@ -12,6 +12,7 @@ import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
+import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor } from '../../../lib/constants';
 
@@ -197,7 +198,7 @@ export default function JobDetailPage() {
         {tab === 'Project' && (
           <>
             <ProjectInfoCard job={job} onSave={saveJob} />
-            <ScopeCard job={job} onSave={saveJob} />
+            <ScopeCard job={job} jobId={id} onSave={saveJob} />
             <PriceCard job={job} onSave={saveJob} />
             <TermsCard job={job} onSave={saveJob} />
           </>
@@ -445,6 +446,7 @@ function ProjectInfoCard({ job, onSave }) {
   const [form, setForm] = useState({
     job_type: job.job_type || '',
     expected_close_date: job.expected_close_date || '',
+    scheduled_start_date: job.scheduled_start_date || '',
     description: job.description || '',
     governing_state: job.governing_state || 'Missouri',
     project_type: job.project_type || 'residential',
@@ -453,8 +455,8 @@ function ProjectInfoCard({ job, onSave }) {
 
   function save() {
     const patch = { ...form };
-    // Filling in the scheduled start date while a job is Approved moves it to Scheduled automatically.
-    if (job.stage === 'approved' && !job.expected_close_date && form.expected_close_date) {
+    // Setting a scheduled start date while a job is Approved moves it to Scheduled automatically.
+    if (job.stage === 'approved' && !job.scheduled_start_date && form.scheduled_start_date) {
       patch.stage = 'scheduled';
     }
     onSave(patch);
@@ -473,8 +475,15 @@ function ProjectInfoCard({ job, onSave }) {
         </div>
         <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
         <div>
-          <label>{job.stage === 'new' || job.stage === 'inspected' || job.stage === 'proposal_delivered' ? 'Expected close date' : 'Scheduled start date'}</label>
+          <label>Expected close date</label>
           <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
+        </div>
+        <div>
+          <label>Scheduled start date</label>
+          <input type="date" value={form.scheduled_start_date} onChange={e => update('scheduled_start_date', e.target.value)} />
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+            Triggers automatic reminder emails to the customer 1 week and 1 day before this date.
+          </div>
         </div>
         <div>
           <label>Governing state</label>
@@ -494,7 +503,7 @@ function ProjectInfoCard({ job, onSave }) {
 }
 
 /* ---------------- Scope of work ---------------- */
-function ScopeCard({ job, onSave }) {
+function ScopeCard({ job, jobId, onSave }) {
   const [items, setItems] = useState((job.scope_items || []).map(i => i.text || ''));
 
   function add() { setItems(prev => [...prev, '']); }
@@ -502,13 +511,20 @@ function ScopeCard({ job, onSave }) {
   function remove(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function save() { onSave({ scope_items: items.filter(t => t.trim()).map(text => ({ text })) }); }
 
+  async function saveTradeActions(tradeActions) {
+    await supabase.from('job_scope_actions').insert(tradeActions.map(a => ({ ...a, job_id: jobId })));
+  }
+
   return (
-    <div className="card">
-      <h3>Scope of work</h3>
-      <AIScopeGenerator
-        projectType={job.project_type}
-        onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
-      />
+    <>
+      <div className="card">
+        <h3>Scope of work</h3>
+        <AIScopeGenerator
+          projectType={job.project_type}
+          jobId={jobId}
+          onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
+          onTradeActions={saveTradeActions}
+        />
       {items.length === 0 && <div className="empty-state">No scope items yet.</div>}
       {items.map((text, i) => (
         <div className="list-row" key={i}>
@@ -520,7 +536,9 @@ function ScopeCard({ job, onSave }) {
         <button className="btn btn-sm" onClick={add}>+ Add item</button>
         <button className="btn btn-primary btn-sm" onClick={save}>Save scope</button>
       </div>
-    </div>
+      </div>
+      <TradeBreakdownCard jobId={jobId} />
+    </>
   );
 }
 

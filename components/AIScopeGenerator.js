@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 
-export default function AIScopeGenerator({ projectType, onGenerate }) {
+export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTradeActions }) {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,11 +15,14 @@ export default function AIScopeGenerator({ projectType, onGenerate }) {
       const res = await fetch('/api/generate-scope', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, projectType }),
+        body: JSON.stringify({ description, projectType, includeTradeBreakdown: Boolean(jobId) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate scope.');
       onGenerate(data.items || []);
+      if (jobId && onTradeActions && data.tradeActions?.length) {
+        onTradeActions(data.tradeActions);
+      }
       setDescription('');
       setOpen(false);
     } catch (err) {
@@ -50,7 +53,9 @@ export default function AIScopeGenerator({ projectType, onGenerate }) {
             <button type="button" className="btn btn-sm" onClick={() => { setOpen(false); setError(''); }}>Cancel</button>
           </div>
           <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
-            Items get added below for you to review, edit, or remove before saving — nothing goes to a customer automatically.
+            {jobId
+              ? 'Generates the customer-facing scope below and an exhaustive, trade-tagged action list for the estimate tab — review both before relying on them.'
+              : 'Items get added below for you to review, edit, or remove before saving — nothing goes to a customer automatically.'}
           </div>
         </div>
       )}

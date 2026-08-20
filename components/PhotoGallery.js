@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { watermarkImage } from '../lib/watermark';
+import { compressImage } from '../lib/imageCompress';
+import PhotoMarkupEditor from './PhotoMarkupEditor';
 
 export default function PhotoGallery({ jobId, updateId, title, allowUpload = true, bare = false }) {
   const { settings } = useSettings();
@@ -13,6 +15,8 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [pickerOpen, setPickerOpen] = useState(false);
   const [generalPhotos, setGeneralPhotos] = useState([]);
   const [generalUrls, setGeneralUrls] = useState({});
+  const [markupPhoto, setMarkupPhoto] = useState(null); // { id, url } of photo currently being marked up
+  const [markupSaving, setMarkupSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   const loadPhotos = useCallback(async () => {
@@ -102,6 +106,31 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     setGeneralPhotos(prev => prev.filter(p => p.id !== photoId));
   }
 
+  function openMarkup(photo) {
+    if (!urls[photo.id]) return;
+    setMarkupPhoto({ id: photo.id, url: urls[photo.id] });
+  }
+
+  async function saveMarkup(blob) {
+    setMarkupSaving(true);
+    try {
+      const path = `${jobId}/${Date.now()}-markup.jpg`;
+      const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (uploadError) throw uploadError;
+      await supabase.from('job_photos').insert({
+        job_id: jobId,
+        update_id: updateId || null,
+        storage_path: path,
+        derived_from_photo_id: markupPhoto.id,
+      });
+      setMarkupPhoto(null);
+    } catch (err) {
+      alert('Failed to save markup: ' + err.message);
+    } finally {
+      setMarkupSaving(false);
+    }
+  }
+
   const content = (
     <>
       {!bare && <h3>{title || 'Photos'}</h3>}
@@ -165,7 +194,9 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
               ) : (
                 <div className="photo-tile-loading" />
               )}
+              {p.derived_from_photo_id && <span className="photo-markup-badge">Marked up</span>}
               <div className="photo-tile-actions">
+                {urls[p.id] && <button className="btn btn-sm" onClick={() => openMarkup(p)} type="button">Markup</button>}
                 {urls[p.id] && <a href={urls[p.id]} download className="btn btn-sm">Download</a>}
                 <button className="btn btn-sm btn-danger" onClick={() => removePhoto(p)}>Delete</button>
               </div>
@@ -176,6 +207,11 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     </>
   );
 
-  if (bare) return content;
-  return <div className="card">{content}</div>;
+  if (bare) return <>{content}{markupPhoto && <PhotoMarkupEditor imageUrl={markupPhoto.url} onSave={saveMarkup} onClose={() => setMarkupPhoto(null)} />}</>;
+  return (
+    <div className="card">
+      {content}
+      {markupPhoto && <PhotoMarkupEditor imageUrl={markupPhoto.url} onSave={saveMarkup} onClose={() => setMarkupPhoto(null)} />}
+    </div>
+  );
 }

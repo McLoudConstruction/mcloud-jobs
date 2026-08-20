@@ -1,30 +1,29 @@
-// Tries increasingly forgiving strategies to pull a JSON array of strings
-// out of the model's response, so a stray preamble or trailing note
-// doesn't waste the whole (paid-for) API call.
-function extractItems(text) {
+import { SERVICES_OFFERED } from '../../../lib/constants';
+
+// Tries increasingly forgiving strategies to pull the model's JSON object
+// out of its response, so a stray preamble or trailing note doesn't waste
+// the whole (paid-for) API call.
+function extractJson(text) {
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.filter(x => typeof x === 'string' && x.trim());
+    if (parsed && typeof parsed === 'object') return parsed;
   } catch {}
 
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) {
     try {
       const parsed = JSON.parse(text.slice(start, end + 1));
-      if (Array.isArray(parsed)) return parsed.filter(x => typeof x === 'string' && x.trim());
+      if (parsed && typeof parsed === 'object') return parsed;
     } catch {}
   }
-
-  const quoted = [...text.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(m => m[1]).filter(s => s.trim());
-  if (quoted.length > 0) return quoted;
 
   return null;
 }
 
 export async function POST(request) {
   try {
-    const { description, projectType } = await request.json();
+    const { description, projectType, includeTradeBreakdown } = await request.json();
 
     if (!description || !description.trim()) {
       return Response.json({ error: 'Describe the job first.' }, { status: 400 });
@@ -36,21 +35,37 @@ export async function POST(request) {
       );
     }
 
+    const tradeSection = includeTradeBreakdown ? `
+
+SECOND, also produce an exhaustive, contractor-side action list — every individual task needed to actually deliver this scope, not consolidated like the customer list above. This is an internal checklist, so break things all the way down: each distinct fixture, line, or unit of work gets its own entry.
+
+For each entry, count correctly the first time — if the job involves 2 sinks, that typically means 2 faucets, but could mean 4 supply lines (2 hot, 2 cold) and 2 drain lines; think through the real quantities like an estimator would, don't just copy the customer-facing count.
+
+Tag every entry with the single best-matching trade from this exact list (use these exact strings, nothing else): ${JSON.stringify(SERVICES_OFFERED)}.
+
+Each entry needs: "description" (the action, concise), "trade" (one of the exact strings above, or "Other" if none fit), "unit_label" (the countable unit, e.g. "faucet", "supply line", "sheet of drywall" — singular), "quantity" (a number).
+
+Respond with a single JSON object shaped exactly like this:
+{"customer_items": ["...", "..."], "trade_actions": [{"description": "...", "trade": "...", "unit_label": "...", "quantity": 2}]}` : `
+
+Respond with a single JSON object shaped exactly like this:
+{"customer_items": ["...", "..."]}`;
+
     const prompt = `You are helping an experienced ${projectType === 'commercial' ? 'commercial' : 'residential'} construction contractor write the scope of work section of a CLIENT-FACING proposal — the customer will read this document. It is not an internal crew checklist or a step-by-step work breakdown.
 
 The contractor described the job like this:
 "${description.trim()}"
 
-Write a concise, consolidated scope of work. Each line item should represent a meaningful phase or category of work, not a single micro-step — combine related tasks into one item wherever a client would naturally expect them bundled together.
+FIRST, write a concise, consolidated customer-facing scope of work. Each line item should represent a meaningful phase or category of work, not a single micro-step — combine related tasks into one item wherever a client would naturally expect them bundled together.
 
 For example:
 - Instead of separate lines for disconnecting plumbing, disconnecting electrical, and disconnecting gas, write one line: "Disconnect and cap all plumbing, electrical, and gas lines in the work area."
 - Instead of separate lines for removing upper cabinets and removing lower cabinets, write one line: "Remove and haul away existing cabinetry."
 - Instead of separate lines for each reconnection step, write one line: "Reconnect and test all plumbing, electrical, and gas connections."
 
-Aim for roughly 8-15 total line items for a job like this — enough to be clear and complete, not exhaustive. Cover the major phases: preparation/protection, demolition/removal, any rough-in adjustments, installation, and finishing/cleanup.
+Aim for roughly 8-15 total line items for a job like this — enough to be clear and complete, not exhaustive. Cover the major phases: preparation/protection, demolition/removal, any rough-in adjustments, installation, and finishing/cleanup.${tradeSection}
 
-Respond with ONLY a JSON array of strings, one per scope item. Do not include any preamble, explanation, or markdown code fences — your entire response must be valid JSON starting with [ and ending with ].`;
+Do not include any preamble, explanation, or markdown code fences — your entire response must be valid JSON starting with { and ending with }.`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -61,7 +76,7 @@ Respond with ONLY a JSON array of strings, one per scope item. Do not include an
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2048,
+        max_tokens: includeTradeBreakdown ? 4096 : 2048,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -74,12 +89,22 @@ Respond with ONLY a JSON array of strings, one per scope item. Do not include an
     const data = await response.json();
     const fullText = data.content?.[0]?.text || '';
 
-    const items = extractItems(fullText);
+    const parsed = extractJson(fullText);
+    const items = Array.isArray(parsed?.customer_items) ? parsed.customer_items.filter(x => typeof x === 'string' && x.trim()) : null;
     if (!items || items.length === 0) {
       throw new Error('AI returned an unexpected format — try rephrasing the description.');
     }
 
-    return Response.json({ items });
+    const tradeActions = Array.isArray(parsed?.trade_actions)
+      ? parsed.trade_actions.filter(a => a && typeof a.description === 'string' && a.description.trim()).map(a => ({
+          description: a.description.trim(),
+          trade: SERVICES_OFFERED.includes(a.trade) ? a.trade : 'Other',
+          unit_label: typeof a.unit_label === 'string' ? a.unit_label.trim() : null,
+          quantity: Number.isFinite(a.quantity) ? a.quantity : 1,
+        }))
+      : [];
+
+    return Response.json({ items, tradeActions });
   } catch (err) {
     return Response.json({ error: err.message || 'Failed to generate scope.' }, { status: 500 });
   }

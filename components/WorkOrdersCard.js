@@ -9,11 +9,18 @@ function fmtMoney(v) {
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function formatAction(a) {
+  const qty = a.quantity ?? 1;
+  const unit = a.unit_label ? ` ${a.unit_label}${qty === 1 ? '' : 's'}` : '';
+  return `${qty}${unit} — ${a.description}`;
+}
+
 const EMPTY_FORM = { company_id: '', description: '', amount: '' };
 
 export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
   const [workOrders, setWorkOrders] = useState([]);
   const [subcontractors, setSubcontractors] = useState([]);
+  const [tradeActions, setTradeActions] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedScope, setSelectedScope] = useState([]);
@@ -28,12 +35,24 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
 
   useEffect(() => {
     loadWorkOrders();
-    supabase.from('companies').select('id, company_name').eq('company_type', 'Subcontractor').order('company_name').then(({ data }) => { if (data) setSubcontractors(data); });
+    supabase.from('companies').select('id, company_name, services_offered').eq('company_type', 'Subcontractor').order('company_name').then(({ data }) => { if (data) setSubcontractors(data); });
+    supabase.from('job_scope_actions').select('*').eq('job_id', jobId).then(({ data }) => { if (data) setTradeActions(data); });
     const channel = supabase.channel(`work-orders-${jobId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders', filter: `job_id=eq.${jobId}` }, loadWorkOrders).subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, loadWorkOrders]);
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+    if (field === 'company_id' && tradeActions.length > 0) {
+      const company = subcontractors.find(c => c.id === value);
+      const services = company?.services_offered || [];
+      const matching = tradeActions.filter(a => services.includes(a.trade)).map(formatAction);
+      setSelectedScope(matching);
+    }
+  }
+
+  const usingTradeActions = tradeActions.length > 0;
+  const availableItems = usingTradeActions ? tradeActions.map(formatAction) : scopeItems;
 
   function toggleScopeItem(item) {
     setSelectedScope(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
@@ -126,11 +145,16 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
             <div><label>Committed amount ($)</label><input value={form.amount} onChange={e => update('amount', e.target.value)} required /></div>
           </div>
 
-          {scopeItems.length > 0 && (
+          {availableItems.length > 0 && (
             <div style={{ marginTop: 10 }}>
-              <label>Include scope items on this work order</label>
+              <label>Include on this work order</label>
+              {usingTradeActions && form.company_id && (
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>
+                  Pre-checked based on this subcontractor's trade — add or remove as needed.
+                </div>
+              )}
               <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
-                {scopeItems.map((item, i) => (
+                {availableItems.map((item, i) => (
                   <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, fontWeight: 400, marginBottom: 6, cursor: 'pointer' }}>
                     <input type="checkbox" style={{ width: 'auto', marginTop: 2 }} checked={selectedScope.includes(item)} onChange={() => toggleScopeItem(item)} />
                     <span>{item}</span>
