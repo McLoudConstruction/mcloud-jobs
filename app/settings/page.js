@@ -7,6 +7,19 @@ import AppShell from '../../components/AppShell';
 import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'AI Features', 'Automatic Communications'];
+
+const AI_FEATURES = [
+  { key: 'scope', name: 'Scope of Work Generation', description: 'Turns a rough job description into a customer-facing scope, plus an exhaustive trade-tagged action list on the estimating side.' },
+  { key: 'receipts', name: 'Receipt Reading', description: 'Reads a photographed receipt and pre-fills vendor, amount, date, and category for you to confirm.' },
+  { key: 'materials', name: 'Materials Suggestions', description: 'Drafts a starting materials list on the Estimating tool from a job\u2019s action list \u2014 always a starting point you edit, never a final answer.' },
+];
+
+const AUTOMATIONS = [
+  { key: 'followups', name: 'Opportunity Follow-ups', description: 'Sends a follow-up email 2 days and 4 days after an opportunity is logged, if it\u2019s still Prospecting or Contacted.' },
+  { key: 'reminders', name: 'Schedule Reminders', description: 'Emails the customer 1 week and 1 day before a job\u2019s Scheduled Start Date.' },
+];
+
 const INTEGRATIONS = [
   { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
   { key: 'stripe', name: 'Payment processor (Stripe)', description: 'Accept card payments on invoices.' },
@@ -39,6 +52,7 @@ export default function SettingsPage() {
   const { settings, refresh } = useSettings();
 
   const [form, setForm] = useState(settings);
+  const [tab, setTab] = useState('Cosmetic');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
@@ -139,6 +153,14 @@ export default function SettingsPage() {
         </div>
         {error && <div className="error-text" style={{ marginBottom: 16 }}>{error}</div>}
 
+        <div className="stage-tabs">
+          {SETTINGS_TABS.map(t => (
+            <button key={t} className={`stage-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
+          ))}
+        </div>
+
+        {tab === 'Cosmetic' && (
+        <>
         <div className="card">
           <h3>Logo</h3>
           {settings.logo_url && (
@@ -192,7 +214,7 @@ export default function SettingsPage() {
         <div className="card">
           <h3>Brand Accent Color</h3>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-            Page layout, backgrounds, and sidebar now follow Light/Dark mode automatically (toggle in the header). Enter one brand color here — buttons, links, and highlights are derived from it automatically, adjusted separately for each mode so it always stays legible.
+            Page layout, backgrounds, and sidebar now follow Light/Dark mode automatically (toggle at the bottom of the sidebar). Enter one brand color here — buttons, links, and highlights are derived from it automatically, adjusted separately for each mode so it always stays legible.
           </div>
           <ColorField label="Brand color" id="brandColor" value={form.brand_color} fallback="#8a3d14" onChange={v => update('brand_color', v)} />
           <BrandColorPreview hex={form.brand_color} />
@@ -203,16 +225,10 @@ export default function SettingsPage() {
           </select>
         </div>
 
-        <div className="card">
-          <h3>Sign-out button</h3>
-          <div className="two-col">
-            <ColorField label="Background" id="signoutBg" value={form.signout_bg === 'transparent' ? '#ffffff' : form.signout_bg} fallback="#ffffff" onChange={v => update('signout_bg', v)} />
-            <ColorField label="Hover background" id="signoutHover" value={form.signout_hover_bg} fallback="#302a1a" onChange={v => update('signout_hover_bg', v)} />
-            <ColorField label="Text & border color" id="signoutText" value={form.signout_text} fallback="#49402a" onChange={v => update('signout_text', v)} />
-          </div>
-          <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => update('signout_bg', 'transparent')}>Use transparent background</button>
-        </div>
+        </>
+        )}
 
+        {tab === 'Dashboard' && (
         <div className="card">
           <h3>Main Dashboard widgets</h3>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
@@ -230,12 +246,14 @@ export default function SettingsPage() {
             </label>
           ))}
         </div>
+        )}
 
         <div className="section-actions" style={{ marginBottom: 20 }}>
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
           <button className="btn" onClick={resetToDefault}>Reset colors to default</button>
         </div>
 
+        {tab === 'Integrations' && (
         <div className="card">
           <h3>Integrations</h3>
           {INTEGRATIONS.map(i => (
@@ -251,6 +269,37 @@ export default function SettingsPage() {
             These need their own accounts/credentials set up before I can wire them in.
           </div>
         </div>
+        )}
+
+        {tab === 'AI Features' && (
+        <div className="card">
+          <h3>AI Features</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Powered by your Anthropic API key (set in Vercel as ANTHROPIC_API_KEY) — there's nothing to configure here, this is just what's active.
+          </div>
+          {AI_FEATURES.map(f => (
+            <div key={f.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{f.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{f.description}</div>
+            </div>
+          ))}
+        </div>
+        )}
+
+        {tab === 'Automatic Communications' && (
+        <div className="card">
+          <h3>Automatic Communications</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Runs once daily on a schedule — there's no on/off switch here, but any individual contact can be excluded from the Automated Notifications section on their contact card.
+          </div>
+          {AUTOMATIONS.map(a => (
+            <div key={a.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{a.description}</div>
+            </div>
+          ))}
+        </div>
+        )}
       </div>
     </AppShell>
   );

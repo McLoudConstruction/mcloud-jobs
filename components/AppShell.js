@@ -32,7 +32,6 @@ const NAV_ITEMS = [
       { href: '/financials/receivable', label: 'Accounts Receivable' },
     ],
   },
-  { href: '/settings', label: 'Settings', icon: SettingsIcon },
   { href: '/estimating', label: 'Estimating', icon: CalculatorIcon },
 ];
 
@@ -118,21 +117,12 @@ export default function AppShell({ children }) {
           </button>
 
           <Link href="/notifications" className="hamburger-btn notif-bell" aria-label="Notifications">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </Link>
-
-          <button
-            className="theme-toggle-btn"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label="Toggle light/dark mode"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
-          </button>
         </div>
 
         <div className="shell-logo">
@@ -167,14 +157,40 @@ export default function AppShell({ children }) {
                 </Link>
               ))}
             </div>
-            <button
-              className="btn btn-sm signout-btn"
-              onClick={handleSignOut}
-              style={{ background: settings.signout_bg, color: settings.signout_text, borderColor: settings.signout_text }}
-              title={!isMobile && !navOpen ? 'Sign out' : undefined}
-            >
-              {!isMobile && !navOpen ? <SignOutIcon /> : 'Sign out'}
-            </button>
+
+            <div>
+              {(isMobile || navOpen) && (
+                <div className="theme-slider-row">
+                  <button
+                    className={`theme-slider ${theme === 'dark' ? 'is-dark' : ''}`}
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    aria-label="Toggle light/dark mode"
+                    type="button"
+                  >
+                    <SunIcon width={13} height={13} className="theme-slider-sun" />
+                    <MoonIcon width={13} height={13} className="theme-slider-moon" />
+                    <span className="theme-slider-knob" />
+                  </button>
+                </div>
+              )}
+              <Link
+                href="/settings"
+                className={`shell-nav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
+                onClick={closeOnMobile}
+                title={!isMobile && !navOpen ? 'Settings' : undefined}
+              >
+                <SettingsIcon className="shell-nav-icon" />
+                <span className="shell-nav-label">Settings</span>
+              </Link>
+              <button
+                className="shell-nav-link signout-link"
+                onClick={handleSignOut}
+                title={!isMobile && !navOpen ? 'Sign out' : undefined}
+              >
+                <SignOutIcon className="shell-nav-icon" />
+                <span className="shell-nav-label">Sign out</span>
+              </button>
+            </div>
           </div>
         </div>
 

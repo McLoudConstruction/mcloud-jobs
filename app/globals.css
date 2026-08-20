@@ -495,13 +495,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 
 .hamburger-btn{
-  width: 34px; height: 34px;
-  background: transparent; border: 1px solid var(--header-line); border-radius: 5px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 44px; height: 44px;
+  background: transparent; border: 1px solid var(--header-line); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
   cursor: pointer;
   flex-shrink: 0;
 }
-.hamburger-btn span{ width: 18px; height: 2px; background: var(--header-text); display: block; }
+.hamburger-btn span{ width: 23px; height: 2px; background: var(--header-text); display: block; }
 
 .theme-toggle-btn{
   width: 34px; height: 34px;
@@ -510,6 +510,31 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   cursor: pointer; color: var(--header-text); flex-shrink: 0;
 }
 .theme-toggle-btn:hover{ border-color: var(--accent); color: var(--accent); }
+
+.theme-slider-row{ padding: 6px 24px 12px; }
+.theme-slider{
+  position: relative;
+  width: 56px; height: 28px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-line);
+  background: var(--card-bg);
+  cursor: pointer;
+  padding: 0 7px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.theme-slider-sun, .theme-slider-moon{ color: var(--ink-soft); position: relative; z-index: 1; }
+.theme-slider-knob{
+  position: absolute; top: 2px; left: 2px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent);
+  transition: transform 0.18s ease;
+}
+.theme-slider.is-dark .theme-slider-knob{ transform: translateX(28px); }
+
+.signout-link{
+  background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+}
+.signout-link:hover{ color: #c0524f; }
 
 .signout-btn{ width: calc(100% - 32px); margin: 0 16px; justify-content: center; }
 .signout-btn:hover{ background: var(--signout-hover-bg) !important; }
