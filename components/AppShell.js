@@ -117,8 +117,8 @@ export default function AppShell({ children }) {
           </button>
 
           <Link href="/notifications" className="hamburger-btn notif-bell" aria-label="Notifications">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8.5c0-3.6-2.7-6.5-6-6.5s-6 2.9-6 6.5c0 5.8-2 7.3-2 7.5a1 1 0 0 0 .9 1.5h14.2a1 1 0 0 0 .9-1.5c0-.2-2-1.7-2-7.5z" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
@@ -167,8 +167,8 @@ export default function AppShell({ children }) {
                     aria-label="Toggle light/dark mode"
                     type="button"
                   >
-                    <SunIcon width={13} height={13} className="theme-slider-sun" />
-                    <MoonIcon width={13} height={13} className="theme-slider-moon" />
+                    <SunIcon width={17} height={17} className="theme-slider-sun" />
+                    <MoonIcon width={17} height={17} className="theme-slider-moon" />
                     <span className="theme-slider-knob" />
                   </button>
                 </div>
