@@ -124,8 +124,19 @@ export function FinanceIcon(props) {
 export function SettingsIcon(props) {
   return (
     <svg {...common} {...props}>
-      <circle cx="10" cy="10" r="2.6" />
-      <path d="M10 2.8v2.1M10 15.1v2.1M17.2 10h-2.1M4.9 10H2.8M15 15l-1.5-1.5M6.5 6.5L5 5M15 5l-1.5 1.5M6.5 13.5L5 15" />
+      <circle cx="10" cy="10" r="5.3" />
+      <circle cx="10" cy="10" r="2.1" />
+      <g fill="currentColor" stroke="none">
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" />
+        <rect x="9.1" y="16.7" width="1.8" height="2.6" rx="0.6" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(45 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(90 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(135 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(180 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(225 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(270 10 10)" />
+        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(315 10 10)" />
+      </g>
     </svg>
   );
 }

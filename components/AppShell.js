@@ -20,8 +20,22 @@ const NAV_ITEMS = [
   },
   { href: '/sales', label: 'Sales', icon: SalesIcon },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon },
-  { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
-  { href: '/messages', label: 'Messages', icon: MessagesIcon },
+  {
+    href: '/subcontractors',
+    label: 'Subcontractors',
+    icon: SubcontractorsIcon,
+    children: [
+      { href: '/subcontractors/work-orders', label: 'Work Orders' },
+    ],
+  },
+  {
+    href: '/messages',
+    label: 'Inbox',
+    icon: MessagesIcon,
+    children: [
+      { href: '/notifications', label: 'Notifications' },
+    ],
+  },
   { href: '/invoices', label: 'Invoices', icon: InvoiceIcon },
   {
     href: '/financials',
@@ -167,9 +181,11 @@ export default function AppShell({ children }) {
                     aria-label="Toggle light/dark mode"
                     type="button"
                   >
-                    <SunIcon width={17} height={17} className="theme-slider-sun" />
-                    <MoonIcon width={17} height={17} className="theme-slider-moon" />
-                    <span className="theme-slider-knob" />
+                    <span className="theme-slider-track-icon theme-slider-track-sun"><SunIcon width={15} height={15} /></span>
+                    <span className="theme-slider-track-icon theme-slider-track-moon"><MoonIcon width={15} height={15} /></span>
+                    <span className="theme-slider-knob">
+                      {theme === 'dark' ? <MoonIcon width={17} height={17} /> : <SunIcon width={17} height={17} />}
+                    </span>
                   </button>
                 </div>
               )}

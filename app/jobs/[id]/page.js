@@ -14,12 +14,15 @@ import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
+import EstimateTab from '../../../components/EstimateTab';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
   { key: 'Project', label: 'Project Details' },
+  { key: 'Scope', label: 'Scope' },
+  { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
   { key: 'Photos', label: 'Photos' },
   { key: 'Documents', label: 'Documentation' },
@@ -200,10 +203,17 @@ export default function JobDetailPage() {
         {tab === 'Project' && (
           <>
             <ProjectInfoCard job={job} onSave={saveJob} />
-            <ScopeCard job={job} jobId={id} onSave={saveJob} />
             <PriceCard job={job} onSave={saveJob} />
             <TermsCard job={job} onSave={saveJob} />
           </>
+        )}
+
+        {tab === 'Scope' && (
+          <ScopeCard job={job} jobId={id} onSave={saveJob} />
+        )}
+
+        {tab === 'Estimate' && (
+          <EstimateTab job={job} jobId={id} />
         )}
 
         {tab === 'Financials' && (

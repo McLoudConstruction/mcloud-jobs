@@ -5,7 +5,7 @@ import { SERVICES_OFFERED } from '../lib/constants';
 
 const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '', quantity: 1 };
 
-export default function TradeBreakdownCard({ jobId }) {
+export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   const [actions, setActions] = useState([]);
   const [view, setView] = useState('trade'); // 'trade' | 'flat'
   const [showForm, setShowForm] = useState(false);
@@ -67,16 +67,18 @@ export default function TradeBreakdownCard({ jobId }) {
     <div className="card">
       <h3>Exhaustive Action List &amp; Trade Breakdown</h3>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-        The full internal task list behind the customer proposal — this is what actually populates a subcontractor's work order by trade.
+        {readOnly
+          ? <>Reference only — this is what the job needs, for pricing. {linkHref && <a href={linkHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Edit on the Scope tab →</a>}</>
+          : "The full internal task list behind the customer proposal — this is what actually populates a subcontractor's work order by trade."}
       </div>
 
       <div className="section-actions" style={{ marginTop: 0 }}>
         <button className={`btn btn-sm ${view === 'trade' ? 'btn-primary' : ''}`} onClick={() => setView('trade')}>By Trade</button>
         <button className={`btn btn-sm ${view === 'flat' ? 'btn-primary' : ''}`} onClick={() => setView('flat')}>Flat List</button>
-        <button className="btn btn-sm" onClick={startAdd}>{showForm && !editingId ? 'Cancel' : '+ Add action'}</button>
+        {!readOnly && <button className="btn btn-sm" onClick={startAdd}>{showForm && !editingId ? 'Cancel' : '+ Add action'}</button>}
       </div>
 
-      {showForm && (
+      {!readOnly && showForm && (
         <form onSubmit={save} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <label>Description</label>
           <input value={form.description} onChange={e => update('description', e.target.value)} required placeholder="e.g. Detach and reset kitchen faucet" />
@@ -110,7 +112,7 @@ export default function TradeBreakdownCard({ jobId }) {
                 {trade} <span style={{ color: 'var(--ink-soft)', fontWeight: 400, textTransform: 'none' }}>({rows.length})</span>
               </div>
               {rows.map(a => (
-                <ActionRow key={a.id} a={a} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+                <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
               ))}
             </div>
           ))}
@@ -120,7 +122,7 @@ export default function TradeBreakdownCard({ jobId }) {
       {actions.length > 0 && view === 'flat' && (
         <div style={{ marginTop: 14 }}>
           {actions.map(a => (
-            <ActionRow key={a.id} a={a} showTrade onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+            <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
           ))}
         </div>
       )}
@@ -128,17 +130,19 @@ export default function TradeBreakdownCard({ jobId }) {
   );
 }
 
-function ActionRow({ a, showTrade, onEdit, onRemove }) {
+function ActionRow({ a, showTrade, readOnly, onEdit, onRemove }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
       <div>
         <b>{a.quantity}{a.unit_label ? ` ${a.unit_label}${a.quantity === 1 ? '' : 's'}` : ''}</b> — {a.description}
         {showTrade && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{a.trade || 'Other'}</div>}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        <button className="btn btn-sm" onClick={onEdit}>Edit</button>
-        <button className="btn btn-sm btn-danger" onClick={onRemove}>Delete</button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button className="btn btn-sm" onClick={onEdit}>Edit</button>
+          <button className="btn btn-sm btn-danger" onClick={onRemove}>Delete</button>
+        </div>
+      )}
     </div>
   );
 }

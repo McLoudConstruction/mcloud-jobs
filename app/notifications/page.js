@@ -12,16 +12,7 @@ function fmtDate(v) {
 
 export default function NotificationsPage() {
   const { session, loading } = useRequireAuth();
-  const [questions, setQuestions] = useState([]);
   const [notifications, setNotifications] = useState([]);
-
-  const loadQuestions = useCallback(async () => {
-    const { data } = await supabase
-      .from('job_questions')
-      .select('*, jobs(job_number, customer_name)')
-      .order('created_at', { ascending: false });
-    if (data) setQuestions(data);
-  }, []);
 
   const loadNotifications = useCallback(async () => {
     const { data } = await supabase
@@ -33,15 +24,13 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!session) return;
-    loadQuestions();
     loadNotifications();
     const channel = supabase
       .channel('notifications-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions' }, loadQuestions)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, loadNotifications)
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, loadQuestions, loadNotifications]);
+  }, [session, loadNotifications]);
 
   async function markNotificationRead(id) {
     await supabase.from('notifications').update({ read: true }).eq('id', id);
@@ -55,48 +44,18 @@ export default function NotificationsPage() {
 
   if (loading || !session) return null;
 
-  const unanswered = questions.filter(q => !q.response);
-  const answered = questions.filter(q => q.response);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Notifications</h2>
-
         <div className="card">
           <div className="top-actions" style={{ marginBottom: 0 }}>
-            <h3 style={{ margin: 0 }}>Messages {unanswered.length > 0 ? `(${unanswered.length} unanswered)` : ''}</h3>
+            <h3 style={{ margin: 0 }}>System Notifications {unreadCount > 0 ? `(${unreadCount} new)` : ''}</h3>
+            {unreadCount > 0 && <button className="btn btn-sm" onClick={markAllNotificationsRead}>Mark all read</button>}
           </div>
-          {questions.length === 0 && <div className="empty-state">No customer messages yet.</div>}
-          {unanswered.map(q => (
-            <Link key={q.id} href={`/jobs/${q.job_id}`} className="job-row">
-              <div className="job-main">
-                <span className="job-number">#{q.jobs?.job_number} — {q.jobs?.customer_name}</span>
-                <span className="job-customer" style={{ fontSize: 13, fontWeight: 400 }}>{q.message}</span>
-                <span className="job-address">{fmtDate(q.created_at)}</span>
-              </div>
-              <span className="badge badge-new">Unanswered</span>
-            </Link>
-          ))}
-          {answered.length > 0 && (
-            <details style={{ marginTop: 10 }}>
-              <summary style={{ fontSize: 12.5, color: 'var(--ink-soft)', cursor: 'pointer' }}>{answered.length} answered message{answered.length === 1 ? '' : 's'}</summary>
-              {answered.map(q => (
-                <Link key={q.id} href={`/jobs/${q.job_id}`} className="job-row" style={{ marginTop: 10 }}>
-                  <div className="job-main">
-                    <span className="job-number">#{q.jobs?.job_number} — {q.jobs?.customer_name}</span>
-                    <span className="job-customer" style={{ fontSize: 13, fontWeight: 400 }}>{q.message}</span>
-                  </div>
-                </Link>
-              ))}
-            </details>
-          )}
-        </div>
-
-        <div className="card">
-          <div className="top-actions" style={{ marginBottom: 0 }}>
-            <h3 style={{ margin: 0 }}>Notifications {notifications.filter(n => !n.read).length > 0 ? `(${notifications.filter(n => !n.read).length} new)` : ''}</h3>
-            {notifications.some(n => !n.read) && <button className="btn btn-sm" onClick={markAllNotificationsRead}>Mark all read</button>}
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 4 }}>
+            Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages.
           </div>
           {notifications.length === 0 && <div className="empty-state">No notifications yet.</div>}
           {notifications.map(n => (

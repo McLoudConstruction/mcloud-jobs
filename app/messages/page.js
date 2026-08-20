@@ -13,32 +13,23 @@ function fmtDate(v) {
 export default function MessagesPage() {
   const { session, loading } = useRequireAuth();
   const [questions, setQuestions] = useState([]);
-  const [notifications, setNotifications] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
-  const [showNotifs, setShowNotifs] = useState(false);
 
   const loadQuestions = useCallback(async () => {
     const { data } = await supabase.from('job_questions').select('*, jobs(job_number, customer_name)').order('created_at', { ascending: true });
     if (data) setQuestions(data);
   }, []);
 
-  const loadNotifications = useCallback(async () => {
-    const { data } = await supabase.from('notifications').select('*, jobs(job_number, customer_name)').order('created_at', { ascending: false }).limit(30);
-    if (data) setNotifications(data);
-  }, []);
-
   useEffect(() => {
     if (!session) return;
     loadQuestions();
-    loadNotifications();
     const channel = supabase.channel('messages-page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions' }, loadQuestions)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, loadNotifications)
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, loadQuestions, loadNotifications]);
+  }, [session, loadQuestions]);
 
   if (loading || !session) return null;
 
@@ -80,41 +71,12 @@ export default function MessagesPage() {
     setSending(false);
   }
 
-  const unreadNotifCount = notifications.filter(n => !n.read).length;
-
   return (
     <AppShell>
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Messages</h2>
-          <button className="btn btn-sm" onClick={() => setShowNotifs(s => !s)}>
-            System Notifications {unreadNotifCount > 0 ? `(${unreadNotifCount} new)` : ''}
-          </button>
         </div>
-
-        {showNotifs && (
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="top-actions" style={{ marginBottom: 0 }}>
-              <h3 style={{ margin: 0 }}>System Notifications</h3>
-              {unreadNotifCount > 0 && (
-                <button className="btn btn-sm" onClick={() => supabase.from('notifications').update({ read: true }).in('id', notifications.filter(n => !n.read).map(n => n.id))}>
-                  Mark all read
-                </button>
-              )}
-            </div>
-            {notifications.length === 0 && <div className="empty-state">Nothing yet.</div>}
-            {notifications.map(n => (
-              <div key={n.id} className="update-entry" style={{ opacity: n.read ? 0.6 : 1 }}>
-                <div className="update-date">{fmtDate(n.created_at)}</div>
-                <p>{n.message}</p>
-                <div className="section-actions">
-                  {n.job_id && <Link href={`/jobs/${n.job_id}`} className="btn btn-sm">View job</Link>}
-                  {!n.read && <button className="btn btn-sm" onClick={() => supabase.from('notifications').update({ read: true }).eq('id', n.id)}>Mark read</button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         <div className="messages-layout">
           <div className="messages-sidebar">
