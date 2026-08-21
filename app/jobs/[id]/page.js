@@ -248,32 +248,40 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Scope' && (
-          <>
-            <ScopeCard job={job} jobId={id} onSave={saveJob} />
-            <TermsCard job={job} onSave={saveJob} />
-          </>
+          <div className="estimate-grid">
+            <div className="estimate-main">
+              <ScopeCard job={job} jobId={id} onSave={saveJob} />
+              <TermsCard job={job} onSave={saveJob} />
+            </div>
+            <div className="estimate-sidebar">
+              <TradeBreakdownCard jobId={id} />
+            </div>
+          </div>
         )}
 
         {tab === 'Estimate' && (
-          <>
-            <EstimateTab job={job} jobId={id} />
+          <EstimateTab job={job} jobId={id}>
             <PriceCard job={job} onSave={saveJob} />
-          </>
+          </EstimateTab>
         )}
 
         {tab === 'Financials' && (
-          <>
-            <DrawsCard jobId={id} />
-            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-            )}
-            <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
-            <ReceiptsCard jobId={id} />
-            <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} />
-            {phaseForStage(job.stage) !== 'opportunity' && (
-              <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
-            )}
-          </>
+          <div className="estimate-grid">
+            <div className="estimate-main">
+              <DrawsCard jobId={id} />
+              {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
+                <InvoiceCard job={job} onSave={saveJob} jobId={id} />
+              )}
+              <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
+              <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
+              {phaseForStage(job.stage) !== 'opportunity' && (
+                <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
+              )}
+            </div>
+            <div className="estimate-sidebar">
+              <ReceiptsCard jobId={id} />
+            </div>
+          </div>
         )}
 
         {tab === 'Photos' && (
@@ -589,7 +597,6 @@ function ScopeCard({ job, jobId, onSave }) {
         <button className="btn btn-primary btn-sm" onClick={save}>Save scope</button>
       </div>
       </div>
-      <TradeBreakdownCard jobId={jobId} />
     </>
   );
 }

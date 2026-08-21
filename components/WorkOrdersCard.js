@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../lib/constants';
+import { buildNewWorkOrderEmail } from '../lib/emailTemplates';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -17,7 +18,7 @@ function formatAction(a) {
 
 const EMPTY_FORM = { company_id: '', description: '', amount: '' };
 
-export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
+export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress }) {
   const [workOrders, setWorkOrders] = useState([]);
   const [subcontractors, setSubcontractors] = useState([]);
   const [tradeActions, setTradeActions] = useState([]);
@@ -35,7 +36,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
 
   useEffect(() => {
     loadWorkOrders();
-    supabase.from('companies').select('id, company_name, services_offered').eq('company_type', 'Subcontractor').order('company_name').then(({ data }) => { if (data) setSubcontractors(data); });
+    supabase.from('companies').select('id, company_name, contact_email, services_offered').eq('company_type', 'Subcontractor').order('company_name').then(({ data }) => { if (data) setSubcontractors(data); });
     supabase.from('job_scope_actions').select('*').eq('job_id', jobId).then(({ data }) => { if (data) setTradeActions(data); });
     const channel = supabase.channel(`work-orders-${jobId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders', filter: `job_id=eq.${jobId}` }, loadWorkOrders).subscribe();
     return () => supabase.removeChannel(channel);
@@ -88,7 +89,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
   }
 
   async function issueWorkOrder(wo) {
-    if (!confirm('Issue this work order? This will log it as a committed cost on the job.')) return;
+    if (!confirm('Issue this work order? This will log it as a committed cost on the job, and email the subcontractor.')) return;
     await supabase.from('work_orders').update({ status: 'issued', issued_at: new Date().toISOString() }).eq('id', wo.id);
     await supabase.from('job_costs').insert({
       job_id: jobId,
@@ -100,6 +101,24 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
       work_order_id: wo.id,
       company_id: wo.company_id,
     });
+
+    const company = subcontractors.find(c => c.id === wo.company_id);
+    if (company?.contact_email) {
+      try {
+        const { subject, html, text } = buildNewWorkOrderEmail({
+          companyName: company.company_name,
+          description: wo.description,
+          projectAddress,
+        });
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: company.contact_email, subject, html, text }),
+        });
+      } catch {
+        // best-effort — the work order is already issued regardless of whether the email went through
+      }
+    }
   }
 
   function startInvoicing(wo) {

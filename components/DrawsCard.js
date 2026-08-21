@@ -57,7 +57,7 @@ export default function DrawsCard({ jobId }) {
   if (draws.length === 0 && !showForm) {
     return (
       <div className="card">
-        <h3>Progress Invoicing (Draws)</h3>
+        <h3>Invoicing</h3>
         <div className="empty-state">
           No draws yet — these are created automatically when the job moves to Approved (Deposit + Final Payment, matching your standard contract terms), or you can add one manually below.
         </div>
@@ -73,7 +73,7 @@ export default function DrawsCard({ jobId }) {
 
   return (
     <div className="card">
-      <h3>Progress Invoicing (Draws)</h3>
+      <h3>Invoicing</h3>
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
         {fmtMoney(paidTotal)} collected of {fmtMoney(total)} across {draws.length} draw{draws.length === 1 ? '' : 's'}
       </div>
