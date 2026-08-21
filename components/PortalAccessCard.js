@@ -117,6 +117,16 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
         Grant multiple contacts on this job their own portal login, and control who's on the notification email list — independently of each other.
       </div>
 
+      <div style={{ fontSize: 12.5, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
+        {job.portal_invited_at
+          ? `Invited to the portal on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}.`
+          : 'Not invited to the portal yet.'}
+        {' '}
+        {job.portal_last_viewed_at
+          ? `Last viewed the portal on ${new Date(job.portal_last_viewed_at).toLocaleString('en-US')}.`
+          : (job.portal_invited_at ? 'Has not viewed the portal yet.' : '')}
+      </div>
+
       <div style={{ marginBottom: 14 }}>
         <label>Linked property</label>
         {property ? (

@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
-import { SERVICES_OFFERED } from '../lib/constants';
+import { SERVICES_OFFERED, contractPathFor } from '../lib/constants';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '$0.00';
@@ -72,6 +73,8 @@ export default function EstimateTab({ job, jobId }) {
   }
 
   const [suggestingTrades, setSuggestingTrades] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushedFlash, setPushedFlash] = useState('');
 
   // Not an AI dollar guess — just a structured starting point, one draft
   // row per distinct trade already in the action list, cost left at $0
@@ -184,6 +187,17 @@ export default function EstimateTab({ job, jobId }) {
   const marginNum = parseFloat(margin) || 0;
   const salePrice = marginNum > 0 && marginNum < 100 ? subtotal / (1 - marginNum / 100) : subtotal;
   const marginDollars = salePrice - subtotal;
+
+  async function pushToContractPrice() {
+    setPushing(true);
+    await supabase.from('jobs').update({
+      contract_price: salePrice,
+      projected_cost: subtotal,
+    }).eq('id', jobId);
+    setPushing(false);
+    setPushedFlash('Saved to this job\u2019s Contract Price & Projected Cost — no need to re-enter it on the Project tab.');
+    setTimeout(() => setPushedFlash(''), 6000);
+  }
 
   return (
     <>
@@ -387,6 +401,25 @@ export default function EstimateTab({ job, jobId }) {
                 <div className="portal-info-label">Final Sale Price</div>
                 <div className="portal-info-value" style={{ fontSize: 20 }}>{fmtMoney(salePrice)}</div>
               </div>
+            </div>
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
+                {pushing ? 'Saving…' : "Use as this Job's Contract Price"}
+              </button>
+            </div>
+            {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
+          </div>
+
+          <div className="card">
+            <h3>Generate &amp; Send</h3>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+              Once the pricing above is where you want it, generate the customer-facing estimate document.
+            </div>
+            <div className="section-actions" style={{ marginTop: 0 }}>
+              <Link href={`/jobs/${jobId}/proposal`} className="btn btn-primary">Generate Estimate Document →</Link>
+              {job.proposal_sent_at && (
+                <Link href={contractPathFor(job)} className="btn">View / Send Contract →</Link>
+              )}
             </div>
           </div>
         </div>

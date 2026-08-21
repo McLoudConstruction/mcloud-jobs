@@ -16,7 +16,7 @@ import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor, nextSequentialNumber, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, nextSequentialNumber, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
@@ -25,8 +25,7 @@ const TABS = [
   { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
   { key: 'Photos', label: 'Photos' },
-  { key: 'Documents', label: 'Documentation' },
-  { key: 'Communications', label: 'Communications' },
+  { key: 'Documents', label: 'Documents' },
 ];
 
 function fmtMoney(v) {
@@ -101,6 +100,26 @@ export default function JobDetailPage() {
     setTimeout(() => setFlash(''), 1500);
   }
 
+  async function assignNextJobNumber(fallback) {
+    const { data: last, error: fetchErr } = await supabase.from('jobs').select('job_number').not('job_number', 'is', null).order('created_at', { ascending: false }).limit(1);
+    if (fetchErr) throw fetchErr;
+    const lastNumber = last && last[0] && last[0].job_number;
+    return nextSequentialNumber(lastNumber, fallback);
+  }
+
+  // Recovery path for a job that's already past Approved but somehow
+  // never got a job number — shown as a fix-it banner rather than
+  // something that has to be chased down through the database directly.
+  async function fixMissingJobNumber() {
+    try {
+      const jobNumber = await assignNextJobNumber(job.estimate_number);
+      await saveJob({ job_number: jobNumber });
+    } catch (err) {
+      setFlash(`Could not assign a job number: ${err.message}`);
+      setTimeout(() => setFlash(''), 8000);
+    }
+  }
+
   async function saveJob(patch) {
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
     if (!error) {
@@ -118,10 +137,15 @@ export default function JobDetailPage() {
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
 
     const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
+
     if (next === 'approved' && !job.job_number) {
-      const { data: last } = await supabase.from('jobs').select('job_number').not('job_number', 'is', null).order('created_at', { ascending: false }).limit(1);
-      const lastNumber = last && last[0] && last[0].job_number;
-      patch.job_number = nextSequentialNumber(lastNumber, job.estimate_number);
+      try {
+        patch.job_number = await assignNextJobNumber(job.estimate_number);
+      } catch (err) {
+        setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
+        setTimeout(() => setFlash(''), 8000);
+        return; // don't advance the stage without a job number — that's the exact stuck state we're trying to prevent
+      }
     }
     await saveJob(patch);
 
@@ -169,6 +193,19 @@ export default function JobDetailPage() {
     <AppShell>
       <div className="container">
         <Breadcrumb href="/jobs" label="Back to Job Tracker" />
+
+        {!isOpportunity(job) && !job.job_number && (
+          <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ fontSize: 13 }}>
+                <b style={{ color: '#c0524f' }}>This job is past Approved but never got a real Job Number.</b>
+                <div style={{ color: 'var(--ink-soft)', fontSize: 12, marginTop: 2 }}>That shouldn't happen — click to assign one now.</div>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={fixMissingJobNumber}>Assign Job Number Now</button>
+            </div>
+          </div>
+        )}
+
         <div className="top-actions">
           <div>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
@@ -203,25 +240,26 @@ export default function JobDetailPage() {
         {tab === 'Customer' && (
           <>
             <CustomerInfoCard job={job} onSave={saveJob} />
-            <PortalCard job={job} />
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
           </>
         )}
 
         {tab === 'Project' && (
+          <ProjectInfoCard job={job} onSave={saveJob} />
+        )}
+
+        {tab === 'Scope' && (
           <>
-            <ProjectInfoCard job={job} onSave={saveJob} />
-            <PriceCard job={job} onSave={saveJob} />
+            <ScopeCard job={job} jobId={id} onSave={saveJob} />
             <TermsCard job={job} onSave={saveJob} />
           </>
         )}
 
-        {tab === 'Scope' && (
-          <ScopeCard job={job} jobId={id} onSave={saveJob} />
-        )}
-
         {tab === 'Estimate' && (
-          <EstimateTab job={job} jobId={id} />
+          <>
+            <EstimateTab job={job} jobId={id} />
+            <PriceCard job={job} onSave={saveJob} />
+          </>
         )}
 
         {tab === 'Financials' && (
@@ -233,6 +271,9 @@ export default function JobDetailPage() {
             <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
             <ReceiptsCard jobId={id} />
             <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} />
+            {phaseForStage(job.stage) !== 'opportunity' && (
+              <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
+            )}
           </>
         )}
 
@@ -242,79 +283,67 @@ export default function JobDetailPage() {
 
         {tab === 'Documents' && (
           <>
-            {phaseForStage(job.stage) !== 'completed_phase' && <DocumentsCard jobId={id} job={job} />}
-            {phaseForStage(job.stage) !== 'opportunity' && (
-              <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
-            )}
+            <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' && (
               <UpdatesCard jobId={id} updates={updates} />
             )}
           </>
-        )}
-
-        {tab === 'Communications' && (
-          <CommunicationsCard job={job} jobId={id} updates={updates} changeOrders={changeOrders} />
         )}
       </div>
     </AppShell>
   );
 }
 
-function CommunicationsCard({ job, jobId, updates, changeOrders }) {
+/* ---------------- Documents tab: real history, only what's issued ---------------- */
+function IssuedDocumentsCard({ jobId, job, updates, changeOrders }) {
+  const [draws, setDraws] = useState([]);
+
+  useEffect(() => {
+    const load = () => supabase.from('invoices').select('*').eq('job_id', jobId).then(({ data }) => { if (data) setDraws(data); });
+    load();
+    const channel = supabase.channel(`issued-docs-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${jobId}` }, load)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [jobId]);
+
   const entries = [];
 
-  if (job.portal_invited_at) {
-    entries.push({ at: job.portal_invited_at, label: 'Customer portal invite sent', href: null });
-  }
   if (job.proposal_sent_at) {
-    entries.push({ at: job.proposal_sent_at, label: 'Estimate sent', href: `/jobs/${jobId}/proposal` });
+    entries.push({ at: job.proposal_sent_at, label: 'Estimate', href: `/jobs/${jobId}/proposal` });
   }
-  if (job.contract_sent_at) {
-    entries.push({ at: job.contract_sent_at, label: 'Contract sent', href: contractPathFor(job) });
+  if (job.contract_finalized_at) {
+    entries.push({ at: job.contract_finalized_at, label: 'Contract — signed', href: contractPathFor(job) });
   }
-  if (job.invoice_status !== 'not_sent' && job.invoiced_at) {
-    entries.push({ at: job.invoiced_at, label: `Invoice sent (${job.invoice_status === 'paid' ? 'now paid' : 'awaiting payment'})`, href: `/jobs/${jobId}/invoice` });
+  draws.filter(d => d.status !== 'not_sent').forEach(d => {
+    entries.push({ at: d.sent_at || d.created_at, label: `${d.description} (${d.status === 'paid' ? 'paid' : 'awaiting payment'})`, href: `/jobs/${jobId}/invoices/${d.id}` });
+  });
+  if (job.invoice_status && job.invoice_status !== 'not_sent' && job.invoiced_at) {
+    entries.push({ at: job.invoiced_at, label: `Invoice (${job.invoice_status === 'paid' ? 'paid' : 'awaiting payment'})`, href: `/jobs/${jobId}/invoice` });
   }
   updates.forEach(u => {
-    if (u.sent_at) {
-      entries.push({ at: u.sent_at, label: `Progress update sent (${u.update_date})`, href: `/jobs/${jobId}/updates/${u.id}` });
-    }
+    if (u.sent_at) entries.push({ at: u.sent_at, label: `Progress update — ${u.update_date}`, href: `/jobs/${jobId}/updates/${u.id}` });
   });
   changeOrders.forEach(co => {
-    if (co.sent_at) {
-      entries.push({ at: co.sent_at, label: `Change order sent (${co.co_date})`, href: `/jobs/${jobId}/change-orders/${co.id}` });
-    }
+    if (co.sent_at) entries.push({ at: co.sent_at, label: `Change order — ${co.co_date}`, href: `/jobs/${jobId}/change-orders/${co.id}` });
   });
 
   entries.sort((a, b) => new Date(b.at) - new Date(a.at));
 
   return (
     <div className="card">
-      <h3>Communications log</h3>
-
-      <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--line)' }}>
-        <div className="update-field-label">Customer portal activity</div>
-        <p style={{ fontSize: 13, margin: '4px 0 0' }}>
-          {job.portal_invited_at
-            ? `Invited on ${new Date(job.portal_invited_at).toLocaleDateString('en-US')}.`
-            : 'Not invited to the portal yet.'}
-          {' '}
-          {job.portal_last_viewed_at
-            ? `Last viewed the portal on ${new Date(job.portal_last_viewed_at).toLocaleString('en-US')}.`
-            : (job.portal_invited_at ? 'Has not viewed the portal yet.' : '')}
-        </p>
+      <h3>Documents</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        Only what's actually been issued shows up here — an estimate before it's sent, or an invoice before it's issued, won't appear.
       </div>
-
-      {entries.length === 0 && <div className="empty-state">Nothing sent yet.</div>}
+      {entries.length === 0 && <div className="empty-state">Nothing issued yet.</div>}
       {entries.map((e, i) => (
         <div className="update-entry" key={i}>
           <div className="update-date">{new Date(e.at).toLocaleString('en-US')}</div>
           <p style={{ margin: 0 }}>{e.label}</p>
-          {e.href && (
-            <div className="section-actions">
-              <Link href={e.href} className="btn btn-sm">View</Link>
-            </div>
-          )}
+          <div className="section-actions">
+            <Link href={e.href} className="btn btn-sm">View</Link>
+          </div>
         </div>
       ))}
     </div>
@@ -322,76 +351,6 @@ function CommunicationsCard({ job, jobId, updates, changeOrders }) {
 }
 
 /* ---------------- Customer portal invite + questions ---------------- */
-function PortalCard({ job }) {
-  const [questions, setQuestions] = useState([]);
-  const [replyDrafts, setReplyDrafts] = useState({});
-  const [replyingId, setReplyingId] = useState(null);
-
-  const loadQuestions = useCallback(async () => {
-    const { data } = await supabase.from('job_questions').select('*').eq('job_id', job.id).order('created_at', { ascending: false });
-    if (data) setQuestions(data);
-  }, [job.id]);
-
-  useEffect(() => {
-    loadQuestions();
-    const channel = supabase
-      .channel(`portal-questions-${job.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions', filter: `job_id=eq.${job.id}` }, loadQuestions)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [job.id, loadQuestions]);
-
-  async function sendReply(questionId) {
-    const text = replyDrafts[questionId] || '';
-    if (!text.trim()) return;
-    await supabase.from('job_questions').update({ response: text, responded_at: new Date().toISOString() }).eq('id', questionId);
-    setReplyingId(null);
-  }
-
-  if (questions.length === 0) return null;
-
-  return (
-    <div className="card">
-      <h3>Customer portal</h3>
-
-      {questions.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <h4 style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 10px' }}>Customer questions</h4>
-          {questions.map(q => (
-            <div className="update-entry" key={q.id}>
-              <div className="update-date">{new Date(q.created_at).toLocaleDateString('en-US')}</div>
-              <p>{q.message}</p>
-              {q.response ? (
-                <>
-                  <div className="update-field-label">Your reply</div>
-                  <p>{q.response}</p>
-                </>
-              ) : replyingId === q.id ? (
-                <div style={{ marginTop: 8 }}>
-                  <textarea
-                    value={replyDrafts[q.id] || ''}
-                    onChange={e => setReplyDrafts(prev => ({ ...prev, [q.id]: e.target.value }))}
-                    placeholder="Type your reply…"
-                  />
-                  <div className="section-actions">
-                    <button className="btn btn-primary btn-sm" onClick={() => sendReply(q.id)}>Send reply</button>
-                    <button className="btn btn-sm" onClick={() => setReplyingId(null)}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="section-actions">
-                  <button className="btn btn-sm" onClick={() => setReplyingId(q.id)}>Reply</button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 function CustomerInfoCard({ job, onSave }) {
   const [form, setForm] = useState({
     customer_name: job.customer_name || '',
@@ -651,52 +610,6 @@ function TermsCard({ job, onSave }) {
 }
 
 /* ---------------- Documents tab ---------------- */
-function DocumentsCard({ jobId, job }) {
-  const relevantDocs = STAGE_DOCS[job.stage] || [];
-  const isActivePhase = phaseForStage(job.stage) === 'active_phase';
-  const DOC_META = {
-    proposal: { label: 'Estimate', href: `/jobs/${jobId}/proposal` },
-    contract: { label: 'Contract', href: contractPathFor(job) },
-    invoice: { label: 'Invoice', href: `/jobs/${jobId}/invoice` },
-    update: { label: 'Project Update (post one below)', href: null },
-  };
-
-  if (isActivePhase) {
-    return (
-      <div className="card">
-        <h3>Documents</h3>
-        <Link href={contractPathFor(job)} className="btn btn-sm">View signed contract</Link>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card">
-      <h3>Documents</h3>
-      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 14 }}>
-        Documents available at this stage:
-      </div>
-      <div className="section-actions" style={{ marginTop: 0 }}>
-        {relevantDocs.map(docType => {
-          const meta = DOC_META[docType];
-          if (!meta.href) return null;
-          return <Link key={docType} href={meta.href} className="btn btn-primary">{meta.label} — Generate PDF</Link>;
-        })}
-      </div>
-      {relevantDocs.includes('update') && (
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-          Project updates are posted and generated individually below.
-        </div>
-      )}
-      {!relevantDocs.includes('contract') && phaseForStage(job.stage) !== 'opportunity' && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <Link href={contractPathFor(job)} className="btn btn-sm">View signed contract</Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ---------------- Change orders ---------------- */
 function ChangeOrdersCard({ jobId, changeOrders }) {
   const [showForm, setShowForm] = useState(false);

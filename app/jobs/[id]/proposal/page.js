@@ -75,6 +75,9 @@ export default function ProposalDocumentPage() {
           {session?.user?.app_metadata?.role === 'admin' && (
             <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
           )}
+          {!job.contract_finalized_at && (
+            <Link href={contractPathFor(job)} className="btn btn-primary btn-sm">Sign the Contract →</Link>
+          )}
         </div>
       </div>
 
@@ -113,16 +116,8 @@ export default function ProposalDocumentPage() {
             </div>
 
             {!job.contract_finalized_at && (
-              <a href={contractPathFor(job)} className="no-print proposal-cta">
-                <span className="proposal-cta-text">Ready to move forward?</span>
-                <span className="proposal-cta-action">Sign the Contract →</span>
-              </a>
-            )}
-
-            {!job.contract_finalized_at && (
-              <div className="proposal-cta-print">
-                <span className="proposal-cta-print-text">Ready to move forward?</span>
-                <span className="proposal-cta-print-action">Reply to your estimate email or call McLoud Construction to get started.</span>
+              <div style={{ fontSize: 12, color: '#6b6350', textAlign: 'center', marginBottom: 28 }}>
+                Ready to move forward? Reply to this estimate or call McLoud Construction to get started.
               </div>
             )}
 
@@ -198,13 +193,6 @@ export default function ProposalDocumentPage() {
         .proposal-cta-action { font-size: 16px; font-weight: 700; }
         @media (max-width: 500px) { .proposal-cta { flex-direction: column; align-items: flex-start; } }
 
-        .proposal-cta-print {
-          background: #ffd400; color: #221f16;
-          border-radius: 8px; padding: 16px 22px; margin-bottom: 28px;
-          text-align: center;
-        }
-        .proposal-cta-print-text { display: block; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
-        .proposal-cta-print-action { display: block; font-size: 14px; font-weight: 600; }
         .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
         .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
