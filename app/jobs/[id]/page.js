@@ -268,10 +268,6 @@ export default function JobDetailPage() {
         {tab === 'Financials' && (
           <div className="estimate-grid">
             <div className="estimate-main">
-              <DrawsCard jobId={id} />
-              {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-                <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-              )}
               <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
               <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
               {phaseForStage(job.stage) !== 'opportunity' && (
@@ -280,6 +276,10 @@ export default function JobDetailPage() {
             </div>
             <div className="estimate-sidebar">
               <ReceiptsCard jobId={id} />
+              <DrawsCard jobId={id} />
+              {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
+                <InvoiceCard job={job} onSave={saveJob} jobId={id} />
+              )}
             </div>
           </div>
         )}
