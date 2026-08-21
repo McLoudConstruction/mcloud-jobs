@@ -107,7 +107,10 @@ Do not include any preamble, explanation, or markdown code fences — your entir
     }
 
     const data = await response.json();
-    const fullText = data.content?.[0]?.text || '';
+    // Find the text block specifically rather than assuming it's always
+    // at index 0 — some responses can include other block types first,
+    // which would silently produce an empty string here otherwise.
+    const fullText = data.content?.find(block => block.type === 'text')?.text || '';
     const wasTruncated = data.stop_reason === 'max_tokens';
 
     let parsed = extractJson(fullText);
@@ -126,10 +129,14 @@ Do not include any preamble, explanation, or markdown code fences — your entir
     }
 
     if (!items || items.length === 0) {
+      // Surface what the model actually said instead of a generic
+      // message — a blind "unexpected format" the second time around
+      // means guessing isn't working; seeing the real output will.
+      const snippet = fullText.trim() ? fullText.trim().slice(0, 300) : '(empty response — no text block found)';
       throw new Error(
         wasTruncated
           ? 'The AI response ran out of room before finishing — try a shorter job description, or turn off the trade breakdown for this one.'
-          : 'AI returned an unexpected format — try rephrasing the description.'
+          : `AI returned an unexpected format. Raw response started with: "${snippet}"`
       );
     }
 
