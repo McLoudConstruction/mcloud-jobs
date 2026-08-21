@@ -420,30 +420,6 @@ export default function EstimateTab({ job, jobId, children }) {
           <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Scope`} />
         </div>
       </div>
-
-      <style jsx global>{`
-        .estimate-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
-        .estimate-sidebar { position: sticky; top: 20px; }
-        .estimate-margin-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-        .estimate-margin-table td { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
-        .estimate-margin-table td:first-child { color: var(--ink-soft); }
-        .estimate-margin-table td:last-child { text-align: right; font-weight: 700; }
-        .estimate-margin-table td input { text-align: right; padding: 4px 8px; font-size: 13px; }
-        .estimate-margin-total-row td { border-bottom: 1px solid var(--panel-line); font-weight: 700; color: var(--heading); }
-        .estimate-table { display: flex; flex-direction: column; }
-        .estimate-row { display: grid; grid-template-columns: 2fr 90px 110px 100px 90px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
-        .estimate-header-row { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--panel-line); }
-        .estimate-row input, .estimate-row select { font-size: 12.5px; padding: 6px 8px; }
-        .estimate-line-total { font-size: 13px; font-weight: 700; padding-top: 7px; }
-        .estimate-tag { display: inline-block; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: var(--panel); color: var(--gold); padding: 2px 6px; border-radius: 8px; margin-top: 4px; }
-        .estimate-buffer-note { font-size: 10.5px; color: #a17c3f; margin-top: 4px; font-style: italic; }
-        .estimate-add-grid { display: grid; grid-template-columns: 2fr 110px 110px auto; gap: 8px; align-items: center; }
-        @media (max-width: 900px) {
-          .estimate-grid { grid-template-columns: 1fr; }
-          .estimate-sidebar { position: static; }
-          .estimate-row, .estimate-header-row, .estimate-add-grid { grid-template-columns: 1fr; }
-        }
-      `}</style>
     </>
   );
 }
