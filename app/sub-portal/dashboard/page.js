@@ -107,7 +107,7 @@ export default function SubPortalDashboard() {
   });
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+    <div className="portal-textured" style={{ minHeight: '100vh' }}>
       <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--header-line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--header-text)' }}>{company.company_name}</div>

@@ -126,7 +126,7 @@ export default function PortalDashboardPage() {
   const job = jobs.find(j => j.id === selectedJobId);
 
   return (
-    <div>
+    <div className="portal-textured" style={{ minHeight: '100vh' }}>
       <div className="topbar">
         {settings.logo_url
           ? <img src={settings.logo_url} alt="Logo" style={{ height: ((isMobile ? settings.logo_size_mobile : settings.logo_size_desktop) || 32) / 4, width: 'auto' }} />

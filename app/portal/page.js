@@ -43,7 +43,7 @@ export default function PortalLoginPage() {
   }
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap portal-textured">
       <div className="login-card">
         <h1>Project Portal</h1>
         <p className="sub">McLoud Construction — view your project updates, invoice, and questions.</p>

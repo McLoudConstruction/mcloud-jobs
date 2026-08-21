@@ -30,7 +30,7 @@ export default function SubPortalLoginPage() {
   }
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap portal-textured">
       <div className="login-card">
         <h1>Subcontractor Portal</h1>
         <p className="sub">McLoud Construction — view and sign your work orders.</p>

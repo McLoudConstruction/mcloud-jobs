@@ -74,7 +74,7 @@ export default function UpdateDocumentPage() {
 
   return (
     <div>
-      <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6' }}>
+      <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6', position: 'sticky', top: 0, zIndex: 50 }}>
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

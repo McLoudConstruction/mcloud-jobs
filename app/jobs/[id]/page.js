@@ -15,8 +15,9 @@ import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
+import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, nextSequentialNumber, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
@@ -98,13 +99,6 @@ export default function JobDetailPage() {
   function flashSaved() {
     setFlash('Saved');
     setTimeout(() => setFlash(''), 1500);
-  }
-
-  async function assignNextJobNumber(fallback) {
-    const { data: last, error: fetchErr } = await supabase.from('jobs').select('job_number').not('job_number', 'is', null).order('created_at', { ascending: false }).limit(1);
-    if (fetchErr) throw fetchErr;
-    const lastNumber = last && last[0] && last[0].job_number;
-    return nextSequentialNumber(lastNumber, fallback);
   }
 
   // Recovery path for a job that's already past Approved but somehow
