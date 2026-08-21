@@ -71,24 +71,36 @@ export default function EstimateTab({ job, jobId }) {
     }
   }
 
+  const [suggestingTrades, setSuggestingTrades] = useState(false);
+
   // Not an AI dollar guess — just a structured starting point, one draft
   // row per distinct trade already in the action list, cost left at $0
   // for you to fill in. Subcontractor pricing depends on your actual
   // relationships, not something a model should ever invent.
   async function suggestTradesFromActions() {
-    const trades = [...new Set(actions.map(a => a.trade).filter(Boolean))];
-    const existingTrades = new Set(items.filter(it => it.category === 'labor').map(it => it.unit_label));
-    const toAdd = trades.filter(t => !existingTrades.has(t));
-    if (toAdd.length === 0) return;
-    await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
-      job_id: jobId,
-      category: 'labor',
-      description: `${trade} — labor/subcontractor cost`,
-      quantity: 1,
-      unit_label: trade,
-      unit_price: 0,
-      source: 'suggested',
-    })));
+    setSuggestingTrades(true);
+    try {
+      const trades = [...new Set(actions.map(a => a.trade).filter(Boolean))];
+      // Re-read what's already there directly from the database right
+      // before inserting, rather than trusting React state — closes the
+      // race where a second click (or a slow realtime update) sees a
+      // stale list and re-adds a trade that was just added a moment ago.
+      const { data: currentLabor } = await supabase.from('job_estimate_items').select('unit_label').eq('job_id', jobId).eq('category', 'labor');
+      const existingTrades = new Set((currentLabor || []).map(it => it.unit_label));
+      const toAdd = trades.filter(t => !existingTrades.has(t));
+      if (toAdd.length === 0) return;
+      await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
+        job_id: jobId,
+        category: 'labor',
+        description: `${trade} — labor/subcontractor cost`,
+        quantity: 1,
+        unit_label: trade,
+        unit_price: 0,
+        source: 'suggested',
+      })));
+    } finally {
+      setSuggestingTrades(false);
+    }
   }
 
   function updateLocalItem(itemId, field, value) {
@@ -100,6 +112,7 @@ export default function EstimateTab({ job, jobId }) {
   }
 
   async function deleteItem(itemId) {
+    setItems(prev => prev.filter(it => it.id !== itemId));
     await supabase.from('job_estimate_items').delete().eq('id', itemId);
   }
 
@@ -240,7 +253,7 @@ export default function EstimateTab({ job, jobId }) {
                   </div>
                   <div className="estimate-line-total">{fmtMoney(lineTotal(it))}</div>
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn btn-sm" title="Save price to your price book" onClick={() => savePriceBook(it)}>💾</button>
+                    <button className="btn btn-sm" title="Save price to your price book" onClick={() => savePriceBook(it)}>Save</button>
                     <button className="btn btn-sm btn-danger" onClick={() => deleteItem(it.id)}>×</button>
                   </div>
                 </div>
@@ -276,8 +289,8 @@ export default function EstimateTab({ job, jobId }) {
             </div>
 
             <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={suggestTradesFromActions} disabled={actions.length === 0}>
-                Add a row per trade from action list
+              <button className="btn btn-sm" onClick={suggestTradesFromActions} disabled={suggestingTrades || actions.length === 0}>
+                {suggestingTrades ? 'Adding…' : 'Add a row per trade from action list'}
               </button>
             </div>
 
@@ -387,7 +400,7 @@ export default function EstimateTab({ job, jobId }) {
         .estimate-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
         .estimate-sidebar { position: sticky; top: 20px; }
         .estimate-table { display: flex; flex-direction: column; }
-        .estimate-row { display: grid; grid-template-columns: 2fr 70px 110px 100px 100px 50px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .estimate-row { display: grid; grid-template-columns: 2fr 70px 110px 100px 100px 90px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
         .estimate-header-row { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--panel-line); }
         .estimate-row input, .estimate-row select { font-size: 12.5px; padding: 6px 8px; }
         .estimate-line-total { font-size: 13px; font-weight: 700; padding-top: 7px; }
