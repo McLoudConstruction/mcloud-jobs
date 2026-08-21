@@ -106,7 +106,7 @@ export default function JobDetailPage() {
   // something that has to be chased down through the database directly.
   async function fixMissingJobNumber() {
     try {
-      const jobNumber = await assignNextJobNumber(job.estimate_number);
+      const jobNumber = await assignNextJobNumber();
       await saveJob({ job_number: jobNumber });
     } catch (err) {
       setFlash(`Could not assign a job number: ${err.message}`);
@@ -134,7 +134,7 @@ export default function JobDetailPage() {
 
     if (next === 'approved' && !job.job_number) {
       try {
-        patch.job_number = await assignNextJobNumber(job.estimate_number);
+        patch.job_number = await assignNextJobNumber();
       } catch (err) {
         setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
         setTimeout(() => setFlash(''), 8000);

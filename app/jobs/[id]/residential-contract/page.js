@@ -83,7 +83,7 @@ export default function ContractDocumentPage() {
 
     if (advancing) {
       try {
-        patch.job_number = await assignNextJobNumber(job.estimate_number);
+        patch.job_number = await assignNextJobNumber();
         patch.stage = 'approved';
         patch.approved_at = new Date().toISOString();
       } catch (err) {
@@ -114,7 +114,7 @@ export default function ContractDocumentPage() {
       <div className="no-print" style={{ padding: '10px 24px', background: '#faf6ec', borderBottom: '1px solid #c4c1a6', fontSize: 11.5, color: 'var(--ink-soft)' }}>
         This is a general-purpose template, not legal advice — have it reviewed by an attorney, especially the lien notice, before relying on it as a binding agreement.
       </div>
-      <div className="no-print" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#d3d0b5', borderBottom: '1px solid #c4c1a6', position: 'sticky', top: 0, zIndex: 50 }}>
+      <div className="no-print doc-toolbar">
         <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}

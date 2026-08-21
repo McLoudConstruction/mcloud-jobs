@@ -439,6 +439,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .update-entry .update-field-label{ font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-top: 8px; }
 .update-entry p{ font-size: 13px; margin: 2px 0 0; white-space: pre-wrap; }
 
+.doc-toolbar{
+  padding: 16px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--header-line);
+  position: sticky; top: 0; z-index: 50;
+}
+.doc-toolbar .btn{ color: var(--header-text); border-color: var(--header-line); }
+.doc-toolbar .btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+
 .login-wrap{
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
 }
