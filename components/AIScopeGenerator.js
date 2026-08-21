@@ -23,8 +23,12 @@ export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTra
       if (jobId && onTradeActions && data.tradeActions?.length) {
         onTradeActions(data.tradeActions);
       }
-      setDescription('');
-      setOpen(false);
+      if (data.warning) {
+        setError(data.warning); // shown in the same amber warning slot — it's a heads-up, not a hard failure
+      } else {
+        setDescription('');
+        setOpen(false);
+      }
     } catch (err) {
       setError(err.message);
     } finally {

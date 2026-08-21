@@ -21,6 +21,23 @@ function extractJson(text) {
   return null;
 }
 
+// If the full object didn't parse (most often because the response got
+// cut off mid-way through the much longer trade_actions array), this
+// pulls just the customer_items array out on its own via regex, so a
+// truncated trade breakdown doesn't take the whole request down with it
+// — customer_items always comes first in the prompt, so it's usually
+// intact even when the response got cut short later on.
+function extractCustomerItemsOnly(text) {
+  const match = text.match(/"customer_items"\s*:\s*(\[[\s\S]*?\])/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request) {
   try {
     const { description, projectType, includeTradeBreakdown } = await request.json();
@@ -76,7 +93,10 @@ Do not include any preamble, explanation, or markdown code fences — your entir
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: includeTradeBreakdown ? 4096 : 2048,
+        // The trade breakdown can legitimately run long on a complex job
+        // (30-40 granular actions, each with 4 fields) — this needs real
+        // headroom, not just a bit more than the simple customer-only case.
+        max_tokens: includeTradeBreakdown ? 8000 : 2048,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -88,14 +108,32 @@ Do not include any preamble, explanation, or markdown code fences — your entir
 
     const data = await response.json();
     const fullText = data.content?.[0]?.text || '';
+    const wasTruncated = data.stop_reason === 'max_tokens';
 
-    const parsed = extractJson(fullText);
-    const items = Array.isArray(parsed?.customer_items) ? parsed.customer_items.filter(x => typeof x === 'string' && x.trim()) : null;
+    let parsed = extractJson(fullText);
+    let items = Array.isArray(parsed?.customer_items) ? parsed.customer_items.filter(x => typeof x === 'string' && x.trim()) : null;
+
+    // Full parse failed (most likely truncation) — try to salvage just
+    // the customer-facing list on its own, since that's the part that
+    // actually blocks the person from moving forward.
+    let recoveredPartial = false;
     if (!items || items.length === 0) {
-      throw new Error('AI returned an unexpected format — try rephrasing the description.');
+      const recovered = extractCustomerItemsOnly(fullText);
+      if (recovered && recovered.length > 0) {
+        items = recovered.filter(x => typeof x === 'string' && x.trim());
+        recoveredPartial = true;
+      }
     }
 
-    const tradeActions = Array.isArray(parsed?.trade_actions)
+    if (!items || items.length === 0) {
+      throw new Error(
+        wasTruncated
+          ? 'The AI response ran out of room before finishing — try a shorter job description, or turn off the trade breakdown for this one.'
+          : 'AI returned an unexpected format — try rephrasing the description.'
+      );
+    }
+
+    const tradeActions = (!recoveredPartial && Array.isArray(parsed?.trade_actions))
       ? parsed.trade_actions.filter(a => a && typeof a.description === 'string' && a.description.trim()).map(a => ({
           description: a.description.trim(),
           trade: SERVICES_OFFERED.includes(a.trade) ? a.trade : 'Other',
@@ -104,7 +142,11 @@ Do not include any preamble, explanation, or markdown code fences — your entir
         }))
       : [];
 
-    return Response.json({ items, tradeActions });
+    const warning = recoveredPartial
+      ? 'The trade breakdown ran out of room and was skipped this time — the customer scope came through fine. Try again, or shorten the description, to get the trade breakdown too.'
+      : null;
+
+    return Response.json({ items, tradeActions, warning });
   } catch (err) {
     return Response.json({ error: err.message || 'Failed to generate scope.' }, { status: 500 });
   }
