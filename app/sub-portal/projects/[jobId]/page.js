@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../../../../lib/constants';
+import SubPortalShell from '../../../../components/SubPortalShell';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -20,6 +21,7 @@ export default function SubPortalProjectPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState(null);
+  const [company, setCompany] = useState(null);
   const [job, setJob] = useState(null);
   const [workOrders, setWorkOrders] = useState([]);
 
@@ -32,8 +34,9 @@ export default function SubPortalProjectPage() {
   }, [router]);
 
   const load = useCallback(async (email) => {
-    const { data: companyData } = await supabase.from('companies').select('id, contact_email, crew_email').or(`contact_email.eq.${email},crew_email.eq.${email}`).limit(1).maybeSingle();
+    const { data: companyData } = await supabase.from('companies').select('id, company_name, contact_email, crew_email').or(`contact_email.eq.${email},crew_email.eq.${email}`).limit(1).maybeSingle();
     if (!companyData) return;
+    setCompany(companyData);
     setRole(companyData.contact_email === email ? 'admin' : 'crew');
 
     const { data: jobData } = await supabase.from('sub_visible_jobs').select('*').eq('id', jobId).maybeSingle();
@@ -53,12 +56,10 @@ export default function SubPortalProjectPage() {
   if (loading || !session || !job) return null;
 
   return (
-    <div className="portal-textured" style={{ minHeight: '100vh' }}>
-      <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--header-line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/sub-portal/dashboard" className="btn btn-sm" style={{ color: 'var(--header-text)', borderColor: 'var(--header-line)' }}>← Back</Link>
-      </div>
-
+    <SubPortalShell company={company} role={role}>
       <div className="container" style={{ paddingTop: 24, maxWidth: 640 }}>
+        <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
+
         <div className="card">
           <h3>{job.project_address || `Job #${job.job_number}`}</h3>
           <div className="portal-info-grid">
@@ -95,6 +96,6 @@ export default function SubPortalProjectPage() {
           ))}
         </div>
       </div>
-    </div>
+    </SubPortalShell>
   );
 }

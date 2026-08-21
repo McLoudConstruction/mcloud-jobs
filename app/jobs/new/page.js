@@ -182,6 +182,31 @@ function NewOpportunityPageInner() {
     if (oppId && data) {
       await supabase.from('opportunities').update({ stage: 'converted', job_id: data.id }).eq('id', oppId);
     }
+
+    if (data && form.customer_email.trim()) {
+      // Best-effort — a failed invite here shouldn't block getting to the
+      // job page. Portal Access still shows the real invited/not-invited
+      // state, and it can always be sent again manually from there.
+      try {
+        await supabase.from('job_portal_access').insert({
+          job_id: data.id,
+          email: form.customer_email.trim(),
+          name: fullName,
+          portal_access: true,
+          notify: true,
+        });
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: form.customer_email.trim(),
+          options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+        });
+        if (!otpError) {
+          await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('job_id', data.id).eq('email', form.customer_email.trim());
+        }
+      } catch {
+        // silently skip — Portal Access on the job page shows the real state either way
+      }
+    }
+
     router.push(`/jobs/${data.id}`);
   }
 

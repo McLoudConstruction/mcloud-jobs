@@ -22,6 +22,8 @@ export default function EstimateTab({ job, jobId }) {
   const [priceMatches, setPriceMatches] = useState([]);
   const [newLabor, setNewLabor] = useState({ trade: SERVICES_OFFERED[0], description: '', quantity: '1', unit_price: '' });
   const marginSaveTimer = useRef(null);
+  const materialDescRef = useRef(null);
+  const laborDescRef = useRef(null);
 
   const loadActions = useCallback(async () => {
     const { data } = await supabase.from('job_scope_actions').select('*').eq('job_id', jobId).order('trade');
@@ -145,7 +147,7 @@ export default function EstimateTab({ job, jobId }) {
   async function addManualItem(e) {
     e.preventDefault();
     if (!newItem.description.trim()) return;
-    await supabase.from('job_estimate_items').insert({
+    const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
       category: 'material',
       description: newItem.description.trim(),
@@ -153,13 +155,15 @@ export default function EstimateTab({ job, jobId }) {
       unit_label: newItem.unit_label || null,
       unit_price: parseFloat(newItem.unit_price) || 0,
       source: 'manual',
-    });
+    }).select().single();
+    if (!error && data) setItems(prev => [...prev, data]);
     setNewItem({ description: '', quantity: '1', unit_label: '', unit_price: '' });
+    materialDescRef.current?.focus();
   }
 
   async function addLaborItem(e) {
     e.preventDefault();
-    await supabase.from('job_estimate_items').insert({
+    const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
       category: 'labor',
       description: newLabor.description.trim() || `${newLabor.trade} — labor/subcontractor cost`,
@@ -167,8 +171,10 @@ export default function EstimateTab({ job, jobId }) {
       unit_label: newLabor.trade,
       unit_price: parseFloat(newLabor.unit_price) || 0,
       source: 'manual',
-    });
+    }).select().single();
+    if (!error && data) setItems(prev => [...prev, data]);
     setNewLabor({ trade: SERVICES_OFFERED[0], description: '', quantity: '1', unit_price: '' });
+    laborDescRef.current?.focus();
   }
 
   function saveMargin(value) {
@@ -278,7 +284,7 @@ export default function EstimateTab({ job, jobId }) {
             <form onSubmit={addManualItem} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16, position: 'relative' }}>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 8 }}>+ Add material</div>
               <div className="estimate-add-grid">
-                <input placeholder="Description (e.g. 2x4x8 stud)" value={newItem.description} onChange={e => searchPriceBook(e.target.value)} required />
+                <input ref={materialDescRef} placeholder="Description (e.g. 2x4x8 stud)" value={newItem.description} onChange={e => searchPriceBook(e.target.value)} required />
                 <input type="number" step="any" placeholder="Qty" value={newItem.quantity} onChange={e => setNewItem(prev => ({ ...prev, quantity: e.target.value }))} />
                 <input placeholder="Unit" value={newItem.unit_label} onChange={e => setNewItem(prev => ({ ...prev, unit_label: e.target.value }))} />
                 <input type="number" step="0.01" placeholder="Unit price" value={newItem.unit_price} onChange={e => setNewItem(prev => ({ ...prev, unit_price: e.target.value }))} />
@@ -363,7 +369,7 @@ export default function EstimateTab({ job, jobId }) {
             <form onSubmit={addLaborItem} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16 }}>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 8 }}>+ Add subcontractor cost</div>
               <div className="estimate-add-grid">
-                <input placeholder="Description (optional)" value={newLabor.description} onChange={e => setNewLabor(prev => ({ ...prev, description: e.target.value }))} />
+                <input ref={laborDescRef} placeholder="Description (optional)" value={newLabor.description} onChange={e => setNewLabor(prev => ({ ...prev, description: e.target.value }))} />
                 <input type="number" step="any" placeholder="Qty" value={newLabor.quantity} onChange={e => setNewLabor(prev => ({ ...prev, quantity: e.target.value }))} />
                 <select value={newLabor.trade} onChange={e => setNewLabor(prev => ({ ...prev, trade: e.target.value }))}>
                   {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
@@ -373,47 +379,13 @@ export default function EstimateTab({ job, jobId }) {
               </div>
             </form>
           </div>
+        </div>
 
-          <div className="card">
-            <h3>Margin &amp; Sale Price</h3>
-            <div className="portal-info-grid">
-              <div>
-                <div className="portal-info-label">Materials</div>
-                <div className="portal-info-value">{fmtMoney(materialSubtotal)}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Subcontractor Cost</div>
-                <div className="portal-info-value">{fmtMoney(laborSubtotal)}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Total Cost</div>
-                <div className="portal-info-value">{fmtMoney(subtotal)}</div>
-              </div>
-              <div>
-                <label style={{ marginBottom: 4 }}>Margin %</label>
-                <input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="e.g. 25" />
-              </div>
-              <div>
-                <div className="portal-info-label">Margin $</div>
-                <div className="portal-info-value">{fmtMoney(marginDollars)}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Final Sale Price</div>
-                <div className="portal-info-value" style={{ fontSize: 20 }}>{fmtMoney(salePrice)}</div>
-              </div>
-            </div>
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
-                {pushing ? 'Saving…' : "Use as this Job's Contract Price"}
-              </button>
-            </div>
-            {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
-          </div>
-
+        <div className="estimate-sidebar">
           <div className="card">
             <h3>Generate &amp; Send</h3>
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Once the pricing above is where you want it, generate the customer-facing estimate document.
+              Once the pricing below is where you want it, generate the customer-facing estimate document.
             </div>
             <div className="section-actions" style={{ marginTop: 0 }}>
               <Link href={`/jobs/${jobId}/proposal`} className="btn btn-primary">Generate Estimate Document →</Link>
@@ -422,9 +394,30 @@ export default function EstimateTab({ job, jobId }) {
               )}
             </div>
           </div>
-        </div>
 
-        <div className="estimate-sidebar">
+          <div className="card">
+            <h3>Margin &amp; Sale Price</h3>
+            <table className="estimate-margin-table">
+              <tbody>
+                <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
+                <tr><td>Subcontractor Cost</td><td>{fmtMoney(laborSubtotal)}</td></tr>
+                <tr className="estimate-margin-total-row"><td>Total Cost</td><td>{fmtMoney(subtotal)}</td></tr>
+                <tr>
+                  <td>Margin %</td>
+                  <td><input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="e.g. 25" /></td>
+                </tr>
+                <tr><td>Margin $</td><td>{fmtMoney(marginDollars)}</td></tr>
+                <tr className="estimate-margin-total-row"><td>Final Sale Price</td><td style={{ fontSize: 16 }}>{fmtMoney(salePrice)}</td></tr>
+              </tbody>
+            </table>
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
+                {pushing ? 'Saving…' : "Use as this Job's Contract Price"}
+              </button>
+            </div>
+            {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
+          </div>
+
           <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Scope`} />
         </div>
       </div>
@@ -432,6 +425,12 @@ export default function EstimateTab({ job, jobId }) {
       <style jsx global>{`
         .estimate-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
         .estimate-sidebar { position: sticky; top: 20px; }
+        .estimate-margin-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+        .estimate-margin-table td { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+        .estimate-margin-table td:first-child { color: var(--ink-soft); }
+        .estimate-margin-table td:last-child { text-align: right; font-weight: 700; }
+        .estimate-margin-table td input { text-align: right; padding: 4px 8px; font-size: 13px; }
+        .estimate-margin-total-row td { border-bottom: 1px solid var(--panel-line); font-weight: 700; color: var(--heading); }
         .estimate-table { display: flex; flex-direction: column; }
         .estimate-row { display: grid; grid-template-columns: 2fr 70px 110px 100px 100px 90px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
         .estimate-header-row { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--panel-line); }

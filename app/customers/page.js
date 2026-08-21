@@ -7,7 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
-import { PROPERTY_TYPES, formatPhone } from '../../lib/constants';
+import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
@@ -268,7 +268,7 @@ export default function CustomersPage() {
             <label>Contact type *</label>
             <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required>
               <option value="">Select…</option>
-              {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
             {form.contact_type && (

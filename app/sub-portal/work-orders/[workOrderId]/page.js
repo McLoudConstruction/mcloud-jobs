@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../../../../lib/constants';
 import SignaturePad from '../../../../components/SignaturePad';
+import SubPortalShell from '../../../../components/SubPortalShell';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -36,7 +37,7 @@ export default function SubPortalWorkOrderPage() {
   }, [router]);
 
   const load = useCallback(async (email) => {
-    const { data: woData } = await supabase.from('work_orders').select('*, companies(contact_email, crew_email)').eq('id', workOrderId).single();
+    const { data: woData } = await supabase.from('work_orders').select('*, companies(company_name, contact_email, crew_email)').eq('id', workOrderId).single();
     if (!woData) return;
     setWo(woData);
     setRole(woData.companies?.contact_email === email ? 'admin' : 'crew');
@@ -72,13 +73,13 @@ export default function SubPortalWorkOrderPage() {
   const scopeItems = Array.isArray(wo.included_scope_items) ? wo.included_scope_items : [];
 
   return (
-    <div className="portal-textured" style={{ minHeight: '100vh' }}>
-      <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--header-line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/sub-portal/dashboard" className="btn btn-sm" style={{ color: 'var(--header-text)', borderColor: 'var(--header-line)' }}>← Back</Link>
-        <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
-      </div>
-
+    <SubPortalShell company={wo.companies} role={role}>
       <div className="container" style={{ paddingTop: 24, maxWidth: 640 }}>
+        <div className="section-actions" style={{ marginTop: 0, justifyContent: 'space-between', display: 'flex' }}>
+          <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
+          <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
+        </div>
+
         <div className="card">
           <h3>Job Information</h3>
           <div className="portal-info-grid">
@@ -168,6 +169,10 @@ export default function SubPortalWorkOrderPage() {
           </div>
         )}
 
+        {role === 'admin' && (wo.status === 'accepted' || wo.status === 'completed') && (
+          <InvoiceUploadCard wo={wo} />
+        )}
+
         {wo.status === 'declined' && (
           <div className="card">
             <h3>Declined</h3>
@@ -175,6 +180,66 @@ export default function SubPortalWorkOrderPage() {
           </div>
         )}
       </div>
+    </SubPortalShell>
+  );
+}
+
+function InvoiceUploadCard({ wo }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [viewUrl, setViewUrl] = useState('');
+
+  async function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setError('');
+    try {
+      const path = `invoices/${wo.id}/${Date.now()}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from('subcontractor-docs').upload(path, file);
+      if (uploadErr) throw uploadErr;
+      const { error: rpcErr } = await supabase.rpc('upload_sub_invoice', {
+        target_work_order_id: wo.id,
+        storage_path: path,
+        invoice_filename: file.name,
+      });
+      if (rpcErr) throw rpcErr;
+    } catch (err) {
+      setError(err.message || 'Upload failed — try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function viewInvoice() {
+    if (!wo.sub_invoice_storage_path) return;
+    const { data, error: urlErr } = await supabase.storage.from('subcontractor-docs').createSignedUrl(wo.sub_invoice_storage_path, 300);
+    if (!urlErr && data) { setViewUrl(data.signedUrl); window.open(data.signedUrl, '_blank'); }
+  }
+
+  return (
+    <div className="card">
+      <h3>Your Invoice</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+        Upload your invoice for this work order so McLoud Construction can see it.
+      </div>
+
+      {wo.sub_invoice_filename && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{wo.sub_invoice_filename}</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Uploaded {new Date(wo.sub_invoice_uploaded_at).toLocaleDateString('en-US')}</div>
+          </div>
+          <button className="btn btn-sm" onClick={viewInvoice}>View</button>
+        </div>
+      )}
+
+      <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer' }}>
+        {uploading ? 'Uploading…' : (wo.sub_invoice_filename ? 'Upload a Replacement' : 'Upload Invoice')}
+        <input type="file" accept="application/pdf,image/*" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+      </label>
+      {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 8 }}>{error}</div>}
     </div>
   );
 }

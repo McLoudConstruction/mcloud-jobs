@@ -9,7 +9,7 @@ const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
 const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
 const ACTIVE_STAGES = ['prospecting', 'contacted'];
 
-const EMPTY_FORM = { company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '' };
+const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '' };
 
 export default function SalesDashboardPage() {
   const { session, loading } = useRequireAuth();
@@ -124,18 +124,31 @@ export default function SalesDashboardPage() {
           <form className="card" onSubmit={submit}>
             <h3>{editingId ? 'Edit lead' : 'New lead'}</h3>
             <div className="two-col">
-              <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
+              <div>
+                <label>Project type</label>
+                <select value={form.project_type} onChange={e => update('project_type', e.target.value)}>
+                  <option value="">Select…</option>
+                  <option value="residential">Residential</option>
+                  <option value="commercial">Commercial</option>
+                </select>
+              </div>
+              {form.project_type === 'commercial' && (
+                <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
+              )}
               <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
               <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
               <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
-              <div><label>Date taken</label><input type="date" value={form.date_taken} onChange={e => update('date_taken', e.target.value)} /></div>
+              <div>
+                <label>Date entered</label>
+                <input value={new Date(form.date_taken + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
+              </div>
             </div>
             <label>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
             <div className="section-actions">
-              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Create opportunity')}</button>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Create lead')}</button>
             </div>
           </form>
         )}

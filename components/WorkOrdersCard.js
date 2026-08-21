@@ -46,16 +46,27 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
     if (field === 'company_id' && tradeActions.length > 0) {
       const company = subcontractors.find(c => c.id === value);
       const services = company?.services_offered || [];
-      const matching = tradeActions.filter(a => services.includes(a.trade)).map(formatAction);
-      setSelectedScope(matching);
+      const matchingIndices = tradeActions
+        .map((a, i) => (services.includes(a.trade) ? i : null))
+        .filter(i => i !== null);
+      setSelectedScope(matchingIndices);
     }
   }
 
   const usingTradeActions = tradeActions.length > 0;
   const availableItems = usingTradeActions ? tradeActions.map(formatAction) : scopeItems;
 
-  function toggleScopeItem(item) {
-    setSelectedScope(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
+  // Selection is tracked by index, not by the item's text — two rows can
+  // easily format to identical-looking text (e.g. two generic "1 faucet
+  // — install" entries), and matching by string value would make
+  // checking one silently check every row sharing that text.
+  function toggleScopeItem(index) {
+    setSelectedScope(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
+  }
+
+  async function viewSubInvoice(wo) {
+    const { data, error } = await supabase.storage.from('subcontractor-docs').createSignedUrl(wo.sub_invoice_storage_path, 300);
+    if (!error && data) window.open(data.signedUrl, '_blank');
   }
 
   async function createWorkOrder(e) {
@@ -68,7 +79,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
       description: form.description,
       amount: parseFloat(form.amount),
       status: 'draft',
-      included_scope_items: selectedScope,
+      included_scope_items: selectedScope.map(i => availableItems[i]).filter(Boolean),
     });
     setSaving(false);
     setForm(EMPTY_FORM);
@@ -156,7 +167,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
               <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: 'var(--card-bg)', maxHeight: 180, overflowY: 'auto' }}>
                 {availableItems.map((item, i) => (
                   <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, fontWeight: 400, marginBottom: 6, cursor: 'pointer' }}>
-                    <input type="checkbox" style={{ width: 'auto', marginTop: 2 }} checked={selectedScope.includes(item)} onChange={() => toggleScopeItem(item)} />
+                    <input type="checkbox" style={{ width: 'auto', marginTop: 2 }} checked={selectedScope.includes(i)} onChange={() => toggleScopeItem(i)} />
                     <span>{item}</span>
                   </label>
                 ))}
@@ -186,12 +197,18 @@ export default function WorkOrdersCard({ jobId, scopeItems = [] }) {
               {wo.status === 'declined' && (
                 <div style={{ fontSize: 11.5, color: '#a13f3f', marginTop: 2 }}>Declined{wo.decline_reason ? `: ${wo.decline_reason}` : ' (no reason given)'}</div>
               )}
+              {wo.sub_invoice_filename && (
+                <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 2 }}>📎 Sub uploaded an invoice — {wo.sub_invoice_filename}</div>
+              )}
             </div>
             <span className={`badge badge-${wo.status}`} style={{ flexShrink: 0 }}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
           </div>
 
           <div className="section-actions" style={{ marginTop: 8 }}>
             <Link href={`/jobs/${jobId}/work-orders/${wo.id}`} className="btn btn-sm">View Document</Link>
+            {wo.sub_invoice_storage_path && (
+              <button className="btn btn-sm" onClick={() => viewSubInvoice(wo)}>View Sub's Invoice</button>
+            )}
             {wo.status === 'draft' && <button className="btn btn-sm" onClick={() => issueWorkOrder(wo)}>Issue</button>}
             {wo.status === 'declined' && <button className="btn btn-sm" onClick={() => reopenWorkOrder(wo)}>Reopen as Draft</button>}
             {(wo.status === 'issued' || wo.status === 'accepted' || wo.status === 'completed') && invoicingId !== wo.id && (

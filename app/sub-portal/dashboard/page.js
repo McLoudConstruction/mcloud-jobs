@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
-import { useTheme } from '../../../lib/useTheme';
-import { SunIcon, MoonIcon } from '../../../components/icons';
+import SubPortalShell from '../../../components/SubPortalShell';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -21,7 +20,6 @@ const ACTIVE_STATUSES = ['draft', 'issued', 'accepted', 'completed'];
 
 export default function SubPortalDashboard() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState(null);
@@ -107,24 +105,7 @@ export default function SubPortalDashboard() {
   });
 
   return (
-    <div className="portal-textured" style={{ minHeight: '100vh' }}>
-      <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--header-line)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--header-text)' }}>{company.company_name}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{role === 'admin' ? 'Admin access' : 'Crew access — view only'}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className="theme-toggle-btn"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label="Toggle light/dark mode"
-          >
-            {theme === 'dark' ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
-          </button>
-          <button className="btn btn-sm" style={{ color: 'var(--header-text)', borderColor: 'var(--header-line)' }} onClick={handleSignOut}>Sign out</button>
-        </div>
-      </div>
-
+    <SubPortalShell company={company} role={role}>
       <div className="container" style={{ paddingTop: 24 }}>
         {needsSignature.length > 0 && (
           <div className="card">
@@ -200,7 +181,7 @@ export default function SubPortalDashboard() {
           </div>
         )}
       </div>
-    </div>
+    </SubPortalShell>
   );
 }
 

@@ -315,7 +315,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .card h2, .card h3{ color: var(--gold); margin-top: 0; }
 .card h2{ font-size: 16px; letter-spacing: 0.03em; }
-.card h3{ font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 3px solid var(--bg); padding-left: 10px; }
+.card h3{ font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 3px solid var(--accent); padding-left: 10px; }
 
 .two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }
@@ -490,7 +490,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 12px;
+  padding: 5px 12px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-line);
   position: sticky;
@@ -586,7 +586,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 4px 0 16px;
+  padding: 0 0 16px;
   box-sizing: border-box;
   overflow-y: hidden;
   transition: width 0.2s ease;
@@ -603,7 +603,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: var(--sidebar-inactive-text);
   white-space: nowrap;
 }
-.shell-sidebar.collapsed .shell-nav-link{ padding: 15px 0; justify-content: center; gap: 0; }
+.shell-sidebar.collapsed .shell-nav-link{ padding: 10px 0; justify-content: center; gap: 0; }
 .shell-sidebar.collapsed .shell-nav-label{ display: none; }
 .shell-sidebar.collapsed .shell-nav-icon{ width: 24px; height: 24px; }
 .shell-sidebar.collapsed .signout-btn{ width: 40px; height: 40px; padding: 0; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; }

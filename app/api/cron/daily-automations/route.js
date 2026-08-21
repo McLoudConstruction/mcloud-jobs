@@ -92,7 +92,7 @@ export async function GET(request) {
     results.errors.push(`Follow-up query failed: ${err.message}`);
   }
 
-  // ── Schedule reminders: 7 days and 1 day before scheduled_start_date ──
+  // ── Schedule reminders: configurable per job via schedule_reminder_days ──
   try {
     const { data: jobs } = await supabase
       .from('jobs')
@@ -102,12 +102,10 @@ export async function GET(request) {
 
     for (const job of jobs || []) {
       const daysOut = -daysBetween(job.scheduled_start_date, today); // positive = in the future
+      const reminderDays = job.schedule_reminder_days || [7, 1];
+      const alreadySent = job.schedule_reminders_sent || [];
 
-      let reminderField = null;
-      let daysOutForCopy = null;
-      if (daysOut === 7 && !job.schedule_reminder_7d_sent_at) { reminderField = 'schedule_reminder_7d_sent_at'; daysOutForCopy = 7; }
-      else if (daysOut === 1 && !job.schedule_reminder_1d_sent_at) { reminderField = 'schedule_reminder_1d_sent_at'; daysOutForCopy = 1; }
-      if (!reminderField) continue;
+      if (!reminderDays.includes(daysOut) || alreadySent.includes(daysOut)) continue;
 
       if (await isOptedOut(job.customer_email)) {
         results.skipped_opted_out++;
@@ -119,10 +117,10 @@ export async function GET(request) {
           customerName: job.customer_name,
           projectAddress: job.project_address,
           scheduledStartDate: job.scheduled_start_date,
-          daysOut: daysOutForCopy,
+          daysOut,
         });
         await sendMail(transporter, { to: job.customer_email, subject, html, text });
-        await supabase.from('jobs').update({ [reminderField]: new Date().toISOString() }).eq('id', job.id);
+        await supabase.from('jobs').update({ schedule_reminders_sent: [...alreadySent, daysOut] }).eq('id', job.id);
         results.reminders_sent++;
       } catch (err) {
         results.errors.push(`Job ${job.id}: ${err.message}`);
