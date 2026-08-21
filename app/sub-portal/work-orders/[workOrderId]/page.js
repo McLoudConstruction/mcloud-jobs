@@ -52,11 +52,16 @@ export default function SubPortalWorkOrderPage() {
     return () => supabase.removeChannel(channel);
   }, [session, workOrderId, load]);
 
-  async function acceptWorkOrder(signature) {
+  const [draftSignature, setDraftSignature] = useState(null);
+
+  async function submitAcceptance() {
+    if (!draftSignature) return;
+    if (!confirm('Submit and accept this work order? Once submitted, the signature can no longer be changed.')) return;
     setSaving(true);
-    const { error } = await supabase.rpc('accept_work_order', { target_work_order_id: workOrderId, signature_payload: signature });
+    const { error } = await supabase.rpc('accept_work_order', { target_work_order_id: workOrderId, signature_payload: draftSignature });
     setSaving(false);
-    if (error) alert('Failed to sign: ' + error.message);
+    if (error) { alert('Failed to sign: ' + error.message); return; }
+    router.push(`/sub-portal/projects/${wo.job_id}`);
   }
 
   async function submitDecline() {
@@ -134,11 +139,21 @@ export default function SubPortalWorkOrderPage() {
             <h3>Accept This Work Order</h3>
             <SignaturePad
               label="Signature"
-              saved={null}
+              saved={draftSignature}
               saving={saving}
-              onSave={acceptWorkOrder}
+              onSave={setDraftSignature}
               note="Sign to accept this work order"
             />
+            {draftSignature?.signature && (
+              <div style={{ marginTop: 14 }}>
+                <button className="btn btn-primary btn-sm" onClick={submitAcceptance} disabled={saving}>
+                  {saving ? 'Submitting…' : 'Submit'}
+                </button>
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                  You can still clear and re-sign above until you click Submit.
+                </div>
+              </div>
+            )}
             <div className="section-actions">
               <button className="btn btn-sm btn-danger" onClick={() => setDeclining(true)}>Can't take this one</button>
             </div>
