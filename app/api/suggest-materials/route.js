@@ -35,7 +35,7 @@ export async function POST(request) {
 Action list:
 ${actionsList}
 
-For each material likely needed, suggest a description and a starting quantity based ONLY on the exact count implied by the actions — never pad the quantity yourself. For example, 2 faucet actions means quantity 2, not 3.
+For each material likely needed, suggest a description and a starting quantity based ONLY on the exact count implied by the actions — never pad the quantity yourself. For example, 2 faucet actions means quantity 2, not 3. If an action's own count is uncertain (e.g. it says "count not specified, confirm on-site"), carry that same uncertainty forward — use quantity 1 and say so in the material's description, rather than picking a specific number that wasn't actually given anywhere upstream.
 
 Separately, for materials that are commonly bought in slight excess for practical reasons (cut waste, breakage, matching dye lots, etc. — typically lumber, sheet goods, tile, fasteners, and similar bulk/consumable materials), add a short "buffer_note" explaining why a contractor might reasonably buy a bit more, e.g. "Framing lumber — many contractors buy 1-2 extra boards for cuts and waste." Do NOT add a buffer_note for fixed-count fixtures or hardware (faucets, toilets, light fixtures, appliances, etc.) — those should just be the exact count, no note.
 

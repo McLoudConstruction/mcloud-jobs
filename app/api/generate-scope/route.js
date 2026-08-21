@@ -58,6 +58,8 @@ SECOND, also produce an exhaustive, contractor-side action list — every indivi
 
 For each entry, count correctly the first time — if the job involves 2 sinks, that typically means 2 faucets, but could mean 4 supply lines (2 hot, 2 cold) and 2 drain lines; think through the real quantities like an estimator would, don't just copy the customer-facing count.
 
+Critically: only state a specific quantity when the description actually gives you enough information to know it. If the description doesn't specify a count — for example "replace kitchen cabinets" with no number of cabinets given — do NOT invent a number based on what a "typical" kitchen usually has. Instead, set quantity to 1 and write the description to make the uncertainty explicit, e.g. "Base cabinets — count not specified, confirm on-site" rather than presenting a guessed number as if it were real. A confident-looking number the contractor didn't actually provide is worse than an honest placeholder.
+
 Tag every entry with the single best-matching trade from this exact list (use these exact strings, nothing else): ${JSON.stringify(SERVICES_OFFERED)}.
 
 Each entry needs: "description" (the action, concise), "trade" (one of the exact strings above, or "Other" if none fit), "unit_label" (the countable unit, e.g. "faucet", "supply line", "sheet of drywall" — singular), "quantity" (a number).
