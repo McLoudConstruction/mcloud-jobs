@@ -139,7 +139,7 @@ export default function CompaniesPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Companies</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Company Database</h2>
           <div style={{ display: 'flex', gap: 10 }}>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>

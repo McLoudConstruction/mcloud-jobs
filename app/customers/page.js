@@ -226,7 +226,7 @@ export default function CustomersPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Contacts</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Contact Database</h2>
           <div style={{ display: 'flex', gap: 10 }}>
             <input
               ref={fileInputRef}

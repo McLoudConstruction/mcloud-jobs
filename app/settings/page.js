@@ -23,7 +23,7 @@ const AUTOMATIONS = [
 const INTEGRATIONS = [
   { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
   { key: 'stripe', name: 'Payment processor (Stripe)', description: 'Accept card payments on invoices.' },
-  { key: 'email', name: 'Transactional email (your SMTP server)', description: 'Auto-send proposals, contracts, and updates by email.' },
+  { key: 'email', name: 'Transactional email (your SMTP server)', description: 'Auto-send estimates, contracts, and updates by email.' },
 ];
 
 const FONT_OPTIONS = [
@@ -135,7 +135,7 @@ export default function SettingsPage() {
       brand_color: '#8a3d14',
       font_choice: 'system',
       logo_size_desktop: 180,
-      logo_size_mobile: 120,
+      logo_size_mobile: 150,
       signout_bg: 'transparent',
       signout_text: '#49402a',
       signout_hover_bg: '#302a1a',
@@ -175,16 +175,42 @@ export default function SettingsPage() {
           <div className="two-col" style={{ marginTop: 16 }}>
             <div>
               <label>Logo height on desktop (px)</label>
-              <input type="number" value={form.logo_size_desktop ?? 180} onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 0)} />
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="150" max="300" step="1"
+                  value={form.logo_size_desktop ?? 180}
+                  onChange={e => update('logo_size_desktop', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="150" max="300"
+                  value={form.logo_size_desktop ?? 180}
+                  onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 150)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
+              </div>
             </div>
             <div>
               <label>Logo height on mobile (px)</label>
-              <input type="number" value={form.logo_size_mobile ?? 120} onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 0)} />
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="150" max="300" step="1"
+                  value={form.logo_size_mobile ?? 150}
+                  onChange={e => update('logo_size_mobile', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="150" max="300"
+                  value={form.logo_size_mobile ?? 150}
+                  onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 150)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
+              </div>
             </div>
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-            This updates the logo shown in the app. Proposal, contract, and update documents still use the original letterhead logo for now — let me know if you want those switched over too.
+            This updates the logo shown in the app. Estimate, contract, and update documents still use the original letterhead logo for now — let me know if you want those switched over too.
           </div>
         </div>
 

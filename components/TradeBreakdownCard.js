@@ -69,7 +69,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
         {readOnly
           ? <>Reference only — this is what the job needs, for pricing. {linkHref && <a href={linkHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Edit on the Scope tab →</a>}</>
-          : "The full internal task list behind the customer proposal — this is what actually populates a subcontractor's work order by trade."}
+          : "The full internal task list behind the customer estimate — this is what actually populates a subcontractor's work order by trade."}
       </div>
 
       <div className="section-actions" style={{ marginTop: 0 }}>

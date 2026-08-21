@@ -4,22 +4,31 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, PersonIcon, CalculatorIcon, MessagesIcon, InvoiceIcon, SunIcon, MoonIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   {
-    href: '/customers',
-    label: 'Contacts',
-    icon: PersonIcon,
+    href: '/sales',
+    label: 'Sales',
+    icon: SalesIcon,
     children: [
+      { href: '/customers', label: 'People' },
       { href: '/properties', label: 'Properties' },
       { href: '/companies', label: 'Companies' },
+      { href: '/sales/routes', label: 'Route Builder' },
     ],
   },
-  { href: '/sales', label: 'Sales', icon: SalesIcon },
-  { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon },
+  {
+    href: '/jobs',
+    label: 'Projects',
+    icon: JobDashboardIcon,
+    children: [
+      { href: '/estimating', label: 'Estimating' },
+      { href: '/invoices', label: 'Invoicing' },
+    ],
+  },
   {
     href: '/subcontractors',
     label: 'Subcontractors',
@@ -36,7 +45,6 @@ const NAV_ITEMS = [
       { href: '/notifications', label: 'Notifications' },
     ],
   },
-  { href: '/invoices', label: 'Invoices', icon: InvoiceIcon },
   {
     href: '/financials',
     label: 'Financials',
@@ -46,7 +54,6 @@ const NAV_ITEMS = [
       { href: '/financials/receivable', label: 'Accounts Receivable' },
     ],
   },
-  { href: '/estimating', label: 'Estimating', icon: CalculatorIcon },
 ];
 
 function isSectionActive(item, pathname) {
@@ -181,10 +188,10 @@ export default function AppShell({ children }) {
                     aria-label="Toggle light/dark mode"
                     type="button"
                   >
-                    <span className="theme-slider-track-icon theme-slider-track-sun"><SunIcon width={15} height={15} /></span>
-                    <span className="theme-slider-track-icon theme-slider-track-moon"><MoonIcon width={15} height={15} /></span>
+                    <span className="theme-slider-track-icon"><SunIcon width={13} height={13} /></span>
+                    <span className="theme-slider-track-icon"><MoonIcon width={13} height={13} /></span>
                     <span className="theme-slider-knob">
-                      {theme === 'dark' ? <MoonIcon width={17} height={17} /> : <SunIcon width={17} height={17} />}
+                      {theme === 'dark' ? <MoonIcon width={14} height={14} /> : <SunIcon width={14} height={14} />}
                     </span>
                   </button>
                 </div>

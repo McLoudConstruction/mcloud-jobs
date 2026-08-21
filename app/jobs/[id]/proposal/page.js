@@ -12,7 +12,7 @@ const LOGO_SRC = '/mcloud-logo.png';
 
 const STANDARD_EXCLUSIONS = [
   'A deposit of 50% of the total project investment is due up front before work begins, with the remaining balance due per the agreed payment schedule.',
-  'Proposal valid for 30 days from the date above.',
+  'Estimate valid for 30 days from the date above.',
   'Pricing is based on visible conditions at the time of estimate. Concealed conditions discovered once work begins (moisture, structural, electrical, etc.) may require a change order.',
   'Permit fees, if required, are not included and will be billed separately.',
   'Homeowner is responsible for clearing the work area and relocating pets prior to each scheduled work day.',
@@ -48,7 +48,7 @@ export default function ProposalDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `Proposal-${job.job_number}.pdf`);
+      const base64 = await generatePdfBase64('doc-preview', `Estimate-${job.job_number}.pdf`);
       window.open(base64ToPdfUrl(base64), '_blank');
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
@@ -82,11 +82,11 @@ export default function ProposalDocumentPage() {
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
-            <div className="doc-brand-tag">Proposal<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Estimate<span className="doc-num">#{job.job_number}</span></div>
           </div>
 
           <div className="doc-body">
-            <h1 className="doc-title">Project Proposal</h1>
+            <h1 className="doc-title">Project Estimate</h1>
 
             <div className="party-grid">
               <div>
@@ -103,7 +103,7 @@ export default function ProposalDocumentPage() {
             <div className="section">
               <h3>Project</h3>
               <p style={{ marginBottom: 4 }}><b>Jobsite:</b> {job.project_address || '—'}</p>
-              <p style={{ marginBottom: 12 }}><b>Proposal date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</p>
+              <p style={{ marginBottom: 12 }}><b>Estimate date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</p>
               <p className={job.description ? '' : 'empty'}>{job.description || 'No description entered yet.'}</p>
             </div>
 
@@ -122,7 +122,7 @@ export default function ProposalDocumentPage() {
             {!job.contract_finalized_at && (
               <div className="proposal-cta-print">
                 <span className="proposal-cta-print-text">Ready to move forward?</span>
-                <span className="proposal-cta-print-action">Reply to your proposal email or call McLoud Construction to get started.</span>
+                <span className="proposal-cta-print-action">Reply to your estimate email or call McLoud Construction to get started.</span>
               </div>
             )}
 
@@ -142,7 +142,7 @@ export default function ProposalDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Proposal #{job.job_number}</span>
+              <span>Estimate #{job.job_number}</span>
             </div>
           </div>
         </div>
@@ -151,12 +151,12 @@ export default function ProposalDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`Proposal #${job.job_number}`}
+        docLabel={`Estimate #${job.job_number}`}
         docType="proposal"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
-        pdfFilename={`Proposal-${job.job_number}.pdf`}
+        pdfFilename={`Estimate-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
           await supabase.from('jobs').update({ proposal_sent_at: new Date().toISOString() }).eq('id', id);

@@ -16,7 +16,7 @@ import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, STAGE_DOCS, phaseForStage, contractPathFor, nextSequentialNumber, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
 const TABS = [
   { key: 'Customer', label: 'Customer Details' },
@@ -116,7 +116,15 @@ export default function JobDetailPage() {
     if (idx >= STAGE_ORDER.length - 1) return;
     const next = STAGE_ORDER[idx + 1];
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
-    await saveJob({ stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) });
+
+    const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
+    if (next === 'approved' && !job.job_number) {
+      const { data: last } = await supabase.from('jobs').select('job_number').not('job_number', 'is', null).order('created_at', { ascending: false }).limit(1);
+      const lastNumber = last && last[0] && last[0].job_number;
+      patch.job_number = nextSequentialNumber(lastNumber, job.estimate_number);
+    }
+    await saveJob(patch);
+
     if (next === 'approved' && job.contract_price) {
       const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
       if (!existing || existing.length === 0) {
@@ -163,7 +171,7 @@ export default function JobDetailPage() {
         <Breadcrumb href="/jobs" label="Back to Job Tracker" />
         <div className="top-actions">
           <div>
-            <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>#{job.job_number} — {job.customer_name || 'Unnamed customer'}</h2>
+            <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
             <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
             {flash && <span className="saved-flash">{flash}</span>}
           </div>
@@ -259,7 +267,7 @@ function CommunicationsCard({ job, jobId, updates, changeOrders }) {
     entries.push({ at: job.portal_invited_at, label: 'Customer portal invite sent', href: null });
   }
   if (job.proposal_sent_at) {
-    entries.push({ at: job.proposal_sent_at, label: 'Proposal sent', href: `/jobs/${jobId}/proposal` });
+    entries.push({ at: job.proposal_sent_at, label: 'Estimate sent', href: `/jobs/${jobId}/proposal` });
   }
   if (job.contract_sent_at) {
     entries.push({ at: job.contract_sent_at, label: 'Contract sent', href: contractPathFor(job) });
@@ -647,7 +655,7 @@ function DocumentsCard({ jobId, job }) {
   const relevantDocs = STAGE_DOCS[job.stage] || [];
   const isActivePhase = phaseForStage(job.stage) === 'active_phase';
   const DOC_META = {
-    proposal: { label: 'Proposal', href: `/jobs/${jobId}/proposal` },
+    proposal: { label: 'Estimate', href: `/jobs/${jobId}/proposal` },
     contract: { label: 'Contract', href: contractPathFor(job) },
     invoice: { label: 'Invoice', href: `/jobs/${jobId}/invoice` },
     update: { label: 'Project Update (post one below)', href: null },

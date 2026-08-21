@@ -3,7 +3,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 // columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), filterable?, stopClickPropagation? }]
 export default function DataTable({ columns, rows, onRowClick, getRowKey }) {
-  const [widths, setWidths] = useState(() => Object.fromEntries(columns.map(c => [c.key, c.defaultWidth || 160])));
+  const [widths, setWidths] = useState(() => {
+    // On a narrow viewport, start columns noticeably tighter so more of
+    // the table is visible before scrolling — the user can still drag
+    // any column back out afterward, this only affects the starting point.
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const scale = isMobile ? 0.6 : 1;
+    return Object.fromEntries(columns.map(c => [c.key, Math.round((c.defaultWidth || 160) * scale)]));
+  });
   const [filters, setFilters] = useState({});
   const resizing = useRef(null);
 

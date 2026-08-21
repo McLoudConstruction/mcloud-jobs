@@ -193,11 +193,11 @@ export default function PortalDashboardPage() {
                 <h3>Documents</h3>
                 <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
                   {job.proposal_sent_at && (
-                    <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Proposal ↗</a>
+                    <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Estimate ↗</a>
                   )}
                   {job.proposal_sent_at && !job.contract_finalized_at && (
                     <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: -4 }}>
-                      Ready to move forward? Open the proposal and use the "Sign the Contract" button inside it.
+                      Ready to move forward? Open the estimate and use the "Sign the Contract" button inside it.
                     </div>
                   )}
                   {job.contract_sent_at && (

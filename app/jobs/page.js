@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
-import { STAGE_ORDER, STAGE_LABELS } from '../../lib/constants';
+import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
 const STAGES = ['all', ...STAGE_ORDER];
 const TAB_LABELS = { all: 'All', ...STAGE_LABELS };
@@ -82,7 +82,7 @@ export default function JobTrackerPage() {
         {filtered.map(job => (
           <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
             <div className="job-main">
-              <span className="job-number">#{job.job_number}</span>
+              <span className="job-number">{formattedProjectNumber(job)}</span>
               <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
               <span className="job-address">{job.project_address || 'No address yet'}</span>
             </div>

@@ -123,20 +123,12 @@ export function FinanceIcon(props) {
 
 export function SettingsIcon(props) {
   return (
-    <svg {...common} {...props}>
-      <circle cx="10" cy="10" r="5.3" />
-      <circle cx="10" cy="10" r="2.1" />
-      <g fill="currentColor" stroke="none">
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" />
-        <rect x="9.1" y="16.7" width="1.8" height="2.6" rx="0.6" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(45 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(90 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(135 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(180 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(225 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(270 10 10)" />
-        <rect x="9.1" y="0.7" width="1.8" height="2.6" rx="0.6" transform="rotate(315 10 10)" />
-      </g>
+    <svg {...common} {...props} fill="currentColor" stroke="none">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M 15.27 7.82 L 17.31 8.84 L 17.31 11.16 L 15.27 12.18 L 15.99 14.35 L 14.35 15.99 L 12.18 15.27 L 11.16 17.31 L 8.84 17.31 L 7.82 15.27 L 5.65 15.99 L 4.01 14.35 L 4.73 12.18 L 2.69 11.16 L 2.69 8.84 L 4.73 7.82 L 4.01 5.65 L 5.65 4.01 L 7.82 4.73 L 8.84 2.69 L 11.16 2.69 L 12.18 4.73 L 14.35 4.01 L 15.99 5.65 Z M 12.3 10 A 2.3 2.3 0 1 0 7.7 10 A 2.3 2.3 0 1 0 12.3 10 Z"
+      />
     </svg>
   );
 }

@@ -96,6 +96,10 @@ a { color: inherit; text-decoration: none; }
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
 }
+@media (max-width: 640px){
+  .dash-kpi-grid{ grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dash-kpi-grid .card{ padding: 14px 12px; }
+}
 .dash-stage-strip{
   display: flex;
   flex-wrap: wrap;
@@ -199,8 +203,9 @@ a { color: inherit; text-decoration: none; }
 
 .sub-portal-tabs{
   display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 1px solid var(--line);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
-.sub-portal-tabs button{
+.sub-portal-tabs button{ flex-shrink: 0;
   background: transparent; border: none; padding: 10px 16px; font-size: 13px; font-weight: 600;
   color: var(--ink-soft); cursor: pointer; border-bottom: 2px solid transparent; font-family: inherit;
 }
@@ -260,7 +265,7 @@ a { color: inherit; text-decoration: none; }
 .topbar .brand span{ color: var(--gold); }
 .topbar-actions{ display:flex; gap: 10px; align-items:center; }
 .topbar .btn{ color: var(--header-text); border-color: var(--header-line); }
-.topbar .btn:hover{ border-color: var(--accent); color: var(--accent); }
+.topbar .btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
 
 .btn{
   font-family: inherit;
@@ -318,8 +323,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 /* Underline tabs — replaces the old filled-pill nav pattern everywhere
    it's used (job stage tabs, section sub-nav, portal mode switch, sub
    portal tabs all share this same class). */
-.stage-tabs{ display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
-.stage-tab{
+.stage-tabs{ display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: nowrap; border-bottom: 1px solid var(--line); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.stage-tab{ flex-shrink: 0;
   padding: 10px 2px;
   border-radius: 0;
   font-size: 13px;
@@ -335,12 +340,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .stage-tab.active{ background: transparent; color: var(--accent); border-color: var(--accent); font-weight: 700; }
 
 .section-subnav{
-  display: flex; gap: 22px; flex-wrap: wrap;
+  display: flex; gap: 22px; flex-wrap: nowrap;
   padding: 14px 24px 0;
   max-width: 1400px;
   margin: 0 auto;
   border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+.section-subnav .stage-tab{ flex-shrink: 0; }
 .section-subnav .stage-tab{ text-decoration: none; }
 
 .badge{
@@ -489,7 +498,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .notif-badge{
   position: absolute; top: -5px; right: -5px;
-  background: var(--accent); color: #fff;
+  background: var(--header-accent, var(--accent)); color: #fff;
   font-size: 10px; font-weight: 700;
   min-width: 16px; height: 16px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -511,33 +520,31 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--header-text); flex-shrink: 0;
 }
-.theme-toggle-btn:hover{ border-color: var(--accent); color: var(--accent); }
+.theme-toggle-btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
 
 .theme-slider-row{ padding: 8px 24px 14px; }
 .theme-slider{
   position: relative;
-  width: 96px; height: 40px;
-  border-radius: 20px;
+  width: 68px; height: 34px;
+  border-radius: 17px;
   border: 1px solid var(--panel-line);
   background: var(--card-bg);
   cursor: pointer;
-  padding: 0;
+  padding: 0 8px;
+  display: flex; align-items: center; justify-content: space-between;
 }
 .theme-slider-track-icon{
-  position: absolute; top: 50%; transform: translateY(-50%);
-  color: var(--ink-soft); opacity: 0.55; display: flex;
+  color: var(--ink-soft); opacity: 0.55; display: flex; position: static; transform: none;
 }
-.theme-slider-track-sun{ left: 11px; }
-.theme-slider-track-moon{ right: 11px; }
 .theme-slider-knob{
-  position: absolute; top: 3px; left: 3px;
-  width: 34px; height: 34px; border-radius: 50%;
+  position: absolute; top: 2px; left: 2px;
+  width: 28px; height: 28px; border-radius: 50%;
   background: #d9a441; /* warm gold — light mode / sun */
   display: flex; align-items: center; justify-content: center;
   color: #fff;
   transition: transform 0.18s ease, background-color 0.18s ease;
 }
-.theme-slider.is-dark .theme-slider-knob{ transform: translateX(56px); background: #4a5a78; /* cool slate — dark mode / moon */ }
+.theme-slider.is-dark .theme-slider-knob{ transform: translateX(34px); background: #4a5a78; /* cool slate — dark mode / moon */ }
 
 .signout-link{
   background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
@@ -569,7 +576,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 12px 0 16px;
+  padding: 4px 0 16px;
   box-sizing: border-box;
   overflow-y: hidden;
   transition: width 0.2s ease;
@@ -621,6 +628,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table tbody tr:hover{ background: var(--line); }
 .data-table tbody tr:last-child td{ border-bottom: none; }
 .data-table-wrap{ overflow-x: auto; }
+@media (max-width: 640px){
+  .data-table{ font-size: 11.5px; }
+  .data-table th{ padding: 6px 7px; font-size: 9.5px; }
+  .data-table td{ padding: 6px 7px; }
+}
 .data-table th{ position: relative; }
 .col-resize-handle{
   position: absolute; top: 0; right: 0; bottom: 0; width: 6px;

@@ -27,7 +27,7 @@ export default function LoginPage() {
     <div className="login-wrap">
       <div className="login-card">
         <h1>McLoud Jobs</h1>
-        <p className="sub">Sign in to manage jobs, proposals, and updates.</p>
+        <p className="sub">Sign in to manage projects, estimates, and updates.</p>
         <form onSubmit={handleSubmit}>
           <label htmlFor="email">Email</label>
           <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />

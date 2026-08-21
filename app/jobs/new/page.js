@@ -6,14 +6,17 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import AIScopeGenerator from '../../../components/AIScopeGenerator';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, formatPhone } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, formatPhone, nextSequentialNumber } from '../../../lib/constants';
 
 const EMPTY_FORM = {
-  job_number: '',
+  estimate_number: '',
   contract_price: '',
   job_type: '',
   expected_close_date: '',
   project_type: '', // 'residential' | 'commercial'
+  company: '',
+  first_name: '',
+  last_name: '',
   customer_name: '',
   customer_contact: '',
   customer_email: '',
@@ -34,18 +37,12 @@ function NewJobPageInner() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => {
-    async function loadNextJobNumber() {
-      const { data } = await supabase.from('jobs').select('job_number').order('created_at', { ascending: false }).limit(1);
-      const last = data && data[0] && data[0].job_number;
-      if (!last) return;
-      const match = last.match(/^(.*?)(\d+)$/);
-      if (match) {
-        const [, prefix, digits] = match;
-        const next = (parseInt(digits, 10) + 1).toString().padStart(digits.length, '0');
-        setForm(prev => (prev.job_number ? prev : { ...prev, job_number: prefix + next }));
-      }
+    async function loadNextEstimateNumber() {
+      const { data } = await supabase.from('jobs').select('estimate_number').not('estimate_number', 'is', null).order('created_at', { ascending: false }).limit(1);
+      const last = data && data[0] && data[0].estimate_number;
+      setForm(prev => (prev.estimate_number ? prev : { ...prev, estimate_number: nextSequentialNumber(last, `EST-${new Date().getFullYear()}-001`) }));
     }
-    loadNextJobNumber();
+    loadNextEstimateNumber();
   }, []);
 
   useEffect(() => {
@@ -53,10 +50,12 @@ function NewJobPageInner() {
     supabase.from('opportunities').select('*').eq('id', oppId).single().then(({ data }) => {
       if (!data) return;
       setSourceOpp(data);
+      const [first, ...rest] = (data.contact_name || '').trim().split(' ');
       setForm(prev => ({
         ...prev,
-        customer_name: data.contact_name || data.company || prev.customer_name,
-        customer_contact: data.contact_name || prev.customer_contact,
+        first_name: first || prev.first_name,
+        last_name: rest.join(' ') || prev.last_name,
+        company: data.company || prev.company,
         customer_email: data.contact_email || prev.customer_email,
         customer_phone: data.contact_phone || prev.customer_phone,
         description: [data.project, data.notes].filter(Boolean).join(' — ') || prev.description,
@@ -100,13 +99,16 @@ function NewJobPageInner() {
   }
 
   // ---- Customer name autofill suggestions ----
-  function handleNameChange(value) {
-    update('customer_name', value);
+  function handleNameChange(field, value) {
+    update(field, value);
     setSelectedContactId(null);
+    const term = field === 'first_name' ? value : form.first_name;
+    const termLast = field === 'last_name' ? value : form.last_name;
+    const combined = `${term} ${termLast}`.trim();
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (!combined.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
     searchTimer.current = setTimeout(async () => {
-      const { data } = await supabase.from('contacts').select('*').ilike('name', `%${value.trim()}%`).limit(5);
+      const { data } = await supabase.from('contacts').select('*').ilike('name', `%${combined.trim()}%`).limit(5);
       setSuggestions(data || []);
       setShowSuggestions((data || []).length > 0);
     }, 250);
@@ -119,6 +121,9 @@ function NewJobPageInner() {
     setSelectedContactId(contact.id);
     setForm(prev => ({
       ...prev,
+      first_name: contact.first_name || prev.first_name,
+      last_name: contact.last_name || prev.last_name,
+      company: contact.management_company || prev.company,
       customer_name: contact.name || prev.customer_name,
       customer_contact: prev.customer_contact,
       customer_email: contact.contact_email || prev.customer_email,
@@ -174,19 +179,13 @@ function NewJobPageInner() {
   }, [form.project_type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function validate() {
-    if (!form.job_number.trim()) return 'Job number is required.';
     if (!form.project_type) return 'Please select Residential or Commercial.';
+    if (!form.first_name.trim() || !form.last_name.trim()) return 'First and last name are required.';
     if (!form.customer_email.trim()) return 'Contact email is required.';
     if (!form.customer_phone.trim()) return 'Contact phone is required.';
-    if (!form.project_street.trim() || !form.project_city.trim()) return 'Project/jobsite address is required.';
 
     if (form.project_type === 'commercial') {
-      if (!form.customer_name.trim()) return 'Customer/Company name is required.';
-      if (!form.customer_contact.trim()) return 'Contact person is required.';
-      if (!form.billing_email.trim()) return 'Billing email is required.';
-      if (!form.billing_street.trim() || !form.billing_city.trim()) return 'Billing address is required.';
-    } else {
-      if (!form.customer_name.trim()) return 'Customer name is required.';
+      if (!form.company.trim()) return 'Company name is required for commercial opportunities.';
     }
     return '';
   }
@@ -198,8 +197,16 @@ function NewJobPageInner() {
     setError('');
     setSaving(true);
 
+    const fullName = `${form.first_name.trim()} ${form.last_name.trim()}`.trim();
     const payload = {
       ...form,
+      // customer_name stays the single "who this is" field used everywhere
+      // downstream (documents, portal, messages) — company for commercial,
+      // the person's name for residential. customer_contact is always the
+      // actual person, useful even when a company is billed.
+      customer_name: isCommercial ? form.company.trim() : fullName,
+      customer_contact: fullName,
+      job_number: null,
       contract_price: form.contract_price ? parseFloat(form.contract_price.replace(/[^0-9.]/g, '')) : null,
       scope_items: scopeItems.filter(t => t.trim()).map(text => ({ text })),
       additional_terms: termItems.filter(t => t.trim()).map(text => ({ text })),
@@ -208,18 +215,21 @@ function NewJobPageInner() {
       project_address: formatAddress(form, 'project'),
       stage: 'new',
     };
+    delete payload.company;
+    delete payload.first_name;
+    delete payload.last_name;
 
     const { data, error: insertError } = await supabase.from('jobs').insert(payload).select().single();
 
-    if (!insertError && !selectedContactId && form.customer_name.trim()) {
+    if (!insertError && !selectedContactId) {
       // No existing contact was picked from suggestions, so this is a brand
       // new customer — log them as a contact now rather than letting their
       // info live only on this one job with no record in the CRM.
-      const [first, ...rest] = form.customer_name.trim().split(' ');
       await supabase.from('contacts').insert({
-        name: form.customer_name.trim(),
-        first_name: first || null,
-        last_name: rest.join(' ') || null,
+        name: payload.customer_name || fullName,
+        first_name: form.first_name.trim() || null,
+        last_name: form.last_name.trim() || null,
+        management_company: isCommercial ? form.company.trim() || null : null,
         contact_email: form.customer_email || null,
         contact_phone: form.customer_phone || null,
         billing_email: form.billing_email || null,
@@ -240,7 +250,7 @@ function NewJobPageInner() {
     setSaving(false);
 
     if (insertError) {
-      setError(insertError.message.includes('duplicate') ? 'That job number is already in use.' : insertError.message);
+      setError(insertError.message.includes('duplicate') ? 'That estimate number is already in use — refresh and try again.' : insertError.message);
       return;
     }
 
@@ -258,7 +268,7 @@ function NewJobPageInner() {
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ color: 'var(--heading)' }}>New Job</h2>
+        <h2 style={{ color: 'var(--heading)' }}>New Opportunity</h2>
         {sourceOpp && (
           <div className="card" style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '12px 16px' }}>
             Starting from opportunity: <b>{sourceOpp.company || sourceOpp.contact_name || 'Unnamed'}</b> — its details are prefilled below. Marking this job created will mark that opportunity Converted.
@@ -267,11 +277,14 @@ function NewJobPageInner() {
 
         <form onSubmit={handleSubmit}>
           <div className="card">
-            <h3>Job info</h3>
+            <h3>Estimate info</h3>
             <div className="two-col">
               <div>
-                <label>Job number *</label>
-                <input value={form.job_number} onChange={e => update('job_number', e.target.value)} placeholder="e.g. 2026-014" required />
+                <label>Estimate number</label>
+                <input value={form.estimate_number} disabled style={{ opacity: 0.7 }} />
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  Assigned automatically. This becomes a real Job number once the opportunity is Approved.
+                </div>
               </div>
               <div>
                 <label>Estimated contract price ($)</label>
@@ -284,6 +297,10 @@ function NewJobPageInner() {
               <div>
                 <label>Expected close date</label>
                 <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
+              </div>
+              <div>
+                <label>Date entered</label>
+                <input value={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
               </div>
             </div>
           </div>
@@ -300,17 +317,38 @@ function NewJobPageInner() {
 
             {form.project_type && (
               <>
-                <div style={{ position: 'relative', marginTop: 12 }}>
-                  <label>{isCommercial ? 'Customer / Company name *' : 'Customer name *'}</label>
-                  <input
-                    value={form.customer_name}
-                    onChange={e => handleNameChange(e.target.value)}
-                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                    autoComplete="off"
-                  />
+                {isCommercial && (
+                  <div style={{ marginTop: 12 }}>
+                    <label>Company *</label>
+                    <input value={form.company} onChange={e => update('company', e.target.value)} required />
+                  </div>
+                )}
+
+                <div className="two-col" style={{ marginTop: 12, position: 'relative' }}>
+                  <div>
+                    <label>First name *</label>
+                    <input
+                      value={form.first_name}
+                      onChange={e => handleNameChange('first_name', e.target.value)}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label>Last name *</label>
+                    <input
+                      value={form.last_name}
+                      onChange={e => handleNameChange('last_name', e.target.value)}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
                   {showSuggestions && (
-                    <div style={{ position: 'absolute', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
                       {suggestions.map(s => (
                         <div
                           key={s.id}
@@ -330,34 +368,30 @@ function NewJobPageInner() {
 
                 <div className="two-col" style={{ marginTop: 12 }}>
                   <div>
-                    <label>Contact person {isCommercial ? '*' : '(optional)'}</label>
-                    <input value={form.customer_contact} onChange={e => update('customer_contact', e.target.value)} required={isCommercial} />
+                    <label>Contact phone *</label>
+                    <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} required />
                   </div>
                   <div>
                     <label>Contact email *</label>
                     <input type="email" value={form.customer_email} onChange={e => update('customer_email', e.target.value)} required />
                   </div>
-                  <div>
-                    <label>Contact phone *</label>
-                    <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} required />
-                  </div>
                   {isCommercial && (
                     <div>
-                      <label>Billing email *</label>
-                      <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} required />
+                      <label>Billing email</label>
+                      <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
                     </div>
                   )}
                 </div>
 
-                <label style={{ marginTop: 16 }}>Billing address {isCommercial ? '*' : ''}</label>
-                <AddressFields prefix="billing" values={form} onChange={update} required={isCommercial} placesEnabled />
+                <label style={{ marginTop: 16 }}>Billing address</label>
+                <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
                   <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
                   Project address same as billing address
                 </label>
-                <label>Project / jobsite address *</label>
-                <AddressFields prefix="project" values={form} onChange={update} required={!sameAsBilling} placesEnabled />
+                <label>Project / jobsite address</label>
+                <AddressFields prefix="project" values={form} onChange={update} placesEnabled />
               </>
             )}
           </div>

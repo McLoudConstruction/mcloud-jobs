@@ -6,7 +6,8 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
-import { STAGE_ORDER, STAGE_LABELS, phaseForStage } from '../../lib/constants';
+import FitText from '../../components/FitText';
+import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 
 function fmtMoney(n) {
   if (!n) return '$0';
@@ -80,33 +81,33 @@ export default function DashboardPage() {
           {show('sold_job_count') && (
             <div className="card">
               <h3>Sold jobs</h3>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{stats.soldCount}</div>
+              <FitText style={{ color: 'var(--heading)' }}>{stats.soldCount}</FitText>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
             </div>
           )}
           {show('total_ar') && (
             <div className="card">
               <h3>Total AR (billed, unpaid)</h3>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</div>
+              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</FitText>
             </div>
           )}
           {show('total_paid') && (
             <div className="card">
               <h3>Total paid (all-time)</h3>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</div>
+              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</FitText>
             </div>
           )}
           {show('revenue_ytd') && (
             <div className="card">
               <h3>Income YTD</h3>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</div>
+              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</FitText>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Cash actually collected</div>
             </div>
           )}
           {show('revenue_mtd') && (
             <div className="card">
               <h3>Income MTD</h3>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</div>
+              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</FitText>
             </div>
           )}
           {show('total_profit') && (
@@ -148,7 +149,7 @@ export default function DashboardPage() {
             {stats.overdue.map(job => (
               <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
                 <div className="job-main">
-                  <span className="job-number">#{job.job_number}</span>
+                  <span className="job-number">{formattedProjectNumber(job)}</span>
                   <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
                   <span className="job-address">Expected close: {job.expected_close_date}</span>
                 </div>
