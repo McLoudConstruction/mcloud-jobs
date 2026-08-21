@@ -12,7 +12,6 @@ alter table jobs add column if not exists estimate_number text;
 -- job_number was NOT NULL UNIQUE — now optional (null until Approved),
 -- with uniqueness enforced only among the rows that do have one.
 alter table jobs alter column job_number drop not null;
-drop index if exists jobs_job_number_key;
 alter table jobs drop constraint if exists jobs_job_number_key;
 create unique index if not exists jobs_job_number_unique_idx on jobs (job_number) where job_number is not null;
 create unique index if not exists jobs_estimate_number_unique_idx on jobs (estimate_number) where estimate_number is not null;
