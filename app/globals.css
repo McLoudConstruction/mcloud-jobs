@@ -628,6 +628,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table tbody tr:hover{ background: var(--line); }
 .data-table tbody tr:last-child td{ border-bottom: none; }
 .data-table-wrap{ overflow-x: auto; }
+.route-modal-card-wrap .card{ margin-bottom: 0; }
 @media (max-width: 640px){
   .data-table{ font-size: 11.5px; }
   .data-table th{ padding: 6px 7px; font-size: 9.5px; }

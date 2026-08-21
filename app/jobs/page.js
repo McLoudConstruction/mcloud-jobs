@@ -58,7 +58,7 @@ export default function JobTrackerPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Jobs</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New Job</Link>
+          <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
         </div>
 
         <div className="search-bar">

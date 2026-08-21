@@ -99,13 +99,13 @@ export default function SalesDashboardPage() {
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
-              {showForm ? 'Cancel' : '+ New opportunity'}
+              {showForm ? 'Cancel' : '+ New Lead'}
             </button>
-            <Link href="/jobs/new" className="btn btn-primary">+ New Job</Link>
+            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
           </div>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-          "New opportunity" tracks an early-stage prospect below — convert it to a job once it's real. "New Job" skips the pipeline and starts a project directly.
+          "New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it's worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.
         </div>
 
         <div className="card">
@@ -122,7 +122,7 @@ export default function SalesDashboardPage() {
 
         {showForm && (
           <form className="card" onSubmit={submit}>
-            <h3>{editingId ? 'Edit opportunity' : 'New opportunity'}</h3>
+            <h3>{editingId ? 'Edit lead' : 'New lead'}</h3>
             <div className="two-col">
               <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
               <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
@@ -180,7 +180,7 @@ export default function SalesDashboardPage() {
                     {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
                   </select>
                   {ACTIVE_STAGES.includes(o.stage) && (
-                    <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Job</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
                   )}
                 </>
               )}
