@@ -177,7 +177,7 @@ export default function SalesDashboardPage() {
         {filtered.map(o => (
           <div className="job-row" key={o.id} style={{ flexWrap: 'wrap', gap: 10 }}>
             <div className="job-main">
-              <span className="job-customer">{o.company || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
+              <span className="job-customer">{o.company || o.contact_name || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
               <span className="job-address">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
               {o.stage === 'lost' && o.loss_reason && <span className="job-address" style={{ color: '#a13f3f' }}>Loss reason: {o.loss_reason}</span>}
             </div>
