@@ -53,7 +53,7 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 3000,
+        max_tokens: 6000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -64,12 +64,21 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
     }
 
     const data = await response.json();
-    const fullText = data.content?.[0]?.text || '';
+    // Find the text block specifically rather than assuming it's always
+    // at index 0 — a response can include other block types first,
+    // which would silently produce an empty string here otherwise.
+    const fullText = data.content?.find(block => block.type === 'text')?.text || '';
+    const wasTruncated = data.stop_reason === 'max_tokens';
     const parsed = extractJson(fullText);
     const materials = Array.isArray(parsed?.materials) ? parsed.materials.filter(m => m && typeof m.description === 'string' && m.description.trim()) : null;
 
     if (!materials || materials.length === 0) {
-      throw new Error('AI returned an unexpected format — try again, or just add line items manually.');
+      const snippet = fullText.trim() ? fullText.trim().slice(0, 300) : '(empty response — no text block found)';
+      throw new Error(
+        wasTruncated
+          ? 'The AI response ran out of room before finishing — try again with a shorter action list, or just add line items manually.'
+          : `AI returned an unexpected format. Raw response started with: "${snippet}"`
+      );
     }
 
     return Response.json({

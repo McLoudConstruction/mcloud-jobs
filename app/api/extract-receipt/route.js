@@ -64,11 +64,12 @@ If you cannot confidently read a field, use null for that field rather than gues
     }
 
     const data = await response.json();
-    const rawText = data.content?.[0]?.text || '{}';
+    const rawText = data.content?.find(block => block.type === 'text')?.text || '';
     const extracted = extractJson(rawText);
 
     if (!extracted) {
-      throw new Error('AI returned an unexpected format — you can still key in the details manually.');
+      const snippet = rawText.trim() ? rawText.trim().slice(0, 300) : '(empty response — no text block found)';
+      throw new Error(`AI returned an unexpected format — you can still key in the details manually. Raw response: "${snippet}"`);
     }
 
     return Response.json({ extracted });
