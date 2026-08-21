@@ -151,7 +151,9 @@ Do not include any preamble, explanation, or markdown code fences — your entir
 
     const warning = recoveredPartial
       ? 'The trade breakdown ran out of room and was skipped this time — the customer scope came through fine. Try again, or shorten the description, to get the trade breakdown too.'
-      : null;
+      : (includeTradeBreakdown && tradeActions.length === 0)
+        ? `The customer scope came through, but no trade breakdown was returned this time. Raw response started with: "${fullText.trim().slice(0, 300) || '(empty)'}"`
+        : null;
 
     return Response.json({ items, tradeActions, warning });
   } catch (err) {
