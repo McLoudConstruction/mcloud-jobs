@@ -61,6 +61,12 @@ export default function CustomerProjectsPage() {
   return (
     <CustomerPortalShell>
       <div className="container" style={{ paddingTop: 24 }}>
+        <div style={{ background: '#fff3cd', border: '1px solid #d4a017', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12.5 }}>
+          <b>Debug (temporary):</b> You are signed in as <b>{session.user.email}</b>, role: <b>{session.user.app_metadata?.role || '(none — this is a real customer session)'}</b>.
+          {session.user.app_metadata?.role === 'admin' && (
+            <span style={{ color: '#a13f3f', fontWeight: 700 }}> ← This is your admin session, not the test customer. That's why you're seeing everything.</span>
+          )}
+        </div>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
         {job && (
