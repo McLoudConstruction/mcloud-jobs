@@ -349,6 +349,32 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .calendar-bar{ font-size: 10px; padding: 4px 6px; }
 }
 
+.overview-thirds{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 1000px){ .overview-thirds{ grid-template-columns: 1fr; } }
+
+.milestone-list{ display: flex; flex-direction: column; }
+.milestone-row{
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+  background: none; border-left: none; border-right: none; border-top: none;
+  cursor: pointer; font-family: inherit;
+}
+.milestone-row:last-child{ border-bottom: none; }
+.milestone-row:hover .milestone-label{ color: var(--accent); }
+.milestone-check{
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  border: 1.5px solid var(--panel-line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: transparent;
+}
+.milestone-check-done{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.milestone-label{ flex: 1; font-size: 13px; color: var(--ink); }
+.milestone-count{
+  flex-shrink: 0; background: var(--panel); color: var(--ink-soft);
+  font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 8px;
+}
+
 /* Underline tabs — replaces the old filled-pill nav pattern everywhere
    it's used (job stage tabs, section sub-nav, portal mode switch, sub
    portal tabs all share this same class). */

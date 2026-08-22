@@ -17,12 +17,12 @@ import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
+import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
 const TABS = [
-  { key: 'Customer', label: 'Customer Details' },
-  { key: 'Project', label: 'Project Details' },
+  { key: 'Overview', label: 'Overview' },
   { key: 'Scope', label: 'Scope' },
   { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
@@ -58,7 +58,7 @@ export default function JobDetailPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
   const [notFound, setNotFound] = useState(false);
-  const [tab, setTab] = useState('Customer');
+  const [tab, setTab] = useState('Overview');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -233,8 +233,12 @@ export default function JobDetailPage() {
           ))}
         </div>
 
-        {tab === 'Customer' && (
-          <CustomerInfoCard job={job} onSave={saveJob} />
+        {tab === 'Overview' && (
+          <div className="overview-thirds">
+            <CustomerInfoCard job={job} onSave={saveJob} />
+            <ProjectInfoCard job={job} onSave={saveJob} />
+            <ProjectMilestonesCard job={job} jobId={id} onTabChange={setTab} />
+          </div>
         )}
 
         {tab === 'Portal' && (
@@ -242,10 +246,6 @@ export default function JobDetailPage() {
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>
-        )}
-
-        {tab === 'Project' && (
-          <ProjectInfoCard job={job} onSave={saveJob} />
         )}
 
         {tab === 'Scope' && (
