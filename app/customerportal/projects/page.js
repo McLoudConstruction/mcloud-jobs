@@ -20,14 +20,19 @@ export default function CustomerProjectsPage() {
   const [updates, setUpdates] = useState([]);
   const [selections, setSelections] = useState([]);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
-  const [passwordPromptDismissed, setPasswordPromptDismissed] = useState(false);
 
   useEffect(() => {
-    if (session && !passwordPromptDismissed) {
-      const t = setTimeout(() => setPasswordPromptOpen(true), 400);
-      return () => clearTimeout(t);
-    }
-  }, [session, passwordPromptDismissed]);
+    if (!session) return;
+    const dismissKey = `mcloud-portal-password-prompt-dismissed-${session.user.id}`;
+    if (window.localStorage.getItem(dismissKey)) return;
+    const t = setTimeout(() => setPasswordPromptOpen(true), 400);
+    return () => clearTimeout(t);
+  }, [session]);
+
+  function dismissPasswordPrompt() {
+    setPasswordPromptOpen(false);
+    if (session) window.localStorage.setItem(`mcloud-portal-password-prompt-dismissed-${session.user.id}`, '1');
+  }
 
   useEffect(() => {
     if (!selectedJobId) return;
@@ -128,7 +133,7 @@ export default function CustomerProjectsPage() {
         )}
       </div>
 
-      <PasswordPromptModal open={passwordPromptOpen} onClose={() => { setPasswordPromptOpen(false); setPasswordPromptDismissed(true); }} />
+      <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </CustomerPortalShell>
   );
 }

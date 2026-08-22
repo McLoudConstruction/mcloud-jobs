@@ -31,9 +31,9 @@ function InvoicesIcon(props) {
 }
 
 const NAV_ITEMS = [
-  { href: '/customerportal/inbox', label: 'Inbox', icon: InboxIcon },
   { href: '/customerportal/projects', label: 'Projects', icon: ProjectsIcon },
   { href: '/customerportal/invoices', label: 'Invoices', icon: InvoicesIcon },
+  { href: '/customerportal/inbox', label: 'Inbox', icon: InboxIcon },
 ];
 
 export default function CustomerPortalShell({ children }) {
