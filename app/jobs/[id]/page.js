@@ -516,6 +516,7 @@ function ProjectInfoCard({ job, onSave }) {
     job_type: job.job_type || '',
     expected_close_date: job.expected_close_date || '',
     scheduled_start_date: job.scheduled_start_date || '',
+    scheduled_end_date: job.scheduled_end_date || '',
     description: job.description || '',
     governing_state: job.governing_state || 'Missouri',
     project_type: job.project_type || 'residential',
@@ -552,6 +553,13 @@ function ProjectInfoCard({ job, onSave }) {
           <input type="date" value={form.scheduled_start_date} onChange={e => update('scheduled_start_date', e.target.value)} />
           <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
             Triggers automatic reminder emails to the customer 1 week and 1 day before this date.
+          </div>
+        </div>
+        <div>
+          <label>Scheduled end date</label>
+          <input type="date" value={form.scheduled_end_date} onChange={e => update('scheduled_end_date', e.target.value)} min={form.scheduled_start_date || undefined} />
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+            Used to draw this job's bar on the Calendar.
           </div>
         </div>
         <div>

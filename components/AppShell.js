@@ -27,6 +27,7 @@ const NAV_ITEMS = [
     children: [
       { href: '/estimating', label: 'Estimating' },
       { href: '/invoices', label: 'Invoicing' },
+      { href: '/jobs/calendar', label: 'Calendar' },
     ],
   },
   {

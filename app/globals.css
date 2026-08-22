@@ -329,6 +329,27 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .material-options-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
 .material-option-card{ margin-bottom: 0; }
 
+.calendar-grid{ display: grid; grid-template-columns: repeat(7, 1fr); }
+.calendar-day-label{ text-align: center; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); padding: 6px 0; }
+.calendar-week{ display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--line); }
+.calendar-week:last-child{ border-bottom: 1px solid var(--line); }
+.calendar-day-cell{ border-right: 1px solid var(--line); padding: 4px 6px; background: var(--card-bg); }
+.calendar-day-cell:last-child{ border-right: none; }
+.calendar-day-outside{ background: var(--panel); opacity: 0.6; }
+.calendar-day-today .calendar-day-number{ background: var(--accent); color: #fff; border-radius: 50%; padding: 1px 6px; }
+.calendar-day-number{ font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.calendar-bar{
+  margin: 1px 2px; padding: 2px 8px; border-radius: 4px;
+  font-size: 10.5px; font-weight: 700; text-transform: none; letter-spacing: normal;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; display: flex; align-items: center;
+}
+.calendar-bar:hover{ opacity: 0.85; }
+@media (max-width: 800px){
+  .calendar-day-label:nth-child(n){ font-size: 9px; }
+  .calendar-bar{ font-size: 9px; padding: 2px 4px; }
+}
+
 /* Underline tabs — replaces the old filled-pill nav pattern everywhere
    it's used (job stage tabs, section sub-nav, portal mode switch, sub
    portal tabs all share this same class). */
