@@ -19,12 +19,6 @@ export default function CustomerProjectsPage() {
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [updates, setUpdates] = useState([]);
   const [selections, setSelections] = useState([]);
-  const [accessRows, setAccessRows] = useState(null);
-
-  useEffect(() => {
-    if (!session) return;
-    supabase.rpc('debug_my_portal_access').then(({ data }) => setAccessRows(data || []));
-  }, [session]);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
 
   useEffect(() => {
@@ -67,27 +61,6 @@ export default function CustomerProjectsPage() {
   return (
     <CustomerPortalShell>
       <div className="container" style={{ paddingTop: 24 }}>
-        <div style={{ background: '#fff3cd', border: '1px solid #d4a017', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12.5 }}>
-          <b>Debug (temporary):</b> Signed in as <b>{session.user.email}</b>, role: <b>{session.user.app_metadata?.role || '(none — real customer session)'}</b>.
-          <div style={{ marginTop: 8 }}>
-            <b>{jobs.length} job(s) returned:</b>
-            {jobs.map(j => (
-              <div key={j.id} style={{ marginTop: 4, paddingLeft: 10, borderLeft: '2px solid #d4a017' }}>
-                {j.job_number || j.estimate_number} — customer_email: <code>{JSON.stringify(j.customer_email)}</code>, billing_email: <code>{JSON.stringify(j.billing_email)}</code>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <b>job_portal_access rows for this email:</b>
-            {accessRows === null && ' loading…'}
-            {accessRows?.length === 0 && ' none'}
-            {accessRows?.map((r, i) => (
-              <div key={i} style={{ marginTop: 4, paddingLeft: 10, borderLeft: '2px solid #d4a017' }}>
-                job_id: <code>{r.job_id}</code>, portal_access: <code>{String(r.portal_access)}</code>
-              </div>
-            ))}
-          </div>
-        </div>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
         {job && (
