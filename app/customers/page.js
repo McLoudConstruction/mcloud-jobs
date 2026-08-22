@@ -261,81 +261,89 @@ export default function CustomersPage() {
           </div>
         )}
 
-        <PopupModal open={showForm} onClose={cancelForm}>
+        <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200}>
             <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
             <form onSubmit={submit}>
 
             <label>Contact type *</label>
-            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required>
+            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required style={{ maxWidth: 320 }}>
               <option value="">Select…</option>
               {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
             {form.contact_type && (
-              <>
-                <div className="two-col" style={{ marginTop: 12 }}>
-                  <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
-                  <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
-                  <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
-                  <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-                  <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Property Manager" /></div>
+              <div className="contact-popup-grid">
+                <div>
+                  <div className="two-col-3" style={{ marginTop: 12 }}>
+                    <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
+                    <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
+                    <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Property Manager" /></div>
+                    <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
+                    <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                    <div><label>Property</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
+                  </div>
+
+                  {!isHomeowner && (
+                    <div style={{ marginTop: 12 }}>
+                      <label>Company</label>
+                      <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
+                    </div>
+                  )}
+
+                  {isHomeowner ? (
+                    <>
+                      <label style={{ marginTop: 16 }}>Address</label>
+                      <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
+                    </>
+                  ) : (
+                    <>
+                      <div className="two-col" style={{ marginTop: 16 }}>
+                        <div><label>Billing email</label><input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
+                      </div>
+                      <label style={{ marginTop: 4 }}>Billing address</label>
+                      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                        <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
+                        Address same as billing address
+                      </label>
+                      <label>Address</label>
+                      <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
+                    </>
+                  )}
+
+                  <label style={{ marginTop: 16 }}>Notes</label>
+                  <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+                  <div className="section-actions">
+                    <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
+                  </div>
                 </div>
 
-                {!isHomeowner && (
-                  <div style={{ marginTop: 12 }}>
-                    <label>Company</label>
-                    <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
-                  </div>
-                )}
-
-                <label style={{ marginTop: 12 }}>Property</label>
-                <input value={form.property} onChange={e => update('property', e.target.value)} />
-
-                {isHomeowner ? (
-                  <>
-                    <label style={{ marginTop: 16 }}>Address</label>
-                    <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
-                  </>
-                ) : (
-                  <>
-                    <label style={{ marginTop: 16 }}>Billing email</label>
-                    <input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} />
-                    <label style={{ marginTop: 4 }}>Billing address</label>
-                    <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
-
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-                      <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
-                      Address same as billing address
+                <div>
+                  <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
+                    <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
+                      Automated Notifications
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: 'auto' }}
+                        checked={!form.automated_emails_opt_out}
+                        onChange={e => update('automated_emails_opt_out', !e.target.checked)}
+                      />
+                      Send this contact automated emails
                     </label>
-                    <label>Address</label>
-                    <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
-                  </>
-                )}
-
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16 }}>
-                  <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
-                    Automated Notifications
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: 'auto' }}
-                      checked={!form.automated_emails_opt_out}
-                      onChange={e => update('automated_emails_opt_out', !e.target.checked)}
-                    />
-                    Send this contact automated emails (sales follow-ups, project schedule reminders)
-                  </label>
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
-                    Uncheck to opt this contact out of every automated email the system sends — manual emails you send yourself are never affected.
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
+                      Uncheck to opt this contact out of every automated email below — manual emails you send yourself are never affected. Here's exactly what's currently automated:
+                    </div>
+                    <ul style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10, paddingLeft: 16, lineHeight: 1.7 }}>
+                      <li><b>Lead follow-ups</b> — sent 2 and 4 days after a lead is entered, if it's still Prospecting or Contacted.</li>
+                      <li><b>Schedule reminders</b> — sent before a job's Scheduled Start Date, on whatever days are configured on that job's Portal Access tab.</li>
+                      <li><b>Portal invite</b> — sent once, the first time this contact is granted portal access.</li>
+                    </ul>
                   </div>
                 </div>
-
-                <label style={{ marginTop: 16 }}>Notes</label>
-                <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
-                <div className="section-actions">
-                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
-                </div>
-              </>
+              </div>
             )}
             </form>
         </PopupModal>

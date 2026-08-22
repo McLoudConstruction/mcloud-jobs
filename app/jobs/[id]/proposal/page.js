@@ -67,7 +67,7 @@ export default function ProposalDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/portal/dashboard'} className="btn btn-sm">← Back</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}
@@ -114,12 +114,6 @@ export default function ProposalDocumentPage() {
               <span className="price-label">Total Investment</span>
               <span className="price-amount">{fmtMoney(job.contract_price)}</span>
             </div>
-
-            {!job.contract_finalized_at && (
-              <div style={{ fontSize: 12, color: '#6b6350', textAlign: 'center', marginBottom: 28 }}>
-                Ready to move forward? Reply to this estimate or call McLoud Construction to get started.
-              </div>
-            )}
 
             <div className="section">
               <h3>Scope of work</h3>

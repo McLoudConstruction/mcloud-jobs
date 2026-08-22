@@ -197,7 +197,7 @@ function NewOpportunityPageInner() {
         });
         const { error: otpError } = await supabase.auth.signInWithOtp({
           email: form.customer_email.trim(),
-          options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+          options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
         });
         if (!otpError) {
           await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('job_id', data.id).eq('email', form.customer_email.trim());

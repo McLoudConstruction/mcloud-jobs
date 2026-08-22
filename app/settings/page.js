@@ -132,7 +132,7 @@ export default function SettingsPage() {
   function resetToDefault() {
     setForm(prev => ({
       ...prev,
-      brand_color: '#8a3d14',
+      brand_color: '#9b773d',
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 150,

@@ -16,6 +16,7 @@ import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
+import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
@@ -251,6 +252,7 @@ export default function JobDetailPage() {
           <div className="estimate-grid">
             <div className="estimate-main">
               <ScopeCard job={job} jobId={id} onSave={saveJob} />
+              <MaterialSelectionsCard jobId={id} />
               <TermsCard job={job} onSave={saveJob} />
             </div>
             <div className="estimate-sidebar">
@@ -304,12 +306,16 @@ export default function JobDetailPage() {
 /* ---------------- Documents tab: real history, only what's issued ---------------- */
 function IssuedDocumentsCard({ jobId, job, updates, changeOrders }) {
   const [draws, setDraws] = useState([]);
+  const [selections, setSelections] = useState([]);
 
   useEffect(() => {
     const load = () => supabase.from('invoices').select('*').eq('job_id', jobId).then(({ data }) => { if (data) setDraws(data); });
     load();
+    const loadSelections = () => supabase.from('material_selections').select('*').eq('job_id', jobId).not('sent_at', 'is', null).then(({ data }) => { if (data) setSelections(data); });
+    loadSelections();
     const channel = supabase.channel(`issued-docs-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${jobId}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `job_id=eq.${jobId}` }, loadSelections)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId]);
@@ -333,6 +339,9 @@ function IssuedDocumentsCard({ jobId, job, updates, changeOrders }) {
   });
   changeOrders.forEach(co => {
     if (co.sent_at) entries.push({ at: co.sent_at, label: `Change order — ${co.co_date}`, href: `/jobs/${jobId}/change-orders/${co.id}` });
+  });
+  selections.forEach(s => {
+    entries.push({ at: s.sent_at, label: `Material selection — ${s.title}${s.status === 'approved' ? ' (approved)' : ''}`, href: `/jobs/${jobId}/material-selections/${s.id}` });
   });
 
   entries.sort((a, b) => new Date(b.at) - new Date(a.at));

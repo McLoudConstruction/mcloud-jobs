@@ -57,18 +57,26 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost }) 
   const totalCosts = totalCommitted + totalActual;
   const margin = contractPrice != null && contractPrice !== '' ? Number(contractPrice) - totalCosts : null;
   const marginPercent = margin != null && contractPrice ? (margin / Number(contractPrice)) * 100 : null;
+  const isOverBudget = projectedCost != null && projectedCost > 0 && totalCosts > Number(projectedCost);
 
   return (
     <div className="card">
       <h3>Job Cost Summary</h3>
+
+      {isOverBudget && (
+        <div style={{ background: '#f5dedd', border: '1px solid #c0524f', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: '#7a2e2c' }}>
+          <b>Over budget</b> — {fmtMoney(totalCosts - Number(projectedCost))} over the {fmtMoney(projectedCost)} budget.
+        </div>
+      )}
+
       <div className="portal-info-grid" style={{ marginBottom: 18 }}>
         <div>
           <div className="portal-info-label">Contract Price</div>
           <div className="portal-info-value">{fmtMoney(contractPrice)}</div>
         </div>
         <div>
-          <div className="portal-info-label">Projected Cost</div>
-          <div className="portal-info-value">{fmtMoney(projectedCost)}</div>
+          <div className="portal-info-label">Budget (from Estimate tab)</div>
+          <div className="portal-info-value" style={{ color: isOverBudget ? '#a13f3f' : undefined }}>{fmtMoney(projectedCost)}</div>
         </div>
         <div>
           <div className="portal-info-label">Committed Costs</div>

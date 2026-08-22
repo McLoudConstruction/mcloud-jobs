@@ -44,6 +44,24 @@ export default function SalesDashboardPage() {
       await supabase.from('opportunities').update(form).eq('id', editingId);
     } else {
       await supabase.from('opportunities').insert({ ...form, stage: 'prospecting' });
+
+      if (form.contact_email.trim() || form.contact_name.trim()) {
+        const { data: existing } = form.contact_email.trim()
+          ? await supabase.from('contacts').select('id').eq('contact_email', form.contact_email.trim()).maybeSingle()
+          : { data: null };
+        if (!existing) {
+          const [first, ...rest] = form.contact_name.trim().split(' ');
+          await supabase.from('contacts').insert({
+            name: form.contact_name.trim() || form.company.trim() || 'Unnamed',
+            first_name: first || null,
+            last_name: rest.join(' ') || null,
+            contact_email: form.contact_email.trim() || null,
+            contact_phone: form.contact_phone.trim() || null,
+            management_company: form.project_type === 'commercial' ? form.company.trim() || null : null,
+            contact_type: form.project_type === 'commercial' ? 'Commercial' : 'Residential - Homeowner',
+          });
+        }
+      }
     }
     setSaving(false);
     setForm(EMPTY_FORM);

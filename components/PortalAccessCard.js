@@ -96,7 +96,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
     for (const a of toInvite) {
       const { error } = await supabase.auth.signInWithOtp({
         email: a.email,
-        options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+        options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
       });
       if (!error) {
         await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('id', a.id);

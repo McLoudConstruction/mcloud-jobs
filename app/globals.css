@@ -71,13 +71,13 @@ html, body{
    never pick up dark mode or the texture no matter what. That's a
    structural guarantee, not a CSS specificity fight. */
 .shell, .portal-textured{
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-color: var(--bg);
   transition: background-color 0.15s ease;
 }
 [data-theme="dark"] .shell, [data-theme="dark"] .portal-textured{
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
 }
 
 a { color: inherit; text-decoration: none; }
@@ -320,6 +320,15 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }
 
+.two-col-3{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 700px){ .two-col-3{ grid-template-columns: 1fr; } }
+
+.contact-popup-grid{ display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+@media (max-width: 800px){ .contact-popup-grid{ grid-template-columns: 1fr; } }
+
+.material-options-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.material-option-card{ margin-bottom: 0; }
+
 /* Underline tabs — replaces the old filled-pill nav pattern everywhere
    it's used (job stage tabs, section sub-nav, portal mode switch, sub
    portal tabs all share this same class). */
@@ -448,6 +457,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .doc-toolbar .btn{ color: var(--header-text); border-color: var(--header-line); }
 .doc-toolbar .btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+.doc-toolbar .btn-primary{
+  background: var(--header-accent, var(--accent));
+  border-color: var(--header-accent, var(--accent));
+  color: #fff;
+}
+.doc-toolbar .btn-primary:hover{ opacity: 0.88; color: #fff; }
 
 .login-wrap{
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -502,27 +517,21 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-logo .brand span{ color: var(--gold); }
 
 .shell-header-left{ display: flex; align-items: center; gap: 8px; }
-.notif-bell{
-  position: relative;
-  color: var(--header-text);
-}
-.notif-badge{
-  position: absolute; top: -5px; right: -5px;
-  background: var(--header-accent, var(--accent)); color: #fff;
-  font-size: 10px; font-weight: 700;
-  min-width: 16px; height: 16px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 3px;
+.shell-nav-dot{
+  position: absolute; top: -2px; right: -2px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #c0524f;
+  border: 1.5px solid var(--panel);
 }
 
 .hamburger-btn{
-  width: 44px; height: 44px;
+  width: 32px; height: 32px;
   background: transparent; border: 1px solid var(--header-line); border-radius: 6px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer;
   flex-shrink: 0;
 }
-.hamburger-btn span{ width: 23px; height: 2px; background: var(--header-text); display: block; }
+.hamburger-btn span{ width: 16px; height: 2px; background: var(--header-text); display: block; }
 
 .theme-toggle-btn{
   width: 34px; height: 34px;

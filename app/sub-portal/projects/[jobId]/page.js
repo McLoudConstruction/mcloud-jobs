@@ -57,7 +57,7 @@ export default function SubPortalProjectPage() {
 
   return (
     <SubPortalShell company={company} role={role}>
-      <div className="container" style={{ paddingTop: 24, maxWidth: 640 }}>
+      <div className="container container-wide" style={{ paddingTop: 24 }}>
         <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
 
         <div className="card">

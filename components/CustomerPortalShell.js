@@ -2,19 +2,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { useSettings } from '../lib/useSettings';
 import { SignOutIcon } from './icons';
 
-function DashboardIcon(props) {
+function InboxIcon(props) {
   return (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.2" />
-      <rect x="11" y="2.5" width="6.5" height="6.5" rx="1.2" />
-      <rect x="2.5" y="11" width="6.5" height="6.5" rx="1.2" />
-      <rect x="11" y="11" width="6.5" height="6.5" rx="1.2" />
+      <path d="M3 5.5h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3.5v-3.5H3a1 1 0 01-1-1v-8a1 1 0 011-1z" />
+      <path d="M6 9h8M6 12h5" />
     </svg>
   );
 }
-function WorkOrdersIcon(props) {
+function ProjectsIcon(props) {
   return (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M4 3.5h8l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-12a1 1 0 011-1z" />
@@ -32,12 +31,13 @@ function InvoicesIcon(props) {
 }
 
 const NAV_ITEMS = [
-  { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { href: '/sub-portal/work-orders', label: 'Work Orders', icon: WorkOrdersIcon },
-  { href: '/sub-portal/invoices', label: 'Invoices', icon: InvoicesIcon },
+  { href: '/customerportal/inbox', label: 'Inbox', icon: InboxIcon },
+  { href: '/customerportal/projects', label: 'Projects', icon: ProjectsIcon },
+  { href: '/customerportal/invoices', label: 'Invoices', icon: InvoicesIcon },
 ];
 
-export default function SubPortalShell({ company, role, children }) {
+export default function CustomerPortalShell({ children }) {
+  const { settings } = useSettings();
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
@@ -67,12 +67,13 @@ export default function SubPortalShell({ company, role, children }) {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
-    router.replace('/sub-portal');
+    router.replace('/customerportal');
   }
 
   function closeOnMobile() { if (isMobile) setNavOpen(false); }
 
   const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
+  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   return (
     <div className="shell">
@@ -83,7 +84,9 @@ export default function SubPortalShell({ company, role, children }) {
           </button>
         </div>
         <div className="shell-logo">
-          <span className="brand">McLoud <span>Subcontractor</span></span>
+          {settings.logo_url
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
+            : <span className="brand">McLoud <span>Portal</span></span>}
         </div>
       </div>
 
@@ -98,41 +101,29 @@ export default function SubPortalShell({ company, role, children }) {
           } : { width: 0 }}
         >
           <div className="shell-sidebar-inner">
-            <div>
-              {(isMobile || navOpen) && company && (
-                <div style={{ padding: '10px 24px 16px', borderBottom: '1px solid var(--panel-line)', marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--heading)' }}>{company.company_name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {role === 'admin' ? 'Admin access' : 'Crew access — view only'}
-                  </div>
-                </div>
-              )}
-              <div className="shell-nav-links">
-                {NAV_ITEMS.map(item => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                    onClick={closeOnMobile}
-                    title={!isMobile && !navOpen ? item.label : undefined}
-                  >
-                    <item.icon className="shell-nav-icon" />
-                    <span className="shell-nav-label">{item.label}</span>
-                  </a>
-                ))}
-              </div>
+            <div className="shell-nav-links">
+              {NAV_ITEMS.map(item => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                  onClick={closeOnMobile}
+                  title={!isMobile && !navOpen ? item.label : undefined}
+                >
+                  <item.icon className="shell-nav-icon" />
+                  <span className="shell-nav-label">{item.label}</span>
+                </a>
+              ))}
             </div>
 
-            <div>
-              <button
-                className="shell-nav-link signout-link"
-                onClick={handleSignOut}
-                title={!isMobile && !navOpen ? 'Sign out' : undefined}
-              >
-                <SignOutIcon className="shell-nav-icon" />
-                <span className="shell-nav-label">Sign out</span>
-              </button>
-            </div>
+            <button
+              className="shell-nav-link signout-link"
+              onClick={handleSignOut}
+              title={!isMobile && !navOpen ? 'Sign out' : undefined}
+            >
+              <SignOutIcon className="shell-nav-icon" />
+              <span className="shell-nav-label">Sign out</span>
+            </button>
           </div>
         </div>
 

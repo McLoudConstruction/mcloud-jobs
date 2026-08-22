@@ -258,7 +258,7 @@ export default function PropertiesPage() {
           </div>
         )}
 
-        <PopupModal open={showForm} onClose={cancelForm}>
+        <PopupModal open={showForm} onClose={cancelForm} maxWidth={960}>
               <form onSubmit={submit}>
             <h3>{editingId ? 'Edit property' : 'New property'}</h3>
             <div className="two-col">

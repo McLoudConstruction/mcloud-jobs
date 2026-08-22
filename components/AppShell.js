@@ -136,14 +136,6 @@ export default function AppShell({ children }) {
           <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
             <span /><span /><span />
           </button>
-
-          <Link href="/notifications" className="hamburger-btn notif-bell" aria-label="Notifications">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8.5c0-3.6-2.7-6.5-6-6.5s-6 2.9-6 6.5c0 5.8-2 7.3-2 7.5a1 1 0 0 0 .9 1.5h14.2a1 1 0 0 0 .9-1.5c0-.2-2-1.7-2-7.5z" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-          </Link>
         </div>
 
         <div className="shell-logo">
@@ -173,7 +165,12 @@ export default function AppShell({ children }) {
                   onClick={closeOnMobile}
                   title={!isMobile && !navOpen ? item.label : undefined}
                 >
-                  {item.icon && <item.icon className="shell-nav-icon" />}
+                  {item.icon && (
+                    <span style={{ position: 'relative', display: 'inline-flex' }}>
+                      <item.icon className="shell-nav-icon" />
+                      {item.href === '/messages' && unreadCount > 0 && <span className="shell-nav-dot" />}
+                    </span>
+                  )}
                   <span className="shell-nav-label">{item.label}</span>
                 </Link>
               ))}

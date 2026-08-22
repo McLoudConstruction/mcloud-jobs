@@ -79,8 +79,8 @@ export default function SubPortalWorkOrderPage() {
 
   return (
     <SubPortalShell company={wo.companies} role={role}>
-      <div className="container" style={{ paddingTop: 24, maxWidth: 640 }}>
-        <div className="section-actions" style={{ marginTop: 0, justifyContent: 'space-between', display: 'flex' }}>
+      <div className="container container-wide" style={{ paddingTop: 24 }}>
+        <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between', display: 'flex' }}>
           <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
           <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
         </div>
@@ -143,6 +143,9 @@ export default function SubPortalWorkOrderPage() {
               saving={saving}
               onSave={setDraftSignature}
               note="Sign to accept this work order"
+              showTitle
+              requireName
+              requireTitle
             />
             {draftSignature?.signature && (
               <div style={{ marginTop: 14 }}>
@@ -155,7 +158,7 @@ export default function SubPortalWorkOrderPage() {
               </div>
             )}
             <div className="section-actions">
-              <button className="btn btn-sm btn-danger" onClick={() => setDeclining(true)}>Can't take this one</button>
+              <button className="btn btn-sm btn-danger" onClick={() => setDeclining(true)}>Decline Work Order</button>
             </div>
           </div>
         )}

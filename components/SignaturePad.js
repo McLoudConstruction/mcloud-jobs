@@ -7,7 +7,7 @@ function fmtDate(v) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function SignaturePad({ label, saved, onSave, saving, defaultName, defaultTitle, note, locked, showTitle }) {
+export default function SignaturePad({ label, saved, onSave, saving, defaultName, defaultTitle, note, locked, showTitle, requireName, requireTitle }) {
   const canvasRef = useRef(null);
   const [name, setName] = useState(saved?.name || defaultName || '');
   const [title, setTitle] = useState(saved?.title || defaultTitle || '');
@@ -87,7 +87,17 @@ export default function SignaturePad({ label, saved, onSave, saving, defaultName
             <span style={{ fontSize: 10.5, color: '#8b8368' }}>{note || 'Draw signature above'}</span>
             <button className="btn btn-sm" onClick={clearPad}>Clear</button>
           </div>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} disabled={!hasDrawn || saving} onClick={save}>
+          {((requireName && !name.trim()) || (requireTitle && !title.trim())) && (
+            <div style={{ fontSize: 10.5, color: '#a13f3f', marginTop: 6 }}>
+              {requireName && !name.trim() ? 'Name' : 'Title'} is required before you can submit.
+            </div>
+          )}
+          <button
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 10 }}
+            disabled={!hasDrawn || saving || (requireName && !name.trim()) || (requireTitle && !title.trim())}
+            onClick={save}
+          >
             {saving ? 'Saving…' : 'Save signature'}
           </button>
         </div>

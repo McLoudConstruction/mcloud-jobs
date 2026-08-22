@@ -88,6 +88,7 @@ export default function JobTrackerPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
               {job.job_type && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{job.job_type}</span>}
+              {job.over_budget_notified && <span className="badge badge-declined" style={{ fontSize: 10 }}>Over Budget</span>}
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
             </div>
           </Link>

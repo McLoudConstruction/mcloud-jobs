@@ -158,7 +158,7 @@ export default function CompaniesPage() {
           </div>
         )}
 
-        <PopupModal open={showForm} onClose={cancelForm}>
+        <PopupModal open={showForm} onClose={cancelForm} maxWidth={960}>
             <h3>{editingId ? 'Edit company' : 'New company'}</h3>
             <form onSubmit={submit}>
             <div className="two-col">
