@@ -293,8 +293,15 @@ export default function JobDetailPage() {
         {tab === 'Documents' && (
           <>
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
-            {phaseForStage(job.stage) !== 'opportunity' && (
+            {phaseForStage(job.stage) !== 'opportunity' ? (
               <UpdatesCard jobId={id} updates={updates} />
+            ) : (
+              <div className="card">
+                <h3>Progress Updates</h3>
+                <div className="empty-state">
+                  Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+                </div>
+              </div>
             )}
           </>
         )}

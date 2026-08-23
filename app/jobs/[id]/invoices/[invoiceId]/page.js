@@ -6,6 +6,7 @@ import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
+import PaymentFlow from '../../../../../components/PaymentFlow';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -120,6 +121,21 @@ export default function DrawInvoiceDocumentPage() {
           </div>
         </div>
       </div>
+
+      {session?.user?.app_metadata?.role !== 'admin' && draw.status === 'sent' && (
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px' }}>
+          <div className="card">
+            <h3>Make a Payment</h3>
+            <PaymentFlow jobId={id} invoiceId={invoiceId} amountDue={Number(draw.amount)} createdBy="customer" onSuccess={() => load()} />
+          </div>
+        </div>
+      )}
+
+      {draw.status === 'paid' && session?.user?.app_metadata?.role !== 'admin' && (
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px', textAlign: 'center', color: '#3a6b45', fontSize: 13 }}>
+          This invoice has been paid. Thank you!
+        </div>
+      )}
 
       <SendDocModal
         open={modalOpen}
