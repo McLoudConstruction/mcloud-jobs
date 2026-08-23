@@ -15,6 +15,9 @@
     "nodemailer": "9.0.5",
     "xlsx": "0.18.5",
     "html2canvas": "1.4.1",
-    "jspdf": "4.2.1"
+    "jspdf": "4.2.1",
+    "stripe": "17.4.0",
+    "@stripe/stripe-js": "5.4.0",
+    "@stripe/react-stripe-js": "3.1.1"
   }
 }
