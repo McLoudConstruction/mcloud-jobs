@@ -128,11 +128,8 @@ export default function InvoiceDocumentPage() {
       </div>
 
       {session?.user?.app_metadata?.role !== 'admin' && job.invoice_status === 'sent' && (
-        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px' }}>
-          <div className="card">
-            <h3>Make a Payment</h3>
-            <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} />
-          </div>
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px', textAlign: 'center' }}>
+          <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} label={`Invoice #${job.job_number}`} />
         </div>
       )}
 

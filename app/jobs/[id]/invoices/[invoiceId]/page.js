@@ -123,11 +123,8 @@ export default function DrawInvoiceDocumentPage() {
       </div>
 
       {session?.user?.app_metadata?.role !== 'admin' && draw.status === 'sent' && (
-        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px' }}>
-          <div className="card">
-            <h3>Make a Payment</h3>
-            <PaymentFlow jobId={id} invoiceId={invoiceId} amountDue={Number(draw.amount)} createdBy="customer" onSuccess={() => load()} />
-          </div>
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px', textAlign: 'center' }}>
+          <PaymentFlow jobId={id} invoiceId={invoiceId} amountDue={Number(draw.amount)} createdBy="customer" onSuccess={() => load()} label={draw.description || 'Draw Invoice'} />
         </div>
       )}
 

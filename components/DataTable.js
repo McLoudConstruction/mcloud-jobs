@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 // columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), filterable?, stopClickPropagation? }]
-export default function DataTable({ columns, rows, onRowClick, getRowKey }) {
+export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName }) {
   const [widths, setWidths] = useState(() => {
     // On a narrow viewport, start columns noticeably tighter so more of
     // the table is visible before scrolling — the user can still drag
@@ -87,7 +87,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey }) {
         </thead>
         <tbody>
           {filteredRows.map(row => (
-            <tr key={getRowKey(row)} onClick={() => onRowClick && onRowClick(row)}>
+            <tr key={getRowKey(row)} onClick={() => onRowClick && onRowClick(row)} className={rowClassName ? rowClassName(row) : ''}>
               {columns.map(c => (
                 <td key={c.key} onClick={c.stopClickPropagation ? (e => e.stopPropagation()) : undefined}>
                   {c.render ? c.render(row) : row[c.key]}

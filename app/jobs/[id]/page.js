@@ -23,6 +23,7 @@ import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAG
 
 const TABS = [
   { key: 'Overview', label: 'Overview' },
+  { key: 'Customer', label: 'Customer Details' },
   { key: 'Scope', label: 'Scope' },
   { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
@@ -234,11 +235,14 @@ export default function JobDetailPage() {
         </div>
 
         {tab === 'Overview' && (
-          <div className="overview-thirds">
-            <CustomerInfoCard job={job} onSave={saveJob} />
+          <div className="overview-split">
             <ProjectInfoCard job={job} onSave={saveJob} />
             <ProjectMilestonesCard job={job} jobId={id} onTabChange={setTab} />
           </div>
+        )}
+
+        {tab === 'Customer' && (
+          <CustomerInfoCard job={job} onSave={saveJob} />
         )}
 
         {tab === 'Portal' && (

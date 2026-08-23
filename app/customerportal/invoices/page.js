@@ -16,7 +16,6 @@ export default function CustomerInvoicesPage() {
   const { session, loading } = usePortalAuth();
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [draws, setDraws] = useState([]);
-  const [payingId, setPayingId] = useState(null); // draw id, or 'single' for the single-invoice model
   const [paidFlash, setPaidFlash] = useState('');
 
   useEffect(() => {
@@ -34,7 +33,6 @@ export default function CustomerInvoicesPage() {
   const hasSingleInvoice = draws.length === 0 && job?.invoice_status !== 'not_sent' && job?.invoice_amount;
 
   function handlePaymentSuccess(status) {
-    setPayingId(null);
     setPaidFlash(status === 'succeeded' ? 'Payment received, thank you!' : "Payment is processing — we'll update this once it clears.");
     setTimeout(() => setPaidFlash(''), 6000);
   }
@@ -70,11 +68,8 @@ export default function CustomerInvoicesPage() {
                     <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
                       Status: {d.status === 'paid' ? 'Paid' : d.status === 'sent' ? 'Unpaid' : 'Not yet sent'}
                     </p>
-                    {d.status === 'sent' && payingId !== d.id && (
-                      <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} onClick={() => setPayingId(d.id)}>Pay Now</button>
-                    )}
-                    {payingId === d.id && (
-                      <div style={{ marginTop: 14 }}>
+                    {d.status === 'sent' && (
+                      <div style={{ marginTop: 10 }}>
                         <PaymentFlow jobId={job.id} invoiceId={d.id} amountDue={Number(d.amount)} createdBy="customer" onSuccess={handlePaymentSuccess} />
                       </div>
                     )}
@@ -92,11 +87,8 @@ export default function CustomerInvoicesPage() {
                 <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
                   Status: {job.invoice_status === 'paid' ? 'Paid' : 'Unpaid'}
                 </p>
-                {job.invoice_status === 'sent' && payingId !== 'single' && (
-                  <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} onClick={() => setPayingId('single')}>Pay Now</button>
-                )}
-                {payingId === 'single' && (
-                  <div style={{ marginTop: 14 }}>
+                {job.invoice_status === 'sent' && (
+                  <div style={{ marginTop: 10 }}>
                     <PaymentFlow jobId={job.id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={handlePaymentSuccess} />
                   </div>
                 )}

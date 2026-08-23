@@ -64,7 +64,6 @@ export default function InvoicesDashboardPage() {
 
     return { ...j, usesDraws, status, urgency, outstanding };
   })
-    .filter(r => r.urgency > 0) // only show jobs that actually need attention
     .sort((a, b) => {
       if (b.urgency !== a.urgency) return b.urgency - a.urgency;
       return new Date(a.expected_close_date || '9999-12-31') - new Date(b.expected_close_date || '9999-12-31');
@@ -78,12 +77,13 @@ export default function InvoicesDashboardPage() {
           Jobs nearing completion or with invoicing action still needed. Click a row to issue or manage its invoice.
         </div>
 
-        {rows.length === 0 && <div className="empty-state">Nothing needs invoicing attention right now.</div>}
+        {rows.length === 0 && <div className="empty-state">No jobs with billing set up yet.</div>}
         {rows.length > 0 && (
           <DataTable
             getRowKey={r => r.id}
             onRowClick={r => window.location.href = `/jobs/${r.id}?tab=Financials`}
             rows={rows}
+            rowClassName={r => r.urgency === 0 ? 'row-settled' : ''}
             columns={[
               { key: 'job_number', label: 'Job #', defaultWidth: 100, render: r => `#${r.job_number}` },
               { key: 'customer_name', label: 'Customer', defaultWidth: 190, render: r => r.customer_name || 'Unnamed' },
