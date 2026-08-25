@@ -13,7 +13,7 @@ export default function SubPortalInvoicesPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) { router.replace('/sub-portal'); return; }
+      if (!data.session) { router.replace('/sub-portal/login'); return; }
       setSession(data.session);
       setLoading(false);
     });

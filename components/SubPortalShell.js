@@ -30,11 +30,23 @@ function InvoicesIcon(props) {
     </svg>
   );
 }
+function SettingsIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="10" cy="10" r="2.6" />
+      <path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.1 5.1l1.4 1.4M13.5 13.5l1.4 1.4M5.1 14.9l1.4-1.4M13.5 6.5l1.4-1.4" />
+    </svg>
+  );
+}
 
 const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
   { href: '/sub-portal/work-orders', label: 'Work Orders', icon: WorkOrdersIcon },
   { href: '/sub-portal/invoices', label: 'Invoices', icon: InvoicesIcon },
+];
+const ADMIN_NAV_ITEMS = [
+  ...NAV_ITEMS,
+  { href: '/sub-portal/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export default function SubPortalShell({ company, role, children }) {
@@ -103,12 +115,12 @@ export default function SubPortalShell({ company, role, children }) {
                 <div style={{ padding: '10px 24px 16px', borderBottom: '1px solid var(--panel-line)', marginBottom: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--heading)' }}>{company.company_name}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {role === 'admin' ? 'Admin access' : 'Crew access — view only'}
+                    {role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}
                   </div>
                 </div>
               )}
               <div className="shell-nav-links">
-                {NAV_ITEMS.map(item => (
+                {(role === 'admin' ? ADMIN_NAV_ITEMS : NAV_ITEMS).map(item => (
                   <a
                     key={item.href}
                     href={item.href}

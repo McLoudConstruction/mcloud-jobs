@@ -23,7 +23,7 @@ export default function SubPortalDashboard() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) { router.replace('/sub-portal'); return; }
+      if (!data.session) { router.replace('/sub-portal/login'); return; }
       setSession(data.session);
       setLoading(false);
     });

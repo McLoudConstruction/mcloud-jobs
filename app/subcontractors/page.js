@@ -325,9 +325,17 @@ export default function SubcontractorsPage() {
       });
       if (error) { setInviting(false); setInviteResult(`Failed to invite ${email}: ${error.message}`); return; }
     }
-    await supabase.from('companies').update({ portal_invited_at: new Date().toISOString() }).eq('id', c.id);
+    const now = new Date().toISOString();
+    await supabase.from('sub_portal_users').upsert(
+      [
+        { company_id: c.id, email: c.contact_email, role: 'admin', invited_at: now },
+        ...(c.crew_email && c.crew_email !== c.contact_email ? [{ company_id: c.id, email: c.crew_email, role: 'crew', invited_at: now }] : []),
+      ],
+      { onConflict: 'company_id,email' }
+    );
+    await supabase.from('companies').update({ portal_invited_at: now }).eq('id', c.id);
     setInviting(false);
-    setInviteResult(`Invited ${emails.join(' and ')}. Every future work order for this sub will show up automatically — no need to re-invite.`);
+    setInviteResult(`Invited ${emails.join(' and ')}. Every future work order for this sub will show up automatically — no need to re-invite. They can add more logins themselves under Settings once inside the portal.`);
   }
 
   async function handleImportFile(e) {
