@@ -1,13 +1,20 @@
+'use client';
+import { useSettings } from '../lib/useSettings';
+
 export default function SubcontractorApplyChrome({ children }) {
+  const { settings } = useSettings();
+  const logoUrl = settings.logo_url || '/mcloud-logo.png';
+  const logoSize = settings.logo_size_desktop || 180;
+
   return (
     <div className="mcw-page">
       <header className="mcw-header">
-        <img src="/mcloud-logo.png" alt="McLoud Construction" className="mcw-logo" />
+        <img src={logoUrl} alt="McLoud Construction" className="mcw-logo" style={{ height: logoSize, width: 'auto' }} />
         <a href="https://mcloudconstruction.com" className="mcw-header-link">mcloudconstruction.com ↗</a>
       </header>
       {children}
       <footer className="mcw-footer">
-        <img src="/mcloud-logo.png" alt="McLoud Construction" className="mcw-footer-logo" />
+        <img src={logoUrl} alt="McLoud Construction" className="mcw-footer-logo" style={{ height: Math.round(logoSize * 0.55), width: 'auto' }} />
         <div className="mcw-footer-meta">
           <span>© {new Date().getFullYear()} McLoud Contracting, LLC</span>
           <span className="mcw-footer-dot">·</span>
@@ -26,7 +33,7 @@ export default function SubcontractorApplyChrome({ children }) {
           background: var(--mcw-ink); color: var(--mcw-paper); display: flex; align-items: center;
           justify-content: space-between; padding: 14px 24px; position: sticky; top: 0; z-index: 10;
         }
-        .mcw-logo{ height: 36px; width: auto; }
+        .mcw-logo{ width: auto; }
         .mcw-header-link{
           font-family: var(--mcw-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em;
           color: rgba(237,231,218,0.65); text-decoration: none;
@@ -112,7 +119,7 @@ export default function SubcontractorApplyChrome({ children }) {
           background: var(--mcw-ink); color: var(--mcw-paper); padding: 28px 24px; margin-top: auto;
           display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
         }
-        .mcw-footer-logo{ height: 26px; width: auto; opacity: 0.9; }
+        .mcw-footer-logo{ width: auto; opacity: 0.9; }
         .mcw-footer-meta{ font-family: var(--mcw-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(237,231,218,0.45); display: flex; gap: 8px; align-items: center; }
         .mcw-footer-dot{ opacity: 0.5; }
       `}</style>
