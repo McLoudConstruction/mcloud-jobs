@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
 import SubPortalShell from '../../../components/SubPortalShell';
+import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 
 export default function SubPortalSettingsPage() {
   const router = useRouter();
@@ -67,14 +68,14 @@ export default function SubPortalSettingsPage() {
 
   if (ready && !company) {
     return (
-      <div className="login-wrap">
-        <div className="login-card">
+      <SubPortalAuthLayout>
+        <div className="login-card" style={{ boxShadow: 'none', border: '1px solid var(--panel-line)' }}>
           <h1>Subcontractor Portal</h1>
           <p className="sub" style={{ color: '#a13f3f' }}>
             This email isn't linked to a subcontractor account yet. Reach out to McLoud Construction to get set up.
           </p>
         </div>
-      </div>
+      </SubPortalAuthLayout>
     );
   }
   if (!company) return null;

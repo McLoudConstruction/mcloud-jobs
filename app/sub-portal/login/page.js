@@ -2,6 +2,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
+import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 
 const ROLE_COPY = {
   crew: "Signing in as crew — you'll be able to view your project details and work orders.",
@@ -37,31 +38,29 @@ function SubPortalLoginForm() {
   }
 
   return (
-    <div className="login-wrap portal-textured">
-      <div className="login-card">
-        <h1>Subcontractor Portal</h1>
-        <p className="sub">
-          {ROLE_COPY[roleHint] || 'McLoud Construction — view and sign your work orders.'}
+    <div className="login-card" style={{ boxShadow: 'none', border: '1px solid var(--panel-line)' }}>
+      <h1>Subcontractor Portal</h1>
+      <p className="sub">
+        {ROLE_COPY[roleHint] || 'McLoud Construction — view and sign your work orders.'}
+      </p>
+
+      {sent ? (
+        <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
+          Check your email for a login link — it may take a minute or two to arrive. You can close this tab.
         </p>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="email">Email</label>
+          <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          {error && <div className="error-text">{error}</div>}
+          <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
+            {loading ? 'Sending…' : 'Email me a login link'}
+          </button>
+        </form>
+      )}
 
-        {sent ? (
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
-            Check your email for a login link — it may take a minute or two to arrive. You can close this tab.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="email">Email</label>
-            <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-            {error && <div className="error-text">{error}</div>}
-            <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
-              {loading ? 'Sending…' : 'Email me a login link'}
-            </button>
-          </form>
-        )}
-
-        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-          <a href="/sub-portal" style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>← Back</a>
-        </div>
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+        <a href="/sub-portal" style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>← Back</a>
       </div>
     </div>
   );
@@ -69,8 +68,10 @@ function SubPortalLoginForm() {
 
 export default function SubPortalLoginPage() {
   return (
-    <Suspense fallback={null}>
-      <SubPortalLoginForm />
-    </Suspense>
+    <SubPortalAuthLayout>
+      <Suspense fallback={null}>
+        <SubPortalLoginForm />
+      </Suspense>
+    </SubPortalAuthLayout>
   );
 }

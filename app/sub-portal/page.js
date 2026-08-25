@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import SubPortalAuthLayout from '../../components/SubPortalAuthLayout';
 
 export default function SubPortalLandingPage() {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function SubPortalLandingPage() {
   }
 
   return (
-    <div className="login-wrap portal-textured">
+    <SubPortalAuthLayout>
       <div className="login-card sub-landing-card">
         <h1>Subcontractor Portal</h1>
         <p className="sub">McLoud Construction — tell us who you are to get to the right place.</p>
@@ -65,17 +66,17 @@ export default function SubPortalLandingPage() {
       </div>
 
       <style jsx global>{`
-        .sub-landing-card{ max-width: 420px; }
+        .sub-landing-card{ max-width: 420px; box-shadow: none; border: 1px solid var(--panel-line); }
         .sub-landing-options{ display: flex; flex-direction: column; gap: 10px; }
         .sub-landing-option{
           display: block; width: 100%; text-align: left; padding: 14px 16px; border-radius: 8px;
           border: 1px solid var(--panel-line); background: var(--panel); cursor: pointer; text-decoration: none;
-          font-family: inherit;
+          font-family: inherit; transition: border-color 0.15s ease, transform 0.1s ease;
         }
-        .sub-landing-option:hover{ border-color: var(--rust); }
+        .sub-landing-option:hover{ border-color: var(--rust); transform: translateY(-1px); }
         .sub-landing-option-title{ font-size: 14px; font-weight: 700; color: var(--heading); margin-bottom: 3px; }
         .sub-landing-option-desc{ font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
       `}</style>
-    </div>
+    </SubPortalAuthLayout>
   );
 }
