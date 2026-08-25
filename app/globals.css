@@ -598,6 +598,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: #f2ead9;
   padding: 56px 48px;
   flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
 }
 .subportal-auth-logo{ width: auto; }
