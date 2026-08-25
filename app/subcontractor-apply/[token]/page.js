@@ -61,6 +61,10 @@ export default function SubcontractorApplyPage() {
 
   async function submit(e) {
     e.preventDefault();
+    if (form.servicesOffered.length === 0) {
+      setError('Please select at least one service offered.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -141,8 +145,8 @@ export default function SubcontractorApplyPage() {
               <input value={form.contactName} onChange={e => update('contactName', e.target.value)} required />
             </div>
             <div>
-              <label>Contact phone</label>
-              <input value={form.contactPhone} onChange={e => update('contactPhone', e.target.value)} />
+              <label>Contact phone *</label>
+              <input value={form.contactPhone} onChange={e => update('contactPhone', e.target.value)} required />
             </div>
           </div>
 
@@ -151,28 +155,28 @@ export default function SubcontractorApplyPage() {
 
           <div className="two-col">
             <div style={{ gridColumn: '1 / -1' }}>
-              <label>Street address</label>
-              <input value={form.street} onChange={e => update('street', e.target.value)} />
+              <label>Street address *</label>
+              <input value={form.street} onChange={e => update('street', e.target.value)} required />
             </div>
             <div>
-              <label>Unit / suite</label>
-              <input value={form.unit} onChange={e => update('unit', e.target.value)} />
+              <label>Unit / suite *</label>
+              <input value={form.unit} onChange={e => update('unit', e.target.value)} required />
             </div>
             <div>
-              <label>City</label>
-              <input value={form.city} onChange={e => update('city', e.target.value)} />
+              <label>City *</label>
+              <input value={form.city} onChange={e => update('city', e.target.value)} required />
             </div>
             <div>
-              <label>State</label>
-              <input value={form.state} onChange={e => update('state', e.target.value)} />
+              <label>State *</label>
+              <input value={form.state} onChange={e => update('state', e.target.value)} required />
             </div>
             <div>
-              <label>ZIP</label>
-              <input value={form.zip} onChange={e => update('zip', e.target.value)} />
+              <label>ZIP *</label>
+              <input value={form.zip} onChange={e => update('zip', e.target.value)} required />
             </div>
           </div>
 
-          <label style={{ marginTop: 10 }}>Services offered</label>
+          <label style={{ marginTop: 10 }}>Services offered *</label>
           <div className="apply-services-grid">
             {SERVICES_OFFERED.map(s => (
               <label key={s} className="apply-service-chip">
@@ -184,16 +188,16 @@ export default function SubcontractorApplyPage() {
 
           <div className="two-col" style={{ marginTop: 10 }}>
             <div>
-              <label>W9</label>
-              <input type="file" accept=".pdf,image/*" onChange={e => setW9File(e.target.files[0])} />
+              <label>W9 *</label>
+              <input type="file" accept=".pdf,image/*" onChange={e => setW9File(e.target.files[0])} required />
             </div>
             <div>
-              <label>Certificate of Insurance</label>
-              <input type="file" accept=".pdf,image/*" onChange={e => setCoiFile(e.target.files[0])} />
+              <label>Certificate of Insurance *</label>
+              <input type="file" accept=".pdf,image/*" onChange={e => setCoiFile(e.target.files[0])} required />
             </div>
           </div>
-          <label style={{ marginTop: 10 }}>COI expiration date</label>
-          <input type="date" value={form.coiExpiresAt} onChange={e => update('coiExpiresAt', e.target.value)} />
+          <label style={{ marginTop: 10 }}>COI expiration date *</label>
+          <input type="date" value={form.coiExpiresAt} onChange={e => update('coiExpiresAt', e.target.value)} required />
 
           <label style={{ marginTop: 10 }}>Anything else we should know?</label>
           <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />

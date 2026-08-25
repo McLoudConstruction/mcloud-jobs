@@ -54,9 +54,27 @@ export async function POST(request) {
 
     const companyName = (body.companyName || '').trim();
     const contactName = (body.contactName || '').trim();
+    const contactPhone = (body.contactPhone || '').trim();
     const contactEmail = (body.contactEmail || '').trim();
-    if (!companyName || !contactName || !contactEmail) {
-      return Response.json({ error: 'Company name, contact name, and contact email are required.' }, { status: 400 });
+    const street = (body.street || '').trim();
+    const unit = (body.unit || '').trim();
+    const city = (body.city || '').trim();
+    const state = (body.state || '').trim();
+    const zip = (body.zip || '').trim();
+    const servicesOffered = Array.isArray(body.servicesOffered) ? body.servicesOffered : [];
+    const coiExpiresAt = body.coiExpiresAt || '';
+
+    if (!companyName || !contactName || !contactPhone || !contactEmail || !street || !unit || !city || !state || !zip) {
+      return Response.json({ error: 'All fields are required except "Anything else we should know?".' }, { status: 400 });
+    }
+    if (servicesOffered.length === 0) {
+      return Response.json({ error: 'Please select at least one service offered.' }, { status: 400 });
+    }
+    if (!coiExpiresAt) {
+      return Response.json({ error: 'COI expiration date is required.' }, { status: 400 });
+    }
+    if (!body.w9Base64 || !body.coiBase64) {
+      return Response.json({ error: 'Both a W9 and a Certificate of Insurance are required.' }, { status: 400 });
     }
 
     let w9StoragePath = null;
@@ -81,14 +99,14 @@ export async function POST(request) {
       status: 'submitted',
       company_name: companyName,
       contact_name: contactName,
-      contact_phone: (body.contactPhone || '').trim() || null,
+      contact_phone: contactPhone,
       contact_email: contactEmail,
-      street: (body.street || '').trim() || null,
-      unit: (body.unit || '').trim() || null,
-      city: (body.city || '').trim() || null,
-      state: (body.state || '').trim() || null,
-      zip: (body.zip || '').trim() || null,
-      services_offered: Array.isArray(body.servicesOffered) ? body.servicesOffered : null,
+      street: street,
+      unit: unit,
+      city: city,
+      state: state,
+      zip: zip,
+      services_offered: servicesOffered,
       notes: (body.notes || '').trim() || null,
       ...(w9StoragePath ? { w9_storage_path: w9StoragePath } : {}),
       ...(coiStoragePath ? { coi_storage_path: coiStoragePath } : {}),

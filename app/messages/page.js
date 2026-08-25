@@ -16,6 +16,7 @@ export default function MessagesPage() {
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
 
   const loadQuestions = useCallback(async () => {
     const { data } = await supabase.from('job_questions').select('*, jobs(job_number, customer_name)').order('created_at', { ascending: true });
@@ -41,7 +42,7 @@ export default function MessagesPage() {
   }
   const threads = Object.entries(threadsByJob).map(([jobId, msgs]) => {
     const last = msgs[msgs.length - 1];
-    const unreadCount = msgs.filter(m => m.sender === 'customer' && !m.response).length;
+    const unreadCount = msgs.filter(m => m.sender === 'customer' && !m.read_at).length;
     return { jobId, msgs, last, unreadCount, jobInfo: last.jobs };
   }).sort((a, b) => new Date(b.last.created_at) - new Date(a.last.created_at));
 
@@ -62,13 +63,26 @@ export default function MessagesPage() {
       message: reply.trim(),
     });
 
-    const unanswered = thread.filter(m => m.sender === 'customer' && !m.response);
+    const unanswered = thread.filter(m => m.sender === 'customer' && !m.responded_at);
     if (unanswered.length > 0) {
-      await supabase.from('job_questions').update({ response: reply.trim(), responded_at: new Date().toISOString() }).in('id', unanswered.map(m => m.id));
+      const now = new Date().toISOString();
+      await supabase.from('job_questions').update({ responded_at: now, read_at: now }).in('id', unanswered.map(m => m.id));
     }
 
     setReply('');
     setSending(false);
+  }
+
+  // Not every customer message needs a reply — this clears the unread
+  // badge for the thread without sending anything back.
+  async function markThreadRead() {
+    if (!activeJobId) return;
+    const thread = threadsByJob[activeJobId];
+    const unread = thread.filter(m => m.sender === 'customer' && !m.read_at);
+    if (unread.length === 0) return;
+    setMarkingRead(true);
+    await supabase.from('job_questions').update({ read_at: new Date().toISOString() }).in('id', unread.map(m => m.id));
+    setMarkingRead(false);
   }
 
   return (
@@ -105,7 +119,14 @@ export default function MessagesPage() {
                     <div style={{ fontWeight: 700 }}>{selectedThread.jobInfo?.customer_name || 'Unnamed'}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Job #{selectedThread.jobInfo?.job_number}</div>
                   </div>
-                  <Link href={`/jobs/${activeJobId}`} className="btn btn-sm">View Job →</Link>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {selectedThread.unreadCount > 0 && (
+                      <button className="btn btn-sm" onClick={markThreadRead} disabled={markingRead}>
+                        {markingRead ? 'Marking…' : 'Mark as Read'}
+                      </button>
+                    )}
+                    <Link href={`/jobs/${activeJobId}`} className="btn btn-sm">View Job →</Link>
+                  </div>
                 </div>
 
                 <div className="messages-thread-scroll">
@@ -115,12 +136,6 @@ export default function MessagesPage() {
                         <div className="messages-bubble-text">{m.message}</div>
                         <div className="messages-bubble-time">{fmtDate(m.created_at)}</div>
                       </div>
-                      {m.sender === 'customer' && m.response && (
-                        <div className="messages-bubble from-admin">
-                          <div className="messages-bubble-text">{m.response}</div>
-                          <div className="messages-bubble-time">{fmtDate(m.responded_at)}</div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

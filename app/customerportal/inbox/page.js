@@ -75,10 +75,7 @@ export default function CustomerInboxPage() {
                         <p>{q.message}</p>
                       </>
                     ) : (
-                      <>
-                        <p>{q.message}</p>
-                        {q.response && <><div className="update-field-label">McLoud Construction replied</div><p>{q.response}</p></>}
-                      </>
+                      <p>{q.message}</p>
                     )}
                   </div>
                 ))}
