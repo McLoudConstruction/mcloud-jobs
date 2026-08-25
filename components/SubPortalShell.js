@@ -43,9 +43,6 @@ const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
   { href: '/sub-portal/work-orders', label: 'Work Orders', icon: WorkOrdersIcon },
   { href: '/sub-portal/invoices', label: 'Invoices', icon: InvoicesIcon },
-];
-const ADMIN_NAV_ITEMS = [
-  ...NAV_ITEMS,
   { href: '/sub-portal/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -120,7 +117,7 @@ export default function SubPortalShell({ company, role, children }) {
                 </div>
               )}
               <div className="shell-nav-links">
-                {(role === 'admin' ? ADMIN_NAV_ITEMS : NAV_ITEMS).map(item => (
+                {NAV_ITEMS.map(item => (
                   <a
                     key={item.href}
                     href={item.href}

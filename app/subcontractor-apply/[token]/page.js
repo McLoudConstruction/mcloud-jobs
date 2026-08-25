@@ -94,6 +94,14 @@ function Chrome({ children }) {
           width: 100%; font-family: var(--mcw-body); font-size: 13px; color: var(--mcw-ink);
           border: 1.5px dashed rgba(28,27,25,0.25); padding: 12px; background: rgba(237,231,218,0.4);
         }
+        .mcw-photo-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
+        .mcw-photo-thumb{ position: relative; border: 1px solid rgba(28,27,25,0.15); }
+        .mcw-photo-thumb img{ width: 100%; height: 84px; object-fit: cover; display: block; }
+        .mcw-photo-thumb button{
+          position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: none;
+          background: rgba(28,27,25,0.7); color: var(--mcw-paper); font-size: 14px; line-height: 1; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+        }
 
         .mcw-two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
         @media (max-width: 560px){ .mcw-two-col{ grid-template-columns: 1fr; } }
@@ -138,6 +146,7 @@ export default function SubcontractorApplyPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [w9File, setW9File] = useState(null);
   const [coiFile, setCoiFile] = useState(null);
+  const [workPhotos, setWorkPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -173,6 +182,14 @@ export default function SubcontractorApplyPage() {
     }));
   }
 
+  function addWorkPhotos(fileList) {
+    const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
+    setWorkPhotos(prev => [...prev, ...files].slice(0, 8));
+  }
+  function removeWorkPhoto(idx) {
+    setWorkPhotos(prev => prev.filter((_, i) => i !== idx));
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (form.servicesOffered.length === 0) {
@@ -192,6 +209,11 @@ export default function SubcontractorApplyPage() {
         payload.coiBase64 = await fileToBase64(coiFile);
         payload.coiFilename = coiFile.name;
         payload.coiContentType = coiFile.type;
+      }
+      if (workPhotos.length > 0) {
+        payload.workPhotos = await Promise.all(workPhotos.map(async f => ({
+          base64: await fileToBase64(f), filename: f.name, contentType: f.type,
+        })));
       }
       const res = await fetch('/api/public/subcontractor-application', {
         method: 'POST',
@@ -324,6 +346,21 @@ export default function SubcontractorApplyPage() {
           </div>
           <label>COI expiration date *</label>
           <input type="date" value={form.coiExpiresAt} onChange={e => update('coiExpiresAt', e.target.value)} required />
+
+          <div className="mcw-tick-rule" />
+          <div className="mcw-section-label">Photos of Previous Work (optional)</div>
+          <label style={{ marginTop: 0 }}>Show us a bit of your craftsmanship — up to 8 photos</label>
+          <input type="file" accept="image/*" multiple onChange={e => addWorkPhotos(e.target.files)} />
+          {workPhotos.length > 0 && (
+            <div className="mcw-photo-grid">
+              {workPhotos.map((f, i) => (
+                <div key={i} className="mcw-photo-thumb">
+                  <img src={URL.createObjectURL(f)} alt={`Work sample ${i + 1}`} />
+                  <button type="button" onClick={() => removeWorkPhoto(i)} aria-label="Remove photo">×</button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="mcw-tick-rule" />
           <label>Anything else we should know?</label>

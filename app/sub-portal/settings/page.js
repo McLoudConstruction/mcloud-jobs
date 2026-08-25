@@ -26,6 +26,9 @@ export default function SubPortalSettingsPage() {
   const [newRole, setNewRole] = useState('crew');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwResult, setPwResult] = useState('');
 
   const loadRoster = useCallback(async () => {
     if (!company) return;
@@ -64,6 +67,24 @@ export default function SubPortalSettingsPage() {
     if (error) alert(error.message);
   }
 
+  async function setupPassword(e) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPwResult('Password needs to be at least 6 characters.');
+      return;
+    }
+    setPwSaving(true);
+    setPwResult('');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPwSaving(false);
+    if (error) {
+      setPwResult(error.message);
+    } else {
+      setPwResult('Password set! You can now sign in with your email and password anytime.');
+      setNewPassword('');
+    }
+  }
+
   if (loading || !session) return null;
 
   if (ready && !company) {
@@ -80,22 +101,25 @@ export default function SubPortalSettingsPage() {
   }
   if (!company) return null;
 
-  if (role !== 'admin') {
-    return (
-      <SubPortalShell company={company} role={role}>
-        <div className="container" style={{ paddingTop: 24 }}>
-          <div className="card">
-            <h3>Settings</h3>
-            <div className="empty-state">Only an Owner/Manager login can manage the team roster.</div>
-          </div>
-        </div>
-      </SubPortalShell>
-    );
-  }
-
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container" style={{ paddingTop: 24 }}>
+        <div className="card">
+          <h3>Sign-In Password</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Set up a password for {session.user.email} and you can sign in anytime without waiting on an email link.
+          </div>
+          <form onSubmit={setupPassword}>
+            <label htmlFor="newPassword">New password</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <input id="newPassword" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required style={{ flex: '1 1 220px' }} />
+              <button className="btn btn-primary btn-sm" type="submit" disabled={pwSaving}>{pwSaving ? 'Saving…' : 'Set Password'}</button>
+            </div>
+            {pwResult && <div style={{ fontSize: 12.5, marginTop: 8, color: pwResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f' }}>{pwResult}</div>}
+          </form>
+        </div>
+
+        {role === 'admin' && (
         <div className="card">
           <h3>Team Logins</h3>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
@@ -128,10 +152,11 @@ export default function SubPortalSettingsPage() {
             </div>
             {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
-              No password to set — they'll sign in with a one-time email link, the same way you did.
+              They'll sign in with a one-time email link at first — they can set up a password anytime from this same Settings page once they're in.
             </div>
           </form>
         </div>
+        )}
       </div>
     </SubPortalShell>
   );

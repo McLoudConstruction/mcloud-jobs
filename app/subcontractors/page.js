@@ -8,7 +8,16 @@ import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
-import { buildSubInviteEmail } from '../../lib/emailTemplates';
+import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
+
+const DECLINE_REASONS = [
+  'COI information is incorrect or incomplete',
+  'Liability coverage is insufficient',
+  'W9 information is incorrect or incomplete',
+  'Services offered don\u2019t match our current needs',
+  'Unable to verify company information',
+  'Other',
+];
 
 const SUBCONTRACTOR_TYPE = 'Subcontractor';
 
@@ -133,6 +142,11 @@ export default function SubcontractorsPage() {
   const [applyResult, setApplyResult] = useState('');
   const [reviewingApp, setReviewingApp] = useState(null);
   const [approving, setApproving] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [declineMode, setDeclineMode] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineReasonOther, setDeclineReasonOther] = useState('');
+  const [photoUrls, setPhotoUrls] = useState([]);
 
   function toggleService(service) {
     setForm(prev => ({
@@ -164,8 +178,20 @@ export default function SubcontractorsPage() {
   }
 
   async function viewDoc(path) {
-    const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    const tab = window.open('', '_blank');
+    try {
+      const { data, error } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        if (tab) tab.location.href = data.signedUrl;
+        else window.open(data.signedUrl, '_blank');
+      } else {
+        throw new Error('No file found at that path.');
+      }
+    } catch (err) {
+      if (tab) tab.close();
+      alert('Could not open file: ' + err.message);
+    }
   }
 
   async function removeDoc(kind) {
@@ -194,6 +220,20 @@ export default function SubcontractorsPage() {
     const channel = supabase.channel('subcontractor-applications').on('postgres_changes', { event: '*', schema: 'public', table: 'subcontractor_applications' }, loadApplications).subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, loadApplications]);
+
+  useEffect(() => {
+    setDeclineMode(false);
+    setDeclineReason('');
+    setDeclineReasonOther('');
+    setPhotoUrls([]);
+    if (!reviewingApp || !reviewingApp.photo_storage_paths?.length) return;
+    Promise.all(
+      reviewingApp.photo_storage_paths.map(async path => {
+        const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+        return data?.signedUrl || null;
+      })
+    ).then(urls => setPhotoUrls(urls.filter(Boolean)));
+  }, [reviewingApp]);
 
   async function sendApplicationInvite(e) {
     e.preventDefault();
@@ -229,8 +269,20 @@ export default function SubcontractorsPage() {
   }
 
   async function viewApplicationDoc(path) {
-    const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    const tab = window.open('', '_blank');
+    try {
+      const { data, error } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        if (tab) tab.location.href = data.signedUrl;
+        else window.open(data.signedUrl, '_blank');
+      } else {
+        throw new Error('No file found at that path.');
+      }
+    } catch (err) {
+      if (tab) tab.close();
+      alert('Could not open file: ' + err.message);
+    }
   }
 
   async function approveApplication(app) {
@@ -251,6 +303,16 @@ export default function SubcontractorsPage() {
       await supabase.from('subcontractor_applications').update({
         status: 'approved', reviewed_at: new Date().toISOString(), created_company_id: company.id,
       }).eq('id', app.id);
+
+      const toEmail = app.contact_email || app.invited_email;
+      if (toEmail) {
+        const { subject, html, text } = buildSubApplicationApprovedEmail({ companyName: app.company_name });
+        fetch('/api/send-email', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: toEmail, subject, html, text }),
+        }).catch(() => {});
+      }
+
       setReviewingApp(null);
     } catch (err) {
       alert('Failed to approve: ' + err.message);
@@ -259,10 +321,33 @@ export default function SubcontractorsPage() {
     }
   }
 
-  async function declineApplication(app) {
-    if (!confirm(`Decline ${app.company_name || app.invited_email}'s application?`)) return;
-    await supabase.from('subcontractor_applications').update({ status: 'declined', reviewed_at: new Date().toISOString() }).eq('id', app.id);
-    setReviewingApp(null);
+  async function submitDecline(app) {
+    const reason = declineReason === 'Other' ? declineReasonOther.trim() : declineReason;
+    if (!reason) return;
+    setDeclining(true);
+    try {
+      await supabase.from('subcontractor_applications').update({
+        status: 'declined', reviewed_at: new Date().toISOString(), decline_reason: reason,
+      }).eq('id', app.id);
+
+      const toEmail = app.contact_email || app.invited_email;
+      if (toEmail) {
+        const { subject, html, text } = buildSubApplicationDeclinedEmail({ companyName: app.company_name, reason });
+        fetch('/api/send-email', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: toEmail, subject, html, text }),
+        }).catch(() => {});
+      }
+
+      setDeclineMode(false);
+      setDeclineReason('');
+      setDeclineReasonOther('');
+      setReviewingApp(null);
+    } catch (err) {
+      alert('Failed to decline: ' + err.message);
+    } finally {
+      setDeclining(false);
+    }
   }
 
   useEffect(() => {
@@ -503,31 +588,106 @@ export default function SubcontractorsPage() {
           </form>
         </PopupModal>
 
-        <PopupModal open={!!reviewingApp} onClose={() => setReviewingApp(null)} maxWidth={520}>
+        <PopupModal open={!!reviewingApp} onClose={() => setReviewingApp(null)} maxWidth={640}>
           {reviewingApp && (
-            <div>
-              <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{reviewingApp.company_name || reviewingApp.invited_email}</h3>
-              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px' }}>Submitted application — review before adding as a subcontractor.</p>
-              <div style={{ fontSize: 13, lineHeight: 1.9 }}>
-                <div><b>Contact:</b> {reviewingApp.contact_name} {reviewingApp.contact_email ? `(${reviewingApp.contact_email})` : ''} {reviewingApp.contact_phone}</div>
-                <div><b>Address:</b> {[reviewingApp.street, reviewingApp.unit, reviewingApp.city, reviewingApp.state, reviewingApp.zip].filter(Boolean).join(', ') || '—'}</div>
-                <div><b>Services:</b> {(reviewingApp.services_offered || []).join(', ') || '—'}</div>
-                {reviewingApp.notes && <div><b>Notes:</b> {reviewingApp.notes}</div>}
-                <div><b>COI expires:</b> {reviewingApp.coi_expires_at || '—'}</div>
+            <div className="sub-review-modal">
+              <h3 style={{ margin: '0 0 6px', color: 'var(--heading)', fontSize: 20 }}>{reviewingApp.company_name || reviewingApp.invited_email}</h3>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 22px' }}>Submitted application — review before adding as a subcontractor.</p>
+
+              <div className="sub-review-grid">
+                <div className="sub-review-field">
+                  <div className="sub-review-label">Contact</div>
+                  <div className="sub-review-value">{reviewingApp.contact_name || '—'}</div>
+                  <div className="sub-review-subvalue">{reviewingApp.contact_email}{reviewingApp.contact_phone ? ` · ${formatPhone(reviewingApp.contact_phone)}` : ''}</div>
+                </div>
+                <div className="sub-review-field">
+                  <div className="sub-review-label">Address</div>
+                  <div className="sub-review-value">{[reviewingApp.street, reviewingApp.unit].filter(Boolean).join(' ') || '—'}</div>
+                  <div className="sub-review-subvalue">{[reviewingApp.city, reviewingApp.state, reviewingApp.zip].filter(Boolean).join(', ')}</div>
+                </div>
+                <div className="sub-review-field">
+                  <div className="sub-review-label">Services Offered</div>
+                  <div className="sub-review-value">{(reviewingApp.services_offered || []).join(', ') || '—'}</div>
+                </div>
+                <div className="sub-review-field">
+                  <div className="sub-review-label">COI Expires</div>
+                  <div className="sub-review-value">{reviewingApp.coi_expires_at || '—'}</div>
+                </div>
+                {reviewingApp.notes && (
+                  <div className="sub-review-field" style={{ gridColumn: '1 / -1' }}>
+                    <div className="sub-review-label">Notes</div>
+                    <div className="sub-review-value">{reviewingApp.notes}</div>
+                  </div>
+                )}
               </div>
-              <div className="section-actions">
+
+              <div className="section-actions" style={{ marginTop: 20 }}>
                 {reviewingApp.w9_storage_path && <button type="button" className="btn btn-sm" onClick={() => viewApplicationDoc(reviewingApp.w9_storage_path)}>View W9</button>}
                 {reviewingApp.coi_storage_path && <button type="button" className="btn btn-sm" onClick={() => viewApplicationDoc(reviewingApp.coi_storage_path)}>View COI</button>}
               </div>
-              <div className="section-actions" style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => approveApplication(reviewingApp)} disabled={approving}>
-                  {approving ? 'Adding…' : 'Approve & Add as Subcontractor'}
-                </button>
-                <button className="btn btn-sm btn-danger" onClick={() => declineApplication(reviewingApp)}>Decline</button>
-              </div>
+
+              {photoUrls.length > 0 && (
+                <div style={{ marginTop: 22 }}>
+                  <div className="sub-review-label" style={{ marginBottom: 8 }}>Photos of Previous Work</div>
+                  <div className="sub-review-photo-grid">
+                    {photoUrls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="sub-review-photo">
+                        <img src={url} alt={`Previous work ${i + 1}`} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!declineMode ? (
+                <div className="section-actions" style={{ marginTop: 26, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => approveApplication(reviewingApp)} disabled={approving}>
+                    {approving ? 'Adding…' : 'Approve & Add as Subcontractor'}
+                  </button>
+                  <button className="btn btn-sm btn-danger" onClick={() => setDeclineMode(true)}>Decline</button>
+                </div>
+              ) : (
+                <div style={{ marginTop: 26, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+                  <label>Reason for declining</label>
+                  <select value={declineReason} onChange={e => setDeclineReason(e.target.value)}>
+                    <option value="">Select a reason…</option>
+                    {DECLINE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  {declineReason === 'Other' && (
+                    <>
+                      <label>Details</label>
+                      <textarea value={declineReasonOther} onChange={e => setDeclineReasonOther(e.target.value)} rows={2} />
+                    </>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
+                    We'll include this reason in the email letting them know, so they have a baseline to work from.
+                  </div>
+                  <div className="section-actions" style={{ marginTop: 12 }}>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={() => submitDecline(reviewingApp)}
+                      disabled={declining || !declineReason || (declineReason === 'Other' && !declineReasonOther.trim())}
+                    >
+                      {declining ? 'Sending…' : 'Confirm Decline & Send Email'}
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setDeclineMode(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </PopupModal>
+
+        <style jsx global>{`
+          .sub-review-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
+          @media (max-width: 560px){ .sub-review-grid{ grid-template-columns: 1fr; } }
+          .sub-review-label{ font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 5px; }
+          .sub-review-value{ font-size: 14px; color: var(--heading); line-height: 1.5; }
+          .sub-review-subvalue{ font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+          .sub-review-photo-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+          .sub-review-photo{ display: block; border-radius: 6px; overflow: hidden; border: 1px solid var(--panel-line); }
+          .sub-review-photo img{ width: 100%; height: 90px; object-fit: cover; display: block; }
+        `}</style>
 
         {applications.filter(a => a.status === 'invited' || a.status === 'submitted').length > 0 && (
           <div className="card">

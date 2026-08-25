@@ -7,6 +7,7 @@ import { useSubPortalData } from '../../../lib/useSubPortalData';
 import { WORK_ORDER_STATUS_LABELS, formattedProjectNumber } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
+import PasswordPromptModal from '../../../components/PasswordPromptModal';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -21,6 +22,7 @@ export default function SubPortalDashboard() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('Active Projects');
+  const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -29,6 +31,19 @@ export default function SubPortalDashboard() {
       setLoading(false);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (!session) return;
+    const dismissKey = `mcloud-subportal-password-prompt-dismissed-${session.user.id}`;
+    if (window.localStorage.getItem(dismissKey)) return;
+    const t = setTimeout(() => setPasswordPromptOpen(true), 400);
+    return () => clearTimeout(t);
+  }, [session]);
+
+  function dismissPasswordPrompt() {
+    setPasswordPromptOpen(false);
+    if (session) window.localStorage.setItem(`mcloud-subportal-password-prompt-dismissed-${session.user.id}`, '1');
+  }
 
   const { company, role, workOrders, jobsById, ready } = useSubPortalData(session);
 
@@ -127,6 +142,7 @@ export default function SubPortalDashboard() {
           </div>
         )}
       </div>
+      <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </SubPortalShell>
   );
 }

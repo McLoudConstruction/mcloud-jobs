@@ -9,13 +9,12 @@ export async function POST(request) {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return Response.json({ error: 'Server not configured.' }, { status: 500 });
     }
-    const { email } = await request.json();
-    const trimmedEmail = (email || '').trim();
-    if (!trimmedEmail) return Response.json({ error: 'Email is required.' }, { status: 400 });
+    const body = await request.json().catch(() => ({}));
+    const trimmedEmail = (body?.email || '').trim();
 
     const supabase = serviceClient();
     const { data, error } = await supabase.from('subcontractor_applications').insert({
-      invited_email: trimmedEmail,
+      invited_email: trimmedEmail || null,
       invited_by: 'Self-service (subcontractor portal)',
       status: 'invited',
     }).select('token').single();

@@ -8,6 +8,10 @@ function b64ToBuffer(b64) {
   return Buffer.from(b64, 'base64');
 }
 
+function sanitizeFilename(name) {
+  return String(name).replace(/[^a-zA-Z0-9._-]/g, '_').slice(-100);
+}
+
 export async function GET(request) {
   try {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -79,20 +83,31 @@ export async function POST(request) {
 
     let w9StoragePath = null;
     let coiStoragePath = null;
+    let photoStoragePaths = [];
 
     if (body.w9Base64 && body.w9Filename) {
-      const path = `applications/${existing.id}/w9-${Date.now()}-${body.w9Filename}`;
+      const path = `applications/${existing.id}/w9-${Date.now()}-${sanitizeFilename(body.w9Filename)}`;
       const { error: upErr } = await supabase.storage.from('subcontractor-docs').upload(path, b64ToBuffer(body.w9Base64), {
         contentType: body.w9ContentType || 'application/octet-stream',
       });
       if (!upErr) w9StoragePath = path;
     }
     if (body.coiBase64 && body.coiFilename) {
-      const path = `applications/${existing.id}/coi-${Date.now()}-${body.coiFilename}`;
+      const path = `applications/${existing.id}/coi-${Date.now()}-${sanitizeFilename(body.coiFilename)}`;
       const { error: upErr } = await supabase.storage.from('subcontractor-docs').upload(path, b64ToBuffer(body.coiBase64), {
         contentType: body.coiContentType || 'application/octet-stream',
       });
       if (!upErr) coiStoragePath = path;
+    }
+    if (Array.isArray(body.workPhotos)) {
+      for (const [i, photo] of body.workPhotos.slice(0, 8).entries()) {
+        if (!photo?.base64 || !photo?.filename) continue;
+        const path = `applications/${existing.id}/work-photo-${Date.now()}-${i}-${sanitizeFilename(photo.filename)}`;
+        const { error: upErr } = await supabase.storage.from('subcontractor-docs').upload(path, b64ToBuffer(photo.base64), {
+          contentType: photo.contentType || 'application/octet-stream',
+        });
+        if (!upErr) photoStoragePaths.push(path);
+      }
     }
 
     const { error: updateError } = await supabase.from('subcontractor_applications').update({
@@ -110,6 +125,7 @@ export async function POST(request) {
       notes: (body.notes || '').trim() || null,
       ...(w9StoragePath ? { w9_storage_path: w9StoragePath } : {}),
       ...(coiStoragePath ? { coi_storage_path: coiStoragePath } : {}),
+      ...(photoStoragePaths.length > 0 ? { photo_storage_paths: photoStoragePaths } : {}),
       coi_expires_at: body.coiExpiresAt || null,
       submitted_at: new Date().toISOString(),
     }).eq('id', existing.id);
