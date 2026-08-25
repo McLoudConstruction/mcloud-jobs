@@ -600,7 +600,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex-direction: column;
   justify-content: space-between;
 }
-.subportal-auth-logo{ height: 40px; width: auto; }
+.subportal-auth-logo{ width: auto; }
 .subportal-auth-brand h2{ font-size: 22px; font-weight: 700; margin: 0 0 12px; color: #fff; }
 .subportal-auth-brand p{ font-size: 13.5px; line-height: 1.7; color: rgba(242,234,217,0.75); margin: 0; max-width: 340px; }
 .subportal-auth-brand-foot{ font-size: 11.5px; color: rgba(242,234,217,0.45); letter-spacing: 0.03em; }
@@ -608,7 +608,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 40px 24px; position: relative;
 }
-.subportal-auth-logo-mobile{ display: block; height: 34px; width: auto; margin-bottom: 22px; }
+.subportal-auth-logo-mobile{ display: block; width: auto; margin-bottom: 22px; }
 @media (min-width: 900px){
   .subportal-auth-brand{ display: flex; }
   .subportal-auth-logo-mobile{ display: none; }

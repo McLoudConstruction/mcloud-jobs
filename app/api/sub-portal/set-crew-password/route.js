@@ -47,8 +47,22 @@ export async function POST(request) {
     }
 
     const { data: targetUserId, error: lookupError } = await service.rpc('get_user_id_by_email', { lookup_email: targetRow.email });
-    if (lookupError || !targetUserId) {
-      return Response.json({ error: "Couldn't find that account — they may not have signed in yet to create it." }, { status: 404 });
+    if (lookupError) {
+      return Response.json({ error: lookupError.message }, { status: 500 });
+    }
+
+    if (!targetUserId) {
+      // No auth account exists yet for this email — normally created lazily
+      // on first magic-link login. Create it directly with the chosen
+      // password so an Owner/Manager can fully provision a teammate
+      // without waiting on that round trip.
+      const { error: createError } = await service.auth.admin.createUser({
+        email: targetRow.email,
+        password: newPassword,
+        email_confirm: true,
+      });
+      if (createError) return Response.json({ error: createError.message }, { status: 500 });
+      return Response.json({ ok: true, created: true });
     }
 
     const { error: updateError } = await service.auth.admin.updateUserById(targetUserId, { password: newPassword });

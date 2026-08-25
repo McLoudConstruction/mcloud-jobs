@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
-import { SignOutIcon } from './icons';
+import { useSettings } from '../lib/useSettings';
+import { SignOutIcon, SettingsIcon } from './icons';
 
 function DashboardIcon(props) {
   return (
@@ -30,14 +31,6 @@ function InvoicesIcon(props) {
     </svg>
   );
 }
-function SettingsIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="10" cy="10" r="2.6" />
-      <path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.1 5.1l1.4 1.4M13.5 13.5l1.4 1.4M5.1 14.9l1.4-1.4M13.5 6.5l1.4-1.4" />
-    </svg>
-  );
-}
 
 const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -49,11 +42,13 @@ const NAV_ITEMS = [
 export default function SubPortalShell({ company, role, children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { settings } = useSettings();
   const [navOpen, setNavOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(47);
   const topbarRef = useRef(null);
+  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -92,7 +87,9 @@ export default function SubPortalShell({ company, role, children }) {
           </button>
         </div>
         <div className="shell-logo">
-          <span className="brand">McLoud <span>Subcontractor</span></span>
+          {settings.logo_url
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
+            : <span className="brand">McLoud <span>Subcontractor</span></span>}
         </div>
       </div>
 

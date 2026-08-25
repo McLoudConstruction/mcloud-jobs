@@ -157,7 +157,7 @@ export default function AppShell({ children }) {
 
         <div className="shell-logo">
           {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: (logoSize || 32) / 4, width: 'auto' }} />
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
       </div>

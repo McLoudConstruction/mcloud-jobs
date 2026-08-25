@@ -18,7 +18,6 @@ export default function CustomerHomePage() {
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [updates, setUpdates] = useState([]);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -31,19 +30,6 @@ export default function CustomerHomePage() {
   function dismissPasswordPrompt() {
     setPasswordPromptOpen(false);
     if (session) window.localStorage.setItem(`mcloud-portal-password-prompt-dismissed-${session.user.id}`, '1');
-  }
-
-  // First-time welcome blurb — shown once per customer, dismissible, so it
-  // doesn't keep taking up space for returning visitors.
-  useEffect(() => {
-    if (!session) return;
-    const dismissKey = `mcloud-portal-welcome-dismissed-${session.user.id}`;
-    setWelcomeOpen(!window.localStorage.getItem(dismissKey));
-  }, [session]);
-
-  function dismissWelcome() {
-    setWelcomeOpen(false);
-    if (session) window.localStorage.setItem(`mcloud-portal-welcome-dismissed-${session.user.id}`, '1');
   }
 
   useEffect(() => {
@@ -66,18 +52,15 @@ export default function CustomerHomePage() {
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
-        {welcomeOpen && (
-          <div className="card portal-welcome-card">
-            <button className="portal-welcome-close" onClick={dismissWelcome} aria-label="Dismiss">×</button>
-            <h3 style={{ marginTop: 0 }}>Welcome to your Project Portal</h3>
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-soft)' }}>
-              This is your home base for everything happening on your project with McLoud Construction — your next scheduled visit,
-              the latest progress updates, and your project details, all in one place. Head to <b>Documents</b> in the sidebar any
-              time to view or sign your estimate and contract, respond to a material selection, or catch up on past updates, and use
-              <b> Inbox</b> to send us a message directly.
-            </p>
-          </div>
-        )}
+        <div className="card portal-welcome-card">
+          <h3 style={{ marginTop: 0 }}>Welcome to your Project Portal</h3>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-soft)' }}>
+            This is your home base for everything happening on your project with McLoud Construction — your next scheduled visit,
+            the latest progress updates, and your project details, all in one place. Head to <b>Documents</b> in the sidebar any
+            time to view or sign your estimate and contract, respond to a material selection, or catch up on past updates, and use
+            <b> Inbox</b> to send us a message directly.
+          </p>
+        </div>
 
         {job && (
           <>
@@ -147,12 +130,7 @@ export default function CustomerHomePage() {
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
 
       <style jsx global>{`
-        .portal-welcome-card{ position: relative; background: var(--panel); }
-        .portal-welcome-close{
-          position: absolute; top: 10px; right: 12px; background: none; border: none; cursor: pointer;
-          font-size: 20px; line-height: 1; color: var(--ink-soft); padding: 4px;
-        }
-        .portal-welcome-close:hover{ color: var(--heading); }
+        .portal-welcome-card{ background: var(--panel); }
       `}</style>
     </CustomerPortalShell>
   );

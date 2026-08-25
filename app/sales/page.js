@@ -9,7 +9,7 @@ const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
 const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
 const ACTIVE_STAGES = ['prospecting', 'contacted'];
 
-const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '' };
+const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '', referral_name: '' };
 
 export default function SalesDashboardPage() {
   const { session, loading } = useRequireAuth();
@@ -158,6 +158,7 @@ export default function SalesDashboardPage() {
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
               <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
+              <div><label>Referral name</label><input value={form.referral_name} onChange={e => update('referral_name', e.target.value)} placeholder="Who referred this lead to us?" /></div>
               <div>
                 <label>Date entered</label>
                 <input value={new Date(form.date_taken + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />

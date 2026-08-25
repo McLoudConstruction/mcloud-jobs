@@ -16,6 +16,7 @@ const EMPTY_FORM = {
   customer_email: '',
   customer_phone: '',
   description: '',
+  referral_name: '',
 };
 
 function NewOpportunityPageInner() {
@@ -61,6 +62,7 @@ function NewOpportunityPageInner() {
         customer_email: data.contact_email || prev.customer_email,
         customer_phone: data.contact_phone || prev.customer_phone,
         description: [data.project, data.notes].filter(Boolean).join(' — ') || prev.description,
+        referral_name: data.referral_name || prev.referral_name,
       }));
     });
   }, [oppId]);
@@ -143,6 +145,7 @@ function NewOpportunityPageInner() {
       customer_phone: form.customer_phone,
       expected_close_date: form.expected_close_date || null,
       description: form.description || null,
+      referral_name: form.referral_name.trim() || null,
       estimate_number: form.estimate_number,
       job_number: null,
       stage: 'new',
@@ -300,6 +303,9 @@ function NewOpportunityPageInner() {
                 <input value={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
               </div>
             </div>
+
+            <label style={{ marginTop: 12 }}>Referral name</label>
+            <input value={form.referral_name} onChange={e => update('referral_name', e.target.value)} placeholder="Who referred this project to us?" />
 
             <label style={{ marginTop: 12 }}>Project description</label>
             <textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Short summary of the job…" rows={3} />
