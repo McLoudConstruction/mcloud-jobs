@@ -347,12 +347,6 @@ export default function SubcontractorsPage() {
     }
   }
 
-  async function removeInvitedApplication(app) {
-    if (!confirm(`Remove this pending invite${app.company_name ? ` for ${app.company_name}` : ''}? This can't be undone — send a new invite if they still need one.`)) return;
-    const { error } = await supabase.from('subcontractor_applications').delete().eq('id', app.id);
-    if (error) alert('Failed to remove: ' + error.message);
-  }
-
   useEffect(() => {
     if (!session) return;
     loadSubs();
@@ -692,28 +686,19 @@ export default function SubcontractorsPage() {
           .sub-review-photo img{ width: 100%; height: 90px; object-fit: cover; display: block; }
         `}</style>
 
-        {applications.filter(a => a.status === 'invited' || a.status === 'submitted').length > 0 && (
+        {applications.filter(a => a.status === 'submitted').length > 0 && (
           <div className="card">
             <h3>Pending Applications</h3>
-            {applications.filter(a => a.status === 'invited' || a.status === 'submitted').map(a => {
-              const label = a.company_name || a.invited_company_hint || a.invited_email || 'Started, not yet identified';
+            {applications.filter(a => a.status === 'submitted').map(a => {
+              const label = a.company_name || a.invited_company_hint || a.invited_email || 'Untitled application';
               return (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
                   <div>
                     <b>{label}</b>{' '}
                     {a.invited_email && a.invited_email !== label && <span style={{ color: 'var(--ink-soft)' }}>{a.invited_email}</span>}
-                    <span className={`badge badge-${a.status === 'submitted' ? 'active' : 'draft'}`} style={{ marginLeft: 10 }}>
-                      {a.status === 'submitted' ? 'Submitted — needs review' : 'Invited — awaiting response'}
-                    </span>
+                    <span className="badge badge-active" style={{ marginLeft: 10 }}>Submitted — needs review</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {a.status === 'submitted' && (
-                      <button className="btn btn-sm" onClick={() => setReviewingApp(a)}>Review</button>
-                    )}
-                    {a.status === 'invited' && (
-                      <button className="btn btn-sm btn-danger" onClick={() => removeInvitedApplication(a)}>Remove</button>
-                    )}
-                  </div>
+                  <button className="btn btn-sm" onClick={() => setReviewingApp(a)}>Review</button>
                 </div>
               );
             })}
