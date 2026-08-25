@@ -19,6 +19,10 @@ function SubPortalLoginForm() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -47,6 +51,18 @@ function SubPortalLoginForm() {
     setLoading(false);
     if (error) setError("Incorrect email or password, or a password hasn't been set up yet on this account.");
     else router.replace('/sub-portal/dashboard');
+  }
+
+  async function handleForgotSubmit(e) {
+    e.preventDefault();
+    setForgotError('');
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/sub-portal/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) setForgotError(error.message);
+    else setForgotSent(true);
   }
 
   return (
@@ -86,9 +102,36 @@ function SubPortalLoginForm() {
               <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-                Haven't set a password yet? Use "Email me a link" once, then set one up from inside the portal.
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 11.5 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Haven't set a password yet? Use "Email me a link" once, then set one up from inside the portal.</span>
               </div>
+              <button
+                type="button"
+                onClick={() => { setForgotOpen(o => !o); setForgotSent(false); setForgotError(''); }}
+                style={{ background: 'none', border: 'none', padding: 0, marginTop: 10, fontSize: 11.5, color: 'var(--rust)', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Forgot your password?
+              </button>
+
+              {forgotOpen && (
+                <div style={{ marginTop: 10, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                  {forgotSent ? (
+                    <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: 0 }}>
+                      If an account exists for {email || 'that email'}, a reset link is on its way. Check your inbox.
+                    </p>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '0 0 8px' }}>
+                        We'll send a reset link to the email above{!email && ' — fill it in first'}.
+                      </p>
+                      {forgotError && <div className="error-text" style={{ marginTop: 0, marginBottom: 8 }}>{forgotError}</div>}
+                      <button type="button" className="btn btn-sm" onClick={handleForgotSubmit} disabled={forgotLoading || !email}>
+                        {forgotLoading ? 'Sending…' : 'Send Reset Link'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </form>
           )}
         </>

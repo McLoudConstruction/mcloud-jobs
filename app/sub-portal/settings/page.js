@@ -29,6 +29,10 @@ export default function SubPortalSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
   const [pwResult, setPwResult] = useState('');
+  const [settingPwFor, setSettingPwFor] = useState(null); // roster row id
+  const [teammatePassword, setTeammatePassword] = useState('');
+  const [teammatePwSaving, setTeammatePwSaving] = useState(false);
+  const [teammatePwResult, setTeammatePwResult] = useState('');
 
   const loadRoster = useCallback(async () => {
     if (!company) return;
@@ -65,6 +69,32 @@ export default function SubPortalSettingsPage() {
     if (!confirm('Remove this login? They will no longer be able to sign in to the subcontractor portal.')) return;
     const { error } = await supabase.rpc('remove_sub_portal_user', { target_id: id });
     if (error) alert(error.message);
+  }
+
+  async function submitTeammatePassword(e, targetEmail) {
+    e.preventDefault();
+    if (teammatePassword.length < 6) {
+      setTeammatePwResult('Password needs to be at least 6 characters.');
+      return;
+    }
+    setTeammatePwSaving(true);
+    setTeammatePwResult('');
+    try {
+      const res = await fetch('/api/sub-portal/set-crew-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: session.access_token, targetEmail, newPassword: teammatePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to set password.');
+      setTeammatePwResult(`Password set for ${targetEmail}.`);
+      setTeammatePassword('');
+      setTimeout(() => { setSettingPwFor(null); setTeammatePwResult(''); }, 1600);
+    } catch (err) {
+      setTeammatePwResult(err.message);
+    } finally {
+      setTeammatePwSaving(false);
+    }
   }
 
   async function setupPassword(e) {
@@ -128,15 +158,47 @@ export default function SubPortalSettingsPage() {
           </div>
 
           {roster.map(u => (
-            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-              <div>
-                <b>{u.email}</b>
-                {u.email === session.user.email && <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 6 }}>(you)</span>}
+            <div key={u.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <b>{u.email}</b>
+                  {u.email === session.user.email && <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 6 }}>(you)</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className={`badge badge-${u.role === 'admin' ? 'active' : 'draft'}`}>{u.role === 'admin' ? 'Owner/Manager' : 'Crew'}</span>
+                  {u.email !== session.user.email && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => { setSettingPwFor(settingPwFor === u.id ? null : u.id); setTeammatePassword(''); setTeammatePwResult(''); }}
+                    >
+                      {settingPwFor === u.id ? 'Cancel' : 'Set Password'}
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-danger" onClick={() => removeUser(u.id)}>Remove</button>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className={`badge badge-${u.role === 'admin' ? 'active' : 'draft'}`}>{u.role === 'admin' ? 'Owner/Manager' : 'Crew'}</span>
-                <button className="btn btn-sm btn-danger" onClick={() => removeUser(u.id)}>Remove</button>
-              </div>
+              {settingPwFor === u.id && (
+                <form onSubmit={e => submitTeammatePassword(e, u.email)} style={{ marginTop: 10, paddingLeft: 2 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <input
+                      type="password" value={teammatePassword} onChange={e => setTeammatePassword(e.target.value)}
+                      placeholder={`New password for ${u.email}`} minLength={6} required autoFocus
+                      style={{ flex: '1 1 220px', margin: 0 }}
+                    />
+                    <button className="btn btn-primary btn-sm" type="submit" disabled={teammatePwSaving}>
+                      {teammatePwSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                  {teammatePwResult && (
+                    <div style={{ fontSize: 12, marginTop: 6, color: teammatePwResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f' }}>
+                      {teammatePwResult}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                    They'll be able to sign in with this password right away.
+                  </div>
+                </form>
+              )}
             </div>
           ))}
 
