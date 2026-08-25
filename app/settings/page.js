@@ -177,13 +177,13 @@ export default function SettingsPage() {
               <label>Logo height on desktop (px)</label>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <input
-                  type="range" min="150" max="300" step="1"
+                  type="range" min="50" max="200" step="1"
                   value={form.logo_size_desktop ?? 180}
                   onChange={e => update('logo_size_desktop', parseInt(e.target.value))}
                   style={{ flex: 1 }}
                 />
                 <input
-                  type="number" min="150" max="300"
+                  type="number" min="50" max="200"
                   value={form.logo_size_desktop ?? 180}
                   onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 150)}
                   style={{ width: 70, flexShrink: 0 }}
@@ -194,13 +194,13 @@ export default function SettingsPage() {
               <label>Logo height on mobile (px)</label>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <input
-                  type="range" min="150" max="300" step="1"
+                  type="range" min="50" max="200" step="1"
                   value={form.logo_size_mobile ?? 150}
                   onChange={e => update('logo_size_mobile', parseInt(e.target.value))}
                   style={{ flex: 1 }}
                 />
                 <input
-                  type="number" min="150" max="300"
+                  type="number" min="50" max="200"
                   value={form.logo_size_mobile ?? 150}
                   onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 150)}
                   style={{ width: 70, flexShrink: 0 }}
