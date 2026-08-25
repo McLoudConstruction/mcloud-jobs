@@ -161,14 +161,7 @@ export default function MessagesPage() {
         .messages-unread-badge { position: absolute; top: 12px; right: 14px; background: var(--rust); color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
         .messages-chat { background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; height: 100%; }
         .messages-chat-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-        .messages-thread-scroll { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
-        .messages-bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; font-size: 13px; }
-        .messages-bubble.from-customer { align-self: flex-start; background: var(--panel); border-bottom-left-radius: 3px; }
-        .messages-bubble.from-admin { align-self: flex-end; background: var(--rust); color: #fff; border-bottom-right-radius: 3px; }
-        .messages-bubble-text { white-space: pre-wrap; }
-        .messages-bubble-time { font-size: 10px; opacity: 0.7; margin-top: 4px; }
-        .messages-compose { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--line); align-items: flex-end; }
-        .messages-compose textarea { flex: 1; resize: none; }
+        .messages-thread-scroll { flex: 1; }
         @media (max-width: 800px) {
           .messages-layout { grid-template-columns: 1fr; height: auto; }
           .messages-sidebar { height: 220px; }

@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import { formatPhone } from '../../lib/constants';
 
 const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
 const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
@@ -21,6 +22,10 @@ export default function SalesDashboardPage() {
   const [stageFilter, setStageFilter] = useState('all');
   const [lossReasonPromptId, setLossReasonPromptId] = useState(null);
   const [lossReasonText, setLossReasonText] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [autofillNote, setAutofillNote] = useState('');
+  const searchTimer = useRef(null);
 
   const loadOpps = useCallback(async () => {
     const { data } = await supabase.from('opportunities').select('*').order('date_taken', { ascending: false });
@@ -35,6 +40,38 @@ export default function SalesDashboardPage() {
   }, [session, loadOpps]);
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+
+  // ---- Contact name autofill suggestions — same idea as New Opportunity,
+  // adapted for this form's single "contact name" field instead of split
+  // first/last name inputs. ----
+  function handleContactNameChange(value) {
+    update('contact_name', value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    searchTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from('contacts').select('*').ilike('name', `%${value.trim()}%`).limit(5);
+      setSuggestions(data || []);
+      setShowSuggestions((data || []).length > 0);
+    }, 250);
+  }
+
+  function applySuggestion(contact) {
+    setForm(prev => ({
+      ...prev,
+      contact_name: contact.name || prev.contact_name,
+      contact_email: contact.contact_email || prev.contact_email,
+      contact_phone: contact.contact_phone || prev.contact_phone,
+      company: contact.management_company || prev.company,
+      project_type: contact.management_company ? 'commercial' : prev.project_type,
+    }));
+    setShowSuggestions(false);
+    const filled = [];
+    if (contact.contact_email) filled.push('email');
+    if (contact.contact_phone) filled.push('phone');
+    if (contact.management_company) filled.push('company');
+    setAutofillNote(`Filled from ${contact.name}: ${filled.join(', ') || 'name only'}.`);
+    setTimeout(() => setAutofillNote(''), 6000);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -154,7 +191,32 @@ export default function SalesDashboardPage() {
                 <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
               )}
               <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
-              <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
+              <div style={{ position: 'relative' }}>
+                <label>Contact name</label>
+                <input
+                  value={form.contact_name}
+                  onChange={e => handleContactNameChange(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  autoComplete="off"
+                />
+                {showSuggestions && (
+                  <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                    {suggestions.map(s => (
+                      <div
+                        key={s.id}
+                        onMouseDown={() => applySuggestion(s)}
+                        style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}
+                      >
+                        <b>{s.name}</b>{s.management_company ? ` — ${s.management_company}` : ''}
+                        <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                          {[s.contact_email, s.contact_phone ? formatPhone(s.contact_phone) : null].filter(Boolean).join(' · ') || 'Click to autofill'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
               <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
               <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
@@ -164,6 +226,7 @@ export default function SalesDashboardPage() {
                 <input value={new Date(form.date_taken + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
               </div>
             </div>
+            {autofillNote && <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 6 }}>{autofillNote}</div>}
             <label>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
             <div className="section-actions">
