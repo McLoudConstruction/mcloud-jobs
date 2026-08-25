@@ -64,8 +64,8 @@ export async function POST(request) {
     const servicesOffered = Array.isArray(body.servicesOffered) ? body.servicesOffered : [];
     const coiExpiresAt = body.coiExpiresAt || '';
 
-    if (!companyName || !contactName || !contactPhone || !contactEmail || !street || !unit || !city || !state || !zip) {
-      return Response.json({ error: 'All fields are required except "Anything else we should know?".' }, { status: 400 });
+    if (!companyName || !contactName || !contactPhone || !contactEmail || !street || !city || !state || !zip) {
+      return Response.json({ error: 'All fields are required except "Unit / suite" and "Anything else we should know?".' }, { status: 400 });
     }
     if (servicesOffered.length === 0) {
       return Response.json({ error: 'Please select at least one service offered.' }, { status: 400 });

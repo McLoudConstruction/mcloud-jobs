@@ -159,8 +159,8 @@ export default function SubcontractorApplyPage() {
               <input value={form.street} onChange={e => update('street', e.target.value)} required />
             </div>
             <div>
-              <label>Unit / suite *</label>
-              <input value={form.unit} onChange={e => update('unit', e.target.value)} required />
+              <label>Unit / suite</label>
+              <input value={form.unit} onChange={e => update('unit', e.target.value)} />
             </div>
             <div>
               <label>City *</label>
