@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabaseClient';
+import ImageDropzone from './ImageDropzone';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
@@ -130,8 +131,9 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
                 <div><label>Model Number</label><input value={form.model_number} onChange={e => setForm(prev => ({ ...prev, model_number: e.target.value }))} /></div>
                 <div><label>Color</label><input value={form.color} onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))} /></div>
               </div>
-              <label style={{ marginTop: 8 }}>Photo</label>
-              <input type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files[0])} />
+              <div style={{ marginTop: 8 }}>
+                <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
+              </div>
               <div className="section-actions">
                 <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add This Option'}</button>
               </div>

@@ -115,7 +115,7 @@ export default function ContractDocumentPage() {
         This is a general-purpose template, not legal advice — have it reviewed by an attorney, especially the lien notice, before relying on it as a binding agreement.
       </div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/documents'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
@@ -287,7 +287,9 @@ export default function ContractDocumentPage() {
         pdfFilename={`Residential-Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
-          await supabase.from('jobs').update({ contract_sent_at: new Date().toISOString() }).eq('id', id);
+          const sentAt = new Date().toISOString();
+          await supabase.from('jobs').update({ contract_sent_at: sentAt }).eq('id', id);
+          setJob(prev => prev ? { ...prev, contract_sent_at: sentAt } : prev);
         }}
       />
 

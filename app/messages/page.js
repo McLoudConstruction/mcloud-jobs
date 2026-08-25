@@ -137,14 +137,14 @@ export default function MessagesPage() {
 
       <style jsx global>{`
         .messages-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; height: calc(100vh - 220px); min-height: 460px; }
-        .messages-sidebar { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-y: auto; height: 100%; }
+        .messages-sidebar { background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; overflow-y: auto; height: 100%; }
         .messages-thread-item { display: block; width: 100%; text-align: left; padding: 12px 16px; border: none; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer; position: relative; font-family: inherit; }
         .messages-thread-item.active { background: var(--panel); }
         .messages-thread-name { font-weight: 700; font-size: 13px; color: var(--heading); }
         .messages-thread-job { font-size: 10.5px; color: var(--ink-soft); margin-bottom: 4px; }
         .messages-thread-preview { font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
         .messages-unread-badge { position: absolute; top: 12px; right: 14px; background: var(--rust); color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
-        .messages-chat { background: #fff; border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; height: 100%; }
+        .messages-chat { background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; height: 100%; }
         .messages-chat-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
         .messages-thread-scroll { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
         .messages-bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; font-size: 13px; }

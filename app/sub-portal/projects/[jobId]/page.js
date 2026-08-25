@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
-import { WORK_ORDER_STATUS_LABELS } from '../../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS } from '../../../../lib/constants';
 import SubPortalShell from '../../../../components/SubPortalShell';
 
 function fmtMoney(v) {
@@ -69,7 +69,7 @@ export default function SubPortalProjectPage() {
             </div>
             <div>
               <div className="portal-info-label">Stage</div>
-              <div className="portal-info-value">{job.stage || '—'}</div>
+              <div className="portal-info-value">{job.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
             </div>
             <div>
               <div className="portal-info-label">Est. Completion</div>

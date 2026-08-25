@@ -102,11 +102,27 @@ export default function AppShell({ children }) {
       setIsMobile(window.innerWidth < 900);
     }
     checkSize();
-    setNavOpen(window.innerWidth >= 900); // open by default on desktop, closed on mobile
+    const isDesktop = window.innerWidth >= 900;
+    if (isDesktop) {
+      // On desktop, remember whichever expanded/collapsed state the user
+      // last left the sidebar in, rather than always reopening it.
+      const stored = window.localStorage.getItem('mcloud-sidebar-open');
+      setNavOpen(stored === null ? true : stored === '1');
+    } else {
+      setNavOpen(false); // mobile always starts closed regardless of the stored desktop preference
+    }
     setMounted(true);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
+
+  function toggleNav() {
+    setNavOpen(o => {
+      const next = !o;
+      if (!isMobile) window.localStorage.setItem('mcloud-sidebar-open', next ? '1' : '0');
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!topbarRef.current) return;
@@ -134,7 +150,7 @@ export default function AppShell({ children }) {
     <div className="shell">
       <div className="shell-topbar" ref={topbarRef}>
         <div className="shell-header-left">
-          <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
+          <button className="hamburger-btn" onClick={toggleNav} aria-label="Toggle navigation">
             <span /><span /><span />
           </button>
         </div>

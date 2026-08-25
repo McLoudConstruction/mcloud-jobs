@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
-import { STAGE_LABELS, contractPathFor } from '../../../lib/constants';
+import { STAGE_LABELS } from '../../../lib/constants';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 
@@ -13,13 +13,12 @@ function fmtDate(v) {
   const d = new Date(v.length === 10 ? v + 'T00:00:00' : v);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
-
-export default function CustomerProjectsPage() {
+export default function CustomerHomePage() {
   const { session, loading } = usePortalAuth();
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [updates, setUpdates] = useState([]);
-  const [selections, setSelections] = useState([]);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -34,34 +33,51 @@ export default function CustomerProjectsPage() {
     if (session) window.localStorage.setItem(`mcloud-portal-password-prompt-dismissed-${session.user.id}`, '1');
   }
 
+  // First-time welcome blurb — shown once per customer, dismissible, so it
+  // doesn't keep taking up space for returning visitors.
   useEffect(() => {
-    if (!selectedJobId) return;
-    supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }).then(({ data }) => { if (data) setUpdates(data); });
-    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId });
-    const channel = supabase.channel(`portal-updates-${selectedJobId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${selectedJobId}` }, () => {
-        supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }).then(({ data }) => { if (data) setUpdates(data); });
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [selectedJobId]);
+    if (!session) return;
+    const dismissKey = `mcloud-portal-welcome-dismissed-${session.user.id}`;
+    setWelcomeOpen(!window.localStorage.getItem(dismissKey));
+  }, [session]);
+
+  function dismissWelcome() {
+    setWelcomeOpen(false);
+    if (session) window.localStorage.setItem(`mcloud-portal-welcome-dismissed-${session.user.id}`, '1');
+  }
 
   useEffect(() => {
     if (!selectedJobId) return;
-    const load = () => supabase.from('material_selections').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('created_at', { ascending: false }).then(({ data }) => { if (data) setSelections(data); });
+    const load = () => supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }).limit(3).then(({ data }) => { if (data) setUpdates(data); });
     load();
-    const channel = supabase.channel(`portal-selections-${selectedJobId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `job_id=eq.${selectedJobId}` }, load)
+    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId });
+    const channel = supabase.channel(`portal-home-updates-${selectedJobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${selectedJobId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [selectedJobId]);
 
   if (loading || !session) return null;
 
+  const hasVisit = job && (job.scheduled_start_date || job.scheduled_end_date);
+
   return (
     <CustomerPortalShell>
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
+
+        {welcomeOpen && (
+          <div className="card portal-welcome-card">
+            <button className="portal-welcome-close" onClick={dismissWelcome} aria-label="Dismiss">×</button>
+            <h3 style={{ marginTop: 0 }}>Welcome to your Project Portal</h3>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-soft)' }}>
+              This is your home base for everything happening on your project with McLoud Construction — your next scheduled visit,
+              the latest progress updates, and your project details, all in one place. Head to <b>Documents</b> in the sidebar any
+              time to view or sign your estimate and contract, respond to a material selection, or catch up on past updates, and use
+              <b> Inbox</b> to send us a message directly.
+            </p>
+          </div>
+        )}
 
         {job && (
           <>
@@ -92,32 +108,24 @@ export default function CustomerProjectsPage() {
 
             <div className="portal-two-col">
               <div className="card">
-                <h3>Documents</h3>
-                <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
-                  {job.proposal_sent_at && (
-                    <a href={`/jobs/${job.id}/proposal`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Estimate ↗</a>
-                  )}
-                  {job.proposal_sent_at && !job.contract_finalized_at && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: -4 }}>
-                      Ready to move forward? Open the estimate and use the "Sign the Contract" button inside it.
+                <h3>Next Scheduled Visit</h3>
+                {hasVisit ? (
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
+                      {fmtDate(job.scheduled_start_date)}
+                      {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
+                        <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
+                      )}
                     </div>
-                  )}
-                  {job.contract_sent_at && (
-                    <a href={contractPathFor(job)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Contract ↗</a>
-                  )}
-                  {selections.map(s => (
-                    <a key={s.id} href={`/jobs/${job.id}/material-selections/${s.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
-                      {s.status === 'approved' ? '✓ ' : ''}{s.title} {s.status !== 'approved' ? '— Choose Now ↗' : '↗'}
-                    </a>
-                  ))}
-                  {!job.proposal_sent_at && !job.contract_sent_at && (
-                    <div className="empty-state" style={{ padding: '4px 0' }}>Nothing has been sent yet.</div>
-                  )}
-                </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
+                  </div>
+                ) : (
+                  <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
+                )}
               </div>
 
               <div className="card">
-                <h3>Progress Updates</h3>
+                <h3>Recent Updates</h3>
                 {updates.length === 0 && <div className="empty-state">No updates posted yet.</div>}
                 {updates.map(u => (
                   <div className="update-entry" key={u.id}>
@@ -127,6 +135,9 @@ export default function CustomerProjectsPage() {
                     </div>
                   </div>
                 ))}
+                <div className="section-actions" style={{ marginTop: updates.length ? 10 : 0 }}>
+                  <a href="/customerportal/documents" className="btn btn-sm">See All Documents &amp; Updates →</a>
+                </div>
               </div>
             </div>
           </>
@@ -134,6 +145,15 @@ export default function CustomerProjectsPage() {
       </div>
 
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
+
+      <style jsx global>{`
+        .portal-welcome-card{ position: relative; background: var(--panel); }
+        .portal-welcome-close{
+          position: absolute; top: 10px; right: 12px; background: none; border: none; cursor: pointer;
+          font-size: 20px; line-height: 1; color: var(--ink-soft); padding: 4px;
+        }
+        .portal-welcome-close:hover{ color: var(--heading); }
+      `}</style>
     </CustomerPortalShell>
   );
 }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import ImageDropzone from '../../../../../components/ImageDropzone';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
@@ -21,6 +22,7 @@ export default function MaterialSelectionPage() {
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const isAdmin = session?.user?.app_metadata?.role === 'admin';
 
@@ -125,7 +127,9 @@ export default function MaterialSelectionPage() {
             return (
               <div key={opt.id} className="card material-option-card" style={isChosen ? { borderColor: 'var(--accent)', borderWidth: 2 } : undefined}>
                 {photoUrls[opt.id] && (
-                  <img src={photoUrls[opt.id]} alt={opt.item} style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 6, marginBottom: 12 }} />
+                  <button type="button" className="selection-photo-btn no-print" onClick={() => setLightboxUrl(photoUrls[opt.id])} aria-label={`Expand photo of ${opt.item}`}>
+                    <img src={photoUrls[opt.id]} alt={opt.item} />
+                  </button>
                 )}
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{opt.item}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 6, lineHeight: 1.7 }}>
@@ -165,8 +169,9 @@ export default function MaterialSelectionPage() {
                   <div><label>Model Number</label><input value={form.model_number} onChange={e => setForm(prev => ({ ...prev, model_number: e.target.value }))} /></div>
                   <div><label>Color</label><input value={form.color} onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))} /></div>
                 </div>
-                <label style={{ marginTop: 10 }}>Photo</label>
-                <input type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files[0])} />
+                <div style={{ marginTop: 10 }}>
+                  <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
+                </div>
                 <div className="section-actions">
                   <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Option'}</button>
                 </div>
@@ -188,6 +193,13 @@ export default function MaterialSelectionPage() {
           jobId={id}
           onSendSuccess={sendToCustomer}
         />
+      )}
+
+      {lightboxUrl && (
+        <div className="photo-lightbox-overlay no-print" onClick={() => setLightboxUrl(null)}>
+          <button className="photo-lightbox-close" onClick={() => setLightboxUrl(null)} aria-label="Close">×</button>
+          <img src={lightboxUrl} alt="Expanded selection photo" onClick={e => e.stopPropagation()} />
+        </div>
       )}
     </div>
   );

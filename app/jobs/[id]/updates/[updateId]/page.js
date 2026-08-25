@@ -75,7 +75,7 @@ export default function UpdateDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/documents'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}
@@ -135,7 +135,9 @@ export default function UpdateDocumentPage() {
         pdfFilename={`Project-Update-${job.job_number}-${update.update_date}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
-          await supabase.from('job_updates').update({ sent_at: new Date().toISOString() }).eq('id', updateId);
+          const sentAt = new Date().toISOString();
+          await supabase.from('job_updates').update({ sent_at: sentAt }).eq('id', updateId);
+          setUpdate(prev => prev ? { ...prev, sent_at: sentAt } : prev);
         }}
       />
 

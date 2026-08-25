@@ -70,7 +70,7 @@ export default function PaymentFlow({ jobId, invoiceId, amountDue, createdBy, on
         <div className="pay-modal-overlay" onClick={close}>
           <div className="pay-modal" onClick={e => e.stopPropagation()}>
             <button className="pay-modal-close" onClick={close} aria-label="Close">×</button>
-
+            <div className="pay-modal-scroll">
             {succeeded ? (
               <div className="pay-success">
                 <div className="pay-success-check">✓</div>
@@ -79,7 +79,7 @@ export default function PaymentFlow({ jobId, invoiceId, amountDue, createdBy, on
                 <button className="btn btn-primary btn-sm" onClick={close}>Done</button>
               </div>
             ) : clientSecret ? (
-              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#9b773d', fontFamily: 'inherit', borderRadius: '8px' } } }}>
+              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#9b773d', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif', borderRadius: '8px' } } }}>
                 <CheckoutForm onSuccess={handleSuccess} onBack={reset} amount={method === 'ach' ? amountDue : cardTotal} />
               </Elements>
             ) : (
@@ -116,6 +116,7 @@ export default function PaymentFlow({ jobId, invoiceId, amountDue, createdBy, on
                 {loading && <div className="pay-loading">Setting up secure payment…</div>}
               </>
             )}
+            </div>
           </div>
         </div>,
         document.body

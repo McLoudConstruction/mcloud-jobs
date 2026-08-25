@@ -112,7 +112,7 @@ export default function ContractDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/documents'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
@@ -281,7 +281,9 @@ export default function ContractDocumentPage() {
         pdfFilename={`Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
-          await supabase.from('jobs').update({ contract_sent_at: new Date().toISOString() }).eq('id', id);
+          const sentAt = new Date().toISOString();
+          await supabase.from('jobs').update({ contract_sent_at: sentAt }).eq('id', id);
+          setJob(prev => prev ? { ...prev, contract_sent_at: sentAt } : prev);
         }}
       />
 

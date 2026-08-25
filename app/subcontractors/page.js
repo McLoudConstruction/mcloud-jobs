@@ -8,6 +8,7 @@ import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
+import { buildSubInviteEmail } from '../../lib/emailTemplates';
 
 const SUBCONTRACTOR_TYPE = 'Subcontractor';
 
@@ -124,6 +125,15 @@ export default function SubcontractorsPage() {
   const [uploadingCoi, setUploadingCoi] = useState(false);
   const fileInputRef = useRef(null);
 
+  const [applications, setApplications] = useState([]);
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [applyEmail, setApplyEmail] = useState('');
+  const [applyCompanyHint, setApplyCompanyHint] = useState('');
+  const [applySending, setApplySending] = useState(false);
+  const [applyResult, setApplyResult] = useState('');
+  const [reviewingApp, setReviewingApp] = useState(null);
+  const [approving, setApproving] = useState(false);
+
   function toggleService(service) {
     setForm(prev => ({
       ...prev,
@@ -172,6 +182,88 @@ export default function SubcontractorsPage() {
     const { data } = await supabase.from('companies').select('*').eq('company_type', SUBCONTRACTOR_TYPE).order('company_name', { ascending: true });
     if (data) setSubs(data);
   }, []);
+
+  const loadApplications = useCallback(async () => {
+    const { data } = await supabase.from('subcontractor_applications').select('*').order('created_at', { ascending: false });
+    if (data) setApplications(data);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    loadApplications();
+    const channel = supabase.channel('subcontractor-applications').on('postgres_changes', { event: '*', schema: 'public', table: 'subcontractor_applications' }, loadApplications).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session, loadApplications]);
+
+  async function sendApplicationInvite(e) {
+    e.preventDefault();
+    if (!applyEmail.trim()) return;
+    setApplySending(true);
+    setApplyResult('');
+    try {
+      const { data: app, error } = await supabase.from('subcontractor_applications').insert({
+        invited_email: applyEmail.trim(),
+        invited_company_hint: applyCompanyHint.trim() || null,
+        invited_by: session?.user?.email || null,
+      }).select().single();
+      if (error) throw error;
+
+      const applyUrl = `${window.location.origin}/subcontractor-apply/${app.token}`;
+      const { subject, html, text } = buildSubInviteEmail({ applyUrl, companyHint: applyCompanyHint.trim() });
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: applyEmail.trim(), subject, html, text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send invite email.');
+
+      setApplyResult(`Invite sent to ${applyEmail.trim()}.`);
+      setApplyEmail('');
+      setApplyCompanyHint('');
+    } catch (err) {
+      setApplyResult(`Failed: ${err.message}`);
+    } finally {
+      setApplySending(false);
+    }
+  }
+
+  async function viewApplicationDoc(path) {
+    const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  async function approveApplication(app) {
+    setApproving(true);
+    try {
+      const { data: company, error } = await supabase.from('companies').insert({
+        company_name: app.company_name,
+        company_type: SUBCONTRACTOR_TYPE,
+        street: app.street, unit: app.unit, city: app.city, state: app.state, zip: app.zip,
+        contact_name: app.contact_name, contact_phone: app.contact_phone, contact_email: app.contact_email,
+        notes: app.notes,
+        w9_storage_path: app.w9_storage_path,
+        coi_storage_path: app.coi_storage_path,
+        coi_expires_at: app.coi_expires_at,
+        services_offered: app.services_offered,
+      }).select().single();
+      if (error) throw error;
+      await supabase.from('subcontractor_applications').update({
+        status: 'approved', reviewed_at: new Date().toISOString(), created_company_id: company.id,
+      }).eq('id', app.id);
+      setReviewingApp(null);
+    } catch (err) {
+      alert('Failed to approve: ' + err.message);
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  async function declineApplication(app) {
+    if (!confirm(`Decline ${app.company_name || app.invited_email}'s application?`)) return;
+    await supabase.from('subcontractor_applications').update({ status: 'declined', reviewed_at: new Date().toISOString() }).eq('id', app.id);
+    setReviewingApp(null);
+  }
 
   useEffect(() => {
     if (!session) return;
@@ -278,6 +370,7 @@ export default function SubcontractorsPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
+            <button className="btn" onClick={() => { setApplyModalOpen(true); setApplyResult(''); }}>+ Invite a Subcontractor</button>
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add subcontractor</button>
           </div>
         </div>
@@ -383,6 +476,70 @@ export default function SubcontractorsPage() {
             </form>
             {editingId && <div style={{ marginTop: 24 }}><SubcontractorStats companyId={editingId} /></div>}
         </PopupModal>
+
+        <PopupModal open={applyModalOpen} onClose={() => setApplyModalOpen(false)} maxWidth={460}>
+          <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>Invite a Subcontractor</h3>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px' }}>
+            Send a link so a prospective subcontractor can submit their company info, W9, and COI themselves — no account needed.
+            You'll review it here before they're added.
+          </p>
+          <form onSubmit={sendApplicationInvite}>
+            <label>Email *</label>
+            <input type="email" value={applyEmail} onChange={e => setApplyEmail(e.target.value)} required />
+            <label style={{ marginTop: 10 }}>Company name (optional)</label>
+            <input value={applyCompanyHint} onChange={e => setApplyCompanyHint(e.target.value)} placeholder="If you already know it" />
+            {applyResult && <div style={{ fontSize: 12.5, marginTop: 10, color: applyResult.startsWith('Failed') ? '#a13f3f' : '#3a6b45' }}>{applyResult}</div>}
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" type="submit" disabled={applySending}>{applySending ? 'Sending…' : 'Send Invite'}</button>
+            </div>
+          </form>
+        </PopupModal>
+
+        <PopupModal open={!!reviewingApp} onClose={() => setReviewingApp(null)} maxWidth={520}>
+          {reviewingApp && (
+            <div>
+              <h3 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{reviewingApp.company_name || reviewingApp.invited_email}</h3>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px' }}>Submitted application — review before adding as a subcontractor.</p>
+              <div style={{ fontSize: 13, lineHeight: 1.9 }}>
+                <div><b>Contact:</b> {reviewingApp.contact_name} {reviewingApp.contact_email ? `(${reviewingApp.contact_email})` : ''} {reviewingApp.contact_phone}</div>
+                <div><b>Address:</b> {[reviewingApp.street, reviewingApp.unit, reviewingApp.city, reviewingApp.state, reviewingApp.zip].filter(Boolean).join(', ') || '—'}</div>
+                <div><b>Services:</b> {(reviewingApp.services_offered || []).join(', ') || '—'}</div>
+                {reviewingApp.notes && <div><b>Notes:</b> {reviewingApp.notes}</div>}
+                <div><b>COI expires:</b> {reviewingApp.coi_expires_at || '—'}</div>
+              </div>
+              <div className="section-actions">
+                {reviewingApp.w9_storage_path && <button type="button" className="btn btn-sm" onClick={() => viewApplicationDoc(reviewingApp.w9_storage_path)}>View W9</button>}
+                {reviewingApp.coi_storage_path && <button type="button" className="btn btn-sm" onClick={() => viewApplicationDoc(reviewingApp.coi_storage_path)}>View COI</button>}
+              </div>
+              <div className="section-actions" style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                <button className="btn btn-primary btn-sm" onClick={() => approveApplication(reviewingApp)} disabled={approving}>
+                  {approving ? 'Adding…' : 'Approve & Add as Subcontractor'}
+                </button>
+                <button className="btn btn-sm btn-danger" onClick={() => declineApplication(reviewingApp)}>Decline</button>
+              </div>
+            </div>
+          )}
+        </PopupModal>
+
+        {applications.filter(a => a.status === 'invited' || a.status === 'submitted').length > 0 && (
+          <div className="card">
+            <h3>Pending Applications</h3>
+            {applications.filter(a => a.status === 'invited' || a.status === 'submitted').map(a => (
+              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+                <div>
+                  <b>{a.company_name || a.invited_company_hint || a.invited_email}</b>{' '}
+                  <span style={{ color: 'var(--ink-soft)' }}>{a.invited_email}</span>
+                  <span className={`badge badge-${a.status === 'submitted' ? 'active' : 'draft'}`} style={{ marginLeft: 10 }}>
+                    {a.status === 'submitted' ? 'Submitted — needs review' : 'Invited — awaiting response'}
+                  </span>
+                </div>
+                {a.status === 'submitted' && (
+                  <button className="btn btn-sm" onClick={() => setReviewingApp(a)}>Review</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="search-bar">
           <input placeholder="Search subcontractors…" value={search} onChange={e => setSearch(e.target.value)} />

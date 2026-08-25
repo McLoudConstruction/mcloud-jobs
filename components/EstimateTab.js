@@ -395,17 +395,29 @@ export default function EstimateTab({ job, jobId, children }) {
               <tbody>
                 <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
                 <tr>
-                  <td>Sales Tax %</td>
-                  <td><input type="number" step="0.001" min="0" value={salesTax} onChange={e => saveSalesTax(e.target.value)} placeholder="e.g. 8.6" /></td>
+                  <td>Sales Tax</td>
+                  <td>
+                    <div className="estimate-margin-inline">
+                      <span className="estimate-margin-pct">
+                        <input type="number" step="0.001" min="0" value={salesTax} onChange={e => saveSalesTax(e.target.value)} placeholder="8.6" />%
+                      </span>
+                      <span>{fmtMoney(salesTaxDollars)}</span>
+                    </div>
+                  </td>
                 </tr>
-                <tr><td>Sales Tax $</td><td>{fmtMoney(salesTaxDollars)}</td></tr>
                 <tr><td>Subcontractor Cost</td><td>{fmtMoney(laborSubtotal)}</td></tr>
                 <tr className="estimate-margin-total-row"><td>Total Cost</td><td>{fmtMoney(subtotal)}</td></tr>
                 <tr>
-                  <td>Margin %</td>
-                  <td><input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="e.g. 25" /></td>
+                  <td>Margin</td>
+                  <td>
+                    <div className="estimate-margin-inline">
+                      <span className="estimate-margin-pct">
+                        <input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="25" />%
+                      </span>
+                      <span>{fmtMoney(marginDollars)}</span>
+                    </div>
+                  </td>
                 </tr>
-                <tr><td>Margin $</td><td>{fmtMoney(marginDollars)}</td></tr>
                 <tr className="estimate-margin-total-row"><td>Final Sale Price</td><td style={{ fontSize: 16 }}>{fmtMoney(salePrice)}</td></tr>
               </tbody>
             </table>

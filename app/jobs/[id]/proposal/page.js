@@ -67,7 +67,7 @@ export default function ProposalDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/documents'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}
@@ -148,7 +148,9 @@ export default function ProposalDocumentPage() {
         pdfFilename={`Estimate-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
-          await supabase.from('jobs').update({ proposal_sent_at: new Date().toISOString() }).eq('id', id);
+          const sentAt = new Date().toISOString();
+          await supabase.from('jobs').update({ proposal_sent_at: sentAt }).eq('id', id);
+          setJob(prev => prev ? { ...prev, proposal_sent_at: sentAt } : prev);
         }}
       />
 

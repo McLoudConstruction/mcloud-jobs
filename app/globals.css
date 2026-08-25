@@ -368,9 +368,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   overflow-y: auto;
 }
 .pay-modal{
-  background: var(--card-bg); border-radius: 14px; padding: 32px; width: 100%; max-width: 460px;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.3); position: relative; margin: auto; max-height: 90vh; overflow-y: auto;
+  background: var(--card-bg); border-radius: 14px; width: 100%; max-width: 460px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.3); position: relative; margin: auto; max-height: 90vh; overflow: hidden;
+  display: flex; flex-direction: column;
 }
+.pay-modal-scroll{ padding: 32px; overflow-y: auto; }
 .pay-modal-close{
   position: absolute; top: 16px; right: 16px; width: 30px; height: 30px; border-radius: 50%;
   border: none; background: var(--panel); color: var(--ink-soft); font-size: 18px; cursor: pointer;
@@ -775,6 +777,49 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .estimate-margin-table td:first-child { color: var(--ink-soft); }
 .estimate-margin-table td:last-child { text-align: right; font-weight: 700; }
 .estimate-margin-table td input { text-align: right; padding: 4px 8px; font-size: 13px; }
+.estimate-margin-inline { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.estimate-margin-pct { display: flex; align-items: center; gap: 3px; font-weight: 400; color: var(--ink-soft); }
+.estimate-margin-pct input { width: 52px; flex: none; text-align: right; padding: 4px 4px; font-size: 12.5px; }
+
+.image-dropzone{
+  position: relative; border: 1.5px dashed var(--panel-line); border-radius: 8px; background: var(--panel);
+  min-height: 110px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease; overflow: hidden;
+}
+.image-dropzone:hover{ border-color: var(--rust); }
+.image-dropzone.is-dragover{ border-color: var(--rust); background: rgba(154,113,64,0.08); }
+.image-dropzone-empty{
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  padding: 18px; font-size: 12px; color: var(--ink-soft);
+}
+.image-dropzone-icon{ font-size: 20px; color: var(--ink-soft); }
+.image-dropzone.has-preview{ min-height: 160px; cursor: default; }
+.image-dropzone-preview{ width: 100%; max-height: 220px; object-fit: cover; display: block; }
+.image-dropzone-clear{
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: rgba(20,18,14,0.6); color: #fff; font-size: 16px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.image-dropzone-clear:hover{ background: rgba(20,18,14,0.8); }
+
+.selection-photo-btn{
+  padding: 0; border: none; background: none; cursor: pointer; display: block; width: 100%;
+  border-radius: 6px; overflow: hidden; margin-bottom: 12px;
+}
+.selection-photo-btn img{ width: 100%; height: 180px; object-fit: cover; display: block; transition: opacity 0.15s ease; }
+.selection-photo-btn:hover img{ opacity: 0.88; }
+
+.photo-lightbox-overlay{
+  position: fixed; inset: 0; background: rgba(10,9,7,0.82); z-index: 1200;
+  display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
+}
+.photo-lightbox-overlay img{ max-width: 90vw; max-height: 88vh; border-radius: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.photo-lightbox-close{
+  position: absolute; top: 18px; right: 22px; width: 36px; height: 36px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.photo-lightbox-close:hover{ background: rgba(255,255,255,0.28); }
 .estimate-margin-total-row td { border-bottom: 1px solid var(--panel-line); font-weight: 700; color: var(--heading); }
 .estimate-table { display: flex; flex-direction: column; }
 .estimate-row { display: grid; grid-template-columns: 2fr 90px 110px 100px 90px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
