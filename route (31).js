@@ -1,79 +1,75 @@
-function extractJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {}
+import { createClient } from '@supabase/supabase-js';
 
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1));
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {}
-  }
+function serviceClient() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
 
-  return null;
+function callerClient(accessToken) {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
 }
 
 export async function POST(request) {
   try {
-    const { imageBase64, mediaType } = await request.json();
-
-    if (!imageBase64) {
-      return Response.json({ error: 'No image provided.' }, { status: 400 });
-    }
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return Response.json(
-        { error: 'AI receipt scanning is not configured yet — add ANTHROPIC_API_KEY in Vercel environment variables.' },
-        { status: 500 }
-      );
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return Response.json({ error: 'Server not configured.' }, { status: 500 });
     }
 
-    const prompt = `Look at this receipt image and extract these details. Respond with ONLY a JSON object, no other text, no markdown formatting:
-
-{"vendor": "business name as shown on the receipt", "amount": total dollar amount as a plain number (no $ sign), "date": "YYYY-MM-DD", "category": one of "materials", "equipment", "permits", or "other" based on what was purchased}
-
-If you cannot confidently read a field, use null for that field rather than guessing.`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 512,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-              { type: 'text', text: prompt },
-            ],
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`AI request failed (${response.status}): ${errBody.slice(0, 200)}`);
+    const { accessToken, targetEmail, newPassword } = await request.json();
+    if (!accessToken || !targetEmail || !newPassword) {
+      return Response.json({ error: 'Missing required fields.' }, { status: 400 });
+    }
+    if (newPassword.length < 6) {
+      return Response.json({ error: 'Password needs to be at least 6 characters.' }, { status: 400 });
     }
 
-    const data = await response.json();
-    const rawText = data.content?.find(block => block.type === 'text')?.text || '';
-    const extracted = extractJson(rawText);
-
-    if (!extracted) {
-      const snippet = rawText.trim() ? rawText.trim().slice(0, 300) : '(empty response — no text block found)';
-      throw new Error(`AI returned an unexpected format — you can still key in the details manually. Raw response: "${snippet}"`);
+    // Confirm the caller is who they say they are.
+    const asCaller = callerClient(accessToken);
+    const { data: { user: caller }, error: callerError } = await asCaller.auth.getUser();
+    if (callerError || !caller?.email) {
+      return Response.json({ error: 'Could not verify your session — try signing in again.' }, { status: 401 });
     }
 
-    return Response.json({ extracted });
+    const service = serviceClient();
+
+    // Confirm the caller is an Owner/Manager, and that the target is a
+    // teammate at the same company — both checked with the real data,
+    // not trusted from the client.
+    const { data: callerRow } = await service.from('sub_portal_users').select('company_id, role').ilike('email', caller.email).maybeSingle();
+    if (!callerRow || callerRow.role !== 'admin') {
+      return Response.json({ error: 'Only an Owner/Manager login can set passwords for teammates.' }, { status: 403 });
+    }
+
+    const { data: targetRow } = await service.from('sub_portal_users').select('company_id, email').ilike('email', targetEmail).maybeSingle();
+    if (!targetRow || targetRow.company_id !== callerRow.company_id) {
+      return Response.json({ error: 'That login is not part of your team.' }, { status: 403 });
+    }
+
+    const { data: targetUserId, error: lookupError } = await service.rpc('get_user_id_by_email', { lookup_email: targetRow.email });
+    if (lookupError) {
+      return Response.json({ error: lookupError.message }, { status: 500 });
+    }
+
+    if (!targetUserId) {
+      // No auth account exists yet for this email — normally created lazily
+      // on first magic-link login. Create it directly with the chosen
+      // password so an Owner/Manager can fully provision a teammate
+      // without waiting on that round trip.
+      const { error: createError } = await service.auth.admin.createUser({
+        email: targetRow.email,
+        password: newPassword,
+        email_confirm: true,
+      });
+      if (createError) return Response.json({ error: createError.message }, { status: 500 });
+      return Response.json({ ok: true, created: true });
+    }
+
+    const { error: updateError } = await service.auth.admin.updateUserById(targetUserId, { password: newPassword });
+    if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
+
+    return Response.json({ ok: true });
   } catch (err) {
-    return Response.json({ error: err.message || 'Failed to read receipt.' }, { status: 500 });
+    return Response.json({ error: err.message || 'Something went wrong.' }, { status: 500 });
   }
 }

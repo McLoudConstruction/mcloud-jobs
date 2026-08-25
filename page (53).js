@@ -1,112 +1,225 @@
 'use client';
-import { Suspense, useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSubPortalData } from '../../../lib/useSubPortalData';
+import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 
-const ROLE_COPY = {
-  crew: "Signing in as crew — you'll be able to view your project details and work orders.",
-  admin: "Signing in as Owner/Manager — you'll be able to accept and sign work orders, and manage your team's logins.",
-};
-
-function SubPortalLoginForm() {
+export default function SubPortalSettingsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const roleHint = searchParams.get('role');
-  const [mode, setMode] = useState('link'); // 'link' | 'password'
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace('/sub-portal/dashboard');
+      if (!data.session) { router.replace('/sub-portal/login'); return; }
+      setSession(data.session);
+      setLoading(false);
     });
   }, [router]);
 
-  async function handleLinkSubmit(e) {
+  const { company, role, ready } = useSubPortalData(session);
+
+  const [roster, setRoster] = useState([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState('crew');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwResult, setPwResult] = useState('');
+  const [settingPwFor, setSettingPwFor] = useState(null); // roster row id
+  const [teammatePassword, setTeammatePassword] = useState('');
+  const [teammatePwSaving, setTeammatePwSaving] = useState(false);
+  const [teammatePwResult, setTeammatePwResult] = useState('');
+
+  const loadRoster = useCallback(async () => {
+    if (!company) return;
+    const { data } = await supabase.from('sub_portal_users').select('*').eq('company_id', company.id).order('created_at', { ascending: true });
+    if (data) setRoster(data);
+  }, [company]);
+
+  useEffect(() => {
+    if (!company) return;
+    loadRoster();
+    const channel = supabase.channel(`sub-portal-roster-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_portal_users', filter: `company_id=eq.${company.id}` }, loadRoster)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [company, loadRoster]);
+
+  async function addUser(e) {
     e.preventDefault();
+    if (!newEmail.trim() || !company) return;
+    setSaving(true);
     setError('');
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/sub-portal/dashboard` },
+    const { error } = await supabase.rpc('add_sub_portal_user', {
+      target_company_id: company.id,
+      new_email: newEmail.trim(),
+      new_role: newRole,
     });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    setSaving(false);
+    if (error) { setError(error.message); return; }
+    setNewEmail('');
+    setNewRole('crew');
   }
 
-  async function handlePasswordSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) setError("Incorrect email or password, or a password hasn't been set up yet on this account.");
-    else router.replace('/sub-portal/dashboard');
+  async function removeUser(id) {
+    if (!confirm('Remove this login? They will no longer be able to sign in to the subcontractor portal.')) return;
+    const { error } = await supabase.rpc('remove_sub_portal_user', { target_id: id });
+    if (error) alert(error.message);
   }
+
+  async function submitTeammatePassword(e, targetEmail) {
+    e.preventDefault();
+    if (teammatePassword.length < 6) {
+      setTeammatePwResult('Password needs to be at least 6 characters.');
+      return;
+    }
+    setTeammatePwSaving(true);
+    setTeammatePwResult('');
+    try {
+      const res = await fetch('/api/sub-portal/set-crew-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: session.access_token, targetEmail, newPassword: teammatePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to set password.');
+      setTeammatePwResult(`Password set for ${targetEmail}.`);
+      setTeammatePassword('');
+      setTimeout(() => { setSettingPwFor(null); setTeammatePwResult(''); }, 1600);
+    } catch (err) {
+      setTeammatePwResult(err.message);
+    } finally {
+      setTeammatePwSaving(false);
+    }
+  }
+
+  async function setupPassword(e) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPwResult('Password needs to be at least 6 characters.');
+      return;
+    }
+    setPwSaving(true);
+    setPwResult('');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPwSaving(false);
+    if (error) {
+      setPwResult(error.message);
+    } else {
+      setPwResult('Password set! You can now sign in with your email and password anytime.');
+      setNewPassword('');
+    }
+  }
+
+  if (loading || !session) return null;
+
+  if (ready && !company) {
+    return (
+      <SubPortalAuthLayout>
+        <div className="login-card" style={{ boxShadow: 'none', border: '1px solid var(--panel-line)' }}>
+          <h1>Subcontractor Portal</h1>
+          <p className="sub" style={{ color: '#a13f3f' }}>
+            This email isn't linked to a subcontractor account yet. Reach out to McLoud Construction to get set up.
+          </p>
+        </div>
+      </SubPortalAuthLayout>
+    );
+  }
+  if (!company) return null;
 
   return (
-    <div className="login-card" style={{ boxShadow: 'none', border: '1px solid var(--panel-line)' }}>
-      <h1>Subcontractor Portal</h1>
-      <p className="sub">
-        {ROLE_COPY[roleHint] || 'McLoud Construction — view and sign your work orders.'}
-      </p>
+    <SubPortalShell company={company} role={role}>
+      <div className="container" style={{ paddingTop: 24 }}>
+        <div className="card">
+          <h3>Sign-In Password</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Set up a password for {session.user.email} and you can sign in anytime without waiting on an email link.
+          </div>
+          <form onSubmit={setupPassword}>
+            <label htmlFor="newPassword">New password</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <input id="newPassword" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required style={{ flex: '1 1 220px' }} />
+              <button className="btn btn-primary btn-sm" type="submit" disabled={pwSaving}>{pwSaving ? 'Saving…' : 'Set Password'}</button>
+            </div>
+            {pwResult && <div style={{ fontSize: 12.5, marginTop: 8, color: pwResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f' }}>{pwResult}</div>}
+          </form>
+        </div>
 
-      {sent ? (
-        <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
-          Check your email for a login link — it may take a minute or two to arrive. You can close this tab.
-        </p>
-      ) : (
-        <>
-          <div className="portal-mode-tabs">
-            <button type="button" className={mode === 'link' ? 'active' : ''} onClick={() => { setMode('link'); setError(''); }}>Email me a link</button>
-            <button type="button" className={mode === 'password' ? 'active' : ''} onClick={() => { setMode('password'); setError(''); }}>Sign in with password</button>
+        {role === 'admin' && (
+        <div className="card">
+          <h3>Team Logins</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Add or remove who can sign in to {company.company_name}'s subcontractor portal. <b>Owner/Manager</b> logins can
+            accept and sign work orders and manage this list; <b>Crew</b> logins can view projects and work orders only.
           </div>
 
-          {mode === 'link' ? (
-            <form onSubmit={handleLinkSubmit}>
-              <label htmlFor="email">Email</label>
-              <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-              {error && <div className="error-text">{error}</div>}
-              <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
-                {loading ? 'Sending…' : 'Email me a login link'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handlePasswordSubmit}>
-              <label htmlFor="pwEmail">Email</label>
-              <input id="pwEmail" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-              <label htmlFor="password">Password</label>
-              <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-              {error && <div className="error-text">{error}</div>}
-              <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
-                {loading ? 'Signing in…' : 'Sign in'}
-              </button>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-                Haven't set a password yet? Use "Email me a link" once, then set one up from inside the portal.
+          {roster.map(u => (
+            <div key={u.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <b>{u.email}</b>
+                  {u.email === session.user.email && <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 6 }}>(you)</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className={`badge badge-${u.role === 'admin' ? 'active' : 'draft'}`}>{u.role === 'admin' ? 'Owner/Manager' : 'Crew'}</span>
+                  {u.email !== session.user.email && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => { setSettingPwFor(settingPwFor === u.id ? null : u.id); setTeammatePassword(''); setTeammatePwResult(''); }}
+                    >
+                      {settingPwFor === u.id ? 'Cancel' : 'Set Password'}
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-danger" onClick={() => removeUser(u.id)}>Remove</button>
+                </div>
               </div>
-            </form>
-          )}
-        </>
-      )}
+              {settingPwFor === u.id && (
+                <form onSubmit={e => submitTeammatePassword(e, u.email)} style={{ marginTop: 10, paddingLeft: 2 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <input
+                      type="password" value={teammatePassword} onChange={e => setTeammatePassword(e.target.value)}
+                      placeholder={`New password for ${u.email}`} minLength={6} required autoFocus
+                      style={{ flex: '1 1 220px', margin: 0 }}
+                    />
+                    <button className="btn btn-primary btn-sm" type="submit" disabled={teammatePwSaving}>
+                      {teammatePwSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                  {teammatePwResult && (
+                    <div style={{ fontSize: 12, marginTop: 6, color: teammatePwResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f' }}>
+                      {teammatePwResult}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                    They'll be able to sign in with this password right away.
+                  </div>
+                </form>
+              )}
+            </div>
+          ))}
 
-      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-        <a href="/sub-portal" style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>← Back</a>
+          <form onSubmit={addUser} style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <label>Add a login</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" required style={{ flex: '1 1 220px' }} />
+              <select value={newRole} onChange={e => setNewRole(e.target.value)} style={{ width: 160 }}>
+                <option value="crew">Crew</option>
+                <option value="admin">Owner/Manager</option>
+              </select>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add'}</button>
+            </div>
+            {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
+              They'll sign in with a one-time email link at first — they can set up a password anytime from this same Settings page once they're in.
+            </div>
+          </form>
+        </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-export default function SubPortalLoginPage() {
-  return (
-    <SubPortalAuthLayout>
-      <Suspense fallback={null}>
-        <SubPortalLoginForm />
-      </Suspense>
-    </SubPortalAuthLayout>
+    </SubPortalShell>
   );
 }

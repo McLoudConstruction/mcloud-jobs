@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -23,76 +25,74 @@ function agingLabel(days) {
   return `${days}d (90+)`;
 }
 
-export default function ReceivablePage() {
+export default function PayablePage() {
   const { session, loading } = useRequireAuth();
-  const [jobs, setJobs] = useState([]);
-  const [draws, setDraws] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [businessExpenses, setBusinessExpenses] = useState([]);
+  const [receipts, setReceipts] = useState([]);
 
   const loadAll = useCallback(async () => {
-    const [{ data: j }, { data: inv }] = await Promise.all([
-      supabase.from('jobs').select('*').eq('invoice_status', 'sent'),
-      supabase.from('invoices').select('*, jobs(job_number, customer_name)').eq('status', 'sent'),
+    const [{ data: wo }, { data: be }, { data: r }] = await Promise.all([
+      supabase.from('work_orders').select('*, jobs(job_number, customer_name), companies(company_name)').neq('status', 'paid'),
+      supabase.from('business_expenses').select('*').eq('payment_status', 'unpaid'),
+      supabase.from('receipts').select('*, jobs(job_number)').eq('payment_status', 'unpaid'),
     ]);
-    if (j) setJobs(j);
-    if (inv) setDraws(inv);
+    if (wo) setWorkOrders(wo);
+    if (be) setBusinessExpenses(be);
+    if (r) setReceipts(r);
   }, []);
 
   useEffect(() => {
     if (!session) return;
     loadAll();
     const channel = supabase
-      .channel('ar-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, loadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, loadAll)
+      .channel('ap-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'business_expenses' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts' }, loadAll)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, loadAll]);
 
   if (loading || !session) return null;
 
-  // A job with any draws is billed via progress invoicing — its old single
-  // invoice_status field is no longer the source of truth, so exclude it
-  // from the single-invoice list to avoid double-counting.
-  const jobsWithDraws = new Set(draws.map(d => d.job_id));
-  const singleInvoiceJobs = jobs.filter(j => !jobsWithDraws.has(j.id));
-
-  const total = singleInvoiceJobs.reduce((s, j) => s + Number(j.invoice_amount || 0), 0) + draws.reduce((s, d) => s + Number(d.amount || 0), 0);
-  const sortedJobs = singleInvoiceJobs.slice().sort((a, b) => new Date(a.invoiced_at || 0) - new Date(b.invoiced_at || 0));
-  const sortedDraws = draws.slice().sort((a, b) => new Date(a.invoiced_at || 0) - new Date(b.invoiced_at || 0));
+  const totalWO = workOrders.reduce((s, wo) => s + Number(wo.invoiced_amount ?? wo.amount ?? 0), 0);
+  const totalBE = businessExpenses.reduce((s, be) => s + Number(be.amount || 0), 0);
+  const totalReceipts = receipts.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Accounts Receivable</h2>
+        <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Accounts Payable</h2>
 
         <div className="card">
-          <div className="portal-info-label">Total Open Receivables</div>
-          <div className="portal-info-value" style={{ fontSize: 22 }}>{fmtMoney(total)}</div>
+          <div className="portal-info-label">Total Open Payables</div>
+          <div className="portal-info-value" style={{ fontSize: 22 }}>{fmtMoney(totalWO + totalBE + totalReceipts)}</div>
         </div>
 
         <div className="card">
-          <h3>Unpaid Draws (Progress Invoicing)</h3>
-          {sortedDraws.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
-          {sortedDraws.length > 0 && (
+          <h3>Subcontractor &amp; Vendor Work Orders</h3>
+          {workOrders.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
+          {workOrders.length > 0 && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 110 }}>Job #</th>
-                    <th style={{ width: 160 }}>Customer</th>
-                    <th style={{ width: 160 }}>Draw</th>
+                    <th style={{ width: 160 }}>Company</th>
+                    <th style={{ width: 110 }}>Job</th>
+                    <th style={{ width: 120 }}>Status</th>
                     <th style={{ width: 120 }}>Amount</th>
                     <th style={{ width: 100 }}>Age</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedDraws.map(d => (
-                    <tr key={d.id} onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`}>
-                      <td>{d.jobs ? `#${d.jobs.job_number}` : '—'}</td>
-                      <td>{d.jobs?.customer_name || 'Unnamed'}</td>
-                      <td>{d.description || 'Draw'}</td>
-                      <td>{fmtMoney(d.amount)}</td>
-                      <td>{agingLabel(daysAgo(d.invoiced_at))}</td>
+                  {workOrders.map(wo => (
+                    <tr key={wo.id} onClick={() => window.location.href = wo.job_id ? `/jobs/${wo.job_id}?tab=Financials` : '#'}>
+                      <td>{wo.companies?.company_name || 'Unknown'}</td>
+                      <td>{wo.jobs ? `#${wo.jobs.job_number}` : '—'}</td>
+                      <td>{WORK_ORDER_STATUS_LABELS[wo.status]}</td>
+                      <td>{fmtMoney(wo.invoiced_amount ?? wo.amount)}</td>
+                      <td>{agingLabel(daysAgo(wo.issued_at || wo.created_at))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -102,26 +102,54 @@ export default function ReceivablePage() {
         </div>
 
         <div className="card">
-          <h3>Unpaid Single Invoices</h3>
-          {sortedJobs.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
-          {sortedJobs.length > 0 && (
+          <h3>Business Expenses (Overhead)</h3>
+          {businessExpenses.length === 0 && <div className="empty-state">None logged yet.</div>}
+          {businessExpenses.length > 0 && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 110 }}>Job #</th>
-                    <th style={{ width: 200 }}>Customer</th>
-                    <th style={{ width: 130 }}>Amount</th>
-                    <th style={{ width: 110 }}>Age</th>
+                    <th style={{ width: 180 }}>Vendor</th>
+                    <th style={{ width: 130 }}>Category</th>
+                    <th style={{ width: 120 }}>Amount</th>
+                    <th style={{ width: 100 }}>Age</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedJobs.map(j => (
-                    <tr key={j.id} onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`}>
-                      <td>#{j.job_number}</td>
-                      <td>{j.customer_name || 'Unnamed'}</td>
-                      <td>{fmtMoney(j.invoice_amount)}</td>
-                      <td>{agingLabel(daysAgo(j.invoiced_at))}</td>
+                  {businessExpenses.map(be => (
+                    <tr key={be.id}>
+                      <td>{be.vendor_name || '—'}</td>
+                      <td>{be.category || '—'}</td>
+                      <td>{fmtMoney(be.amount)}</td>
+                      <td>{agingLabel(daysAgo(be.expense_date))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="card">
+          <h3>Unpaid Receipts</h3>
+          {receipts.length === 0 && <div className="empty-state">None outstanding.</div>}
+          {receipts.length > 0 && (
+            <div className="data-table-wrap">
+              <table className="data-table" style={{ tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 180 }}>Vendor</th>
+                    <th style={{ width: 100 }}>Job</th>
+                    <th style={{ width: 120 }}>Amount</th>
+                    <th style={{ width: 100 }}>Age</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receipts.map(r => (
+                    <tr key={r.id} onClick={() => window.location.href = r.job_id ? `/jobs/${r.job_id}?tab=Financials` : '#'}>
+                      <td>{r.vendor_name || '—'}</td>
+                      <td>{r.jobs ? `#${r.jobs.job_number}` : '—'}</td>
+                      <td>{fmtMoney(r.amount)}</td>
+                      <td>{agingLabel(daysAgo(r.receipt_date))}</td>
                     </tr>
                   ))}
                 </tbody>

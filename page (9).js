@@ -206,8 +206,22 @@ export default function JobDetailPage() {
         <div className="top-actions">
           <div>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
-            <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-            {flash && <span className="saved-flash">{flash}</span>}
+            {job.project_address && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.project_address)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12.5, color: 'var(--ink-soft)', textDecoration: 'none', display: 'inline-block', marginBottom: 4 }}
+                onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
+                onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
+              >
+                📍 {job.project_address}
+              </a>
+            )}
+            <div>
+              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+              {flash && <span className="saved-flash">{flash}</span>}
+            </div>
           </div>
           <div className="section-actions">
             <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
@@ -458,7 +472,7 @@ function CustomerInfoCard({ job, onSave }) {
     customer_contact: job.customer_contact || '',
     customer_email: job.customer_email || '',
     customer_phone: job.customer_phone || '',
-    billing_email: job.billing_email || '',
+    billing_email: job.billing_email || job.customer_email || '',
     billing_street: job.billing_street || '', billing_unit: job.billing_unit || '', billing_city: job.billing_city || '', billing_state: job.billing_state || '', billing_zip: job.billing_zip || '',
     project_street: job.project_street || '', project_unit: job.project_unit || '', project_city: job.project_city || '', project_state: job.project_state || '', project_zip: job.project_zip || '',
   });
@@ -466,11 +480,17 @@ function CustomerInfoCard({ job, onSave }) {
     Boolean(job.billing_street) && job.billing_street === job.project_street && job.billing_city === job.project_city
   );
 
+  const [billingEmailTouched, setBillingEmailTouched] = useState(Boolean(job.billing_email) && job.billing_email !== job.customer_email);
+
   function update(field, value) {
     setForm(prev => {
       const next = { ...prev, [field]: value };
       if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
         next[field.replace('billing_', 'project_')] = value;
+      }
+      if (field === 'billing_email') setBillingEmailTouched(true);
+      if (field === 'customer_email' && !billingEmailTouched) {
+        next.billing_email = value;
       }
       return next;
     });
@@ -504,15 +524,15 @@ function CustomerInfoCard({ job, onSave }) {
         <div><label>Billing email</label><input value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
       </div>
 
-      <label style={{ marginTop: 16 }}>Billing address</label>
-      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
+      <label style={{ marginTop: 16 }}>Project / jobsite address</label>
+      <AddressFields prefix="project" values={form} onChange={update} placesEnabled />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
         <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
         Project address same as billing address
       </label>
-      <label>Project / jobsite address</label>
-      <AddressFields prefix="project" values={form} onChange={update} placesEnabled />
+      <label>Billing address</label>
+      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
 
       <div className="section-actions">
         <button className="btn btn-primary btn-sm" onClick={save}>Save customer info</button>

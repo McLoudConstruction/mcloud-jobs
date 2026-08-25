@@ -3,104 +3,135 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
+import { STAGE_LABELS } from '../../../lib/constants';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
-import PaymentFlow from '../../../components/PaymentFlow';
+import PasswordPromptModal from '../../../components/PasswordPromptModal';
 
-function fmtMoney(v) {
+function fmtDate(v) {
   if (!v) return '—';
-  return '$' + Number(v).toLocaleString('en-US');
+  const d = new Date(v.length === 10 ? v + 'T00:00:00' : v);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
-
-export default function CustomerInvoicesPage() {
+export default function CustomerHomePage() {
   const { session, loading } = usePortalAuth();
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
-  const [draws, setDraws] = useState([]);
-  const [paidFlash, setPaidFlash] = useState('');
+  const [updates, setUpdates] = useState([]);
+  const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    const dismissKey = `mcloud-portal-password-prompt-dismissed-${session.user.id}`;
+    if (window.localStorage.getItem(dismissKey)) return;
+    const t = setTimeout(() => setPasswordPromptOpen(true), 400);
+    return () => clearTimeout(t);
+  }, [session]);
+
+  function dismissPasswordPrompt() {
+    setPasswordPromptOpen(false);
+    if (session) window.localStorage.setItem(`mcloud-portal-password-prompt-dismissed-${session.user.id}`, '1');
+  }
 
   useEffect(() => {
     if (!selectedJobId) return;
-    const load = () => supabase.from('invoices').select('*').eq('job_id', selectedJobId).order('created_at', { ascending: true }).then(({ data }) => { if (data) setDraws(data); });
+    const load = () => supabase.from('job_updates').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('update_date', { ascending: false }).limit(3).then(({ data }) => { if (data) setUpdates(data); });
     load();
-    const channel = supabase.channel(`portal-invoices-${selectedJobId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${selectedJobId}` }, load)
+    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId });
+    const channel = supabase.channel(`portal-home-updates-${selectedJobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${selectedJobId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [selectedJobId]);
 
   if (loading || !session) return null;
 
-  const hasSingleInvoice = draws.length === 0 && job?.invoice_status !== 'not_sent' && job?.invoice_amount;
-
-  function handlePaymentSuccess(status) {
-    setPaidFlash(status === 'succeeded' ? 'Payment received, thank you!' : "Payment is processing — we'll update this once it clears.");
-    setTimeout(() => setPaidFlash(''), 6000);
-  }
+  const hasVisit = job && (job.scheduled_start_date || job.scheduled_end_date);
 
   return (
     <CustomerPortalShell>
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
+        <div className="card portal-welcome-card">
+          <h3 style={{ marginTop: 0 }}>Welcome to your Project Portal</h3>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-soft)' }}>
+            This is your home base for everything happening on your project with McLoud Construction — your next scheduled visit,
+            the latest progress updates, and your project details, all in one place. Head to <b>Documents</b> in the sidebar any
+            time to view or sign your estimate and contract, respond to a material selection, or catch up on past updates, and use
+            <b> Inbox</b> to send us a message directly.
+          </p>
+        </div>
+
         {job && (
-          <div className="card">
-            <h3>Invoices</h3>
-
-            {draws.filter(d => d.status !== 'not_sent').map(d => (
-              <a key={d.id} href={`/jobs/${job.id}/invoices/${d.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ marginBottom: 8, marginRight: 8 }}>
-                View {d.description || 'Draw'} ↗
-              </a>
-            ))}
-            {hasSingleInvoice && (
-              <a href={`/jobs/${job.id}/invoice`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Invoice ↗</a>
-            )}
-
-            {paidFlash && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 10 }}>{paidFlash}</div>}
-
-            {draws.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                {draws.map(d => (
-                  <div key={d.id} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>{d.description || 'Draw'}</span>
-                      <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(d.amount)}</span>
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
-                      Status: {d.status === 'paid' ? 'Paid' : d.status === 'sent' ? 'Unpaid' : 'Not yet sent'}
-                    </p>
-                    {d.status === 'sent' && (
-                      <div style={{ marginTop: 10 }}>
-                        <PaymentFlow jobId={job.id} invoiceId={d.id} amountDue={Number(d.amount)} createdBy="customer" onSuccess={handlePaymentSuccess} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {hasSingleInvoice && (
-              <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginTop: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>Invoice Amount</span>
-                  <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(job.invoice_amount)}</span>
+          <>
+            <div className="card">
+              <div className="portal-info-grid">
+                <div>
+                  <div className="portal-info-label">Customer</div>
+                  <div className="portal-info-value">{job.customer_name || '—'}</div>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
-                  Status: {job.invoice_status === 'paid' ? 'Paid' : 'Unpaid'}
-                </p>
-                {job.invoice_status === 'sent' && (
-                  <div style={{ marginTop: 10 }}>
-                    <PaymentFlow jobId={job.id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={handlePaymentSuccess} />
+                <div>
+                  <div className="portal-info-label">Project Address</div>
+                  <div className="portal-info-value">{job.project_address || '—'}</div>
+                </div>
+                <div>
+                  <div className="portal-info-label">Job Type</div>
+                  <div className="portal-info-value">{job.job_type || '—'}</div>
+                </div>
+                <div>
+                  <div className="portal-info-label">Estimated Completion</div>
+                  <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginRight: 8 }}>Status:</span>
+                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+              </div>
+            </div>
+
+            <div className="portal-two-col">
+              <div className="card">
+                <h3>Next Scheduled Visit</h3>
+                {hasVisit ? (
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
+                      {fmtDate(job.scheduled_start_date)}
+                      {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
+                        <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
                   </div>
+                ) : (
+                  <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
                 )}
               </div>
-            )}
 
-            {draws.length === 0 && !hasSingleInvoice && (
-              <div className="empty-state">No invoices issued yet.</div>
-            )}
-          </div>
+              <div className="card">
+                <h3>Recent Updates</h3>
+                {updates.length === 0 && <div className="empty-state">No updates posted yet.</div>}
+                {updates.map(u => (
+                  <div className="update-entry" key={u.id}>
+                    <div className="update-date">{fmtDate(u.update_date)}</div>
+                    <div className="section-actions">
+                      <a href={`/jobs/${job.id}/updates/${u.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Progress Update ↗</a>
+                    </div>
+                  </div>
+                ))}
+                <div className="section-actions" style={{ marginTop: updates.length ? 10 : 0 }}>
+                  <a href="/customerportal/documents" className="btn btn-sm">See All Documents &amp; Updates →</a>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
+
+      <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
+
+      <style jsx global>{`
+        .portal-welcome-card{ background: var(--panel); }
+      `}</style>
     </CustomerPortalShell>
   );
 }

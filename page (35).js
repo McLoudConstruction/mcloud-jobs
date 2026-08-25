@@ -1,89 +1,91 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { supabase } from '../../../lib/supabaseClient';
-import { usePortalAuth } from '../../../lib/usePortalAuth';
-import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
-import CustomerPortalShell from '../../../components/CustomerPortalShell';
-import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 
-function fmtDate(v) {
-  if (!v) return '—';
-  return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-export default function CustomerInboxPage() {
-  const { session, loading } = usePortalAuth();
-  const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
-  const [questions, setQuestions] = useState([]);
-  const [question, setQuestion] = useState('');
-  const [sending, setSending] = useState(false);
-  const [flash, setFlash] = useState('');
+export default function PortalLoginPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState('link'); // 'link' | 'password'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedJobId) return;
-    const load = () => supabase.from('job_questions').select('*').eq('job_id', selectedJobId).order('created_at', { ascending: false }).then(({ data }) => { if (data) setQuestions(data); });
-    load();
-    const channel = supabase.channel(`portal-inbox-${selectedJobId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions', filter: `job_id=eq.${selectedJobId}` }, load)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [selectedJobId]);
-
-  async function submitQuestion(e) {
-    e.preventDefault();
-    if (!question.trim() || !selectedJobId) return;
-    setSending(true);
-    const { error } = await supabase.from('job_questions').insert({
-      job_id: selectedJobId,
-      customer_email: session.user.email,
-      message: question,
+    // If already signed in (e.g. clicked the magic link and landed here), go straight in.
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) router.replace('/customerportal/projects');
     });
-    setSending(false);
-    if (!error) {
-      setQuestion('');
-      setFlash('Message sent — we\'ll get back to you soon.');
-      setTimeout(() => setFlash(''), 3000);
-    }
+  }, [router]);
+
+  async function handleLinkSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+    });
+    setLoading(false);
+    if (error) setError(error.message);
+    else setSent(true);
   }
 
-  if (loading || !session) return null;
+  async function handlePasswordSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) setError('Incorrect email or password, or a password hasn\'t been set up yet on this account.');
+    else router.replace('/customerportal/projects');
+  }
 
   return (
-    <CustomerPortalShell>
-      <div className="container" style={{ paddingTop: 24 }}>
-        <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
+    <div className="login-wrap portal-textured">
+      <div className="login-card">
+        <h1>Project Portal</h1>
+        <p className="sub">McLoud Construction — view your project updates, invoice, and questions.</p>
 
-        {job && (
-          <div className="card">
-            <h3>Have a question about your project?</h3>
-            <form onSubmit={submitQuestion}>
-              <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="Fill out your message here" />
-              {flash && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 8 }}>{flash}</div>}
-              <div className="section-actions">
-                <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Submit message'}</button>
-              </div>
-            </form>
+        {sent ? (
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
+            Check your email for a login link — it may take a minute or two to arrive. You can close this tab.
+          </p>
+        ) : (
+          <>
+            <div className="portal-mode-tabs">
+              <button type="button" className={mode === 'link' ? 'active' : ''} onClick={() => { setMode('link'); setError(''); }}>Email me a link</button>
+              <button type="button" className={mode === 'password' ? 'active' : ''} onClick={() => { setMode('password'); setError(''); }}>Sign in with password</button>
+            </div>
 
-            {questions.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                {questions.map(q => (
-                  <div className="update-entry" key={q.id}>
-                    <div className="update-date">{fmtDate((q.created_at || '').slice(0, 10))}</div>
-                    {q.sender === 'admin' ? (
-                      <>
-                        <div className="update-field-label">McLoud Construction</div>
-                        <p>{q.message}</p>
-                      </>
-                    ) : (
-                      <p>{q.message}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+            {mode === 'link' ? (
+              <form onSubmit={handleLinkSubmit}>
+                <label htmlFor="email">Email</label>
+                <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                {error && <div className="error-text">{error}</div>}
+                <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
+                  {loading ? 'Sending…' : 'Email me a login link'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handlePasswordSubmit}>
+                <label htmlFor="pwEmail">Email</label>
+                <input id="pwEmail" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                <label htmlFor="password">Password</label>
+                <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                {error && <div className="error-text">{error}</div>}
+                <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+                  Haven't set a password yet? Use "Email me a link" once, then set one up from inside the portal.
+                </div>
+              </form>
             )}
-          </div>
+          </>
         )}
       </div>
-    </CustomerPortalShell>
+    </div>
   );
 }
