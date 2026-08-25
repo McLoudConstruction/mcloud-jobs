@@ -34,21 +34,21 @@ export default function SubcontractorApplyChrome({ children }) {
         .mcw-header-link:hover{ color: var(--mcw-brass); }
 
         .mcw-hero{ background: var(--mcw-ink); color: var(--mcw-paper); padding: 56px 24px 64px; }
-        .mcw-hero-inner{ max-width: 720px; margin: 0 auto; }
+        .mcw-hero-inner{ max-width: 880px; margin: 0 auto; }
         .mcw-eyebrow{
           display: inline-flex; align-items: center; gap: 0.4em; border: 1.5px solid var(--mcw-brass);
-          border-radius: 9999px; padding: 0.35em 0.9em; font-family: var(--mcw-mono); font-size: 11px;
+          border-radius: 9999px; padding: 0.35em 0.9em; font-family: var(--mcw-mono); font-size: 12px;
           letter-spacing: 0.12em; text-transform: uppercase; color: var(--mcw-brass); transform: rotate(-1.5deg);
         }
         .mcw-hero h1{
           font-family: var(--mcw-display); font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em;
-          line-height: 0.95; font-size: 44px; margin: 22px 0 0;
+          line-height: 0.95; font-size: 48px; margin: 22px 0 0;
         }
-        .mcw-hero p{ font-family: var(--mcw-body); font-size: 15.5px; line-height: 1.7; color: rgba(237,231,218,0.8); margin: 18px 0 0; max-width: 560px; }
+        .mcw-hero p{ font-family: var(--mcw-body); font-size: 17px; line-height: 1.7; color: rgba(237,231,218,0.8); margin: 18px 0 0; max-width: 640px; }
 
-        .mcw-form-wrap{ flex: 1; max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; width: 100%; }
+        .mcw-form-wrap{ flex: 1; max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; width: 100%; }
         .mcw-section-label{
-          font-family: var(--mcw-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+          font-family: var(--mcw-mono); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.18em;
           color: var(--mcw-concrete); margin: 32px 0 4px;
         }
         .mcw-section-label:first-child{ margin-top: 0; }
@@ -58,21 +58,21 @@ export default function SubcontractorApplyChrome({ children }) {
 
         .mcw-page form{ font-family: var(--mcw-body); }
         .mcw-page label{
-          display: block; font-family: var(--mcw-mono); font-size: 11px; text-transform: uppercase;
-          letter-spacing: 0.14em; color: var(--mcw-concrete); margin: 20px 0 6px;
+          display: block; font-family: var(--mcw-mono); font-size: 13px; text-transform: uppercase;
+          letter-spacing: 0.1em; color: var(--mcw-concrete); margin: 22px 0 7px; font-weight: 500;
         }
         .mcw-page label:first-of-type{ margin-top: 0; }
         .mcw-page input[type="text"], .mcw-page input[type="email"], .mcw-page input[type="tel"],
         .mcw-page input[type="date"], .mcw-page input:not([type]), .mcw-page textarea{
           width: 100%; border: none; border-bottom: 1.5px solid rgba(28,27,25,0.25); background: transparent;
-          padding: 10px 2px; font-family: var(--mcw-body); font-size: 14.5px; color: var(--mcw-ink); border-radius: 0;
+          padding: 11px 2px; font-family: var(--mcw-body); font-size: 17px; color: var(--mcw-ink); border-radius: 0;
         }
         .mcw-page input::placeholder, .mcw-page textarea::placeholder{ color: rgba(28,27,25,0.32); }
         .mcw-page input:focus, .mcw-page textarea:focus{ outline: none; border-color: var(--mcw-brass); }
-        .mcw-page textarea{ min-height: 90px; line-height: 1.6; resize: vertical; }
+        .mcw-page textarea{ min-height: 100px; line-height: 1.6; resize: vertical; }
         .mcw-page input[type="file"]{
-          width: 100%; font-family: var(--mcw-body); font-size: 13px; color: var(--mcw-ink);
-          border: 1.5px dashed rgba(28,27,25,0.25); padding: 12px; background: rgba(237,231,218,0.4);
+          width: 100%; font-family: var(--mcw-body); font-size: 14.5px; color: var(--mcw-ink);
+          border: 1.5px dashed rgba(28,27,25,0.25); padding: 13px; background: rgba(237,231,218,0.4);
         }
         .mcw-photo-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
         .mcw-photo-thumb{ position: relative; border: 1px solid rgba(28,27,25,0.15); }
@@ -87,26 +87,26 @@ export default function SubcontractorApplyChrome({ children }) {
         @media (max-width: 560px){ .mcw-two-col{ grid-template-columns: 1fr; } }
         .mcw-two-col > div > label{ margin-top: 0; }
 
-        .mcw-checkbox-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 14px; margin-top: 10px; }
-        .mcw-page .mcw-checkbox{ display: flex; align-items: center; gap: 8px; font-family: var(--mcw-body); font-size: 13.5px; color: var(--mcw-ink); cursor: pointer; margin: 0; text-transform: none; letter-spacing: normal; }
-        .mcw-checkbox input[type="checkbox"]{ width: 16px; height: 16px; accent-color: var(--mcw-brass); cursor: pointer; }
+        .mcw-checkbox-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px 16px; margin-top: 12px; }
+        .mcw-page .mcw-checkbox{ display: flex; align-items: center; gap: 9px; font-family: var(--mcw-body); font-size: 15px; color: var(--mcw-ink); cursor: pointer; margin: 0; text-transform: none; letter-spacing: normal; }
+        .mcw-checkbox input[type="checkbox"]{ width: 18px; height: 18px; accent-color: var(--mcw-brass); cursor: pointer; }
 
-        .mcw-error{ font-family: var(--mcw-body); font-size: 13px; color: var(--mcw-rust); margin-top: 14px; }
+        .mcw-error{ font-family: var(--mcw-body); font-size: 14.5px; color: var(--mcw-rust); margin-top: 14px; }
         .mcw-submit{
           margin-top: 36px; width: 100%; background: var(--mcw-brass); color: var(--mcw-ink); border: none;
-          padding: 16px 28px; font-family: var(--mcw-mono); font-size: 12px; text-transform: uppercase;
+          padding: 17px 28px; font-family: var(--mcw-mono); font-size: 13px; text-transform: uppercase;
           letter-spacing: 0.15em; cursor: pointer; transition: opacity 0.15s ease; border-radius: 0;
         }
         .mcw-submit:hover{ opacity: 0.88; }
         .mcw-submit:disabled{ opacity: 0.55; cursor: default; }
 
-        .mcw-status-card{ max-width: 560px; margin: 0 auto; padding: 60px 24px 100px; text-align: center; }
+        .mcw-status-card{ max-width: 640px; margin: 0 auto; padding: 60px 24px 100px; text-align: center; }
         .mcw-status-card .mcw-eyebrow{ margin-bottom: 20px; }
         .mcw-status-card h1{
-          font-family: var(--mcw-display); font-weight: 800; text-transform: uppercase; font-size: 32px;
+          font-family: var(--mcw-display); font-weight: 800; text-transform: uppercase; font-size: 34px;
           color: var(--mcw-ink); margin: 0 0 14px;
         }
-        .mcw-status-card p{ font-family: var(--mcw-body); font-size: 15px; line-height: 1.7; color: rgba(28,27,25,0.72); }
+        .mcw-status-card p{ font-family: var(--mcw-body); font-size: 16.5px; line-height: 1.7; color: rgba(28,27,25,0.72); }
 
         .mcw-footer{
           background: var(--mcw-ink); color: var(--mcw-paper); padding: 28px 24px; margin-top: auto;

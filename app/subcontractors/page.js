@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
@@ -132,6 +133,8 @@ export default function SubcontractorsPage() {
   const [inviteResult, setInviteResult] = useState('');
   const [uploadingW9, setUploadingW9] = useState(false);
   const [uploadingCoi, setUploadingCoi] = useState(false);
+  const [docViewerUrl, setDocViewerUrl] = useState(null); // null | 'loading' | signedUrl
+  const [docViewerError, setDocViewerError] = useState('');
   const fileInputRef = useRef(null);
 
   const [applications, setApplications] = useState([]);
@@ -178,19 +181,16 @@ export default function SubcontractorsPage() {
   }
 
   async function viewDoc(path) {
-    const tab = window.open('', '_blank');
+    setDocViewerError('');
+    setDocViewerUrl('loading');
     try {
       const { data, error } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
       if (error) throw error;
-      if (data?.signedUrl) {
-        if (tab) tab.location.href = data.signedUrl;
-        else window.open(data.signedUrl, '_blank');
-      } else {
-        throw new Error('No file found at that path.');
-      }
+      if (data?.signedUrl) setDocViewerUrl(data.signedUrl);
+      else throw new Error('No file found at that path.');
     } catch (err) {
-      if (tab) tab.close();
-      alert('Could not open file: ' + err.message);
+      setDocViewerUrl(null);
+      setDocViewerError('Could not open file: ' + err.message);
     }
   }
 
@@ -269,19 +269,16 @@ export default function SubcontractorsPage() {
   }
 
   async function viewApplicationDoc(path) {
-    const tab = window.open('', '_blank');
+    setDocViewerError('');
+    setDocViewerUrl('loading');
     try {
       const { data, error } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
       if (error) throw error;
-      if (data?.signedUrl) {
-        if (tab) tab.location.href = data.signedUrl;
-        else window.open(data.signedUrl, '_blank');
-      } else {
-        throw new Error('No file found at that path.');
-      }
+      if (data?.signedUrl) setDocViewerUrl(data.signedUrl);
+      else throw new Error('No file found at that path.');
     } catch (err) {
-      if (tab) tab.close();
-      alert('Could not open file: ' + err.message);
+      setDocViewerUrl(null);
+      setDocViewerError('Could not open file: ' + err.message);
     }
   }
 
@@ -735,6 +732,52 @@ export default function SubcontractorsPage() {
           />
         )}
       </div>
+
+      <DocViewerOverlay
+        url={docViewerUrl}
+        error={docViewerError}
+        onClose={() => { setDocViewerUrl(null); setDocViewerError(''); }}
+      />
     </AppShell>
+  );
+}
+
+function DocViewerOverlay({ url, error, onClose }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted || (!url && !error)) return null;
+
+  return createPortal(
+    <div className="doc-viewer-overlay" onClick={onClose}>
+      <div className="doc-viewer-box" onClick={e => e.stopPropagation()}>
+        <button className="doc-viewer-close" onClick={onClose} aria-label="Close">×</button>
+        {url === 'loading' && <div className="doc-viewer-status">Loading…</div>}
+        {error && <div className="doc-viewer-status doc-viewer-error">{error}</div>}
+        {url && url !== 'loading' && <iframe src={url} title="Document viewer" className="doc-viewer-frame" />}
+      </div>
+
+      <style jsx global>{`
+        .doc-viewer-overlay{
+          position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1200;
+          display: flex; align-items: center; justify-content: center; padding: 30px;
+        }
+        .doc-viewer-box{
+          position: relative; width: 100%; height: 100%; max-width: 1000px; background: #fff;
+          border-radius: 8px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .doc-viewer-frame{ width: 100%; height: 100%; border: none; }
+        .doc-viewer-status{ font-size: 14px; color: #444; padding: 40px; text-align: center; }
+        .doc-viewer-error{ color: #a13f3f; max-width: 360px; }
+        .doc-viewer-close{
+          position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%;
+          border: none; background: rgba(20,18,14,0.75); color: #fff; font-size: 18px; line-height: 1;
+          cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 1;
+        }
+        .doc-viewer-close:hover{ background: rgba(20,18,14,0.9); }
+      `}</style>
+    </div>,
+    document.body
   );
 }
