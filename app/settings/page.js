@@ -110,6 +110,7 @@ export default function SettingsPage() {
         .from('app_settings')
         .update({
           brand_color: form.brand_color,
+          header_text_color: form.header_text_color,
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
@@ -133,6 +134,7 @@ export default function SettingsPage() {
     setForm(prev => ({
       ...prev,
       brand_color: '#9b773d',
+      header_text_color: null,
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 150,
@@ -249,6 +251,19 @@ export default function SettingsPage() {
           <select id="fontChoice" value={form.font_choice || 'system'} onChange={e => update('font_choice', e.target.value)}>
             {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
+        </div>
+
+        <div className="card">
+          <h3>Header Text Color</h3>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            The header bar itself is always dark chrome in both Light and Dark mode, by design — this only controls the text and icon color on top of it. It's separate from the brand color above, which only drives buttons and accents.
+          </div>
+          <ColorField label="Header text color" id="headerTextColor" value={form.header_text_color || '#f0ede8'} fallback="#f0ede8" onChange={v => update('header_text_color', v)} />
+          {form.header_text_color && (
+            <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => update('header_text_color', null)}>
+              Use default
+            </button>
+          )}
         </div>
 
         </>

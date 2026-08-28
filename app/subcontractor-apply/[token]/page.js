@@ -4,15 +4,6 @@ import { useParams } from 'next/navigation';
 import { SERVICES_OFFERED } from '../../../lib/constants';
 import Chrome from '../../../components/SubcontractorApplyChrome';
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 const EMPTY_FORM = {
   companyName: '', contactName: '', contactPhone: '', contactEmail: '',
   street: '', unit: '', city: '', state: '', zip: '',
@@ -24,9 +15,6 @@ export default function SubcontractorApplyPage() {
   const { token } = useParams();
   const [status, setStatus] = useState('loading'); // loading | ready | invalid | submitted | already
   const [form, setForm] = useState(EMPTY_FORM);
-  const [w9File, setW9File] = useState(null);
-  const [coiFile, setCoiFile] = useState(null);
-  const [workPhotos, setWorkPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,14 +50,6 @@ export default function SubcontractorApplyPage() {
     }));
   }
 
-  function addWorkPhotos(fileList) {
-    const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
-    setWorkPhotos(prev => [...prev, ...files].slice(0, 8));
-  }
-  function removeWorkPhoto(idx) {
-    setWorkPhotos(prev => prev.filter((_, i) => i !== idx));
-  }
-
   async function submit(e) {
     e.preventDefault();
     if (form.servicesOffered.length === 0) {
@@ -80,21 +60,6 @@ export default function SubcontractorApplyPage() {
     setError('');
     try {
       const payload = { token, ...form };
-      if (w9File) {
-        payload.w9Base64 = await fileToBase64(w9File);
-        payload.w9Filename = w9File.name;
-        payload.w9ContentType = w9File.type;
-      }
-      if (coiFile) {
-        payload.coiBase64 = await fileToBase64(coiFile);
-        payload.coiFilename = coiFile.name;
-        payload.coiContentType = coiFile.type;
-      }
-      if (workPhotos.length > 0) {
-        payload.workPhotos = await Promise.all(workPhotos.map(async f => ({
-          base64: await fileToBase64(f), filename: f.name, contentType: f.type,
-        })));
-      }
       const res = await fetch('/api/public/subcontractor-application', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,7 +107,7 @@ export default function SubcontractorApplyPage() {
         <div className="mcw-status-card">
           <div className="mcw-eyebrow">Application Sent</div>
           <h1>Thank you</h1>
-          <p>Your information has been submitted to McLoud Construction. We'll review it and reach out with next steps.</p>
+          <p>Your information has been submitted to McLoud Construction. We'll review it and reach out with next steps. We'll be in touch regarding your COI and W9.</p>
         </div>
       </Chrome>
     );
@@ -154,7 +119,7 @@ export default function SubcontractorApplyPage() {
         <div className="mcw-hero-inner">
           <div className="mcw-eyebrow">Work With Us</div>
           <h1>Subcontractor Application</h1>
-          <p>Tell us about your company and share your W9 and Certificate of Insurance. No account needed — this only takes a few minutes.</p>
+          <p>Tell us about your company and services offered. No account needed — this only takes a few minutes.</p>
         </div>
       </section>
 
@@ -214,33 +179,8 @@ export default function SubcontractorApplyPage() {
 
           <div className="mcw-tick-rule" />
           <div className="mcw-section-label">Documentation</div>
-          <div className="mcw-two-col">
-            <div>
-              <label>W9 *</label>
-              <input type="file" accept=".pdf,image/*" onChange={e => setW9File(e.target.files[0])} required />
-            </div>
-            <div>
-              <label>Certificate of Insurance *</label>
-              <input type="file" accept=".pdf,image/*" onChange={e => setCoiFile(e.target.files[0])} required />
-            </div>
-          </div>
           <label>COI expiration date *</label>
           <input type="date" value={form.coiExpiresAt} onChange={e => update('coiExpiresAt', e.target.value)} required />
-
-          <div className="mcw-tick-rule" />
-          <div className="mcw-section-label">Photos of Previous Work (optional)</div>
-          <label style={{ marginTop: 0 }}>Show us a bit of your craftsmanship — up to 8 photos</label>
-          <input type="file" accept="image/*" multiple onChange={e => addWorkPhotos(e.target.files)} />
-          {workPhotos.length > 0 && (
-            <div className="mcw-photo-grid">
-              {workPhotos.map((f, i) => (
-                <div key={i} className="mcw-photo-thumb">
-                  <img src={URL.createObjectURL(f)} alt={`Work sample ${i + 1}`} />
-                  <button type="button" onClick={() => removeWorkPhoto(i)} aria-label="Remove photo">×</button>
-                </div>
-              ))}
-            </div>
-          )}
 
           <div className="mcw-tick-rule" />
           <label>Anything else we should know?</label>

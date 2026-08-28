@@ -77,10 +77,12 @@ export async function POST(request) {
     if (!coiExpiresAt) {
       return Response.json({ error: 'COI expiration date is required.' }, { status: 400 });
     }
-    if (!body.w9Base64 || !body.coiBase64) {
-      return Response.json({ error: 'Both a W9 and a Certificate of Insurance are required.' }, { status: 400 });
-    }
-
+    // W9/COI are no longer collected at application time — they're
+    // gathered separately after review (see the admin-side "Upload W9" /
+    // "Upload COI" buttons in app/subcontractors/page.js). The upload
+    // handling below is left in place and still works if a future
+    // version of this form ever sends these fields again; it's simply a
+    // no-op now since body.w9Base64/coiBase64 are never set.
     let w9StoragePath = null;
     let coiStoragePath = null;
     let photoStoragePaths = [];
