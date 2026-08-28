@@ -58,49 +58,34 @@ export default function CustomerHomePage() {
 
         {job && (
           <>
-            <div className="card">
-              <div className="portal-info-grid">
-                <div>
-                  <div className="portal-info-label">Customer</div>
-                  <div className="portal-info-value">{job.customer_name || '—'}</div>
-                </div>
-                <div>
-                  <div className="portal-info-label">Project Address</div>
-                  <div className="portal-info-value">{job.project_address || '—'}</div>
-                </div>
-                <div>
-                  <div className="portal-info-label">Job Type</div>
-                  <div className="portal-info-value">{job.job_type || '—'}</div>
-                </div>
-                <div>
-                  <div className="portal-info-label">Estimated Completion</div>
-                  <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginRight: 8 }}>Status:</span>
-                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              </div>
+            <div className="portal-summary-bar">
+              <span className="portal-summary-item"><b>{job.customer_name || '—'}</b></span>
+              {job.project_address && <span className="portal-summary-item">{job.project_address}</span>}
+              {job.job_type && <span className="portal-summary-item">{job.job_type}</span>}
+              <span className="portal-summary-item">Est. completion {fmtDate(job.expected_close_date)}</span>
+              <span className={`badge badge-${job.stage} portal-summary-badge`}>{STAGE_LABELS[job.stage]}</span>
             </div>
 
-            <div className="card">
-              <h3>Next Scheduled Visit</h3>
-              {hasVisit ? (
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
-                    {fmtDate(job.scheduled_start_date)}
-                    {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
-                      <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
-                    )}
+            <div className="portal-two-col portal-feed-layout">
+              <PortalFeed job={job} />
+
+              <div className="card">
+                <h3>Next Scheduled Visit</h3>
+                {hasVisit ? (
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
+                      {fmtDate(job.scheduled_start_date)}
+                      {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
+                        <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
-                </div>
-              ) : (
-                <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
-              )}
+                ) : (
+                  <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
+                )}
+              </div>
             </div>
-
-            <PortalFeed job={job} />
           </>
         )}
       </div>
