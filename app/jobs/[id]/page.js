@@ -7,6 +7,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import PhotoGallery from '../../../components/PhotoGallery';
+import OfflineFieldLog from '../../../components/OfflineFieldLog';
 import AIScopeGenerator from '../../../components/AIScopeGenerator';
 import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
@@ -18,6 +19,7 @@ import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
+import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
@@ -28,6 +30,7 @@ const TABS = [
   { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
   { key: 'Photos', label: 'Photos' },
+  { key: 'Field Log', label: 'Field Log' },
   { key: 'Documents', label: 'Documents' },
   { key: 'Messages', label: 'Messages' },
   { key: 'Portal', label: 'Portal Access' },
@@ -60,6 +63,7 @@ export default function JobDetailPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
   const [notFound, setNotFound] = useState(false);
+  const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
   const [tab, setTab] = useState('Overview');
 
   useEffect(() => {
@@ -68,10 +72,38 @@ export default function JobDetailPage() {
     if (requested && TABS.some(t => t.key === requested)) setTab(requested);
   }, []);
 
+  // Financial fields (contract_price, invoice_amount, invoice_status) live
+  // in job_financials, not on jobs itself — split out so RLS can hide them
+  // from field crew while everything else about the job stays visible.
+  // Merged back onto the same job object here so every existing read of
+  // job.contract_price etc. elsewhere in this file keeps working as-is.
+  const FINANCIAL_FIELDS = ['contract_price', 'invoice_amount', 'invoice_status'];
+
   const loadJob = useCallback(async () => {
-    const { data, error } = await supabase.from('jobs').select('*').eq('id', id).single();
-    if (error || !data) { setNotFound(true); return; }
-    setJob(data);
+    try {
+      const [{ data, error }, { data: financials }] = await Promise.all([
+        supabase.from('jobs').select('*').eq('id', id).single(),
+        supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status').eq('job_id', id).maybeSingle(),
+      ]);
+      if (error || !data) throw error || new Error('Job not found');
+      const merged = { ...data, ...financials };
+      setJob(merged);
+      setOfflineViewing(null);
+      cacheJobPatch(id, { job: merged });
+    } catch (err) {
+      // Could be genuinely missing, or could just be offline — a fetch
+      // to Supabase failing outright (no response at all) looks
+      // different from Postgres cleanly saying "no rows," so only fall
+      // back to cache when it looks like a network failure, and only
+      // declare not-found when there's no cache to fall back to either.
+      const cached = await getCachedJob(id);
+      if (cached?.data?.job) {
+        setJob(cached.data.job);
+        setOfflineViewing({ cachedAt: cached.cachedAt });
+      } else {
+        setNotFound(true);
+      }
+    }
   }, [id]);
 
   const loadUpdates = useCallback(async () => {
@@ -93,6 +125,7 @@ export default function JobDetailPage() {
     const channel = supabase
       .channel(`job-${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${id}` }, loadJob)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials', filter: `job_id=eq.${id}` }, loadJob)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${id}` }, loadUpdates)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'change_orders', filter: `job_id=eq.${id}` }, loadChangeOrders)
       .subscribe();
@@ -119,13 +152,29 @@ export default function JobDetailPage() {
   }
 
   async function saveJob(patch) {
-    const { error } = await supabase.from('jobs').update(patch).eq('id', id);
-    if (!error) {
-      flashSaved();
-    } else {
-      setFlash(`Save failed: ${error.message}`);
-      setTimeout(() => setFlash(''), 6000);
+    const jobPatch = {};
+    const financialsPatch = {};
+    for (const [key, value] of Object.entries(patch)) {
+      (FINANCIAL_FIELDS.includes(key) ? financialsPatch : jobPatch)[key] = value;
     }
+
+    if (Object.keys(jobPatch).length > 0) {
+      const { error } = await supabase.from('jobs').update(jobPatch).eq('id', id);
+      if (error) {
+        setFlash(`Save failed: ${error.message}`);
+        setTimeout(() => setFlash(''), 6000);
+        return;
+      }
+    }
+    if (Object.keys(financialsPatch).length > 0) {
+      const { error } = await supabase.from('job_financials').update(financialsPatch).eq('job_id', id);
+      if (error) {
+        setFlash(`Save failed: ${error.message}`);
+        setTimeout(() => setFlash(''), 6000);
+        return;
+      }
+    }
+    flashSaved();
   }
 
   async function advanceStage() {
@@ -191,6 +240,14 @@ export default function JobDetailPage() {
     <AppShell>
       <div className="container">
         <Breadcrumb href="/jobs" label="Back to Job Tracker" />
+
+        {offlineViewing && (
+          <div className="sync-badge sync-badge-offline">
+            Offline — showing cached data from{' '}
+            {new Date(offlineViewing.cachedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+            Editing is unavailable until you're back online.
+          </div>
+        )}
 
         {!isOpportunity(job) && !job.job_number && (
           <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
@@ -307,6 +364,10 @@ export default function JobDetailPage() {
 
         {tab === 'Photos' && (
           <PhotoGallery jobId={id} title="Job Photos" />
+        )}
+
+        {tab === 'Field Log' && (
+          <OfflineFieldLog jobId={id} session={session} />
         )}
 
         {tab === 'Documents' && (

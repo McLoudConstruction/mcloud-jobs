@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import { flattenJobFinancials } from '../../../lib/jobFinancials';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -30,10 +31,10 @@ export default function ReceivablePage() {
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: inv }] = await Promise.all([
-      supabase.from('jobs').select('*').eq('invoice_status', 'sent'),
+      supabase.from('jobs').select('*, job_financials!inner(contract_price, invoice_amount, invoice_status)').eq('job_financials.invoice_status', 'sent'),
       supabase.from('invoices').select('*, jobs(job_number, customer_name)').eq('status', 'sent'),
     ]);
-    if (j) setJobs(j);
+    if (j) setJobs(flattenJobFinancials(j));
     if (inv) setDraws(inv);
   }, []);
 
@@ -43,6 +44,7 @@ export default function ReceivablePage() {
     const channel = supabase
       .channel('ar-page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials' }, loadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, loadAll)
       .subscribe();
     return () => supabase.removeChannel(channel);

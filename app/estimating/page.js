@@ -15,7 +15,12 @@ export default function EstimatingWorklistPage() {
 
   useEffect(() => {
     if (!session) return;
-    supabase.from('jobs').select('id, job_number, customer_name, project_address, stage, contract_price').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('jobs').select('id, job_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
+      // Supabase's embedded-resource syntax returns job_financials as a
+      // nested object here (job_financials is the parent side of a 1:1
+      // via the job_id primary key) — flatten it back onto each job so
+      // job.contract_price keeps working unchanged below.
+      data = data?.map(j => ({ ...j, contract_price: j.job_financials?.contract_price, job_financials: undefined }));
       if (data) setJobs(data);
     });
   }, [session]);

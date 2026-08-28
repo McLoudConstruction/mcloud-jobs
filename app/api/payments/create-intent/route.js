@@ -33,7 +33,7 @@ export async function POST(request) {
     // or returns nothing, RLS has already told us this person can't see
     // this job, and we stop here before ever touching Stripe.
     const caller = callerClient(accessToken);
-    const { data: job, error: jobErr } = await caller.from('jobs').select('id, invoice_status, invoice_amount').eq('id', jobId).single();
+    const { data: job, error: jobErr } = await caller.from('jobs').select('id').eq('id', jobId).single();
     if (jobErr || !job) {
       return Response.json({ error: 'Not authorized for this job.' }, { status: 403 });
     }
@@ -48,10 +48,15 @@ export async function POST(request) {
       if (invoice.status === 'paid') return Response.json({ error: 'This has already been paid.' }, { status: 400 });
       amountDue = Number(invoice.amount);
     } else {
-      if (!job.invoice_amount || job.invoice_status === 'paid') {
+      // invoice_amount/invoice_status now live on job_financials, which
+      // has its own RLS policy granting the customer read access to
+      // their own job's row (has_job_portal_access) — the access check
+      // above already confirmed they can see the job itself.
+      const { data: financials, error: finErr } = await caller.from('job_financials').select('invoice_amount, invoice_status').eq('job_id', jobId).maybeSingle();
+      if (finErr || !financials || !financials.invoice_amount || financials.invoice_status === 'paid') {
         return Response.json({ error: 'No open invoice found for this job.' }, { status: 400 });
       }
-      amountDue = Number(job.invoice_amount);
+      amountDue = Number(financials.invoice_amount);
     }
 
     const { fee, total } = calculateFee(amountDue, paymentMethod);

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
+import { flattenJobFinancials } from '../../lib/jobFinancials';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -21,10 +22,10 @@ export default function InvoicesDashboardPage() {
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: d }] = await Promise.all([
-      supabase.from('jobs').select('*').in('stage', ['active', 'completed', 'invoiced']),
+      supabase.from('jobs').select('*, job_financials(contract_price, invoice_amount, invoice_status)').in('stage', ['active', 'completed', 'invoiced']),
       supabase.from('invoices').select('*'),
     ]);
-    if (j) setJobs(j);
+    if (j) setJobs(flattenJobFinancials(j));
     if (d) setDraws(d);
   }, []);
 

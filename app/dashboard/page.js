@@ -8,6 +8,7 @@ import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import FitText from '../../components/FitText';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
+import { flattenJobFinancials } from '../../lib/jobFinancials';
 
 function fmtMoney(n) {
   if (!n) return '$0';
@@ -23,9 +24,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!session) return;
     let mounted = true;
-    const load = () => supabase.from('jobs').select('*').then(({ data }) => { if (mounted && data) setJobs(data); });
+    const load = () => supabase.from('jobs').select('*, job_financials(contract_price, invoice_amount, invoice_status)').then(({ data }) => { if (mounted && data) setJobs(flattenJobFinancials(data)); });
     load();
-    const channel = supabase.channel('jobs-stats').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).subscribe();
+    const channel = supabase.channel('jobs-stats').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials' }, load).subscribe();
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [session]);
 

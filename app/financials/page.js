@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
+import { flattenJobFinancials } from '../../lib/jobFinancials';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
 
@@ -23,14 +24,14 @@ export default function FinancialDashboardPage() {
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: jc }, { data: wo }, { data: be }, { data: r }, { data: inv }] = await Promise.all([
-      supabase.from('jobs').select('*'),
+      supabase.from('jobs').select('*, job_financials(contract_price, invoice_amount, invoice_status)'),
       supabase.from('job_costs').select('*'),
       supabase.from('work_orders').select('*, jobs(job_number, customer_name), companies(company_name)'),
       supabase.from('business_expenses').select('*'),
       supabase.from('receipts').select('*, jobs(job_number)'),
       supabase.from('invoices').select('*, jobs(job_number, customer_name)'),
     ]);
-    if (j) setJobs(j);
+    if (j) setJobs(flattenJobFinancials(j));
     if (jc) setJobCosts(jc);
     if (wo) setWorkOrders(wo);
     if (be) setBusinessExpenses(be);

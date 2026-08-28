@@ -39,8 +39,11 @@ export default function ProposalDocumentPage() {
   const [downloading, setDownloading] = useState(false);
 
   const loadJob = useCallback(async () => {
-    const { data } = await supabase.from('jobs').select('*').eq('id', id).single();
-    if (data) setJob(data);
+    const [{ data }, { data: financials }] = await Promise.all([
+      supabase.from('jobs').select('*').eq('id', id).single(),
+      supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status').eq('job_id', id).maybeSingle(),
+    ]);
+    if (data) setJob({ ...data, ...financials });
   }, [id]);
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);

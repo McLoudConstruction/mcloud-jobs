@@ -7,6 +7,7 @@ import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 import PaymentFlow from '../../../../components/PaymentFlow';
+import { flattenJobFinancialsOne } from '../../../../lib/jobFinancials';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -29,18 +30,18 @@ export default function InvoiceDocumentPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   const loadJob = useCallback(async () => {
-    const { data } = await supabase.from('jobs').select('*').eq('id', id).single();
-    if (data) setJob(data);
+    const { data } = await supabase.from('jobs').select('*, job_financials(contract_price, invoice_amount, invoice_status)').eq('id', id).single();
+    if (data) setJob(flattenJobFinancialsOne(data));
   }, [id]);
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
   async function markInvoiceSent() {
     if (job.invoice_status === 'not_sent') {
-      await supabase.from('jobs').update({
-        invoice_status: 'sent',
-        invoiced_at: job.invoiced_at || new Date().toISOString(),
-      }).eq('id', id);
+      await supabase.from('job_financials').update({ invoice_status: 'sent' }).eq('job_id', id);
+      if (!job.invoiced_at) {
+        await supabase.from('jobs').update({ invoiced_at: new Date().toISOString() }).eq('id', id);
+      }
       loadJob();
     }
   }

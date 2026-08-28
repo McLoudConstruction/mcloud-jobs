@@ -7,6 +7,7 @@ import { useSettings } from '../../../lib/useSettings';
 import { STAGE_LABELS, phaseForStage, contractPathFor } from '../../../lib/constants';
 import { useTheme } from '../../../lib/useTheme';
 import { SunIcon, MoonIcon } from '../../../components/icons';
+import { flattenJobFinancials } from '../../../lib/jobFinancials';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -57,11 +58,11 @@ export default function PortalDashboardPage() {
   const loadJobs = useCallback(async () => {
     const { data } = await supabase
       .from('jobs')
-      .select('*')
+      .select('*, job_financials(contract_price, invoice_amount, invoice_status)')
       .not('portal_invited_at', 'is', null)
       .order('created_at', { ascending: false });
     if (data) {
-      setJobs(data);
+      setJobs(flattenJobFinancials(data));
       setSelectedJobId(prev => prev || (data[0] && data[0].id));
     }
   }, []);
@@ -94,6 +95,7 @@ export default function PortalDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_questions', filter: `job_id=eq.${selectedJobId}` }, loadJobDetails)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${selectedJobId}` }, loadJobDetails)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${selectedJobId}` }, loadJobs)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials', filter: `job_id=eq.${selectedJobId}` }, loadJobs)
       .subscribe();
 
     return () => supabase.removeChannel(channel);

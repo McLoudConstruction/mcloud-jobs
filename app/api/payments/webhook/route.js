@@ -30,7 +30,7 @@ export async function POST(request) {
       if (payment.invoice_id) {
         await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', payment.invoice_id);
       } else {
-        await supabase.from('jobs').update({ invoice_status: 'paid' }).eq('id', payment.job_id);
+        await supabase.from('job_financials').update({ invoice_status: 'paid' }).eq('job_id', payment.job_id);
       }
 
       await supabase.from('notifications').insert({

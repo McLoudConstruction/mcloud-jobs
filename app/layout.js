@@ -2,10 +2,12 @@ import './globals.css';
 import { SettingsProvider } from '../lib/useSettings';
 import { ThemeProvider } from '../lib/useTheme';
 import BrandAccentInjector from '../components/BrandAccentInjector';
+import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 
 export const metadata = {
   title: 'McLoud Jobs',
   description: 'McLoud Construction job management',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -23,6 +25,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <SettingsProvider>
             <BrandAccentInjector />
+            <ServiceWorkerRegister />
             {children}
           </SettingsProvider>
         </ThemeProvider>
