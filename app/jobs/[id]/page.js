@@ -7,7 +7,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import PhotoGallery from '../../../components/PhotoGallery';
-import OfflineFieldLog from '../../../components/OfflineFieldLog';
+import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
 import AIScopeGenerator from '../../../components/AIScopeGenerator';
 import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
@@ -30,7 +30,7 @@ const TABS = [
   { key: 'Estimate', label: 'Estimate' },
   { key: 'Financials', label: 'Financials' },
   { key: 'Photos', label: 'Photos' },
-  { key: 'Field Log', label: 'Field Log' },
+  { key: 'Internal Updates', label: 'Internal Updates' },
   { key: 'Documents', label: 'Documents' },
   { key: 'Messages', label: 'Messages' },
   { key: 'Portal', label: 'Portal Access' },
@@ -64,6 +64,18 @@ export default function JobDetailPage() {
   const [inviteResult, setInviteResult] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+
+  useEffect(() => {
+    function goOnline() { setIsOnline(true); }
+    function goOffline() { setIsOnline(false); }
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
   const [tab, setTab] = useState('Overview');
 
   useEffect(() => {
@@ -107,7 +119,7 @@ export default function JobDetailPage() {
   }, [id]);
 
   const loadUpdates = useCallback(async () => {
-    const { data } = await supabase.from('job_updates').select('*').eq('job_id', id).order('update_date', { ascending: false });
+    const { data } = await supabase.from('job_updates').select('*').eq('job_id', id).eq('is_internal', false).order('update_date', { ascending: false });
     if (data) setUpdates(data);
   }, [id]);
 
@@ -152,6 +164,17 @@ export default function JobDetailPage() {
   }
 
   async function saveJob(patch) {
+    if (!isOnline) {
+      // Deliberately not attempting the network call at all — this isn't
+      // queued anywhere the way Field Log entries are, so a failed save
+      // here would otherwise look identical to a successful one (the
+      // form still shows what you typed either way). Blocking outright
+      // and saying so clearly beats a save that silently doesn't happen.
+      setFlash("You're offline — this can't be saved right now. Your edit is still showing here, but it has NOT been saved. Reconnect and save again.");
+      setTimeout(() => setFlash(''), 10000);
+      return false;
+    }
+
     const jobPatch = {};
     const financialsPatch = {};
     for (const [key, value] of Object.entries(patch)) {
@@ -163,7 +186,7 @@ export default function JobDetailPage() {
       if (error) {
         setFlash(`Save failed: ${error.message}`);
         setTimeout(() => setFlash(''), 6000);
-        return;
+        return false;
       }
     }
     if (Object.keys(financialsPatch).length > 0) {
@@ -171,10 +194,11 @@ export default function JobDetailPage() {
       if (error) {
         setFlash(`Save failed: ${error.message}`);
         setTimeout(() => setFlash(''), 6000);
-        return;
+        return false;
       }
     }
     flashSaved();
+    return true;
   }
 
   async function advanceStage() {
@@ -246,6 +270,12 @@ export default function JobDetailPage() {
             Offline — showing cached data from{' '}
             {new Date(offlineViewing.cachedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
             Editing is unavailable until you're back online.
+          </div>
+        )}
+
+        {!offlineViewing && !isOnline && (
+          <div className="sync-badge sync-badge-offline">
+            You're currently offline. Everything on this page is still viewable, but edits won't be saved until you reconnect.
           </div>
         )}
 
@@ -366,8 +396,8 @@ export default function JobDetailPage() {
           <PhotoGallery jobId={id} title="Job Photos" />
         )}
 
-        {tab === 'Field Log' && (
-          <OfflineFieldLog jobId={id} session={session} />
+        {tab === 'Internal Updates' && (
+          <InternalUpdatesPanel jobId={id} session={session} />
         )}
 
         {tab === 'Documents' && (
