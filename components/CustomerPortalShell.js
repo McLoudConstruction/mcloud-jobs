@@ -20,14 +20,6 @@ function ProjectsIcon(props) {
     </svg>
   );
 }
-function DocumentsIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M4 3.5h8l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-12a1 1 0 011-1z" />
-      <path d="M12 3.5v4h4M7 10.5h6M7 13.5h6" />
-    </svg>
-  );
-}
 function InvoicesIcon(props) {
   return (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -39,7 +31,6 @@ function InvoicesIcon(props) {
 
 const NAV_ITEMS = [
   { href: '/customerportal/projects', label: 'Home', icon: ProjectsIcon },
-  { href: '/customerportal/documents', label: 'Documents', icon: DocumentsIcon },
   { href: '/customerportal/invoices', label: 'Invoices', icon: InvoicesIcon },
   { href: '/customerportal/inbox', label: 'Inbox', icon: InboxIcon },
 ];
