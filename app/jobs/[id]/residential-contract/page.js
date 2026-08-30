@@ -42,6 +42,14 @@ export default function ContractDocumentPage() {
 
   useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
 
+  // Marks this contract as viewed by the customer specifically, separate
+  // from the blunt "opened the portal home page" signal.
+  useEffect(() => {
+    if (session?.user?.app_metadata?.role !== 'admin' && id) {
+      supabase.rpc('mark_contract_viewed', { target_job_id: id });
+    }
+  }, [session, id]);
+
   const [downloading, setDownloading] = useState(false);
 
   async function downloadDocument() {
@@ -64,21 +72,50 @@ export default function ContractDocumentPage() {
   const sigs = job.contract_signatures || {};
   const recipientEmail = job.billing_email || job.customer_email || '';
 
+  const isAdmin = session?.user?.app_metadata?.role === 'admin';
+
   async function saveSignature(role, payload) {
-    const updatedSigs = { ...sigs, [role]: payload };
     setSaving(true);
-    const { error } = await supabase.from('jobs').update({ contract_signatures: updatedSigs }).eq('id', id);
+    // Admin sessions (e.g. staff signing on a customer's behalf in person)
+    // already have full write access to jobs and can go straight to the
+    // table. Customer sessions cannot — see migration 068 — and go through
+    // a narrow function that only ever touches their own signature.
+    const { error } = isAdmin
+      ? await supabase.from('jobs').update({ contract_signatures: { ...sigs, [role]: payload } }).eq('id', id)
+      : await supabase.rpc('save_contract_owner_signature', { target_job_id: id, signature_payload: payload });
     setSaving(false);
     if (!error) {
       setFlash('Signature saved — click Submit below to finalize');
       setTimeout(() => setFlash(''), 3000);
       loadJob();
+    } else {
+      setFlash(`Couldn't save signature: ${error.message}`);
+      setTimeout(() => setFlash(''), 8000);
     }
   }
 
   async function submitContract() {
     if (!sigs.owner?.signature) return;
     if (!confirm('Submit this contract? Once submitted, the signature can no longer be changed.')) return;
+
+    setSaving(true);
+
+    if (!isAdmin) {
+      // Customer path: the whole finalize step — including job-number
+      // assignment, which needs to see the full jobs table — now runs
+      // server-side in one transaction. See migration 068.
+      const { error } = await supabase.rpc('submit_customer_contract', { target_job_id: id });
+      setSaving(false);
+      if (error) {
+        setFlash(`Couldn't submit: ${error.message}`);
+        setTimeout(() => setFlash(''), 8000);
+        return;
+      }
+      setFlash('Contract submitted and finalized');
+      setTimeout(() => setFlash(''), 3000);
+      loadJob();
+      return;
+    }
 
     const preSignatureStages = ['new', 'inspected', 'proposal_delivered'];
     const advancing = preSignatureStages.includes(job.stage);
@@ -90,13 +127,13 @@ export default function ContractDocumentPage() {
         patch.stage = 'approved';
         patch.approved_at = new Date().toISOString();
       } catch (err) {
+        setSaving(false);
         setFlash(`Signature saved, but couldn't assign a Job Number: ${err.message}. Try Submit again, or use Advance Stage on the job page.`);
         setTimeout(() => setFlash(''), 8000);
         return;
       }
     }
 
-    setSaving(true);
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
     if (!error) {
       await supabase.from('notifications').insert({

@@ -42,6 +42,13 @@ export default function ChangeOrderDocumentPage() {
 
   useEffect(() => { if (session) load(); }, [session, load]);
 
+  // Marks this specific change order as viewed by the customer.
+  useEffect(() => {
+    if (session?.user?.app_metadata?.role !== 'admin' && changeOrderId) {
+      supabase.rpc('mark_change_order_viewed', { target_co_id: changeOrderId });
+    }
+  }, [session, changeOrderId]);
+
   const [downloading, setDownloading] = useState(false);
 
   async function downloadDocument() {
@@ -56,16 +63,26 @@ export default function ChangeOrderDocumentPage() {
     }
   }
 
+  const isAdmin = session?.user?.app_metadata?.role === 'admin';
+
   async function saveSignature(role, payload) {
-    const sigs = co.co_signatures || {};
-    const updated = { ...sigs, [role]: payload };
     setSigning(true);
-    const { error } = await supabase.from('change_orders').update({ co_signatures: updated }).eq('id', changeOrderId);
+    // The contractor's signature is always saved from an admin session,
+    // which already has full write access. The owner/customer signature
+    // needs a narrow function instead — see migration 068, same root cause
+    // as the contract-signing bug (customers have select-only on this
+    // table; a direct update silently no-ops under RLS).
+    const { error } = role === 'owner' && !isAdmin
+      ? await supabase.rpc('save_change_order_owner_signature', { target_co_id: changeOrderId, signature_payload: payload })
+      : await supabase.from('change_orders').update({ co_signatures: { ...(co.co_signatures || {}), [role]: payload } }).eq('id', changeOrderId);
     setSigning(false);
     if (!error) {
       setSignFlash('Signature saved');
       setTimeout(() => setSignFlash(''), 2500);
       load();
+    } else {
+      setSignFlash(`Couldn't save signature: ${error.message}`);
+      setTimeout(() => setSignFlash(''), 8000);
     }
   }
 
