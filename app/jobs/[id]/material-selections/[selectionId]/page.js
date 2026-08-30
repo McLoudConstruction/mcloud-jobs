@@ -103,7 +103,7 @@ export default function MaterialSelectionPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={isAdmin ? `/jobs/${id}?tab=Scope` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={isAdmin ? `/jobs/${id}?tab=Estimate&section=scope` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className={`badge badge-${isApproved ? 'paid' : selection.status === 'sent' ? 'active' : 'draft'}`}>
             {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}

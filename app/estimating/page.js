@@ -57,7 +57,7 @@ export default function EstimatingWorklistPage() {
         {filtered.length > 0 && (
           <DataTable
             getRowKey={j => j.id}
-            onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate`}
+            onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
             rows={filtered}
             columns={[
               { key: 'job_number', label: 'Job #', defaultWidth: 100, render: j => `#${j.job_number}` },

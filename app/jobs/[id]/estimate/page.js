@@ -9,7 +9,7 @@ export default function EstimateRedirect() {
   const { id } = useParams();
   const router = useRouter();
   useEffect(() => {
-    router.replace(`/jobs/${id}?tab=Estimate`);
+    router.replace(`/jobs/${id}?tab=Estimate&section=pricing`);
   }, [id, router]);
   return null;
 }

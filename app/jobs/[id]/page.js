@@ -23,17 +23,46 @@ import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 
+// Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
+// at very different altitudes (a customer contact form next to internal
+// job costing) and showed post-approval content (Financials) on records
+// that are still just Estimates. Tabs now group by what they're actually
+// for, and a tab can offer `sections` for content that's related but
+// distinct enough to want its own toggle rather than being smashed
+// together. `hideWhen(job)` lets a tab stay out of the way until it's
+// actually earned relevance for this job's stage.
 const TABS = [
   { key: 'Overview', label: 'Overview' },
-  { key: 'Customer', label: 'Customer Details' },
-  { key: 'Scope', label: 'Scope' },
-  { key: 'Estimate', label: 'Estimate' },
-  { key: 'Financials', label: 'Financials' },
+  {
+    key: 'Customer', label: 'Customer',
+    sections: [
+      { key: 'details', label: 'Details' },
+      { key: 'portal', label: 'Portal & Notifications' },
+    ],
+  },
+  {
+    key: 'Estimate', label: 'Estimate',
+    sections: [
+      { key: 'scope', label: 'Scope' },
+      { key: 'pricing', label: 'Pricing' },
+    ],
+  },
+  {
+    key: 'Financials', label: 'Financials',
+    // Work orders, receipts, draws, change orders — none of this exists
+    // yet on a job that hasn't been approved, so don't show the tab at
+    // all rather than showing five empty cards.
+    hideWhen: (job) => isOpportunity(job),
+  },
   { key: 'Photos', label: 'Photos' },
+  {
+    key: 'Updates', label: 'Updates',
+    sections: [
+      { key: 'log', label: 'Progress & Documents' },
+      { key: 'messages', label: 'Messages' },
+    ],
+  },
   { key: 'Internal Updates', label: 'Internal Updates' },
-  { key: 'Documents', label: 'Documents' },
-  { key: 'Messages', label: 'Messages' },
-  { key: 'Portal', label: 'Portal Access' },
 ];
 
 function fmtMoney(v) {
@@ -77,12 +106,40 @@ export default function JobDetailPage() {
     };
   }, []);
   const [tab, setTab] = useState('Overview');
+  const [section, setSection] = useState(null);
+
+  // Central place to change tabs so section always lands somewhere valid:
+  // explicit section if given, else that tab's first section, else none.
+  const goToTab = useCallback((tabKey, sectionKey) => {
+    const target = TABS.find(t => t.key === tabKey);
+    if (!target) return;
+    setTab(tabKey);
+    setSection(sectionKey || target.sections?.[0]?.key || null);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const requested = new URLSearchParams(window.location.search).get('tab');
-    if (requested && TABS.some(t => t.key === requested)) setTab(requested);
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get('tab');
+    const requestedSection = params.get('section');
+    if (requestedTab && TABS.some(t => t.key === requestedTab)) {
+      goToTab(requestedTab, requestedSection);
+    }
+  }, [goToTab]);
+
+  // A tab can disappear out from under the current selection — e.g. the
+  // job just got approved and Financials was hidden while it was still
+  // an opportunity. Land somewhere valid instead of a blank pane.
+  useEffect(() => {
+    if (!job) return;
+    const visible = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
+    const current = visible.find(t => t.key === tab);
+    if (!current) {
+      goToTab(visible[0]?.key || 'Overview');
+    } else if (current.sections && !current.sections.some(s => s.key === section)) {
+      setSection(current.sections[0].key);
+    }
+  }, [job, tab, section, goToTab]);
 
   // Financial fields (contract_price, invoice_amount, invoice_status) live
   // in job_financials, not on jobs itself — split out so RLS can hide them
@@ -260,6 +317,9 @@ export default function JobDetailPage() {
   if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Job Tracker</Link></div>;
   if (!job) return null;
 
+  const visibleTabs = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
+  const activeTabDef = visibleTabs.find(t => t.key === tab) || visibleTabs[0];
+
   return (
     <AppShell>
       <div className="container">
@@ -331,30 +391,44 @@ export default function JobDetailPage() {
 
 
         <div className="stage-tabs">
-          {TABS.map(t => (
-            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
+          {TABS.filter(t => !t.hideWhen || !t.hideWhen(job)).map(t => (
+            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>{t.label}</button>
           ))}
         </div>
+
+        {activeTabDef?.sections && (
+          <div className="tab-sections">
+            {activeTabDef.sections.map(s => (
+              <button
+                key={s.key}
+                className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
+                onClick={() => setSection(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {tab === 'Overview' && (
           <div className="overview-split">
             <ProjectInfoCard job={job} onSave={saveJob} />
-            <ProjectMilestonesCard job={job} jobId={id} onTabChange={setTab} />
+            <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
           </div>
         )}
 
-        {tab === 'Customer' && (
+        {tab === 'Customer' && section === 'details' && (
           <CustomerInfoCard job={job} onSave={saveJob} />
         )}
 
-        {tab === 'Portal' && (
+        {tab === 'Customer' && section === 'portal' && (
           <>
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>
         )}
 
-        {tab === 'Scope' && (
+        {tab === 'Estimate' && section === 'scope' && (
           <div className="estimate-grid">
             <div className="estimate-main">
               <ScopeCard job={job} jobId={id} onSave={saveJob} />
@@ -367,7 +441,7 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {tab === 'Estimate' && (
+        {tab === 'Estimate' && section === 'pricing' && (
           <EstimateTab job={job} jobId={id}>
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
@@ -400,7 +474,7 @@ export default function JobDetailPage() {
           <InternalUpdatesPanel jobId={id} session={session} />
         )}
 
-        {tab === 'Documents' && (
+        {tab === 'Updates' && section === 'log' && (
           <>
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' ? (
@@ -416,7 +490,7 @@ export default function JobDetailPage() {
           </>
         )}
 
-        {tab === 'Messages' && (
+        {tab === 'Updates' && section === 'messages' && (
           <JobMessagesCard jobId={id} job={job} />
         )}
       </div>

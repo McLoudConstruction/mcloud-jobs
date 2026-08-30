@@ -429,7 +429,7 @@ export default function EstimateTab({ job, jobId, children }) {
             {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
           </div>
 
-          <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Scope`} />
+          <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Estimate&section=scope`} />
         </div>
       </div>
     </>
