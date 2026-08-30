@@ -1052,16 +1052,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   flex-direction: column;
   gap: 5px;
-  background: var(--panel);
+  background: #faf4e8;
   border-radius: 8px;
   padding: 14px 16px;
   border-bottom: none;
   margin-bottom: 8px;
-  border-left: 3px solid var(--accent);
+  border-left: 4px solid var(--accent);
 }
+.portal-feed-item-new .portal-feed-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .portal-feed-item-new .portal-feed-label { font-weight: 700; font-size: 15px; }
 .portal-feed-item-action { border-left-color: var(--rust); background: #fbeae7; }
-.portal-feed-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .portal-feed-badge {
   display: inline-flex;
   align-items: center;
@@ -1069,15 +1069,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid var(--accent);
-  padding: 2px 8px;
+  color: #fff;
+  background: var(--accent);
+  padding: 3px 9px;
   border-radius: 20px;
   flex: none;
 }
-.portal-feed-item-action .portal-feed-badge { color: var(--rust); border-color: var(--rust); }
-.portal-feed-item-new .portal-feed-date { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; flex: none; }
+.portal-feed-item-action .portal-feed-badge { background: var(--rust); }
+.portal-feed-item-new .portal-feed-date { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; flex: none; margin-left: auto; }
 .portal-feed-divider {
   font-size: 11px;
   text-transform: uppercase;

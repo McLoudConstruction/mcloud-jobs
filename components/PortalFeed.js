@@ -96,9 +96,9 @@ export default function PortalFeed({ job }) {
         <a key={e.id} href={e.href} target="_blank" rel="noopener noreferrer" className={`portal-feed-item portal-feed-item-new ${e.needsAction ? 'portal-feed-item-action' : ''}`}>
           <div className="portal-feed-item-top">
             <span className="portal-feed-badge">{e.needsAction ? 'Action needed' : 'New'}</span>
+            <span className="portal-feed-label">{e.label}</span>
             <span className="portal-feed-date">{fmtDate(e.at)}</span>
           </div>
-          <span className="portal-feed-label">{e.label}</span>
           {e.sub && <span className="portal-feed-sub">{e.sub}</span>}
         </a>
       ))}
