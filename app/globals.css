@@ -1049,29 +1049,35 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .portal-feed-sub { font-size: 12.5px; color: var(--ink-soft); flex-basis: 100%; }
 .portal-feed-date { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
 .portal-feed-item-new {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   background: var(--panel);
   border-radius: 8px;
-  padding: 14px 14px;
+  padding: 14px 16px;
   border-bottom: none;
   margin-bottom: 8px;
-  border-left: 4px solid var(--accent);
+  border-left: 3px solid var(--accent);
 }
 .portal-feed-item-new .portal-feed-label { font-weight: 700; font-size: 15px; }
 .portal-feed-item-action { border-left-color: var(--rust); background: #fbeae7; }
+.portal-feed-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .portal-feed-badge {
-  display: inline-block;
-  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #fff;
-  background: var(--accent);
-  padding: 3px 8px;
-  border-radius: 999px;
-  flex-basis: 100%;
-  width: fit-content;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  padding: 2px 8px;
+  border-radius: 20px;
+  flex: none;
 }
-.portal-feed-item-action .portal-feed-badge { background: var(--rust); }
+.portal-feed-item-action .portal-feed-badge { color: var(--rust); border-color: var(--rust); }
+.portal-feed-item-new .portal-feed-date { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; flex: none; }
 .portal-feed-divider {
   font-size: 11px;
   text-transform: uppercase;

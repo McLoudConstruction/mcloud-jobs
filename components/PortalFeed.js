@@ -94,10 +94,12 @@ export default function PortalFeed({ job }) {
 
       {highlighted.map(e => (
         <a key={e.id} href={e.href} target="_blank" rel="noopener noreferrer" className={`portal-feed-item portal-feed-item-new ${e.needsAction ? 'portal-feed-item-action' : ''}`}>
-          <span className="portal-feed-badge">{e.needsAction ? 'Action needed' : 'New'}</span>
+          <div className="portal-feed-item-top">
+            <span className="portal-feed-badge">{e.needsAction ? 'Action needed' : 'New'}</span>
+            <span className="portal-feed-date">{fmtDate(e.at)}</span>
+          </div>
           <span className="portal-feed-label">{e.label}</span>
           {e.sub && <span className="portal-feed-sub">{e.sub}</span>}
-          <span className="portal-feed-date">{fmtDate(e.at)}</span>
         </a>
       ))}
 
