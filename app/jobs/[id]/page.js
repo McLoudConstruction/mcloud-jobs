@@ -21,7 +21,8 @@ import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
-import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
+import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity, GOOGLE_REVIEW_URL } from '../../../lib/constants';
+import { buildReviewRequestEmail } from '../../../lib/emailTemplates';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
 // at very different altitudes (a customer contact form next to internal
@@ -398,15 +399,29 @@ export default function JobDetailPage() {
 
         {activeTabDef?.sections && (
           <div className="tab-sections">
-            {activeTabDef.sections.map(s => (
-              <button
-                key={s.key}
-                className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
-                onClick={() => setSection(s.key)}
-              >
-                {s.label}
-              </button>
-            ))}
+            <div className="tab-sections-pills">
+              {activeTabDef.sections.map(s => (
+                <button
+                  key={s.key}
+                  className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
+                  onClick={() => setSection(s.key)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            {/* Centralized (Aug 2026): generating the estimate used to be a card
+                buried in the Pricing sidebar, invisible while on Scope. It's the
+                primary action for this whole tab, so it lives here instead —
+                reachable no matter which section is active. */}
+            {tab === 'Estimate' && (
+              <div className="tab-sections-actions">
+                <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
+                {job.proposal_sent_at && (
+                  <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -432,7 +447,6 @@ export default function JobDetailPage() {
           <div className="estimate-grid">
             <div className="estimate-main">
               <ScopeCard job={job} jobId={id} onSave={saveJob} />
-              <MaterialSelectionsCard jobId={id} />
               <TermsCard job={job} onSave={saveJob} />
             </div>
             <div className="estimate-sidebar">
@@ -478,12 +492,23 @@ export default function JobDetailPage() {
           <>
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' ? (
-              <UpdatesCard jobId={id} updates={updates} />
+              <>
+                {/* Moved here from Estimate > Scope (Aug 2026) — selections get
+                    made once a job is actually underway, not while it's still
+                    being priced. Scope and Estimate stay purely pre-approval;
+                    this now sits alongside the other things that happen during
+                    the job (progress updates, issued documents). */}
+                <MaterialSelectionsCard jobId={id} />
+                <UpdatesCard jobId={id} updates={updates} />
+                {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
+                  <ReviewRequestCard job={job} onSave={saveJob} />
+                )}
+              </>
             ) : (
               <div className="card">
                 <h3>Progress Updates</h3>
                 <div className="empty-state">
-                  Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+                  Progress updates and material selections become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
                 </div>
               </div>
             )}
@@ -572,6 +597,57 @@ function JobMessagesCard({ jobId, job }) {
 }
 
 /* ---------------- Documents tab: real history, only what's issued ---------------- */
+/* ---------------- Manual "ask for a Google review" trigger ---------------- */
+function ReviewRequestCard({ job, onSave }) {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState('');
+
+  async function send() {
+    const to = job.customer_email || job.billing_email || '';
+    if (!to) {
+      setResult('Add a contact email on the Customer tab before sending.');
+      return;
+    }
+    setSending(true);
+    setResult('');
+    try {
+      const { subject, html, text } = buildReviewRequestEmail({ customerName: job.customer_name, reviewUrl: GOOGLE_REVIEW_URL });
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, html, text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send.');
+      await onSave({ review_requested_at: new Date().toISOString() });
+      setResult(`Sent to ${to}.`);
+    } catch (err) {
+      setResult(err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3>Google Review Request</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        {job.review_requested_at
+          ? `Sent on ${new Date(job.review_requested_at).toLocaleDateString('en-US')}. You can send it again if you'd like.`
+          : "A one-click email asking the customer to leave a Google review — send it whenever feels right, e.g. once the job's wrapped up."}
+      </div>
+      <div className="section-actions" style={{ marginTop: 0 }}>
+        <button className="btn btn-primary btn-sm" onClick={send} disabled={sending}>
+          {sending ? 'Sending…' : job.review_requested_at ? 'Send again' : 'Send Review Request'}
+        </button>
+      </div>
+      {result && (
+        <div style={{ fontSize: 12, marginTop: 8, color: result.startsWith('Sent') ? '#3a6b45' : '#a13f3f' }}>{result}</div>
+      )}
+    </div>
+  );
+}
+
 function IssuedDocumentsCard({ jobId, job, updates, changeOrders }) {
   const [draws, setDraws] = useState([]);
   const [selections, setSelections] = useState([]);

@@ -479,7 +479,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
    Deliberately smaller and pill-shaped rather than underlined, so it
    reads as "a mode within this tab" and never gets mistaken for another
    top-level tab. */
-.tab-sections{ display: flex; gap: 6px; flex-wrap: wrap; margin: -10px 0 18px; }
+.tab-sections{ display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -10px 0 18px; }
+.tab-sections-pills{ display: flex; gap: 6px; flex-wrap: wrap; }
+.tab-sections-actions{ display: flex; gap: 8px; flex-wrap: wrap; }
 .tab-section-btn{
   flex-shrink: 0;
   padding: 5px 12px;

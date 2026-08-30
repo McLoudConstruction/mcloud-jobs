@@ -6,7 +6,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
-import { contractPathFor } from '../../../../lib/constants';
+import { contractPathFor, projectNumber } from '../../../../lib/constants';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -51,7 +51,7 @@ export default function ProposalDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `Estimate-${job.job_number}.pdf`);
+      const base64 = await generatePdfBase64('doc-preview', `Estimate-${projectNumber(job)}.pdf`);
       window.open(base64ToPdfUrl(base64), '_blank');
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
@@ -88,7 +88,7 @@ export default function ProposalDocumentPage() {
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
-            <div className="doc-brand-tag">Estimate<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Estimate<span className="doc-num">#{projectNumber(job)}</span></div>
           </div>
 
           <div className="doc-body">
@@ -134,7 +134,7 @@ export default function ProposalDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Estimate #{job.job_number}</span>
+              <span>Estimate #{projectNumber(job)}</span>
             </div>
           </div>
         </div>
@@ -143,12 +143,12 @@ export default function ProposalDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`Estimate #${job.job_number}`}
+        docLabel={`Estimate #${projectNumber(job)}`}
         docType="proposal"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
-        pdfFilename={`Estimate-${job.job_number}.pdf`}
+        pdfFilename={`Estimate-${projectNumber(job)}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
           const sentAt = new Date().toISOString();

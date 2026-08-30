@@ -9,7 +9,7 @@ const ITEMS = [
   { key: 'scope', label: 'Scope of Work', tab: 'Estimate', section: 'scope' },
   { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate', section: 'pricing' },
   { key: 'contract', label: 'Contract Signed', tab: 'Updates', section: 'log' },
-  { key: 'selections', label: 'Material Selections', tab: 'Estimate', section: 'scope' },
+  { key: 'selections', label: 'Material Selections', tab: 'Updates', section: 'log' },
   { key: 'workOrders', label: 'Work Orders Issued', tab: 'Financials' },
   { key: 'receipts', label: 'Receipts Logged', tab: 'Financials' },
   { key: 'photos', label: 'Photos', tab: 'Photos' },

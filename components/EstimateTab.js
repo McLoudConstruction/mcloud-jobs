@@ -1,9 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
-import { SERVICES_OFFERED, contractPathFor } from '../lib/constants';
+import { SERVICES_OFFERED } from '../lib/constants';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '$0.00';
@@ -376,19 +375,9 @@ export default function EstimateTab({ job, jobId, children }) {
         </div>
 
         <div className="estimate-sidebar">
-          <div className="card">
-            <h3>Generate &amp; Send</h3>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Once the pricing below is where you want it, generate the customer-facing estimate document.
-            </div>
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <Link href={`/jobs/${jobId}/proposal`} className="btn btn-primary">Generate Estimate Document →</Link>
-              {job.proposal_sent_at && (
-                <Link href={contractPathFor(job)} className="btn">View / Send Contract →</Link>
-              )}
-            </div>
-          </div>
-
+          {/* Generate & Send moved (Aug 2026) to the centralized action row next to
+              the Scope/Pricing pills, so it's reachable from either section instead
+              of being buried down here only on Pricing. See page.js. */}
           <div className="card">
             <h3>Margin &amp; Sale Price</h3>
             <table className="estimate-margin-table">
