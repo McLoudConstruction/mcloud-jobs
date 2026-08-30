@@ -38,7 +38,6 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const [syncedUpdates, setSyncedUpdates] = useState([]);
   const [syncedPhotosByUpdate, setSyncedPhotosByUpdate] = useState({});
   const [signedUrls, setSignedUrls] = useState({});
-  const [promoting, setPromoting] = useState(null); // update id currently being promoted
 
   const loadChecklist = useCallback(async () => {
     const { data, error } = await supabase.from('checklist_items').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -153,21 +152,6 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     await queueChecklistToggle({ jobId, itemId: item.id, isComplete: nextComplete, completedByEmail: createdByEmail });
   }
 
-  async function promoteToProgressUpdate(update) {
-    if (!isOnline) return;
-    setPromoting(update.id);
-    const { data, error } = await supabase.from('job_updates').insert({
-      job_id: jobId,
-      is_internal: false,
-      work_completed: update.issues_notes,
-    }).select().single();
-    if (!error && data) {
-      await supabase.from('job_updates').update({ promoted_to_update_id: data.id }).eq('id', update.id);
-      loadUpdates();
-    }
-    setPromoting(null);
-  }
-
   return (
     <div className="offline-field-log">
       <SyncBadge isOnline={isOnline} pendingCount={pendingCount} failedCount={failedCount} sync={sync} />
@@ -233,21 +217,6 @@ export default function InternalUpdatesPanel({ jobId, session }) {
                     <img key={p.id} src={p._localUrl || signedUrls[p.id]} alt="" />
                   ))}
                 </div>
-              )}
-              {!u._pending && (
-                u.promoted_to_update_id ? (
-                  <div className="promoted-tag">✓ Added to Progress Update</div>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={!isOnline || promoting === u.id}
-                    onClick={() => promoteToProgressUpdate(u)}
-                    title={!isOnline ? 'Reconnect to add this to a Progress Update' : ''}
-                  >
-                    {promoting === u.id ? 'Adding…' : 'Add to Progress Update'}
-                  </button>
-                )
               )}
             </div>
           );
