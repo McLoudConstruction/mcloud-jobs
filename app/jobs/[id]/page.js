@@ -972,6 +972,11 @@ function ChangeOrdersCard({ jobId, changeOrders }) {
 }
 
 /* ---------------- Daily updates ---------------- */
+function fmtDateTime(v) {
+  if (!v) return '—';
+  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function UpdatesCard({ jobId, updates }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -979,6 +984,46 @@ function UpdatesCard({ jobId, updates }) {
     work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '',
   });
   const [saving, setSaving] = useState(false);
+
+  // Reference sidebar: the running Internal Updates log, visible while
+  // actively writing a formal progress update — not a one-click "promote"
+  // action (that turned out to add little value beyond syncing across
+  // devices, which any job_updates row already does). This is meant to
+  // be referenced while writing, the way you'd glance at field notes.
+  const [internalLog, setInternalLog] = useState([]);
+  const [internalPhotos, setInternalPhotos] = useState({});
+
+  const loadInternalLog = useCallback(async () => {
+    const { data: entries } = await supabase.from('job_updates').select('*').eq('job_id', jobId).eq('is_internal', true).order('created_at', { ascending: false });
+    if (!entries) return;
+    setInternalLog(entries);
+    if (entries.length === 0) { setInternalPhotos({}); return; }
+    const { data: photos } = await supabase.from('job_photos').select('*').in('update_id', entries.map(e => e.id));
+    const grouped = {};
+    for (const p of photos || []) (grouped[p.update_id] = grouped[p.update_id] || []).push(p);
+    const withUrls = {};
+    for (const [uid, pics] of Object.entries(grouped)) {
+      withUrls[uid] = await Promise.all(pics.map(async p => {
+        const { data: signed } = await supabase.storage.from('job-photos').createSignedUrl(p.storage_path, 3600);
+        return { id: p.id, url: signed?.signedUrl };
+      }));
+    }
+    setInternalPhotos(withUrls);
+  }, [jobId]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    loadInternalLog();
+    const channel = supabase.channel(`internal-log-ref-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${jobId}` }, loadInternalLog)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_photos', filter: `job_id=eq.${jobId}` }, loadInternalLog)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [showForm, jobId, loadInternalLog]);
+
+  function insertIntoDraft(text) {
+    setForm(prev => ({ ...prev, work_completed: prev.work_completed ? `${prev.work_completed}\n\n${text}` : text }));
+  }
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
@@ -1000,22 +1045,45 @@ function UpdatesCard({ jobId, updates }) {
       <h3>Project updates</h3>
 
       {showForm ? (
-        <div>
-          <div className="two-col">
-            <div><label>Date</label><input type="date" value={form.update_date} onChange={e => update('update_date', e.target.value)} /></div>
-            <div><label>Estimated completion</label><input type="date" value={form.estimated_completion} onChange={e => update('estimated_completion', e.target.value)} /></div>
+        <div className="update-compose-layout">
+          <div className="update-compose-form">
+            <div className="two-col">
+              <div><label>Date</label><input type="date" value={form.update_date} onChange={e => update('update_date', e.target.value)} /></div>
+              <div><label>Estimated completion</label><input type="date" value={form.estimated_completion} onChange={e => update('estimated_completion', e.target.value)} /></div>
+            </div>
+            <label>Work completed</label>
+            <textarea value={form.work_completed} onChange={e => update('work_completed', e.target.value)} />
+            <label>Upcoming work</label>
+            <textarea value={form.upcoming_work} onChange={e => update('upcoming_work', e.target.value)} />
+            <label>Issues / notes</label>
+            <textarea value={form.issues_notes} onChange={e => update('issues_notes', e.target.value)} />
+            <label>Next steps</label>
+            <textarea value={form.next_steps} onChange={e => update('next_steps', e.target.value)} />
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Post update'}</button>
+              <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
+            </div>
           </div>
-          <label>Work completed</label>
-          <textarea value={form.work_completed} onChange={e => update('work_completed', e.target.value)} />
-          <label>Upcoming work</label>
-          <textarea value={form.upcoming_work} onChange={e => update('upcoming_work', e.target.value)} />
-          <label>Issues / notes</label>
-          <textarea value={form.issues_notes} onChange={e => update('issues_notes', e.target.value)} />
-          <label>Next steps</label>
-          <textarea value={form.next_steps} onChange={e => update('next_steps', e.target.value)} />
-          <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Post update'}</button>
-            <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
+
+          <div className="internal-log-sidebar">
+            <h4>Internal Updates</h4>
+            <div className="internal-log-scroll">
+              {internalLog.length === 0 && <div className="empty-state">No internal updates logged yet.</div>}
+              {internalLog.map(entry => (
+                <div key={entry.id} className="internal-log-entry">
+                  <div className="internal-log-date">{fmtDateTime(entry.created_at)}</div>
+                  {entry.issues_notes && <p>{entry.issues_notes}</p>}
+                  {internalPhotos[entry.id]?.length > 0 && (
+                    <div className="internal-log-photos">
+                      {internalPhotos[entry.id].map(p => <img key={p.id} src={p.url} alt="" />)}
+                    </div>
+                  )}
+                  {entry.issues_notes && (
+                    <button type="button" className="btn btn-sm" onClick={() => insertIntoDraft(entry.issues_notes)}>Insert into draft</button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : (

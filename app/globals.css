@@ -1072,3 +1072,41 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .portal-summary-item b { color: var(--heading); font-weight: 600; }
 .portal-summary-badge { font-size: 10px; padding: 2px 8px; }
 .portal-feed-layout { align-items: start; }
+
+/* ─── Progress Update composer: Internal Updates reference sidebar ────── */
+.update-compose-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .update-compose-layout { grid-template-columns: 1fr; }
+}
+.internal-log-sidebar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  position: sticky;
+  top: 12px;
+}
+.internal-log-sidebar h4 { margin: 0 0 10px; font-size: 13px; color: var(--heading); }
+.internal-log-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.internal-log-entry {
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12.5px;
+}
+.internal-log-entry p { margin: 4px 0 8px; white-space: pre-wrap; }
+.internal-log-date { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+.internal-log-photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.internal-log-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 5px; flex: 0 0 56px; }
