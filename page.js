@@ -1,48 +1,73 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Chrome from '../../components/SubcontractorApplyChrome';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+import { useRequireAuth } from '../../lib/useAuth';
+import AppShell from '../../components/AppShell';
+import DataTable from '../../components/DataTable';
 
-export default function SubcontractorApplyEntryPage() {
-  const router = useRouter();
-  const [error, setError] = useState('');
+const NEEDS_PRICING_STAGES = ['new', 'inspected', 'proposal_delivered'];
+
+export default function EstimatingWorklistPage() {
+  const { session, loading } = useRequireAuth();
+  const [jobs, setJobs] = useState([]);
+  const [showAll, setShowAll] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    async function start() {
-      try {
-        const res = await fetch('/api/public/subcontractor-application/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
-        if (!cancelled) router.replace(`/subcontractor-apply/${data.token}`);
-      } catch (err) {
-        if (!cancelled) setError(err.message);
-      }
-    }
-    start();
-    return () => { cancelled = true; };
-  }, [router]);
+    if (!session) return;
+    supabase.from('jobs').select('id, job_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
+      // Supabase's embedded-resource syntax returns job_financials as a
+      // nested object here (job_financials is the parent side of a 1:1
+      // via the job_id primary key) — flatten it back onto each job so
+      // job.contract_price keeps working unchanged below.
+      data = data?.map(j => ({ ...j, contract_price: j.job_financials?.contract_price, job_financials: undefined }));
+      if (data) setJobs(data);
+    });
+  }, [session]);
+
+  if (loading || !session) return null;
+
+  const needsPricing = jobs.filter(j => NEEDS_PRICING_STAGES.includes(j.stage) && !j.contract_price);
+  const pool = showAll ? jobs : needsPricing;
+
+  const filtered = pool.filter(j => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    return (j.job_number || '').toLowerCase().includes(term) || (j.customer_name || '').toLowerCase().includes(term);
+  });
 
   return (
-    <Chrome>
-      <div className="mcw-status-card">
-        <div className="mcw-eyebrow">Work With Us</div>
-        {error ? (
-          <>
-            <h1>Something went wrong</h1>
-            <p>We couldn't start your application. Please try again in a moment, or email us directly.</p>
-          </>
-        ) : (
-          <>
-            <h1>One moment…</h1>
-            <p>Taking you to the subcontractor application.</p>
-          </>
+    <AppShell>
+      <div className="container">
+        <h2 style={{ margin: '0 0 8px', color: 'var(--heading)' }}>Estimating</h2>
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 16 }}>
+          {showAll ? 'Every job.' : "Jobs that don't have a contract price set yet — pick one to build its estimate."} Estimating itself now lives on the job's own Estimate tab.
+        </div>
+
+        <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
+          <button className={`btn btn-sm ${!showAll ? 'btn-primary' : ''}`} onClick={() => setShowAll(false)}>Needs Pricing ({needsPricing.length})</button>
+          <button className={`btn btn-sm ${showAll ? 'btn-primary' : ''}`} onClick={() => setShowAll(true)}>All Jobs</button>
+        </div>
+
+        <div className="search-bar">
+          <input placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        {filtered.length === 0 && <div className="empty-state">{showAll ? 'No jobs found.' : "Nothing needs pricing right now — nice."}</div>}
+        {filtered.length > 0 && (
+          <DataTable
+            getRowKey={j => j.id}
+            onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
+            rows={filtered}
+            columns={[
+              { key: 'job_number', label: 'Job #', defaultWidth: 100, render: j => `#${j.job_number}` },
+              { key: 'customer_name', label: 'Customer', defaultWidth: 200, render: j => j.customer_name || 'Unnamed' },
+              { key: 'project_address', label: 'Address', defaultWidth: 250, render: j => j.project_address || '—' },
+              { key: 'stage', label: 'Stage', defaultWidth: 130, render: j => j.stage || '—' },
+            ]}
+          />
         )}
       </div>
-    </Chrome>
+    </AppShell>
   );
 }

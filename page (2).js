@@ -1,227 +1,206 @@
 'use client';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '../../lib/supabaseClient';
-import { useRequireAuth } from '../../lib/useAuth';
-import AppShell from '../../components/AppShell';
+import { supabase } from '../../../../../lib/supabaseClient';
+import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
+import SendDocModal from '../../../../../components/SendDocModal';
+import ImageDropzone from '../../../../../components/ImageDropzone';
 
-const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
-const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
-const ACTIVE_STAGES = ['prospecting', 'contacted'];
+const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
-const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '', referral_name: '' };
-
-export default function SalesDashboardPage() {
-  const { session, loading } = useRequireAuth();
-  const [opps, setOpps] = useState([]);
+export default function MaterialSelectionPage() {
+  const { session, loading } = useDocumentAuth();
+  const { id, selectionId } = useParams();
+  const [selection, setSelection] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [job, setJob] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(EMPTY_OPTION);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoUrls, setPhotoUrls] = useState({});
   const [saving, setSaving] = useState(false);
-  const [stageFilter, setStageFilter] = useState('all');
-  const [lossReasonPromptId, setLossReasonPromptId] = useState(null);
-  const [lossReasonText, setLossReasonText] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
-  const loadOpps = useCallback(async () => {
-    const { data } = await supabase.from('opportunities').select('*').order('date_taken', { ascending: false });
-    if (data) setOpps(data);
-  }, []);
+  const isAdmin = session?.user?.app_metadata?.role === 'admin';
+
+  const load = useCallback(async () => {
+    const { data: sel } = await supabase.from('material_selections').select('*').eq('id', selectionId).single();
+    const { data: opts } = await supabase.from('material_selection_options').select('*').eq('selection_id', selectionId).order('display_order');
+    if (sel) setSelection(sel);
+    if (opts) setOptions(opts);
+  }, [selectionId]);
 
   useEffect(() => {
     if (!session) return;
-    loadOpps();
-    const channel = supabase.channel('opportunities').on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, loadOpps).subscribe();
+    load();
+    supabase.from('jobs').select('job_number, estimate_number, customer_name').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
+    const channel = supabase.channel(`material-selection-${selectionId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selection_options', filter: `selection_id=eq.${selectionId}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `id=eq.${selectionId}` }, load)
+      .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, loadOpps]);
+  }, [session, selectionId, id, load]);
 
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+  // Resolve signed URLs for each option's photo, since job-photos is a private bucket.
+  useEffect(() => {
+    options.forEach(async opt => {
+      if (!opt.photo_storage_path || photoUrls[opt.id]) return;
+      const { data } = await supabase.storage.from('job-photos').createSignedUrl(opt.photo_storage_path, 3600);
+      if (data) setPhotoUrls(prev => ({ ...prev, [opt.id]: data.signedUrl }));
+    });
+  }, [options, photoUrls]);
 
-  async function submit(e) {
+  async function addOption(e) {
     e.preventDefault();
-    if (!form.company.trim() && !form.project.trim()) return;
+    if (!form.item.trim()) return;
     setSaving(true);
-    if (editingId) {
-      await supabase.from('opportunities').update(form).eq('id', editingId);
-    } else {
-      await supabase.from('opportunities').insert({ ...form, stage: 'prospecting' });
-
-      if (form.contact_email.trim() || form.contact_name.trim()) {
-        const { data: existing } = form.contact_email.trim()
-          ? await supabase.from('contacts').select('id').eq('contact_email', form.contact_email.trim()).maybeSingle()
-          : { data: null };
-        if (!existing) {
-          const [first, ...rest] = form.contact_name.trim().split(' ');
-          await supabase.from('contacts').insert({
-            name: form.contact_name.trim() || form.company.trim() || 'Unnamed',
-            first_name: first || null,
-            last_name: rest.join(' ') || null,
-            contact_email: form.contact_email.trim() || null,
-            contact_phone: form.contact_phone.trim() || null,
-            management_company: form.project_type === 'commercial' ? form.company.trim() || null : null,
-            contact_type: form.project_type === 'commercial' ? 'Commercial' : 'Residential - Homeowner',
-          });
-        }
-      }
+    let photo_storage_path = null;
+    if (photoFile) {
+      const path = `selections/${selectionId}/${Date.now()}-${photoFile.name}`;
+      const { error: uploadErr } = await supabase.storage.from('job-photos').upload(path, photoFile);
+      if (!uploadErr) photo_storage_path = path;
     }
+    await supabase.from('material_selection_options').insert({
+      selection_id: selectionId,
+      brand: form.brand.trim() || null,
+      item: form.item.trim(),
+      model_number: form.model_number.trim() || null,
+      color: form.color.trim() || null,
+      photo_storage_path,
+      display_order: options.length,
+    });
     setSaving(false);
-    setForm(EMPTY_FORM);
-    setEditingId(null);
+    setForm(EMPTY_OPTION);
+    setPhotoFile(null);
     setShowForm(false);
   }
 
-  function startEdit(o) {
-    setForm({ ...EMPTY_FORM, ...o });
-    setEditingId(o.id);
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  async function deleteOption(optionId) {
+    if (!confirm('Remove this option?')) return;
+    await supabase.from('material_selection_options').delete().eq('id', optionId);
   }
 
-  async function setStage(id, stage) {
-    if (stage === 'lost') {
-      setLossReasonPromptId(id);
-      setLossReasonText('');
-      return;
-    }
-    await supabase.from('opportunities').update({ stage }).eq('id', id);
+  async function sendToCustomer() {
+    await supabase.from('material_selections').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', selectionId);
   }
 
-  function convertToJob(id) {
-    window.location.href = `/jobs/new?opp=${id}`;
+  async function chooseOption(optionId) {
+    if (!confirm('Choose this option? This selection will be marked approved.')) return;
+    setChoosing(true);
+    const { error } = await supabase.rpc('approve_material_selection', { target_selection_id: selectionId, chosen_option_id: optionId });
+    setChoosing(false);
+    if (error) alert('Failed to submit your choice: ' + error.message);
   }
 
-  async function confirmLoss() {
-    await supabase.from('opportunities').update({ stage: 'lost', loss_reason: lossReasonText }).eq('id', lossReasonPromptId);
-    setLossReasonPromptId(null);
-    setLossReasonText('');
-  }
+  if (loading || !session || !selection) return null;
 
-  async function removeOpp(id) {
-    if (!confirm('Delete this opportunity?')) return;
-    await supabase.from('opportunities').delete().eq('id', id);
-  }
-
-  const stats = useMemo(() => {
-    const byStage = {};
-    STAGES.forEach(s => { byStage[s] = opps.filter(o => o.stage === s).length; });
-    return byStage;
-  }, [opps]);
-
-  const filtered = stageFilter === 'all' ? opps : opps.filter(o => o.stage === stageFilter);
-
-  if (loading || !session) return null;
+  const isDraft = selection.status === 'draft';
+  const isApproved = selection.status === 'approved';
 
   return (
-    <AppShell>
-      <div className="container">
-        <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
-              {showForm ? 'Cancel' : '+ New Lead'}
-            </button>
-            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
-          </div>
+    <div>
+      <div className="no-print doc-toolbar">
+        <Link href={isAdmin ? `/jobs/${id}?tab=Estimate&section=scope` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span className={`badge badge-${isApproved ? 'paid' : selection.status === 'sent' ? 'active' : 'draft'}`}>
+            {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}
+          </span>
+          {isAdmin && isDraft && options.length > 0 && (
+            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+          )}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-          "New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it's worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.
-        </div>
-
-        <div className="card">
-          <h3>Pipeline overview</h3>
-          <div className="two-col">
-            {STAGES.map(s => (
-              <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}>
-                <span>{STAGE_LABELS[s]}</span>
-                <span style={{ fontWeight: 700 }}>{stats[s] || 0}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {showForm && (
-          <form className="card" onSubmit={submit}>
-            <h3>{editingId ? 'Edit lead' : 'New lead'}</h3>
-            <div className="two-col">
-              <div>
-                <label>Project type</label>
-                <select value={form.project_type} onChange={e => update('project_type', e.target.value)}>
-                  <option value="">Select…</option>
-                  <option value="residential">Residential</option>
-                  <option value="commercial">Commercial</option>
-                </select>
-              </div>
-              {form.project_type === 'commercial' && (
-                <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
-              )}
-              <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
-              <div><label>Contact name</label><input value={form.contact_name} onChange={e => update('contact_name', e.target.value)} /></div>
-              <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
-              <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
-              <div><label>Referral name</label><input value={form.referral_name} onChange={e => update('referral_name', e.target.value)} placeholder="Who referred this lead to us?" /></div>
-              <div>
-                <label>Date entered</label>
-                <input value={new Date(form.date_taken + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
-              </div>
-            </div>
-            <label>Notes</label>
-            <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Create lead')}</button>
-            </div>
-          </form>
-        )}
-
-        {lossReasonPromptId && (
-          <div className="card">
-            <h3>Reason for loss</h3>
-            <textarea value={lossReasonText} onChange={e => setLossReasonText(e.target.value)} placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…" />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={confirmLoss}>Save &amp; mark lost</button>
-              <button className="btn btn-sm" onClick={() => setLossReasonPromptId(null)}>Cancel</button>
-            </div>
-          </div>
-        )}
-
-        <div className="stage-tabs">
-          <button className={`stage-tab ${stageFilter === 'all' ? 'active' : ''}`} onClick={() => setStageFilter('all')}>All ({opps.length})</button>
-          {STAGES.map(s => (
-            <button key={s} className={`stage-tab ${stageFilter === s ? 'active' : ''}`} onClick={() => setStageFilter(s)}>
-              {STAGE_LABELS[s]} ({stats[s] || 0})
-            </button>
-          ))}
-        </div>
-
-        {filtered.length === 0 && <div className="empty-state">No opportunities here yet.</div>}
-        {filtered.map(o => (
-          <div className="job-row" key={o.id} style={{ flexWrap: 'wrap', gap: 10 }}>
-            <div className="job-main">
-              <span className="job-customer">{o.company || o.contact_name || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
-              <span className="job-address">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
-              {o.stage === 'lost' && o.loss_reason && <span className="job-address" style={{ color: '#a13f3f' }}>Loss reason: {o.loss_reason}</span>}
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {o.stage === 'converted' ? (
-                <>
-                  <span className="badge badge-approved">Converted</span>
-                  {o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>}
-                </>
-              ) : (
-                <>
-                  <select value={o.stage} onChange={e => setStage(o.id, e.target.value)} style={{ width: 'auto' }}>
-                    {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                  </select>
-                  {ACTIVE_STAGES.includes(o.stage) && (
-                    <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
-                  )}
-                </>
-              )}
-              <button className="btn btn-sm" onClick={() => startEdit(o)}>Edit</button>
-              <button className="btn btn-sm btn-danger" onClick={() => removeOpp(o.id)}>Delete</button>
-            </div>
-          </div>
-        ))}
       </div>
-    </AppShell>
+
+      <div className="container" style={{ paddingTop: 24, maxWidth: 900 }} id="doc-preview">
+        <div className="card">
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
+          {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
+          {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
+        </div>
+
+        <div className="material-options-grid">
+          {options.map(opt => {
+            const isChosen = selection.selected_option_id === opt.id;
+            return (
+              <div key={opt.id} className="card material-option-card" style={isChosen ? { borderColor: 'var(--accent)', borderWidth: 2 } : undefined}>
+                {photoUrls[opt.id] && (
+                  <button type="button" className="selection-photo-btn no-print" onClick={() => setLightboxUrl(photoUrls[opt.id])} aria-label={`Expand photo of ${opt.item}`}>
+                    <img src={photoUrls[opt.id]} alt={opt.item} />
+                  </button>
+                )}
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{opt.item}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 6, lineHeight: 1.7 }}>
+                  {opt.brand && <div><b>Brand:</b> {opt.brand}</div>}
+                  {opt.model_number && <div><b>Model #:</b> {opt.model_number}</div>}
+                  {opt.color && <div><b>Color:</b> {opt.color}</div>}
+                </div>
+
+                {isChosen && (
+                  <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: '#3a6b45' }}>✓ Selected</div>
+                )}
+                {!isAdmin && selection.status === 'sent' && (
+                  <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={() => chooseOption(opt.id)} disabled={choosing}>
+                    {choosing ? 'Submitting…' : 'Choose This'}
+                  </button>
+                )}
+                {isAdmin && isDraft && (
+                  <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={() => deleteOption(opt.id)}>Remove</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {options.length === 0 && <div className="empty-state">No options added yet.</div>}
+
+        {isAdmin && isDraft && (
+          <div className="card no-print">
+            <div className="section-actions" style={{ marginTop: 0 }}>
+              <button className="btn btn-sm" onClick={() => setShowForm(s => !s)}>{showForm ? 'Cancel' : '+ Add Option'}</button>
+            </div>
+            {showForm && (
+              <form onSubmit={addOption} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+                <div className="two-col">
+                  <div><label>Brand</label><input value={form.brand} onChange={e => setForm(prev => ({ ...prev, brand: e.target.value }))} /></div>
+                  <div><label>Item *</label><input value={form.item} onChange={e => setForm(prev => ({ ...prev, item: e.target.value }))} placeholder="e.g. Dishwasher" required /></div>
+                  <div><label>Model Number</label><input value={form.model_number} onChange={e => setForm(prev => ({ ...prev, model_number: e.target.value }))} /></div>
+                  <div><label>Color</label><input value={form.color} onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))} /></div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
+                </div>
+                <div className="section-actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Option'}</button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+
+      {isAdmin && (
+        <SendDocModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          docLabel={selection.title}
+          docType="material selection"
+          customerName={job?.customer_name}
+          docElementId="doc-preview"
+          pdfFilename={`${selection.title}.pdf`}
+          jobId={id}
+          onSendSuccess={sendToCustomer}
+        />
+      )}
+
+      {lightboxUrl && (
+        <div className="photo-lightbox-overlay no-print" onClick={() => setLightboxUrl(null)}>
+          <button className="photo-lightbox-close" onClick={() => setLightboxUrl(null)} aria-label="Close">×</button>
+          <img src={lightboxUrl} alt="Expanded selection photo" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+    </div>
   );
 }

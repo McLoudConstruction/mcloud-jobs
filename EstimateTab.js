@@ -207,10 +207,10 @@ export default function EstimateTab({ job, jobId, children }) {
 
   async function pushToContractPrice() {
     setPushing(true);
-    await supabase.from('jobs').update({
-      contract_price: salePrice,
-      projected_cost: subtotal,
-    }).eq('id', jobId);
+    await Promise.all([
+      supabase.from('job_financials').update({ contract_price: salePrice }).eq('job_id', jobId),
+      supabase.from('jobs').update({ projected_cost: subtotal }).eq('id', jobId),
+    ]);
     setPushing(false);
     setPushedFlash('Saved to this job\u2019s Contract Price & Projected Cost — no need to re-enter it on the Project tab.');
     setTimeout(() => setPushedFlash(''), 6000);
@@ -429,7 +429,7 @@ export default function EstimateTab({ job, jobId, children }) {
             {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
           </div>
 
-          <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Scope`} />
+          <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Estimate&section=scope`} />
         </div>
       </div>
     </>

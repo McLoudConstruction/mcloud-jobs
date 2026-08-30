@@ -475,6 +475,26 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .section-subnav .stage-tab{ flex-shrink: 0; }
 .section-subnav .stage-tab{ text-decoration: none; }
 
+/* Sub-sections within a job-detail tab (e.g. Estimate: Scope / Pricing).
+   Deliberately smaller and pill-shaped rather than underlined, so it
+   reads as "a mode within this tab" and never gets mistaken for another
+   top-level tab. */
+.tab-sections{ display: flex; gap: 6px; flex-wrap: wrap; margin: -10px 0 18px; }
+.tab-section-btn{
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.tab-section-btn:hover{ color: var(--ink); border-color: var(--ink-soft); }
+.tab-section-btn.active{ background: var(--accent); border-color: var(--accent); color: #fff; }
+
 .badge{
   display: inline-block;
   font-size: 10.5px;
@@ -589,6 +609,15 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .login-card p.sub{ color: var(--ink-soft); font-size: 12.5px; margin: 0 0 20px; }
 .error-text{ color: #a13f3f; font-size: 12.5px; margin-top: 10px; }
 
+.messages-thread-scroll { overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.messages-bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; font-size: 13px; }
+.messages-bubble.from-customer { align-self: flex-start; background: var(--panel); border-bottom-left-radius: 3px; }
+.messages-bubble.from-admin { align-self: flex-end; background: var(--rust); color: #fff; border-bottom-right-radius: 3px; }
+.messages-bubble-text { white-space: pre-wrap; }
+.messages-bubble-time { font-size: 10px; opacity: 0.7; margin-top: 4px; }
+.messages-compose { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--line); align-items: flex-end; }
+.messages-compose textarea { flex: 1; resize: none; }
+
 .subportal-auth-wrap{ min-height: 100vh; display: flex; }
 .subportal-auth-brand{
   display: none;
@@ -598,9 +627,10 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: #f2ead9;
   padding: 56px 48px;
   flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
 }
-.subportal-auth-logo{ height: 40px; width: auto; }
+.subportal-auth-logo{ width: auto; }
 .subportal-auth-brand h2{ font-size: 22px; font-weight: 700; margin: 0 0 12px; color: #fff; }
 .subportal-auth-brand p{ font-size: 13.5px; line-height: 1.7; color: rgba(242,234,217,0.75); margin: 0; max-width: 340px; }
 .subportal-auth-brand-foot{ font-size: 11.5px; color: rgba(242,234,217,0.45); letter-spacing: 0.03em; }
@@ -608,7 +638,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 40px 24px; position: relative;
 }
-.subportal-auth-logo-mobile{ display: block; height: 34px; width: auto; margin-bottom: 22px; }
+.subportal-auth-logo-mobile{ display: block; width: auto; margin-bottom: 22px; }
 @media (min-width: 900px){
   .subportal-auth-brand{ display: flex; }
   .subportal-auth-logo-mobile{ display: none; }
@@ -900,7 +930,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .send-doc-overlay{ display: none !important; }
 }
 
-/* ─── Offline field log (Field Log tab, job detail page) ───────────────── */
+/* ─── Offline field log / Internal Updates (job detail page) ──────────── */
 .sync-badge {
   padding: 10px 14px;
   border-radius: 8px;
@@ -980,10 +1010,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .field-checklist label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .checklist-done { text-decoration: line-through; color: var(--ink-soft); }
 
-/* ─── Internal Updates panel additions ──────────────────────────────── */
 .staged-photo-strip { display: flex; gap: 8px; flex-wrap: wrap; }
-.staged-photo-thumb { position: relative; width: 72px; height: 72px; }
-.staged-photo-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.staged-photo-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.staged-photo-thumb img { display: block; width: 72px; height: 72px; object-fit: cover; }
 .staged-photo-thumb button {
   position: absolute; top: -6px; right: -6px;
   width: 20px; height: 20px; border-radius: 50%;
@@ -991,6 +1027,106 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   font-size: 12px; line-height: 1; cursor: pointer;
 }
 .update-photo-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.update-photo-strip img { width: 90px; height: 90px; object-fit: cover; border-radius: 6px; }
+.update-photo-strip img { display: block; width: 90px; height: 90px; flex: 0 0 90px; object-fit: cover; border-radius: 6px; }
 .pending-tag { color: var(--rust-dim); font-style: italic; }
 .promoted-tag { color: var(--ink-soft); font-size: 12px; margin-top: 6px; }
+
+/* ─── Customer portal Feed (Home page) ──────────────────────────────── */
+.portal-feed-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+}
+.portal-feed-item:last-child { border-bottom: none; }
+.portal-feed-label { font-size: 14px; color: var(--heading); }
+.portal-feed-sub { font-size: 12.5px; color: var(--ink-soft); flex-basis: 100%; }
+.portal-feed-date { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
+.portal-feed-item-new {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 14px 14px;
+  border-bottom: none;
+  margin-bottom: 8px;
+  border-left: 4px solid var(--accent);
+}
+.portal-feed-item-new .portal-feed-label { font-weight: 700; font-size: 15px; }
+.portal-feed-item-action { border-left-color: var(--rust); background: #fbeae7; }
+.portal-feed-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  padding: 3px 8px;
+  border-radius: 999px;
+  flex-basis: 100%;
+  width: fit-content;
+}
+.portal-feed-item-action .portal-feed-badge { background: var(--rust); }
+.portal-feed-divider {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin: 14px 0 4px;
+}
+
+/* ─── Customer portal Home: compact summary bar + feed/visit layout ───── */
+.portal-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 4px 2px 20px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.portal-summary-item { white-space: nowrap; }
+.portal-summary-item b { color: var(--heading); font-weight: 600; }
+.portal-summary-badge { font-size: 10px; padding: 2px 8px; }
+.portal-feed-layout { align-items: start; }
+
+/* ─── Progress Update composer: Internal Updates reference sidebar ────── */
+.update-compose-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .update-compose-layout { grid-template-columns: 1fr; }
+}
+.internal-log-sidebar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  position: sticky;
+  top: 12px;
+}
+.internal-log-sidebar h4 { margin: 0 0 10px; font-size: 13px; color: var(--heading); }
+.internal-log-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.internal-log-entry {
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12.5px;
+}
+.internal-log-entry p { margin: 4px 0 8px; white-space: pre-wrap; }
+.internal-log-date { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+.internal-log-photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.internal-log-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 5px; flex: 0 0 56px; }

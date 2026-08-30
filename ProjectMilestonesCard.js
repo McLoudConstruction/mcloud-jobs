@@ -5,15 +5,15 @@ import { supabase } from '../lib/supabaseClient';
 // Ordered to roughly follow how a real job actually unfolds — pre-contract
 // decisions first, then everything that happens once work is underway.
 const ITEMS = [
-  { key: 'portal', label: 'Portal Access Granted', tab: 'Portal' },
-  { key: 'scope', label: 'Scope of Work', tab: 'Scope' },
-  { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate' },
-  { key: 'contract', label: 'Contract Signed', tab: 'Documents' },
-  { key: 'selections', label: 'Material Selections', tab: 'Scope' },
+  { key: 'portal', label: 'Portal Access Granted', tab: 'Customer', section: 'portal' },
+  { key: 'scope', label: 'Scope of Work', tab: 'Estimate', section: 'scope' },
+  { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate', section: 'pricing' },
+  { key: 'contract', label: 'Contract Signed', tab: 'Updates', section: 'log' },
+  { key: 'selections', label: 'Material Selections', tab: 'Estimate', section: 'scope' },
   { key: 'workOrders', label: 'Work Orders Issued', tab: 'Financials' },
   { key: 'receipts', label: 'Receipts Logged', tab: 'Financials' },
   { key: 'photos', label: 'Photos', tab: 'Photos' },
-  { key: 'updates', label: 'Progress Updates Sent', tab: 'Documents' },
+  { key: 'updates', label: 'Progress Updates Sent', tab: 'Updates', section: 'log' },
   { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Financials' },
   { key: 'invoicing', label: 'Invoicing', tab: 'Financials' },
 ];
@@ -90,7 +90,7 @@ export default function ProjectMilestonesCard({ job, jobId, onTabChange }) {
           const count = counts[item.key];
           const showCount = ['selections', 'workOrders', 'receipts', 'photos', 'updates', 'changeOrders', 'invoicing'].includes(item.key);
           return (
-            <button key={item.key} className="milestone-row" onClick={() => onTabChange?.(item.tab)}>
+            <button key={item.key} className="milestone-row" onClick={() => onTabChange?.(item.tab, item.section)}>
               <span className={`milestone-check ${done ? 'milestone-check-done' : ''}`}>{done ? '✓' : ''}</span>
               <span className="milestone-label">{item.label}</span>
               {showCount && count > 0 && <span className="milestone-count">{count}</span>}
