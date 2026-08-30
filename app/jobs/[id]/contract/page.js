@@ -331,7 +331,7 @@ export default function ContractDocumentPage() {
         body { background: #dbd8bf; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 1000px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #fff; padding: 28px 48px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
+        .doc-header { background: #fff; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
         .doc-logo { width: 170px; height: auto; display: block; }
         .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9b773d; text-align: right; }
         .doc-num { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: 0.05em; color: #6b6350; text-transform: none; margin-top: 3px; }

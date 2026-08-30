@@ -21,6 +21,7 @@ import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
+import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STANDARD_ASSUMPTIONS_RESIDENTIAL, STANDARD_ASSUMPTIONS_COMMERCIAL, STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity, GOOGLE_REVIEW_URL } from '../../../lib/constants';
 import { buildReviewRequestEmail } from '../../../lib/emailTemplates';
 
@@ -356,16 +357,14 @@ export default function JobDetailPage() {
           <div>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
             {job.project_address && (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.project_address)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <MapLinkMenu
+                address={job.project_address}
                 style={{ fontSize: 12.5, color: 'var(--ink-soft)', textDecoration: 'none', display: 'inline-block', marginBottom: 4 }}
                 onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
                 onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
               >
                 📍 {job.project_address}
-              </a>
+              </MapLinkMenu>
             )}
             <div>
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>

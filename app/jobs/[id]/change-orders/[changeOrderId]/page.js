@@ -188,7 +188,7 @@ export default function ChangeOrderDocumentPage() {
         body { background: #dbd8bf; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #fff; padding: 28px 48px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
+        .doc-header { background: #fff; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
         .doc-logo { width: 180px; height: auto; display: block; }
         .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9b773d; }
         .doc-body { padding: 38px 48px 56px; }
