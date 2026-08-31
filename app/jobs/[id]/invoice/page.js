@@ -80,6 +80,22 @@ export default function InvoiceDocumentPage() {
         </div>
       </div>
 
+      {session?.user?.app_metadata?.role !== 'admin' && job.invoice_status === 'sent' && (
+        <div className="no-print pay-banner">
+          <div className="pay-banner-info">
+            <span className="pay-banner-label">Amount Due</span>
+            <span className="pay-banner-amount">{fmtMoney(job.invoice_amount)}</span>
+          </div>
+          <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} label={`Invoice #${job.job_number}`} />
+        </div>
+      )}
+
+      {job.invoice_status === 'paid' && session?.user?.app_metadata?.role !== 'admin' && (
+        <div className="no-print pay-banner-paid">
+          This invoice has been paid. Thank you!
+        </div>
+      )}
+
       <div className="doc-outer">
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
@@ -127,18 +143,6 @@ export default function InvoiceDocumentPage() {
           </div>
         </div>
       </div>
-
-      {session?.user?.app_metadata?.role !== 'admin' && job.invoice_status === 'sent' && (
-        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px', textAlign: 'center' }}>
-          <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} label={`Invoice #${job.job_number}`} />
-        </div>
-      )}
-
-      {job.invoice_status === 'paid' && session?.user?.app_metadata?.role !== 'admin' && (
-        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 40px', padding: '0 40px', textAlign: 'center', color: '#3a6b45', fontSize: 13 }}>
-          This invoice has been paid. Thank you!
-        </div>
-      )}
 
       <SendDocModal
         open={modalOpen}
