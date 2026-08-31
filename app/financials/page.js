@@ -94,7 +94,13 @@ export default function FinancialDashboardPage() {
     const total = actual + committed;
     const margin = j.contract_price != null ? Number(j.contract_price) - total : null;
     const marginPercent = margin != null && j.contract_price ? (margin / Number(j.contract_price)) * 100 : null;
-    return { ...j, actual, committed, total, margin, marginPercent };
+    // Projected margin — a forward-looking estimate straight from Contract
+    // Price and Projected Cost, independent of what's actually been logged
+    // in job costs so far. Distinct from "Actual Margin" above, which only
+    // reflects committed + actual costs entered to date.
+    const projectedMargin = j.contract_price != null && j.projected_cost != null ? Number(j.contract_price) - Number(j.projected_cost) : null;
+    const projectedMarginPercent = projectedMargin != null && j.contract_price ? (projectedMargin / Number(j.contract_price)) * 100 : null;
+    return { ...j, actual, committed, total, margin, marginPercent, projectedMargin, projectedMarginPercent };
   }).filter(j => j.total > 0 || j.contract_price); // only show jobs with any financial activity
 
   return (
@@ -226,6 +232,8 @@ export default function FinancialDashboardPage() {
                 { key: 'customer_name', label: 'Customer', defaultWidth: 170, render: j => j.customer_name || 'Unnamed' },
                 { key: 'contract_price', label: 'Contract Price', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.contract_price) },
                 { key: 'projected_cost', label: 'Projected Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.projected_cost) },
+                { key: 'projectedMargin', label: 'Projected Margin', defaultWidth: 140, filterable: false, render: j => <span style={{ color: j.projectedMargin != null && j.projectedMargin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.projectedMargin)}</span> },
+                { key: 'projectedMarginPercent', label: 'Projected Margin %', defaultWidth: 140, filterable: false, render: j => <span style={{ color: j.projectedMarginPercent != null && j.projectedMarginPercent < 0 ? '#a13f3f' : undefined }}>{j.projectedMarginPercent != null ? `${j.projectedMarginPercent.toFixed(1)}%` : '—'}</span> },
                 { key: 'committed', label: 'Committed Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.committed) },
                 { key: 'actual', label: 'Actual Cost', defaultWidth: 120, filterable: false, render: j => fmtMoney(j.actual) },
                 { key: 'margin', label: 'Actual Margin', defaultWidth: 130, filterable: false, render: j => <span style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</span> },
