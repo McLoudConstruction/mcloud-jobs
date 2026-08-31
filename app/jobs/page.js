@@ -6,7 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
-const STAGES = ['all', ...STAGE_ORDER, 'lost'];
+const STAGES = ['all', ...STAGE_ORDER];
 const TAB_LABELS = { all: 'All', ...STAGE_LABELS };
 
 export default function JobTrackerPage() {
@@ -19,14 +19,14 @@ export default function JobTrackerPage() {
     if (!session) return;
 
     let mounted = true;
-    supabase.from('jobs').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('jobs').select('*').neq('stage', 'lost').order('created_at', { ascending: false }).then(({ data }) => {
       if (mounted && data) setJobs(data);
     });
 
     const channel = supabase
       .channel('jobs-tracker')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
-        supabase.from('jobs').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+        supabase.from('jobs').select('*').neq('stage', 'lost').order('created_at', { ascending: false }).then(({ data }) => {
           if (mounted && data) setJobs(data);
         });
       })
@@ -58,7 +58,10 @@ export default function JobTrackerPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Jobs</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Link href="/jobs/lost" className="btn btn-sm">Closed Lost →</Link>
+            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          </div>
         </div>
 
         <div className="search-bar">

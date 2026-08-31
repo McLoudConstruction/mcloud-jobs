@@ -298,17 +298,29 @@ export default function JobDetailPage() {
     if (!recipientEmail) { setInviteResult('Add a contact email before inviting the customer.'); return; }
     setInviting(true);
     setInviteResult('');
-    const { error } = await supabase.auth.signInWithOtp({
-      email: recipientEmail,
-      // Sends new customers into /customerportal (where PortalFeed, the
-      // no-active-project screen, etc. actually live), not the older
-      // standalone /portal/dashboard implementation — see README for the
-      // Closed Lost portal-access feature for why this matters.
-      options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
+    // Sends via the same working SMTP as every other email in the app —
+    // not supabase.auth.signInWithOtp(), whose built-in email service is
+    // separate infrastructure, heavily rate-limited, and can silently drop
+    // sends without ever reporting an error. See migration/route notes.
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
+    const res = await fetch('/api/portal/send-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: adminSession?.access_token,
+        email: recipientEmail,
+        customerName: job.customer_name,
+        // Sends new customers into /customerportal (where PortalFeed, the
+        // no-active-project screen, etc. actually live), not the older
+        // standalone /portal/dashboard implementation — see README for the
+        // Closed Lost portal-access feature for why this matters.
+        redirectTo: `${window.location.origin}/customerportal/projects`,
+      }),
     });
+    const data = await res.json();
     setInviting(false);
-    if (error) {
-      setInviteResult(error.message);
+    if (!res.ok) {
+      setInviteResult(data.error || 'Failed to send invite.');
     } else {
       setInviteResult(`Invite sent to ${recipientEmail}.`);
       await saveJob({ portal_invited_at: new Date().toISOString() });

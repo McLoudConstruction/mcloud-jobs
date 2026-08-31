@@ -93,16 +93,31 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
       setSaving(false);
       return;
     }
+    // Sends via the same working SMTP as every other email in the app —
+    // not supabase.auth.signInWithOtp(), whose built-in email service is
+    // separate infrastructure, heavily rate-limited, and can silently drop
+    // sends without ever reporting an error.
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
+    let sentCount = 0;
     for (const a of toInvite) {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: a.email,
-        options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
+      const res = await fetch('/api/portal/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: adminSession?.access_token,
+          email: a.email,
+          customerName: a.name || job.customer_name,
+          redirectTo: `${window.location.origin}/customerportal/projects`,
+        }),
       });
-      if (!error) {
+      if (res.ok) {
+        sentCount++;
         await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('id', a.id);
       }
     }
-    setResult(`Invited ${toInvite.length} contact${toInvite.length === 1 ? '' : 's'}.`);
+    setResult(sentCount === toInvite.length
+      ? `Invited ${sentCount} contact${sentCount === 1 ? '' : 's'}.`
+      : `Invited ${sentCount} of ${toInvite.length} — check SMTP configuration for the rest.`);
     setSaving(false);
   }
 
