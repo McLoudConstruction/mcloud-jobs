@@ -907,6 +907,10 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   border-right: 2px solid transparent;
 }
 .col-resize-handle:hover, .col-resize-handle:active{ border-right-color: var(--rust); }
+.data-table-sortable-th{ cursor: pointer; user-select: none; }
+.data-table-sortable-th:hover{ color: var(--accent); }
+.sort-indicator{ display: inline-block; margin-left: 5px; font-size: 9px; opacity: 0.5; }
+.sort-indicator.active{ opacity: 1; color: var(--accent); }
 .data-table-filter-row th{ padding: 4px 6px; background: var(--card-bg); }
 .data-table-filter-input{
   width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 7px;

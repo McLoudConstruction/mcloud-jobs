@@ -7,6 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
+import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 
@@ -142,8 +143,8 @@ export default function PropertiesPage() {
     await supabase.from('properties').delete().eq('id', id);
   }
 
-  async function markVisited(id) {
-    await supabase.from('properties').update({ last_visited_at: new Date().toISOString() }).eq('id', id);
+  async function markVisited(id, visitedAtIso) {
+    await supabase.from('properties').update({ last_visited_at: visitedAtIso }).eq('id', id);
   }
 
   function updateContactForm(field, value) {
@@ -402,10 +403,10 @@ export default function PropertiesPage() {
                 render: p => p.last_visited_at ? new Date(p.last_visited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
               },
               {
-                key: 'actions', label: '', defaultWidth: 160, filterable: false, stopClickPropagation: true,
+                key: 'actions', label: '', defaultWidth: 160, filterable: false, sortable: false, stopClickPropagation: true,
                 render: p => (
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm" onClick={() => markVisited(p.id)}>Mark Visited</button>
+                    <LogVisitPopover onLog={iso => markVisited(p.id, iso)} />
                     <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
                   </div>
                 ),

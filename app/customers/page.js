@@ -366,7 +366,7 @@ export default function CustomersPage() {
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
               {
-                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>,
               },
             ]}

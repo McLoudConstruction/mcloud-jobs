@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
@@ -18,6 +18,7 @@ import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
+import { compressImage } from '../../../lib/imageCompress';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import AddressFields, { formatAddress } from '../../../components/AddressFields';
@@ -1201,6 +1202,13 @@ function UpdatesCard({ jobId, updates }) {
   });
   const [saving, setSaving] = useState(false);
 
+  // Photos staged while composing — attached to the update at submit time
+  // rather than requiring you to save the text first and then find it in
+  // the list below to add photos afterward (which was still possible via
+  // that entry's own PhotoGallery, just not a one-step flow).
+  const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
+  const photoInputRef = useRef(null);
+
   // Reference sidebar: the running Internal Updates log, visible while
   // actively writing a formal progress update — not a one-click "promote"
   // action (that turned out to add little value beyond syncing across
@@ -1243,12 +1251,44 @@ function UpdatesCard({ jobId, updates }) {
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
+  function handleStagePhotos(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setStagedPhotos(prev => [...prev, ...files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))]);
+  }
+
+  function removeStagedPhoto(index) {
+    setStagedPhotos(prev => prev.filter((_, i) => i !== index));
+  }
+
   async function submit() {
     setSaving(true);
-    await supabase.from('job_updates').insert({ job_id: jobId, ...form, estimated_completion: form.estimated_completion || null });
+    // Client-generated id (same pattern already used for offline-synced
+    // internal updates) so the photos below can be linked to this exact
+    // update in the same submit action, instead of needing a second
+    // round-trip after the insert to learn the new row's id.
+    const updateId = crypto.randomUUID();
+    await supabase.from('job_updates').insert({ id: updateId, job_id: jobId, ...form, estimated_completion: form.estimated_completion || null });
+
+    for (const { file } of stagedPhotos) {
+      try {
+        const compressed = await compressImage(file);
+        const path = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+        const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, compressed, { contentType: 'image/jpeg' });
+        if (uploadError) throw uploadError;
+        await supabase.from('job_photos').insert({ job_id: jobId, update_id: updateId, storage_path: path });
+      } catch {
+        // Individual photo failures shouldn't block the text update, which
+        // already saved successfully — the entry's own PhotoGallery below
+        // can always be used to retry adding it.
+      }
+    }
+
     setSaving(false);
     setShowForm(false);
     setForm({ update_date: new Date().toISOString().slice(0, 10), work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '' });
+    setStagedPhotos([]);
   }
 
   async function removeUpdate(updateId) {
@@ -1275,6 +1315,23 @@ function UpdatesCard({ jobId, updates }) {
             <textarea value={form.issues_notes} onChange={e => update('issues_notes', e.target.value)} />
             <label>Next steps</label>
             <textarea value={form.next_steps} onChange={e => update('next_steps', e.target.value)} />
+
+            <label>Photos</label>
+            {stagedPhotos.length > 0 && (
+              <div className="staged-photo-strip">
+                {stagedPhotos.map((p, i) => (
+                  <div key={i} className="staged-photo-thumb">
+                    <img src={p.previewUrl} alt="" />
+                    <button type="button" onClick={() => removeStagedPhoto(i)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={handleStagePhotos} style={{ display: 'none' }} />
+            <div className="section-actions" style={{ marginTop: 0, marginBottom: 4 }}>
+              <button type="button" className="btn btn-sm" onClick={() => photoInputRef.current?.click()}>Add photos</button>
+            </div>
+
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Post update'}</button>
               <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>

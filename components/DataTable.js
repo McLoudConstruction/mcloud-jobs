@@ -1,7 +1,7 @@
 'use client';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
-// columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), filterable?, stopClickPropagation? }]
+// columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), sortValue?(row), filterable?, sortable?, stopClickPropagation? }]
 export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName }) {
   const [widths, setWidths] = useState(() => {
     // On a narrow viewport, start columns noticeably tighter so more of
@@ -12,6 +12,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
     return Object.fromEntries(columns.map(c => [c.key, Math.round((c.defaultWidth || 160) * scale)]));
   });
   const [filters, setFilters] = useState({});
+  const [sort, setSort] = useState({ key: null, dir: 'asc' });
   const resizing = useRef(null);
 
   const onMouseMove = useCallback((e) => {
@@ -44,6 +45,21 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
     setFilters(prev => ({ ...prev, [key]: value }));
   }
 
+  function toggleSort(col) {
+    if (col.sortable === false) return;
+    setSort(prev => {
+      if (prev.key !== col.key) return { key: col.key, dir: 'asc' };
+      if (prev.dir === 'asc') return { key: col.key, dir: 'desc' };
+      return { key: null, dir: 'asc' }; // third click clears back to natural order
+    });
+  }
+
+  function sortRawValue(col, row) {
+    if (col.sortValue) return col.sortValue(row);
+    if (col.filterValue) return col.filterValue(row);
+    return row[col.key];
+  }
+
   const filteredRows = rows.filter(row =>
     columns.every(col => {
       if (col.filterable === false) return true;
@@ -54,6 +70,33 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
     })
   );
 
+  const sortedRows = useMemo(() => {
+    if (!sort.key) return filteredRows;
+    const col = columns.find(c => c.key === sort.key);
+    if (!col) return filteredRows;
+    const withIndex = filteredRows.map((row, i) => ({ row, i }));
+    withIndex.sort((a, b) => {
+      const av = sortRawValue(col, a.row);
+      const bv = sortRawValue(col, b.row);
+      const aEmpty = av === null || av === undefined || av === '';
+      const bEmpty = bv === null || bv === undefined || bv === '';
+      // Empty/missing values always sort to the end, regardless of
+      // direction — otherwise ascending vs descending would flip whether
+      // blanks show up first or last, which reads as broken either way.
+      if (aEmpty && bEmpty) return a.i - b.i;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      let cmp;
+      if (av instanceof Date || bv instanceof Date) cmp = new Date(av) - new Date(bv);
+      else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+      if (cmp === 0) cmp = a.i - b.i; // stable tiebreaker
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+    return withIndex.map(x => x.row);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredRows, sort, columns]);
+
   return (
     <div className="data-table-wrap">
       <table className="data-table" style={{ tableLayout: 'fixed' }}>
@@ -63,9 +106,18 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
         <thead>
           <tr>
             {columns.map(c => (
-              <th key={c.key}>
+              <th
+                key={c.key}
+                className={c.sortable === false ? '' : 'data-table-sortable-th'}
+                onClick={() => toggleSort(c)}
+              >
                 {c.label}
-                <span className="col-resize-handle" onMouseDown={e => startResize(e, c.key)} />
+                {c.sortable !== false && (
+                  <span className={`sort-indicator ${sort.key === c.key ? 'active' : ''}`}>
+                    {sort.key === c.key ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                )}
+                <span className="col-resize-handle" onMouseDown={e => startResize(e, c.key)} onClick={e => e.stopPropagation()} />
               </th>
             ))}
           </tr>
@@ -86,7 +138,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
           </tr>
         </thead>
         <tbody>
-          {filteredRows.map(row => (
+          {sortedRows.map(row => (
             <tr key={getRowKey(row)} onClick={() => onRowClick && onRowClick(row)} className={rowClassName ? rowClassName(row) : ''}>
               {columns.map(c => (
                 <td key={c.key} onClick={c.stopClickPropagation ? (e => e.stopPropagation()) : undefined}>
@@ -97,7 +149,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
           ))}
         </tbody>
       </table>
-      {filteredRows.length === 0 && <div className="empty-state">No results match these filters.</div>}
+      {sortedRows.length === 0 && <div className="empty-state">No results match these filters.</div>}
     </div>
   );
 }
