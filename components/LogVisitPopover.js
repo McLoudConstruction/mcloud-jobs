@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 // Normalizes to noon local time before converting to ISO, so a
 // "Yesterday" or calendar-picked date doesn't shift to the wrong day
@@ -13,15 +14,42 @@ function isoForDate(date) {
 export default function LogVisitPopover({ onLog, label = 'Mark Visited' }) {
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState('');
-  const wrapRef = useRef(null);
+  const [coords, setCoords] = useState(null);
+  const btnRef = useRef(null);
+  const popoverRef = useRef(null);
+
+  // Rendered in a portal (not as a normal absolutely-positioned child) —
+  // this button typically sits inside a DataTable, whose wrapper has
+  // overflow-x: auto for horizontal scrolling. That clips any
+  // absolutely-positioned popover that would render outside the table's
+  // bounds, which is exactly what made this look "hidden": it was there,
+  // just cut off by the scroll container. Portaling to <body> and
+  // positioning with fixed coordinates escapes that entirely.
+  function openPopover() {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) setCoords({ top: rect.bottom + 4, left: rect.right });
+    setOpen(true);
+  }
 
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      if (popoverRef.current && !popoverRef.current.contains(e.target) && !btnRef.current?.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    function handleReposition() {
+      const rect = btnRef.current?.getBoundingClientRect();
+      if (rect) setCoords({ top: rect.bottom + 4, left: rect.right });
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleReposition, true);
+    window.addEventListener('resize', handleReposition);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handleReposition);
+    };
   }, [open]);
 
   function pick(iso) {
@@ -31,12 +59,15 @@ export default function LogVisitPopover({ onLog, label = 'Mark Visited' }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}>
-      <button type="button" className="btn btn-sm" onClick={() => setOpen(o => !o)}>{label}</button>
-      {open && (
+    <>
+      <button type="button" ref={btnRef} className="btn btn-sm" onClick={() => (open ? setOpen(false) : openPopover())}>
+        {label}
+      </button>
+      {open && coords && typeof document !== 'undefined' && createPortal(
         <div
+          ref={popoverRef}
           style={{
-            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 20,
+            position: 'fixed', top: coords.top, left: coords.left, transform: 'translateX(-100%)', zIndex: 1000,
             background: 'var(--card-bg)', border: '1px solid var(--line)', borderRadius: 6,
             minWidth: 190, boxShadow: '0 4px 14px rgba(0,0,0,0.15)', padding: 10,
           }}
@@ -59,8 +90,9 @@ export default function LogVisitPopover({ onLog, label = 'Mark Visited' }) {
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
