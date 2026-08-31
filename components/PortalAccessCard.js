@@ -122,6 +122,13 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
       if (res.ok) {
         sentCount++;
         await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('id', a.id);
+        // The banner at the top of this card reads jobs.portal_invited_at
+        // specifically, separate from this row's own invited_at — without
+        // this, sending an invite here could succeed completely and the
+        // banner would still say "Not invited to the portal yet."
+        if (!job.portal_invited_at) {
+          await supabase.from('jobs').update({ portal_invited_at: new Date().toISOString() }).eq('id', jobId);
+        }
       }
     }
     setResult(sentCount === toInvite.length

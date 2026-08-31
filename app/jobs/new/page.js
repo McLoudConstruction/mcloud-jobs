@@ -215,7 +215,16 @@ function NewOpportunityPageInner() {
           }),
         });
         if (res.ok) {
-          await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('job_id', data.id).eq('email', form.customer_email.trim());
+          const invitedAt = new Date().toISOString();
+          await Promise.all([
+            supabase.from('job_portal_access').update({ invited_at: invitedAt }).eq('job_id', data.id).eq('email', form.customer_email.trim()),
+            // The Portal Access & Notifications banner reads jobs.portal_invited_at
+            // specifically (separate from the per-contact job_portal_access.invited_at
+            // above) — this was only ever being set by the manual "Resend portal
+            // invite" button, so an auto-invite here could succeed end-to-end and the
+            // banner would still say "Not invited to the portal yet."
+            supabase.from('jobs').update({ portal_invited_at: invitedAt }).eq('id', data.id),
+          ]);
         }
       } catch {
         // silently skip — Portal Access on the job page shows the real state either way
