@@ -1209,6 +1209,39 @@ function UpdatesCard({ jobId, updates }) {
   const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
   const photoInputRef = useRef(null);
 
+  // Existing, already-uploaded job photos (general library, not yet tied
+  // to any update) that get picked to attach to this draft. Kept as local
+  // selection only — the actual job_photos.update_id write happens at
+  // submit, same moment new uploads get linked — so canceling the draft
+  // never leaves a photo pointing at an update that was never created.
+  const [existingPickerOpen, setExistingPickerOpen] = useState(false);
+  const [unattachedPhotos, setUnattachedPhotos] = useState([]);
+  const [unattachedUrls, setUnattachedUrls] = useState({});
+  const [selectedExisting, setSelectedExisting] = useState([]); // [{ id, url }]
+
+  async function openExistingPicker() {
+    const { data } = await supabase.from('job_photos').select('*').eq('job_id', jobId).is('update_id', null).order('created_at', { ascending: false });
+    const list = (data || []).filter(p => !selectedExisting.some(s => s.id === p.id));
+    setUnattachedPhotos(list);
+    const entries = await Promise.all(
+      list.map(async p => {
+        const { data: signed } = await supabase.storage.from('job-photos').createSignedUrl(p.storage_path, 3600);
+        return [p.id, signed?.signedUrl];
+      })
+    );
+    setUnattachedUrls(Object.fromEntries(entries));
+    setExistingPickerOpen(true);
+  }
+
+  function selectExisting(photo) {
+    setSelectedExisting(prev => [...prev, { id: photo.id, url: unattachedUrls[photo.id] }]);
+    setUnattachedPhotos(prev => prev.filter(p => p.id !== photo.id));
+  }
+
+  function removeSelectedExisting(id) {
+    setSelectedExisting(prev => prev.filter(p => p.id !== id));
+  }
+
   // Reference sidebar: the running Internal Updates log, visible while
   // actively writing a formal progress update — not a one-click "promote"
   // action (that turned out to add little value beyond syncing across
@@ -1285,10 +1318,22 @@ function UpdatesCard({ jobId, updates }) {
       }
     }
 
+    if (selectedExisting.length > 0) {
+      await supabase.from('job_photos').update({ update_id: updateId }).in('id', selectedExisting.map(p => p.id));
+    }
+
     setSaving(false);
     setShowForm(false);
     setForm({ update_date: new Date().toISOString().slice(0, 10), work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '' });
     setStagedPhotos([]);
+    setSelectedExisting([]);
+  }
+
+  function cancelCompose() {
+    setShowForm(false);
+    setStagedPhotos([]);
+    setSelectedExisting([]);
+    setExistingPickerOpen(false);
   }
 
   async function removeUpdate(updateId) {
@@ -1317,12 +1362,18 @@ function UpdatesCard({ jobId, updates }) {
             <textarea value={form.next_steps} onChange={e => update('next_steps', e.target.value)} />
 
             <label>Photos</label>
-            {stagedPhotos.length > 0 && (
+            {(stagedPhotos.length > 0 || selectedExisting.length > 0) && (
               <div className="staged-photo-strip">
                 {stagedPhotos.map((p, i) => (
-                  <div key={i} className="staged-photo-thumb">
+                  <div key={`new-${i}`} className="staged-photo-thumb">
                     <img src={p.previewUrl} alt="" />
                     <button type="button" onClick={() => removeStagedPhoto(i)}>×</button>
+                  </div>
+                ))}
+                {selectedExisting.map(p => (
+                  <div key={`existing-${p.id}`} className="staged-photo-thumb">
+                    {p.url ? <img src={p.url} alt="" /> : <div className="photo-tile-loading" />}
+                    <button type="button" onClick={() => removeSelectedExisting(p.id)}>×</button>
                   </div>
                 ))}
               </div>
@@ -1330,11 +1381,33 @@ function UpdatesCard({ jobId, updates }) {
             <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={handleStagePhotos} style={{ display: 'none' }} />
             <div className="section-actions" style={{ marginTop: 0, marginBottom: 4 }}>
               <button type="button" className="btn btn-sm" onClick={() => photoInputRef.current?.click()}>Add photos</button>
+              <button type="button" className="btn btn-sm" onClick={() => (existingPickerOpen ? setExistingPickerOpen(false) : openExistingPicker())}>
+                {existingPickerOpen ? 'Close' : 'Attach existing photo'}
+              </button>
             </div>
+
+            {existingPickerOpen && (
+              <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 12, marginBottom: 14, background: 'var(--panel)' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                  Click a photo from this job's general library to attach it to this update.
+                </div>
+                {unattachedPhotos.length === 0 && <div className="empty-state" style={{ padding: '10px 0' }}>No unattached photos in the job library.</div>}
+                <div className="photo-grid">
+                  {unattachedPhotos.map(p => (
+                    <div className="photo-tile" key={p.id} style={{ cursor: 'pointer' }} onClick={() => selectExisting(p)}>
+                      {unattachedUrls[p.id] ? <img src={unattachedUrls[p.id]} alt="" /> : <div className="photo-tile-loading" />}
+                      <div className="photo-tile-actions">
+                        <span className="btn btn-sm" style={{ flex: 1, textAlign: 'center' }}>Attach</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Post update'}</button>
-              <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn btn-sm" onClick={cancelCompose}>Cancel</button>
             </div>
           </div>
 
