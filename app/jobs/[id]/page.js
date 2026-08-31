@@ -217,8 +217,11 @@ export default function JobDetailPage() {
   // something that has to be chased down through the database directly.
   async function fixMissingJobNumber() {
     try {
-      const jobNumber = await assignNextJobNumber();
-      await saveJob({ job_number: jobNumber });
+      // assignNextJobNumber writes the number to this row itself (and
+      // retries if it collides with a number claimed a moment earlier by
+      // someone else) — nothing further to save here.
+      await assignNextJobNumber(id);
+      flashSaved();
     } catch (err) {
       setFlash(`Could not assign a job number: ${err.message}`);
       setTimeout(() => setFlash(''), 8000);
@@ -273,7 +276,10 @@ export default function JobDetailPage() {
 
     if (next === 'approved' && !job.job_number) {
       try {
-        patch.job_number = await assignNextJobNumber();
+        // Writes job_number to this row directly (with its own
+        // collision-retry) before we touch stage/approved_at, so we never
+        // move a job to Approved without a number actually attached.
+        await assignNextJobNumber(id);
       } catch (err) {
         setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
         setTimeout(() => setFlash(''), 8000);

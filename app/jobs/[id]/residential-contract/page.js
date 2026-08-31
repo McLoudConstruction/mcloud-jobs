@@ -121,9 +121,13 @@ export default function ContractDocumentPage() {
     const advancing = preSignatureStages.includes(job.stage);
     const patch = { contract_finalized_at: new Date().toISOString() };
 
+    let assignedJobNumber = null;
     if (advancing) {
       try {
-        patch.job_number = await assignNextJobNumber();
+        // Writes job_number to this row directly (with its own
+        // collision-retry against the true max) before touching
+        // stage/approved_at below.
+        assignedJobNumber = await assignNextJobNumber(id);
         patch.stage = 'approved';
         patch.approved_at = new Date().toISOString();
       } catch (err) {
@@ -137,7 +141,7 @@ export default function ContractDocumentPage() {
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
     if (!error) {
       await supabase.from('notifications').insert({
-        message: `Job ${patch.job_number ? '#' + patch.job_number : '#' + job.estimate_number} (${job.customer_name || 'customer'}) contract was submitted${advancing ? ' and auto-advanced to Approved' : ''}.`,
+        message: `Job ${assignedJobNumber ? '#' + assignedJobNumber : '#' + job.estimate_number} (${job.customer_name || 'customer'}) contract was submitted${advancing ? ' and auto-advanced to Approved' : ''}.`,
         job_id: job.id,
       });
     }

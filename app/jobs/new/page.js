@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
-import { formatPhone, nextSequentialNumber } from '../../../lib/constants';
+import { formatPhone, nextInSeries } from '../../../lib/constants';
 
 const EMPTY_FORM = {
   estimate_number: '',
@@ -39,11 +39,22 @@ function NewOpportunityPageInner() {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const searchTimer = useRef(null);
 
+  // Computes the next estimate number from the true numeric max across
+  // every existing estimate_number — not from "whichever row was created
+  // most recently." Estimate numbers (like job numbers) aren't always
+  // assigned in the same order rows are created, so sorting by created_at
+  // can hand back a number that's already taken. See nextInSeries for
+  // the full explanation.
+  async function computeNextEstimateNumber() {
+    const { data } = await supabase.from('jobs').select('estimate_number').not('estimate_number', 'is', null);
+    const existing = (data || []).map(row => row.estimate_number);
+    return nextInSeries(existing, `EST-${new Date().getFullYear()}-001`);
+  }
+
   useEffect(() => {
     async function loadNextEstimateNumber() {
-      const { data } = await supabase.from('jobs').select('estimate_number').not('estimate_number', 'is', null).order('created_at', { ascending: false }).limit(1);
-      const last = data && data[0] && data[0].estimate_number;
-      setForm(prev => (prev.estimate_number ? prev : { ...prev, estimate_number: nextSequentialNumber(last, `EST-${new Date().getFullYear()}-001`) }));
+      const next = await computeNextEstimateNumber();
+      setForm(prev => (prev.estimate_number ? prev : { ...prev, estimate_number: next }));
     }
     loadNextEstimateNumber();
   }, []);
@@ -158,7 +169,16 @@ function NewOpportunityPageInner() {
       ...carriedAddress,
     };
 
-    const { data, error: insertError } = await supabase.from('jobs').insert(payload).select().single();
+    // Two people opening this form at nearly the same moment can both be
+    // handed the same suggested estimate number. Rather than making
+    // Stachys refresh and retry by hand, catch the unique-constraint
+    // rejection and recompute+resubmit automatically a couple of times.
+    let data, insertError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
+      if (!insertError || insertError.code !== '23505') break;
+      payload.estimate_number = await computeNextEstimateNumber();
+    }
 
     if (!insertError && !selectedContactId) {
       // No existing contact was picked from suggestions, so this is a brand
