@@ -6,6 +6,7 @@ import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PaymentFlow from '../../../components/PaymentFlow';
+import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtMoney(v) {
   if (!v) return '—';
@@ -14,7 +15,7 @@ function fmtMoney(v) {
 
 export default function CustomerInvoicesPage() {
   const { session, loading } = usePortalAuth();
-  const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
+  const { jobs, jobsLoaded, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [draws, setDraws] = useState([]);
   const [paidFlash, setPaidFlash] = useState('');
 
@@ -29,6 +30,7 @@ export default function CustomerInvoicesPage() {
   }, [selectedJobId]);
 
   if (loading || !session) return null;
+  if (jobsLoaded && jobs.length === 0) return <CustomerPortalShell><NoActiveProjectNotice /></CustomerPortalShell>;
 
   const hasSingleInvoice = draws.length === 0 && job?.invoice_status !== 'not_sent' && job?.invoice_amount;
 

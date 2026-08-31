@@ -8,6 +8,7 @@ import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
 import PortalFeed from '../../../components/PortalFeed';
+import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -16,7 +17,7 @@ function fmtDate(v) {
 }
 export default function CustomerHomePage() {
   const { session, loading } = usePortalAuth();
-  const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
+  const { jobs, jobsLoaded, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
 
   useEffect(() => {
@@ -38,6 +39,11 @@ export default function CustomerHomePage() {
   }, [selectedJobId]);
 
   if (loading || !session) return null;
+  // A closed-lost job's portal access is revoked at the RLS layer
+  // (migration 070) — once jobs have actually finished loading, zero
+  // results means there's genuinely nothing this customer can see right
+  // now, not that the page is still fetching.
+  if (jobsLoaded && jobs.length === 0) return <CustomerPortalShell><NoActiveProjectNotice /></CustomerPortalShell>;
 
   const hasVisit = job && (job.scheduled_start_date || job.scheduled_end_date);
 

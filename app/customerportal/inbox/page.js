@@ -5,6 +5,7 @@ import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
+import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -13,7 +14,7 @@ function fmtDate(v) {
 
 export default function CustomerInboxPage() {
   const { session, loading } = usePortalAuth();
-  const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
+  const { jobs, jobsLoaded, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [questions, setQuestions] = useState([]);
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
@@ -47,6 +48,7 @@ export default function CustomerInboxPage() {
   }
 
   if (loading || !session) return null;
+  if (jobsLoaded && jobs.length === 0) return <CustomerPortalShell><NoActiveProjectNotice /></CustomerPortalShell>;
 
   return (
     <CustomerPortalShell>

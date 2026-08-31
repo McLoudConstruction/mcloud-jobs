@@ -300,7 +300,11 @@ export default function JobDetailPage() {
     setInviteResult('');
     const { error } = await supabase.auth.signInWithOtp({
       email: recipientEmail,
-      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
+      // Sends new customers into /customerportal (where PortalFeed, the
+      // no-active-project screen, etc. actually live), not the older
+      // standalone /portal/dashboard implementation — see README for the
+      // Closed Lost portal-access feature for why this matters.
+      options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
     });
     setInviting(false);
     if (error) {
