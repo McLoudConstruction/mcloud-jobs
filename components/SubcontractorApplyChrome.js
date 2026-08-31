@@ -31,7 +31,7 @@ export default function SubcontractorApplyChrome({ children }) {
         }
         .mcw-header{
           background: var(--mcw-ink); color: var(--mcw-paper); display: flex; align-items: center;
-          justify-content: space-between; padding: 14px 24px; position: sticky; top: 0; z-index: 10;
+          justify-content: space-between; padding: 14px 24px 22px; position: sticky; top: 0; z-index: 10;
         }
         .mcw-logo{ width: auto; }
         .mcw-header-link{
