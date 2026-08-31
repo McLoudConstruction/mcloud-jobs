@@ -58,15 +58,22 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
     const email = contact.contact_email;
     if (!email) { setResult('This contact has no email on file — add one before granting access.'); return; }
     const existing = findAccessRow(email);
+    let error;
     if (existing) {
-      await supabase.from('job_portal_access').update({ [field]: value }).eq('id', existing.id);
+      ({ error } = await supabase.from('job_portal_access').update({ [field]: value }).eq('id', existing.id));
     } else {
-      await supabase.from('job_portal_access').insert({
+      ({ error } = await supabase.from('job_portal_access').insert({
         job_id: jobId, contact_id: contact.id, email, name: contact.name,
         portal_access: field === 'portal_access' ? value : true,
         notify: field === 'notify' ? value : true,
-      });
+      }));
     }
+    // Don't rely solely on the realtime subscription to reflect our own
+    // write — refresh immediately so the checkbox doesn't visually snap
+    // back while waiting on (or if the DB isn't even publishing changes
+    // for this table — see migration 071).
+    if (error) setResult(`Couldn't save: ${error.message}`);
+    else await loadAccess();
   }
 
   async function addAdHoc(contact) {
@@ -78,10 +85,12 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
     });
     setContactSearch('');
     setContactResults([]);
+    await loadAccess();
   }
 
   async function removeAccess(id) {
     await supabase.from('job_portal_access').delete().eq('id', id);
+    await loadAccess();
   }
 
   async function sendInvites() {
@@ -175,7 +184,18 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 4 }}>Other contacts added to this job</div>
           {adHocRows.map(a => (
-            <AccessRow key={a.id} name={a.name} email={a.email} accessRow={a} onToggle={async (field, value) => { await supabase.from('job_portal_access').update({ [field]: value }).eq('id', a.id); }} onRemove={() => removeAccess(a.id)} />
+            <AccessRow
+              key={a.id}
+              name={a.name}
+              email={a.email}
+              accessRow={a}
+              onToggle={async (field, value) => {
+                const { error } = await supabase.from('job_portal_access').update({ [field]: value }).eq('id', a.id);
+                if (error) setResult(`Couldn't save: ${error.message}`);
+                else await loadAccess();
+              }}
+              onRemove={() => removeAccess(a.id)}
+            />
           ))}
         </div>
       )}

@@ -190,6 +190,11 @@ function NewOpportunityPageInner() {
       // Best-effort — a failed invite here shouldn't block getting to the
       // job page. Portal Access still shows the real invited/not-invited
       // state, and it can always be sent again manually from there.
+      // Uses the same working-SMTP invite route as the manual "Resend
+      // portal invite" button — this used to call signInWithOtp() directly,
+      // which sends through Supabase's own rate-limited built-in mailer and
+      // can silently fail without ever surfacing an error, wrapped in a
+      // try/catch that swallowed even that.
       try {
         await supabase.from('job_portal_access').insert({
           job_id: data.id,
@@ -198,11 +203,18 @@ function NewOpportunityPageInner() {
           portal_access: true,
           notify: true,
         });
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: form.customer_email.trim(),
-          options: { emailRedirectTo: `${window.location.origin}/customerportal/projects` },
+        const { data: { session: adminSession } } = await supabase.auth.getSession();
+        const res = await fetch('/api/portal/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken: adminSession?.access_token,
+            email: form.customer_email.trim(),
+            customerName: fullName,
+            redirectTo: `${window.location.origin}/customerportal/projects`,
+          }),
         });
-        if (!otpError) {
+        if (res.ok) {
           await supabase.from('job_portal_access').update({ invited_at: new Date().toISOString() }).eq('job_id', data.id).eq('email', form.customer_email.trim());
         }
       } catch {

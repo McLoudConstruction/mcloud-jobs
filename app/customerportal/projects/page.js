@@ -35,7 +35,16 @@ export default function CustomerHomePage() {
 
   useEffect(() => {
     if (!selectedJobId) return;
-    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId });
+    // Was previously fire-and-forget with no error handling at all — if
+    // has_job_portal_access() denies the call for any reason (e.g. testing
+    // with a contact whose "Portal access" checkbox wasn't actually
+    // granted — see the Portal Access card fix for why that could look
+    // checked in the UI without being true in the database), this failed
+    // completely silently and "last viewed" would never update, with
+    // nothing in the console to explain why.
+    supabase.rpc('mark_portal_viewed', { target_job_id: selectedJobId }).then(({ error }) => {
+      if (error) console.error('mark_portal_viewed failed:', error);
+    });
   }, [selectedJobId]);
 
   if (loading || !session) return null;
