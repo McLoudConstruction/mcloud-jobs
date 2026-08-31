@@ -1307,10 +1307,23 @@ function UpdatesCard({ jobId, updates }) {
     for (const { file } of stagedPhotos) {
       try {
         const compressed = await compressImage(file);
-        const path = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
-        const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, compressed, { contentType: 'image/jpeg' });
+        const basePath = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+        // Uploaded once, then duplicated as two independent storage
+        // objects + rows — one general (update_id null, so it shows up
+        // in the main Photos tab automatically) and one tied to this
+        // update. Independent objects rather than two rows sharing one
+        // file on purpose: deleting the photo from either the Photos tab
+        // or from this specific update must not silently break the other.
+        const generalPath = `${basePath}-general.jpg`;
+        const updatePath = `${basePath}-update.jpg`;
+        const { error: uploadError } = await supabase.storage.from('job-photos').upload(generalPath, compressed, { contentType: 'image/jpeg' });
         if (uploadError) throw uploadError;
-        await supabase.from('job_photos').insert({ job_id: jobId, update_id: updateId, storage_path: path });
+        const { error: copyError } = await supabase.storage.from('job-photos').copy(generalPath, updatePath);
+        if (copyError) throw copyError;
+        await supabase.from('job_photos').insert([
+          { job_id: jobId, update_id: null, storage_path: generalPath },
+          { job_id: jobId, update_id: updateId, storage_path: updatePath },
+        ]);
       } catch {
         // Individual photo failures shouldn't block the text update, which
         // already saved successfully — the entry's own PhotoGallery below
@@ -1318,8 +1331,22 @@ function UpdatesCard({ jobId, updates }) {
       }
     }
 
-    if (selectedExisting.length > 0) {
-      await supabase.from('job_photos').update({ update_id: updateId }).in('id', selectedExisting.map(p => p.id));
+    for (const { id: sourceId } of selectedExisting) {
+      try {
+        // These are already in the general Photos-tab bucket — attaching
+        // them here must not remove them from there, so this copies the
+        // underlying file to a second, independent storage object rather
+        // than reassigning the existing row's update_id (which would pull
+        // it out of the general bucket's query entirely).
+        const { data: source } = await supabase.from('job_photos').select('storage_path').eq('id', sourceId).single();
+        if (!source) continue;
+        const updatePath = `${jobId}/${Date.now()}-${sourceId}-update.jpg`;
+        const { error: copyError } = await supabase.storage.from('job-photos').copy(source.storage_path, updatePath);
+        if (copyError) throw copyError;
+        await supabase.from('job_photos').insert({ job_id: jobId, update_id: updateId, storage_path: updatePath });
+      } catch {
+        // Same reasoning as above — don't let one failed copy block the rest.
+      }
     }
 
     setSaving(false);
