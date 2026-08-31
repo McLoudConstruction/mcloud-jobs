@@ -6,7 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
-const STAGES = ['all', ...STAGE_ORDER];
+const STAGES = ['all', ...STAGE_ORDER, 'lost'];
 const TAB_LABELS = { all: 'All', ...STAGE_LABELS };
 
 export default function JobTrackerPage() {

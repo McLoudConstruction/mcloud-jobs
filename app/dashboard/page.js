@@ -58,7 +58,8 @@ export default function DashboardPage() {
     const overdue = jobs.filter(j =>
       j.expected_close_date &&
       new Date(j.expected_close_date) < now &&
-      phaseForStage(j.stage) === 'opportunity'
+      phaseForStage(j.stage) === 'opportunity' &&
+      j.stage !== 'lost'
     );
 
     return { byStage, soldCount, totalPaid, totalAR, revenueYTD, revenueMTD, overdue };

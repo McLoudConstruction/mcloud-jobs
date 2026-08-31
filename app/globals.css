@@ -521,6 +521,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .badge-draft{ background: #9a9488; }
 .badge-accepted{ background: #7d5a2e; }
 .badge-declined{ background: #a13f3f; }
+.badge-lost{ background: #6b6560; }
 
 [data-theme="dark"] .badge-new{ background: #8a8563; }
 [data-theme="dark"] .badge-inspected{ background: #8f8360; }
@@ -534,6 +535,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 [data-theme="dark"] .badge-draft{ background: #7a7670; }
 [data-theme="dark"] .badge-accepted{ background: #a3763f; }
 [data-theme="dark"] .badge-declined{ background: #c0524f; }
+[data-theme="dark"] .badge-lost{ background: #8a8580; }
 
 .stepper{ display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 16px 18px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; }
 .stepper-flat{ gap: 8px; }

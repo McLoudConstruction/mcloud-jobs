@@ -93,6 +93,8 @@ export default function JobDetailPage() {
   const [flash, setFlash] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
+  const [closingLost, setClosingLost] = useState(false);
+  const [lossReasonText, setLossReasonText] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -262,7 +264,7 @@ export default function JobDetailPage() {
 
   async function advanceStage() {
     const idx = STAGE_ORDER.indexOf(job.stage);
-    if (idx >= STAGE_ORDER.length - 1) return;
+    if (idx === -1 || idx >= STAGE_ORDER.length - 1) return;
     const next = STAGE_ORDER[idx + 1];
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
 
@@ -313,6 +315,28 @@ export default function JobDetailPage() {
     if (!confirm('Permanently delete this job? This cannot be undone.')) return;
     await supabase.from('jobs').delete().eq('id', id);
     router.push('/jobs');
+  }
+
+  // Closing an opportunity as lost before it's ever Approved — a real
+  // terminal stage (with its own DB constraint entry, migration 069)
+  // rather than just hiding the record, so it stays visible/filterable
+  // in the Job Tracker instead of disappearing. Mirrors the same
+  // reason-prompt pattern already used for leads in the Sales pipeline.
+  async function confirmCloseLost() {
+    await saveJob({
+      stage: 'lost',
+      stage_before_lost: job.stage,
+      lost_at: new Date().toISOString(),
+      loss_reason: lossReasonText.trim() || null,
+    });
+    setClosingLost(false);
+    setLossReasonText('');
+  }
+
+  async function reopenLost() {
+    const restoreTo = job.stage_before_lost && STAGE_ORDER.includes(job.stage_before_lost) ? job.stage_before_lost : 'new';
+    if (!confirm(`Reopen this opportunity? It will move back to ${STAGE_LABELS[restoreTo]}.`)) return;
+    await saveJob({ stage: restoreTo, stage_before_lost: null });
   }
 
   if (loading || !session) return null;
@@ -370,15 +394,24 @@ export default function JobDetailPage() {
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
               {flash && <span className="saved-flash">{flash}</span>}
             </div>
+            {job.stage === 'lost' && job.loss_reason && (
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>Loss reason: {job.loss_reason}</div>
+            )}
           </div>
           <div className="section-actions">
             <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
               {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
             </button>
-            {job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
+            {STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
               </button>
+            )}
+            {['new', 'inspected', 'proposal_delivered'].includes(job.stage) && (
+              <button className="btn btn-sm" onClick={() => { setClosingLost(true); setLossReasonText(''); }}>Close Lost</button>
+            )}
+            {job.stage === 'lost' && (
+              <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
             )}
             <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
           </div>
@@ -386,6 +419,20 @@ export default function JobDetailPage() {
         {inviteResult && (
           <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
             {inviteResult}
+          </div>
+        )}
+        {closingLost && (
+          <div className="card">
+            <h3>Reason for loss</h3>
+            <textarea
+              value={lossReasonText}
+              onChange={e => setLossReasonText(e.target.value)}
+              placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…"
+            />
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
+              <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>
+            </div>
           </div>
         )}
 
@@ -602,7 +649,11 @@ function ReviewRequestCard({ job, onSave }) {
   const [result, setResult] = useState('');
 
   async function send() {
-    const to = job.customer_email || job.billing_email || '';
+    // Same recipient precedence every other document email in this app
+    // uses (billing_email first, falling back to customer_email) — this
+    // was previously reversed here, which could silently send to a
+    // different inbox than every other email on the job.
+    const to = job.billing_email || job.customer_email || '';
     if (!to) {
       setResult('Add a contact email on the Customer tab before sending.');
       return;
