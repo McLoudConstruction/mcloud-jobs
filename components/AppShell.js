@@ -84,7 +84,7 @@ export default function AppShell({ children }) {
     let mounted2 = true;
     async function loadUnread() {
       const [{ count: notifCount }, { count: questionCount }] = await Promise.all([
-        supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('read', false),
+        supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('read', false).eq('dismissed', false),
         supabase.from('job_questions').select('*', { count: 'exact', head: true }).eq('sender', 'customer').is('read_at', null),
       ]);
       if (mounted2) setUnreadCount((notifCount || 0) + (questionCount || 0));
