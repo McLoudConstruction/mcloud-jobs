@@ -603,6 +603,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .update-entry .update-date{ font-weight: 700; font-size: 12.5px; color: var(--heading); margin-bottom: 4px; }
 .update-entry .update-field-label{ font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-top: 8px; }
 .update-entry p{ font-size: 13px; margin: 2px 0 0; white-space: pre-wrap; }
+.notification-row{ display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.notification-row-main{ flex: 1; min-width: 0; }
+.notification-dismiss{ flex-shrink: 0; }
 
 .doc-toolbar{
   padding: 16px 24px;
