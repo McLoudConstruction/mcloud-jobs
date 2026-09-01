@@ -11,6 +11,7 @@ import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import { formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
+import { syncCompanyContact } from '../../lib/contactSync';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 
@@ -78,11 +79,29 @@ export default function CompaniesPage() {
     e.preventDefault();
     if (!form.company_name.trim()) return;
     setSaving(true);
+
+    let companyId = editingId;
     if (editingId) {
       await supabase.from('companies').update(form).eq('id', editingId);
     } else {
-      await supabase.from('companies').insert(form);
+      const { data } = await supabase.from('companies').insert(form).select().single();
+      companyId = data ? data.id : null;
     }
+
+    // A contact name on this form becomes a real, linked Person in
+    // People — but only if it's a genuinely new name for this company.
+    // See lib/contactSync.js for why this never touches an existing
+    // linked Person's details.
+    if (companyId) {
+      await syncCompanyContact({
+        companyId,
+        companyName: form.company_name,
+        name: form.contact_name,
+        phone: form.contact_phone,
+        email: form.contact_email,
+      });
+    }
+
     setSaving(false);
     setForm(EMPTY_FORM);
     setEditingId(null);

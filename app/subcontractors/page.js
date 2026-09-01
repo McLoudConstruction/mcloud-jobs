@@ -13,6 +13,7 @@ import CustomFieldCell from '../../components/CustomFieldCell';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
+import { syncCompanyContact } from '../../lib/contactSync';
 
 const DECLINE_REASONS = [
   'COI information is incorrect or incomplete',
@@ -301,6 +302,13 @@ export default function SubcontractorsPage() {
         services_offered: app.services_offered,
       }).select().single();
       if (error) throw error;
+      await syncCompanyContact({
+        companyId: company.id,
+        companyName: app.company_name,
+        name: app.contact_name,
+        phone: app.contact_phone,
+        email: app.contact_email,
+      });
       await supabase.from('subcontractor_applications').update({
         status: 'approved', reviewed_at: new Date().toISOString(), created_company_id: company.id,
       }).eq('id', app.id);
@@ -369,10 +377,21 @@ export default function SubcontractorsPage() {
     setSaving(true);
     const { w9_storage_path, coi_storage_path, ...rest } = form;
     const payload = { ...rest, company_type: SUBCONTRACTOR_TYPE, coi_expires_at: form.coi_expires_at || null };
+    let companyId = editingId;
     if (editingId) {
       await supabase.from('companies').update(payload).eq('id', editingId);
     } else {
-      await supabase.from('companies').insert(payload);
+      const { data } = await supabase.from('companies').insert(payload).select().single();
+      companyId = data ? data.id : null;
+    }
+    if (companyId) {
+      await syncCompanyContact({
+        companyId,
+        companyName: form.company_name,
+        name: form.contact_name,
+        phone: form.contact_phone,
+        email: form.contact_email,
+      });
     }
     setSaving(false);
     setForm(EMPTY_FORM);

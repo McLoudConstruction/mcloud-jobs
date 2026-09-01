@@ -12,6 +12,7 @@ import CustomFieldCell from '../../components/CustomFieldCell';
 import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
+import { linkOrCreateCompanyByName, findPropertyIdByName } from '../../lib/contactSync';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
@@ -133,7 +134,20 @@ export default function CustomersPage() {
       payload.management_company = '';
       payload.billing_street = ''; payload.billing_unit = ''; payload.billing_city = '';
       payload.billing_state = ''; payload.billing_zip = ''; payload.billing_email = '';
+      payload.company_id = null;
+    } else {
+      // Mirrors what Properties already does for its own management_company
+      // field: find the matching company by name, or create it if it
+      // doesn't exist yet, so this contact is really linked rather than
+      // just carrying a text string that happens to match.
+      payload.company_id = await linkOrCreateCompanyByName(form.management_company);
     }
+
+    // Same idea for property, but link-only — a property needs a real
+    // address to be worth creating, and a contact's free-text property
+    // name alone isn't enough to do that well. If nothing matches, the
+    // text is still saved; it just isn't linked to a Properties record.
+    payload.property_id = await findPropertyIdByName(form.property);
 
     if (editingId) {
       await supabase.from('contacts').update(payload).eq('id', editingId);

@@ -15,6 +15,30 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
   const resizing = useRef(null);
 
+  // widths above is only computed once, at mount. A column added later —
+  // e.g. a custom column created after this table is already on screen —
+  // would otherwise have no entry here at all (undefined width) until a
+  // full page reload remounted the table from scratch. This fills in a
+  // default for any column that's missing one, without touching widths
+  // for columns that already have a size (including ones the user's
+  // dragged to a custom width).
+  useEffect(() => {
+    setWidths(prev => {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      const scale = isMobile ? 0.6 : 1;
+      let changed = false;
+      const next = { ...prev };
+      for (const c of columns) {
+        if (!(c.key in next)) {
+          next[c.key] = Math.round((c.defaultWidth || 160) * scale);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns.map(c => c.key).join(',')]);
+
   const onMouseMove = useCallback((e) => {
     if (!resizing.current) return;
     const { key, startX, startWidth } = resizing.current;

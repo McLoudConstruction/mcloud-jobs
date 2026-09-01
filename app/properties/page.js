@@ -13,6 +13,7 @@ import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
+import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
@@ -94,32 +95,41 @@ export default function PropertiesPage() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
-  async function findOrCreateCompany(companyName) {
-    const trimmed = (companyName || '').trim();
-    if (!trimmed) return null;
-    const { data: existing } = await supabase.from('companies').select('id').ilike('company_name', trimmed).limit(1);
-    if (existing && existing.length > 0) return existing[0].id;
-    const { data: created } = await supabase.from('companies').insert({ company_name: trimmed, company_type: 'Management Company' }).select().single();
-    return created ? created.id : null;
-  }
-
   async function submit(e) {
     e.preventDefault();
     if (!form.property_name.trim()) return;
     setSaving(true);
 
-    const companyId = await findOrCreateCompany(form.management_company);
+    const companyId = await linkOrCreateCompanyByName(form.management_company, { defaultCompanyType: 'Management Company' });
     const payload = {
       ...form,
       target_value: form.target_value ? parseFloat(String(form.target_value).replace(/[^0-9.]/g, '')) : null,
       company_id: companyId,
     };
 
+    let propertyId = editingId;
     if (editingId) {
       await supabase.from('properties').update(payload).eq('id', editingId);
     } else {
-      await supabase.from('properties').insert(payload);
+      const { data } = await supabase.from('properties').insert(payload).select().single();
+      propertyId = data ? data.id : null;
     }
+
+    // Same rule as Companies: a contact name here becomes a real, linked
+    // Person in People, but only if it's a genuinely new name for this
+    // property — an existing linked Person's own details are never
+    // overwritten from this form. See lib/contactSync.js.
+    if (propertyId) {
+      await syncPropertyContact({
+        propertyId,
+        propertyName: form.property_name,
+        managementCompany: form.management_company,
+        name: form.contact_name,
+        phone: form.contact_phone,
+        email: form.contact_email,
+      });
+    }
+
     setSaving(false);
     setForm(EMPTY_FORM);
     setEditingId(null);
