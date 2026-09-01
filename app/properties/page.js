@@ -9,7 +9,10 @@ import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
 import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
+import AddColumnButton from '../../components/AddColumnButton';
+import CustomFieldCell from '../../components/CustomFieldCell';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
+import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
@@ -66,6 +69,7 @@ export default function PropertiesPage() {
   const [savingContact, setSavingContact] = useState(false);
   const [contactNote, setContactNote] = useState('');
   const [propertyContacts, setPropertyContacts] = useState([]);
+  const { customColumns, addColumn } = useCustomColumns('properties');
 
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
@@ -141,6 +145,11 @@ export default function PropertiesPage() {
   async function removeProperty(id) {
     if (!confirm('Delete this property?')) return;
     await supabase.from('properties').delete().eq('id', id);
+  }
+
+  async function saveCustomField(property, key, value) {
+    const nextFields = await updateCustomFieldValue('properties', property.id, property.custom_fields, key, value);
+    setProperties(prev => prev.map(p => (p.id === property.id ? { ...p, custom_fields: nextFields } : p)));
   }
 
   async function markVisited(id, visitedAtIso) {
@@ -247,6 +256,7 @@ export default function PropertiesPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
+            <AddColumnButton addColumn={addColumn} />
             <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
               {showForm ? 'Cancel' : '+ Add property'}
             </button>
@@ -402,6 +412,21 @@ export default function PropertiesPage() {
                 key: 'last_visited_at', label: 'Last Visited', defaultWidth: 130, filterable: false,
                 render: p => p.last_visited_at ? new Date(p.last_visited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
               },
+              ...customColumns.map(col => ({
+                key: `custom:${col.column_key}`,
+                label: col.label,
+                defaultWidth: 150,
+                stopClickPropagation: true,
+                filterValue: p => p.custom_fields?.[col.column_key] ?? '',
+                sortValue: p => p.custom_fields?.[col.column_key] ?? '',
+                render: p => (
+                  <CustomFieldCell
+                    column={col}
+                    value={p.custom_fields?.[col.column_key]}
+                    onSave={value => saveCustomField(p, col.column_key, value)}
+                  />
+                ),
+              })),
               {
                 key: 'actions', label: '', defaultWidth: 160, filterable: false, sortable: false, stopClickPropagation: true,
                 render: p => (

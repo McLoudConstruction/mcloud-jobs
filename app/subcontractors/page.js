@@ -8,8 +8,11 @@ import AppShell from '../../components/AppShell';
 import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
+import AddColumnButton from '../../components/AddColumnButton';
+import CustomFieldCell from '../../components/CustomFieldCell';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
+import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 
 const DECLINE_REASONS = [
   'COI information is incorrect or incomplete',
@@ -122,6 +125,7 @@ function SubcontractorStats({ companyId }) {
 export default function SubcontractorsPage() {
   const { session, loading } = useRequireAuth();
   const [subs, setSubs] = useState([]);
+  const { customColumns, addColumn } = useCustomColumns('companies');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -394,6 +398,11 @@ export default function SubcontractorsPage() {
     await supabase.from('companies').delete().eq('id', id);
   }
 
+  async function saveCustomField(sub, key, value) {
+    const nextFields = await updateCustomFieldValue('companies', sub.id, sub.custom_fields, key, value);
+    setSubs(prev => prev.map(s => (s.id === sub.id ? { ...s, custom_fields: nextFields } : s)));
+  }
+
   async function invitePortal(c) {
     if (!c.contact_email) { setInviteResult('Add a contact email before inviting.'); return; }
     setInviting(true);
@@ -461,6 +470,7 @@ export default function SubcontractorsPage() {
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
             <button className="btn" onClick={() => { setApplyModalOpen(true); setApplyResult(''); }}>+ Invite a Subcontractor</button>
+            <AddColumnButton addColumn={addColumn} />
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add subcontractor</button>
           </div>
         </div>
@@ -723,6 +733,21 @@ export default function SubcontractorsPage() {
               { key: 'contact_email', label: 'Email', defaultWidth: 220, render: c => c.contact_email || '—' },
               { key: 'portal', label: 'Portal', defaultWidth: 110, filterable: false, render: c => c.portal_invited_at ? <span style={{ color: '#3a6b45', fontWeight: 600 }}>Invited</span> : <span style={{ color: 'var(--ink-soft)' }}>Not invited</span> },
               { key: 'coi', label: 'COI', defaultWidth: 130, filterable: false, render: c => coiStatus(c.coi_expires_at) },
+              ...customColumns.map(col => ({
+                key: `custom:${col.column_key}`,
+                label: col.label,
+                defaultWidth: 150,
+                stopClickPropagation: true,
+                filterValue: c => c.custom_fields?.[col.column_key] ?? '',
+                sortValue: c => c.custom_fields?.[col.column_key] ?? '',
+                render: c => (
+                  <CustomFieldCell
+                    column={col}
+                    value={c.custom_fields?.[col.column_key]}
+                    onSave={value => saveCustomField(c, col.column_key, value)}
+                  />
+                ),
+              })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeSub(c.id)}>Delete</button>,

@@ -7,7 +7,10 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
+import AddColumnButton from '../../components/AddColumnButton';
+import CustomFieldCell from '../../components/CustomFieldCell';
 import { formatPhone } from '../../lib/constants';
+import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 
@@ -52,6 +55,7 @@ export default function CompaniesPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
+  const { customColumns, addColumn } = useCustomColumns('companies');
 
   const loadCompanies = useCallback(async () => {
     const { data } = await supabase.from('companies').select('*').or('company_type.is.null,company_type.neq.Subcontractor').order('company_name', { ascending: true });
@@ -102,6 +106,11 @@ export default function CompaniesPage() {
     await supabase.from('companies').delete().eq('id', id);
   }
 
+  async function saveCustomField(company, key, value) {
+    const nextFields = await updateCustomFieldValue('companies', company.id, company.custom_fields, key, value);
+    setCompanies(prev => prev.map(c => (c.id === company.id ? { ...c, custom_fields: nextFields } : c)));
+  }
+
   async function handleImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -145,6 +154,7 @@ export default function CompaniesPage() {
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
+            <AddColumnButton addColumn={addColumn} />
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add company</button>
           </div>
         </div>
@@ -203,6 +213,21 @@ export default function CompaniesPage() {
               { key: 'contact_name', label: 'Contact Name', defaultWidth: 160, render: c => c.contact_name || '—' },
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
+              ...customColumns.map(col => ({
+                key: `custom:${col.column_key}`,
+                label: col.label,
+                defaultWidth: 150,
+                stopClickPropagation: true,
+                filterValue: c => c.custom_fields?.[col.column_key] ?? '',
+                sortValue: c => c.custom_fields?.[col.column_key] ?? '',
+                render: c => (
+                  <CustomFieldCell
+                    column={col}
+                    value={c.custom_fields?.[col.column_key]}
+                    onSave={value => saveCustomField(c, col.column_key, value)}
+                  />
+                ),
+              })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeCompany(c.id)}>Delete</button>,

@@ -7,8 +7,11 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
+import AddColumnButton from '../../components/AddColumnButton';
+import CustomFieldCell from '../../components/CustomFieldCell';
 import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
+import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
@@ -75,6 +78,7 @@ export default function CustomersPage() {
   const fileInputRef = useRef(null);
   const vcardInputRef = useRef(null);
   const [importingVcard, setImportingVcard] = useState(false);
+  const { customColumns, addColumn } = useCustomColumns('contacts');
 
   const loadContacts = useCallback(async () => {
     const { data } = await supabase.from('contacts').select('*').order('name', { ascending: true });
@@ -160,6 +164,11 @@ export default function CustomersPage() {
   async function removeContact(id) {
     if (!confirm('Delete this contact?')) return;
     await supabase.from('contacts').delete().eq('id', id);
+  }
+
+  async function saveCustomField(contact, key, value) {
+    const nextFields = await updateCustomFieldValue('contacts', contact.id, contact.custom_fields, key, value);
+    setContacts(prev => prev.map(c => (c.id === contact.id ? { ...c, custom_fields: nextFields } : c)));
   }
 
   async function handleImportFile(e) {
@@ -248,6 +257,7 @@ export default function CustomersPage() {
             <button className="btn" onClick={() => vcardInputRef.current?.click()} disabled={importingVcard}>
               {importingVcard ? 'Importing…' : '↑ Import from iPhone (.vcf)'}
             </button>
+            <AddColumnButton addColumn={addColumn} />
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add new contact</button>
           </div>
         </div>
@@ -365,6 +375,21 @@ export default function CustomersPage() {
               { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
+              ...customColumns.map(col => ({
+                key: `custom:${col.column_key}`,
+                label: col.label,
+                defaultWidth: 150,
+                stopClickPropagation: true,
+                filterValue: c => c.custom_fields?.[col.column_key] ?? '',
+                sortValue: c => c.custom_fields?.[col.column_key] ?? '',
+                render: c => (
+                  <CustomFieldCell
+                    column={col}
+                    value={c.custom_fields?.[col.column_key]}
+                    onSave={value => saveCustomField(c, col.column_key, value)}
+                  />
+                ),
+              })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>,
