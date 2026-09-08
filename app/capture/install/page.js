@@ -20,12 +20,16 @@ export default function InstallBookmarkletPage() {
           onClick={e => e.preventDefault()}
           style={{
             display: 'inline-block',
-            padding: '10px 18px',
-            background: '#1c1b19',
+            padding: '13px 26px',
+            background: '#A8471F',
             color: '#fff',
             borderRadius: 6,
             textDecoration: 'none',
-            fontSize: 14,
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+            boxShadow: '0 2px 8px rgba(168, 71, 31, 0.4)',
+            border: '1px solid #8a3a19',
             cursor: 'grab',
             margin: '16px 0',
           }}

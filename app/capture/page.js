@@ -31,7 +31,7 @@ export default function CapturePage() {
   const [selections, setSelections] = useState([]);
   const [selectionId, setSelectionId] = useState(''); // '' = choose, '__new__' = create
   const [newSheetTitle, setNewSheetTitle] = useState('');
-  const [form, setForm] = useState({ item: '', brand: '', price: '', color: '', model_number: '' });
+  const [form, setForm] = useState({ item: '', brand: '', price: '', color: '', model_number: '', height: '', width: '', depth: '' });
   const [status, setStatus] = useState('waiting'); // waiting | ready | saving | saved | error
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -48,8 +48,11 @@ export default function CapturePage() {
         item: payload.name || '',
         brand: payload.brand || '',
         price: payload.priceCents != null ? formatPrice(payload.priceCents) : '',
-        color: '',
+        color: payload.color || '',
         model_number: payload.sku || '',
+        height: payload.height || '',
+        width: payload.width || '',
+        depth: payload.depth || '',
       });
       setStatus('ready');
     }
@@ -112,6 +115,9 @@ export default function CapturePage() {
       brand: form.brand.trim() || null,
       model_number: form.model_number.trim() || null,
       color: form.color.trim() || null,
+      height: form.height.trim() || null,
+      width: form.width.trim() || null,
+      depth: form.depth.trim() || null,
       price_cents: form.price ? parsePriceToCents(form.price) : null,
       photo_external_url: captured?.imageUrl || null,
       source_url: captured?.sourceUrl || null,
@@ -171,6 +177,17 @@ export default function CapturePage() {
         <Field label="Color">
           <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} style={inputStyle} />
         </Field>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Field label="Height">
+            <input value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="e.g. 24 in" style={inputStyle} />
+          </Field>
+          <Field label="Width">
+            <input value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="e.g. 30 in" style={inputStyle} />
+          </Field>
+          <Field label="Depth">
+            <input value={form.depth} onChange={e => setForm(f => ({ ...f, depth: e.target.value }))} placeholder="e.g. 18 in" style={inputStyle} />
+          </Field>
+        </div>
         <Field label="Price">
           <input value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" style={inputStyle} />
         </Field>
@@ -214,9 +231,9 @@ export default function CapturePage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, style }) {
   return (
-    <label style={{ display: 'block', marginBottom: 12 }}>
+    <label style={{ display: 'block', marginBottom: 12, flex: 1, minWidth: 0, ...style }}>
       <span style={{ display: 'block', fontSize: 12, color: '#555', marginBottom: 4 }}>{label}</span>
       {children}
     </label>

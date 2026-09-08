@@ -136,6 +136,13 @@ export default function MaterialSelectionPage() {
                   {opt.brand && <div><b>Brand:</b> {opt.brand}</div>}
                   {opt.model_number && <div><b>Model #:</b> {opt.model_number}</div>}
                   {opt.color && <div><b>Color:</b> {opt.color}</div>}
+                  {(opt.width || opt.height || opt.depth) && (
+                    <div><b>Dimensions:</b> {[
+                      opt.width && `W ${opt.width}`,
+                      opt.height && `H ${opt.height}`,
+                      opt.depth && `D ${opt.depth}`,
+                    ].filter(Boolean).join(' × ')}</div>
+                  )}
                 </div>
 
                 {isChosen && (
