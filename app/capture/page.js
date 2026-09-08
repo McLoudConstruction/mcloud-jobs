@@ -32,6 +32,7 @@ export default function CapturePage() {
   const [selectionId, setSelectionId] = useState(''); // '' = choose, '__new__' = create
   const [newSheetTitle, setNewSheetTitle] = useState('');
   const [form, setForm] = useState({ item: '', brand: '', price: '', color: '', model_number: '', height: '', width: '', depth: '' });
+  const [extraSpecs, setExtraSpecs] = useState([]); // [{ key, value, include }]
   const [status, setStatus] = useState('waiting'); // waiting | ready | saving | saved | error
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -54,6 +55,8 @@ export default function CapturePage() {
         width: payload.width || '',
         depth: payload.depth || '',
       });
+      const specEntries = Object.entries(payload.extraSpecs || {}).map(([key, value]) => ({ key, value, include: true }));
+      setExtraSpecs(specEntries);
       setStatus('ready');
     }
     window.addEventListener('message', handleMessage);
@@ -122,6 +125,7 @@ export default function CapturePage() {
       photo_external_url: captured?.imageUrl || null,
       source_url: captured?.sourceUrl || null,
       captured_via: 'bookmarklet',
+      specs: extraSpecs.filter(s => s.include).reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {}),
       display_order: count || 0,
     });
 
@@ -191,6 +195,27 @@ export default function CapturePage() {
         <Field label="Price">
           <input value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" style={inputStyle} />
         </Field>
+
+        {extraSpecs.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <span style={{ display: 'block', fontSize: 12, color: '#555', marginBottom: 6 }}>
+              Other details found on the page — uncheck anything you don't want saved
+            </span>
+            <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: '6px 10px' }}>
+              {extraSpecs.map((s, i) => (
+                <label key={s.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, padding: '4px 0' }}>
+                  <input
+                    type="checkbox"
+                    checked={s.include}
+                    onChange={e => setExtraSpecs(prev => prev.map((p, pi) => pi === i ? { ...p, include: e.target.checked } : p))}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span><b>{s.key}:</b> {s.value}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Field label="Job">
           <select value={jobId} onChange={e => setJobId(e.target.value)} required style={inputStyle}>

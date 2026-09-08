@@ -143,6 +143,11 @@ export default function MaterialSelectionPage() {
                       opt.depth && `D ${opt.depth}`,
                     ].filter(Boolean).join(' × ')}</div>
                   )}
+                  {opt.specs && Object.keys(opt.specs).length > 0 && (
+                    Object.entries(opt.specs).map(([key, value]) => (
+                      <div key={key}><b>{key}:</b> {value}</div>
+                    ))
+                  )}
                 </div>
 
                 {isChosen && (
