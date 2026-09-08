@@ -1,83 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+// Serves the minified bookmarklet JS as plain text, so the install page
+// can build the javascript: href without embedding a huge inline string
+// in the React bundle, and so updating the scraper is a one-file change.
 
-// The marketing site lives on a different domain than jobs.mcloudconstruction.com,
-// so this needs real CORS handling — browsers block cross-origin responses
-// without it. Restricted to the actual marketing site domains, not '*'.
-const ALLOWED_ORIGINS = [
-  'https://www.mcloudconstruction.com',
-  'https://mcloudconstruction.com',
-];
+const BOOKMARKLET_CODE = "!function(){var t=\"https://jobs.mcloudconstruction.com/capture\";function e(t){return t?\"string\"==typeof t?t:null!=t.value?String(t.value)+(t.unitText?\" \"+t.unitText:\"\"):null:null}function r(t,e){if(!t.additionalProperty)return null;for(var r=Array.isArray(t.additionalProperty)?t.additionalProperty:[t.additionalProperty],n=0;n<r.length;n++)for(var l=r[n]||{},o=(l.name||\"\").toLowerCase(),i=0;i<e.length;i++)if(-1!==o.indexOf(e[i]))return null!=l.value?String(l.value):l.unitText||null;return null}function n(t,e){for(var r=[\"product \"+e+\" (in.)\",\"overall \"+e+\" (in.)\",\"cabinet \"+e+\" (in.)\",\"item \"+e+\" (in.)\",\"product \"+e,\"overall \"+e,e+\" (in.)\",e],n=0;n<r.length;n++){var l=t[r[n]];if(l)return/^[\\d.]+$/.test(l)&&(l+=\" in\"),l}return null}var l,o=function(){for(var t=document.querySelectorAll('script[type=\"application/ld+json\"]'),n=0;n<t.length;n++)try{for(var l=JSON.parse(t[n].textContent),o=Array.isArray(l)?l:[l],i=0;i<o.length;i++){var a=o[i];if(a[\"@graph\"]&&(a=a[\"@graph\"].find(function(t){return\"Product\"===t[\"@type\"]})||a),a&&(\"Product\"===a[\"@type\"]||Array.isArray(a[\"@type\"])&&-1!==a[\"@type\"].indexOf(\"Product\"))){var u=Array.isArray(a.offers)?a.offers[0]:a.offers,d=Array.isArray(a.image)?a.image[0]:a.image;return{name:a.name||null,brand:a.brand&&(a.brand.name||a.brand)||null,sku:a.sku||a.mpn||null,imageUrl:d||null,priceCents:u&&u.price?Math.round(100*parseFloat(u.price)):null,color:a.color||r(a,[\"color\"])||null,height:e(a.height)||r(a,[\"height\"])||null,width:e(a.width)||r(a,[\"width\"])||null,depth:e(a.depth)||r(a,[\"depth\",\"length\"])||null}}}}catch(t){}return null}()||function(){function t(t){var e=document.querySelector('meta[property=\"'+t+'\"], meta[name=\"'+t+'\"]');return e?e.getAttribute(\"content\"):null}var e=t(\"og:title\");if(!e)return null;var r=t(\"product:price:amount\")||t(\"og:price:amount\");return{name:e,brand:t(\"product:brand\")||t(\"og:brand\")||null,sku:null,imageUrl:t(\"og:image\"),priceCents:r?Math.round(100*parseFloat(r)):null,color:t(\"product:color\")||null,height:null,width:null,depth:null}}()||{name:(l=document.querySelector(\"h1\"))?l.textContent.trim():document.title,brand:null,sku:null,imageUrl:null,priceCents:null,color:null,height:null,width:null,depth:null},i=function(){for(var t={},e=document.querySelectorAll(\"tr\"),r=0;r<e.length;r++){var n=e[r].querySelectorAll(\"th,td\");if(n.length>=2){var l=n[0].textContent.trim().toLowerCase(),o=n[1].textContent.trim();l&&o&&(t[l]=o)}}for(var i=document.querySelectorAll(\"dl dt\"),a=0;a<i.length;a++){var u=i[a].nextElementSibling;if(u&&\"DD\"===u.tagName){var d=i[a].textContent.trim().toLowerCase(),c=u.textContent.trim();d&&c&&(t[d]=c)}}for(var h=(document.body.innerText||document.body.textContent||\"\").split(\"\\n\").map(function(t){return t.trim()}).filter(Boolean),p=0;p<h.length-1;p++){var s=h[p].toLowerCase();s.length>0&&s.length<60&&!(s in t)&&(t[s]=h[p+1])}return t}();o.color=o.color||function(t){for(var e=[\"color/finish family\",\"color family\",\"color/finish\",\"finish family\",\"color\",\"finish\"],r=0;r<e.length;r++)if(t[e[r]])return t[e[r]];return null}(i),o.height=o.height||n(i,\"height\"),o.width=o.width||n(i,\"width\"),o.depth=o.depth||n(i,\"depth\"),o.sourceUrl=window.location.href;var a=window.open(t,\"mcloudCapture\",\"width=460,height=760\");a?window.addEventListener(\"message\",function e(r){r.source===a&&r.data&&\"MCLOUD_CAPTURE_READY\"===r.data.type&&(a.postMessage({type:\"MCLOUD_CAPTURE\",payload:o},t),window.removeEventListener(\"message\",e))}):alert(\"McLoud Jobs: please allow popups for this site, then click the bookmarklet again.\")}();";
 
-function corsHeaders(origin) {
-  const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-}
-
-function serviceClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
-export async function OPTIONS(request) {
-  return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('origin')) });
-}
-
-export async function POST(request) {
-  const headers = corsHeaders(request.headers.get('origin'));
-
-  try {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return Response.json({ error: 'Server not configured.' }, { status: 500, headers });
-    }
-
-    const body = await request.json();
-
-    // Honeypot — a field real visitors never see or fill, but bots
-    // filling every input often do. Silently accept and do nothing real,
-    // rather than telling a bot its submission was rejected.
-    if (body.website) {
-      return Response.json({ ok: true }, { headers });
-    }
-
-    const name = (body.name || '').trim();
-    const email = (body.email || '').trim();
-    const phone = (body.phone || '').trim();
-    const projectType = body.projectType === 'Commercial' ? 'commercial' : 'residential';
-    const company = (body.company || '').trim();
-    const project = (body.project || '').trim();
-    const message = (body.message || '').trim();
-
-    if (!name || !email) {
-      return Response.json({ error: 'Name and email are required.' }, { status: 400, headers });
-    }
-
-    const supabase = serviceClient();
-
-    const { data: lead, error: leadError } = await supabase.from('opportunities').insert({
-      contact_name: name,
-      contact_email: email,
-      contact_phone: phone || null,
-      project_type: projectType,
-      company: company || null,
-      project: project || null,
-      notes: message || null,
-      stage: 'prospecting',
-    }).select().single();
-
-    if (leadError) {
-      return Response.json({ error: leadError.message }, { status: 500, headers });
-    }
-
-    await supabase.from('notifications').insert({
-      job_id: null,
-      message: `New website consultation request from ${name}${company ? ` (${company})` : ''} — ${projectType} project. Reply to ${email}${phone ? ` or call ${phone}` : ''}.`,
-    });
-
-    return Response.json({ ok: true, leadId: lead.id }, { headers });
-  } catch (err) {
-    return Response.json({ error: err.message || 'Something went wrong.' }, { status: 500, headers });
-  }
+export async function GET() {
+  return new Response(BOOKMARKLET_CODE, {
+    headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
 }
