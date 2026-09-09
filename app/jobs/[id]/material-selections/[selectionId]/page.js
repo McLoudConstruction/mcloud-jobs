@@ -9,6 +9,88 @@ import ImageDropzone from '../../../../../components/ImageDropzone';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
+function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, selectionStatus, onChoose, onDelete, choosing }) {
+  const [expanded, setExpanded] = useState(false);
+  const MAX_VISIBLE_ROWS = 4;
+
+  const detailRows = [];
+  if (opt.width || opt.height || opt.depth) {
+    detailRows.push(['Dimensions', [
+      opt.width && `W ${opt.width}`,
+      opt.height && `H ${opt.height}`,
+      opt.depth && `D ${opt.depth}`,
+    ].filter(Boolean).join(' × ')]);
+  }
+  if (opt.specs) {
+    Object.entries(opt.specs).forEach(([key, value]) => detailRows.push([key, value]));
+  }
+  const visibleRows = expanded ? detailRows : detailRows.slice(0, MAX_VISIBLE_ROWS);
+  const hiddenCount = detailRows.length - visibleRows.length;
+
+  const priceDisplay = opt.price_cents != null ? `$${(opt.price_cents / 100).toFixed(2)}` : null;
+  const optionLine = [
+    opt.brand && `Brand: ${opt.brand}`,
+    opt.model_number && `Model #: ${opt.model_number}`,
+    opt.color && `Color: ${opt.color}`,
+  ].filter(Boolean);
+
+  return (
+    <div className="card material-option-card" style={isChosen ? { borderColor: 'var(--accent)', borderWidth: 2 } : undefined}>
+      {/* Photo + price, front and center */}
+      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+        {photoUrl && (
+          <button type="button" className="selection-photo-btn no-print" onClick={() => onExpandPhoto(photoUrl)} aria-label={`Expand photo of ${opt.item}`}>
+            <img src={photoUrl} alt={opt.item} style={{ width: 100, height: 100, objectFit: 'contain' }} />
+          </button>
+        )}
+        {priceDisplay && (
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--heading)', marginTop: 6 }}>{priceDisplay}</div>
+        )}
+      </div>
+
+      {/* Simple header */}
+      <div style={{ fontWeight: 700, fontSize: 14, textAlign: 'center' }}>{opt.item}</div>
+
+      {/* Brand / Model / Color, all on one row */}
+      {optionLine.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 14px', fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 6 }}>
+          {optionLine.map(line => <span key={line}>{line}</span>)}
+        </div>
+      )}
+
+      {/* Everything else, capped with a "+N more" expander */}
+      {detailRows.length > 0 && (
+        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 10, lineHeight: 1.7 }}>
+          {visibleRows.map(([key, value]) => (
+            <div key={key}><b>{key}:</b> {value}</div>
+          ))}
+          {(hiddenCount > 0 || expanded) && detailRows.length > MAX_VISIBLE_ROWS && (
+            <button
+              type="button"
+              className="no-print"
+              onClick={() => setExpanded(e => !e)}
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '4px 0' }}
+            >
+              {expanded ? 'Show less' : `+ ${hiddenCount} more`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {isChosen && (
+        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: '#3a6b45', textAlign: 'center' }}>✓ Selected</div>
+      )}
+      {!isAdmin && selectionStatus === 'sent' && (
+        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={() => onChoose(opt.id)} disabled={choosing}>
+          {choosing ? 'Submitting…' : 'Choose This'}
+        </button>
+      )}
+      {isAdmin && isDraft && (
+        <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={() => onDelete(opt.id)}>Remove</button>
+      )}
+    </div>
+  );
+}
 export default function MaterialSelectionPage() {
   const { session, loading } = useDocumentAuth();
   const { id, selectionId } = useParams();
@@ -122,48 +204,21 @@ export default function MaterialSelectionPage() {
         </div>
 
         <div className="material-options-grid">
-          {options.map(opt => {
-            const isChosen = selection.selected_option_id === opt.id;
-            return (
-              <div key={opt.id} className="card material-option-card" style={isChosen ? { borderColor: 'var(--accent)', borderWidth: 2 } : undefined}>
-                {photoUrls[opt.id] && (
-                  <button type="button" className="selection-photo-btn no-print" onClick={() => setLightboxUrl(photoUrls[opt.id])} aria-label={`Expand photo of ${opt.item}`}>
-                    <img src={photoUrls[opt.id]} alt={opt.item} />
-                  </button>
-                )}
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{opt.item}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 6, lineHeight: 1.7 }}>
-                  {opt.brand && <div><b>Brand:</b> {opt.brand}</div>}
-                  {opt.model_number && <div><b>Model #:</b> {opt.model_number}</div>}
-                  {opt.color && <div><b>Color:</b> {opt.color}</div>}
-                  {(opt.width || opt.height || opt.depth) && (
-                    <div><b>Dimensions:</b> {[
-                      opt.width && `W ${opt.width}`,
-                      opt.height && `H ${opt.height}`,
-                      opt.depth && `D ${opt.depth}`,
-                    ].filter(Boolean).join(' × ')}</div>
-                  )}
-                  {opt.specs && Object.keys(opt.specs).length > 0 && (
-                    Object.entries(opt.specs).map(([key, value]) => (
-                      <div key={key}><b>{key}:</b> {value}</div>
-                    ))
-                  )}
-                </div>
-
-                {isChosen && (
-                  <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: '#3a6b45' }}>✓ Selected</div>
-                )}
-                {!isAdmin && selection.status === 'sent' && (
-                  <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={() => chooseOption(opt.id)} disabled={choosing}>
-                    {choosing ? 'Submitting…' : 'Choose This'}
-                  </button>
-                )}
-                {isAdmin && isDraft && (
-                  <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={() => deleteOption(opt.id)}>Remove</button>
-                )}
-              </div>
-            );
-          })}
+          {options.map(opt => (
+            <OptionCard
+              key={opt.id}
+              opt={opt}
+              isChosen={selection.selected_option_id === opt.id}
+              photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
+              onExpandPhoto={setLightboxUrl}
+              isAdmin={isAdmin}
+              isDraft={isDraft}
+              selectionStatus={selection.status}
+              onChoose={chooseOption}
+              onDelete={deleteOption}
+              choosing={choosing}
+            />
+          ))}
         </div>
 
         {options.length === 0 && <div className="empty-state">No options added yet.</div>}
