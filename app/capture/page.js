@@ -33,7 +33,6 @@ export default function CapturePage() {
   const [newSheetTitle, setNewSheetTitle] = useState('');
   const [form, setForm] = useState({ item: '', brand: '', price: '', color: '', model_number: '', height: '', width: '', depth: '' });
   const [extraSpecs, setExtraSpecs] = useState([]); // [{ key, value, include }]
-  const [specsLoading, setSpecsLoading] = useState(false);
   const [status, setStatus] = useState('waiting'); // waiting | ready | saving | saved | error
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -56,29 +55,9 @@ export default function CapturePage() {
         width: payload.width || '',
         depth: payload.depth || '',
       });
+      const specEntries = Object.entries(payload.extraSpecs || {}).map(([key, value]) => ({ key, value, include: true }));
+      setExtraSpecs(specEntries);
       setStatus('ready');
-
-      // The bookmarklet sends a loosely-filtered candidate list (shape
-      // checks only, no keyword requirement) — this route does the
-      // actual "is this really a product attribute" judgment via Claude,
-      // so it generalizes to whatever fields this particular item's
-      // category needs instead of only recognizing a fixed keyword list.
-      const candidates = payload.candidateSpecs || {};
-      if (Object.keys(candidates).length > 0) {
-        setSpecsLoading(true);
-        fetch('/api/capture/classify-specs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pairs: candidates }),
-        })
-          .then(r => r.json())
-          .then(data => {
-            const specs = Array.isArray(data?.specs) ? data.specs : [];
-            setExtraSpecs(specs.map(s => ({ key: s.label, value: s.value, include: true })));
-          })
-          .catch(() => setExtraSpecs([]))
-          .finally(() => setSpecsLoading(false));
-      }
     }
     window.addEventListener('message', handleMessage);
     if (window.opener) {
@@ -217,10 +196,7 @@ export default function CapturePage() {
           <input value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" style={inputStyle} />
         </Field>
 
-        {specsLoading && (
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>Checking for other relevant details…</p>
-        )}
-        {!specsLoading && extraSpecs.length > 0 && (
+        {extraSpecs.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <span style={{ display: 'block', fontSize: 12, color: '#555', marginBottom: 6 }}>
               Other details found on the page — uncheck anything you don't want saved
