@@ -9,39 +9,9 @@ import ImageDropzone from '../../../../../components/ImageDropzone';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
-// Maps common material/finish color language to a representative swatch
-// color for the hover/pin border — free text ("Spot Resist Stainless",
-// "Oil Rubbed Bronze") rather than a fixed palette, so this matches by
-// keyword rather than exact value. Falls back to the app's own brass
-// accent for anything unrecognized, rather than showing nothing.
-function colorForSwatch(colorText) {
-  if (!colorText) return null;
-  const t = colorText.toLowerCase();
-  const table = [
-    [['chrome', 'stainless', 'nickel', 'silver', 'platinum', 'pewter'], '#adb5bd'],
-    [['bronze', 'oil rubbed', 'copper', 'rust'], '#6b4226'],
-    [['brass', 'gold', 'brushed gold'], '#b8860b'],
-    [['black', 'matte black', 'onyx', 'graphite'], '#1a1a1a'],
-    [['white', 'bisque', 'almond', 'linen', 'ivory'], '#f0ede4'],
-    [['gray', 'grey', 'slate', 'charcoal'], '#6b7280'],
-    [['espresso', 'walnut', 'dark wood', 'ebony'], '#3e2723'],
-    [['oak', 'natural wood', 'honey', 'maple'], '#c19a6b'],
-    [['cherry', 'mahogany'], '#5d2e1f'],
-    [['red'], '#c0392b'],
-    [['blue', 'navy'], '#2c5282'],
-    [['green'], '#2f6b3a'],
-    [['beige', 'tan'], '#d2b48c'],
-  ];
-  for (const [keywords, hex] of table) {
-    if (keywords.some(k => t.indexOf(k) !== -1)) return hex;
-  }
-  return '#9B773D'; // brass accent — unrecognized color text still gets a visible cue
-}
-
 function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, selectionStatus, onChoose, onDelete, choosing }) {
   const [expanded, setExpanded] = useState(false);
   const [hovering, setHovering] = useState(false);
-  const [pinned, setPinned] = useState(false);
   const MAX_VISIBLE_ROWS = 4;
 
   const detailRows = [];
@@ -65,29 +35,46 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
     opt.color && `Color: ${opt.color}`,
   ].filter(Boolean);
 
-  const swatch = colorForSwatch(opt.color); // null only when no color was captured at all
-  const highlightColor = swatch || 'var(--accent)'; // still give hover/pin feedback even without captured color data
-  const showHighlight = hovering || pinned;
-  const borderColor = isChosen ? 'var(--accent)' : showHighlight ? highlightColor : 'var(--line)';
-  const borderWidth = isChosen || showHighlight ? 2 : 1;
+  // This is purely a "which one are you picking" affordance for the
+  // customer — not tied to the item's actual material color. Hover
+  // previews what clicking would select; a click commits it. Only
+  // active when there's actually something to choose (customer view,
+  // sheet sent, not admin/draft), so the whole card is the click
+  // target rather than needing the separate button below.
+  const selectable = !isAdmin && selectionStatus === 'sent';
+  const showHoverPreview = selectable && !isChosen && hovering;
+  const borderColor = isChosen ? 'var(--accent)' : showHoverPreview ? 'var(--accent)' : 'var(--line)';
+  const borderWidth = isChosen ? 3 : showHoverPreview ? 2 : 1;
 
   return (
     <div
       className="material-option-card"
-      onMouseEnter={() => setHovering(true)}
+      onMouseEnter={() => selectable && setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      onClick={() => setPinned(p => !p)}
+      onClick={() => selectable && !choosing && onChoose(opt.id)}
       style={{
         border: `${borderWidth}px solid ${borderColor}`,
         borderRadius: 8,
         padding: 14,
-        cursor: 'pointer',
-        transition: 'border-color 150ms ease',
+        cursor: selectable ? 'pointer' : 'default',
+        transition: 'border-color 150ms ease, background-color 150ms ease',
         height: '100%',
         alignSelf: 'stretch',
         boxSizing: 'border-box',
+        backgroundColor: isChosen ? 'rgba(155, 119, 61, 0.08)' : 'transparent',
+        position: 'relative',
       }}
     >
+      {isChosen && (
+        <div style={{
+          position: 'absolute', top: 10, right: 10,
+          width: 24, height: 24, borderRadius: '50%',
+          background: 'var(--accent)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, fontWeight: 700,
+        }}>✓</div>
+      )}
+
       {/* Photo + price, front and center */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         {photoUrl && (
@@ -130,10 +117,10 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
       )}
 
       {isChosen && (
-        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: '#3a6b45', textAlign: 'center' }}>✓ Selected</div>
+        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: 'var(--accent)', textAlign: 'center' }}>✓ This is your selection</div>
       )}
-      {!isAdmin && selectionStatus === 'sent' && (
-        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={e => { e.stopPropagation(); onChoose(opt.id); }} disabled={choosing}>
+      {selectable && !isChosen && (
+        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12, width: '100%' }} onClick={e => { e.stopPropagation(); onChoose(opt.id); }} disabled={choosing}>
           {choosing ? 'Submitting…' : 'Choose This'}
         </button>
       )}
