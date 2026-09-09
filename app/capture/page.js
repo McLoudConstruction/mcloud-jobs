@@ -210,7 +210,7 @@ export default function CapturePage() {
                     onChange={e => setExtraSpecs(prev => prev.map((p, pi) => pi === i ? { ...p, include: e.target.checked } : p))}
                     style={{ marginTop: 2, flexShrink: 0 }}
                   />
-                  <span style={{ textAlign: 'left', flex: 1 }}><b>{s.key}:</b> {s.value}</span>
+                  <span style={{ textAlign: 'left', flex: 1, minWidth: 0, wordBreak: 'break-word', overflowWrap: 'break-word' }}><b>{s.key}:</b> {s.value}</span>
                 </label>
               ))}
             </div>
