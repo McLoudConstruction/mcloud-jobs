@@ -67,9 +67,26 @@ const TABS = [
   },
   {
     key: 'Financials', label: 'Financials',
-    // Work orders, receipts, draws, change orders — none of this exists
-    // yet on a job that hasn't been approved, so don't show the tab at
-    // all rather than showing five empty cards.
+    // Cost summary / budget-vs-actual overview only now — Change Orders,
+    // Work Orders, Invoicing, and Receipts were split out into their own
+    // tabs (Sep 2026) the same way Material Selections was earlier, so
+    // each is one click away instead of a scroll inside a shared tab.
+    hideWhen: (job) => isOpportunity(job),
+  },
+  {
+    key: 'Change Orders', label: 'Change Orders',
+    hideWhen: (job) => isOpportunity(job),
+  },
+  {
+    key: 'Work Orders', label: 'Work Orders',
+    hideWhen: (job) => isOpportunity(job),
+  },
+  {
+    key: 'Invoicing', label: 'Invoicing',
+    hideWhen: (job) => isOpportunity(job),
+  },
+  {
+    key: 'Receipts', label: 'Receipts',
     hideWhen: (job) => isOpportunity(job),
   },
   { key: 'Photos', label: 'Photos' },
@@ -532,22 +549,35 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Financials' && (
-          <div className="estimate-grid">
-            <div className="estimate-main">
-              <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
-              <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
-              {phaseForStage(job.stage) !== 'opportunity' && (
-                <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
-              )}
-            </div>
-            <div className="estimate-sidebar">
-              <ReceiptsCard jobId={id} />
-              <DrawsCard jobId={id} />
-              {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-                <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-              )}
-            </div>
-          </div>
+          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
+        )}
+
+        {tab === 'Change Orders' && (
+          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
+        )}
+
+        {tab === 'Work Orders' && (
+          <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
+        )}
+
+        {tab === 'Invoicing' && (
+          <>
+            <DrawsCard jobId={id} />
+            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
+              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
+            ) : (
+              <div className="card">
+                <h3>Invoice</h3>
+                <div className="empty-state">
+                  The final invoice becomes available once this job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'Receipts' && (
+          <ReceiptsCard jobId={id} />
         )}
 
         {tab === 'Photos' && (
