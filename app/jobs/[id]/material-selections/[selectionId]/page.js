@@ -181,7 +181,7 @@ export default function MaterialSelectionPage() {
     if (!session) return;
     load();
     loadSiblings();
-    supabase.from('jobs').select('job_number, estimate_number, customer_name').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
+    supabase.from('jobs').select('job_number, estimate_number, customer_name, customer_email, billing_email').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
     const channel = supabase.channel(`material-selection-${selectionId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selection_options', filter: `selection_id=eq.${selectionId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `id=eq.${selectionId}` }, load)
@@ -281,7 +281,7 @@ export default function MaterialSelectionPage() {
     <div>
       <div className="no-print doc-toolbar">
         <Link href={isAdmin ? `/jobs/${id}?tab=Updates&section=log` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className={`badge badge-${isApproved ? 'paid' : selection.status === 'sent' ? 'active' : 'draft'}`}>
             {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}
           </span>
@@ -372,6 +372,7 @@ export default function MaterialSelectionPage() {
           docLabel={selection.title}
           docType="material selection"
           customerName={job?.customer_name}
+          defaultEmail={job?.billing_email || job?.customer_email || ''}
           docElementId="doc-preview"
           pdfFilename={`${selection.title}.pdf`}
           jobId={id}
