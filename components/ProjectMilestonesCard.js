@@ -8,14 +8,14 @@ const ITEMS = [
   { key: 'portal', label: 'Portal Access Granted', tab: 'Customer', section: 'portal' },
   { key: 'scope', label: 'Scope of Work', tab: 'Estimate', section: 'scope' },
   { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate', section: 'pricing' },
-  { key: 'contract', label: 'Contract Signed', tab: 'Updates', section: 'log' },
-  { key: 'selections', label: 'Material Selections', tab: 'Updates', section: 'log' },
-  { key: 'workOrders', label: 'Work Orders Issued', tab: 'Financials' },
-  { key: 'receipts', label: 'Receipts Logged', tab: 'Financials' },
+  { key: 'contract', label: 'Contract Signed', tab: 'Project Updates' },
+  { key: 'selections', label: 'Material Selections', tab: 'Material Selections' },
+  { key: 'workOrders', label: 'Work Orders Issued', tab: 'Work Orders' },
+  { key: 'receipts', label: 'Receipts Logged', tab: 'Receipts' },
   { key: 'photos', label: 'Photos', tab: 'Photos' },
-  { key: 'updates', label: 'Progress Updates Sent', tab: 'Updates', section: 'log' },
-  { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Financials' },
-  { key: 'invoicing', label: 'Invoicing', tab: 'Financials' },
+  { key: 'updates', label: 'Progress Updates Sent', tab: 'Project Updates' },
+  { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Change Orders' },
+  { key: 'invoicing', label: 'Invoicing', tab: 'Invoicing' },
 ];
 
 export default function ProjectMilestonesCard({ job, jobId, onTabChange }) {

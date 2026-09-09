@@ -23,7 +23,7 @@ import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, ChangeOrderIcon, WorkOrderIcon,
-  InvoiceIcon, ReceiptIcon, PhotosIcon, MaterialSelectionsTabIcon, UpdatesTabIcon, InternalUpdatesIcon,
+  InvoiceIcon, ReceiptIcon, PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -33,7 +33,6 @@ import {
 // possible to open "the Scope tab" without wading through 1,500+
 // unrelated lines to find it.
 import JobMessagesCard from '../../../components/JobMessagesCard';
-import JobQuickAccessIcons from '../../../components/JobQuickAccessIcons';
 import ReviewRequestCard from '../../../components/ReviewRequestCard';
 import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
 import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
@@ -96,13 +95,8 @@ const TABS = [
   },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon },
   { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
-  {
-    key: 'Updates', label: 'Updates', icon: UpdatesTabIcon,
-    sections: [
-      { key: 'log', label: 'Progress & Documents' },
-      { key: 'messages', label: 'Messages' },
-    ],
-  },
+  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon },
+  { key: 'Messages', label: 'Messages', icon: MessagesIcon },
   { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
 ];
 
@@ -445,6 +439,12 @@ export default function JobDetailPage() {
             )}
           </div>
           <div className="section-actions">
+            <button className="btn btn-sm" onClick={() => goToTab('Messages')}>
+              <MessagesIcon width={16} height={16} /> Messages
+            </button>
+            <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
+              <ProjectFeedIcon width={16} height={16} /> Project Updates
+            </button>
             <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
               {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
             </button>
@@ -491,7 +491,6 @@ export default function JobDetailPage() {
           ))}
         </div>
 
-        <JobQuickAccessIcons job={job} onNavigate={goToTab} />
         {activeTabDef?.sections && (
           <div className="tab-sections">
             <div className="tab-sections-pills">
@@ -605,7 +604,7 @@ export default function JobDetailPage() {
           <InternalUpdatesPanel jobId={id} session={session} />
         )}
 
-        {tab === 'Updates' && section === 'log' && (
+        {tab === 'Project Updates' && (
           <>
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' ? (
@@ -617,7 +616,7 @@ export default function JobDetailPage() {
               </>
             ) : (
               <div className="card">
-                <h3>Progress Updates</h3>
+                <h3>Project Updates</h3>
                 <div className="empty-state">
                   Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
                 </div>
@@ -639,7 +638,7 @@ export default function JobDetailPage() {
           )
         )}
 
-        {tab === 'Updates' && section === 'messages' && (
+        {tab === 'Messages' && (
           <JobMessagesCard jobId={id} job={job} />
         )}
       </div>

@@ -159,7 +159,7 @@ export default function MaterialSelectionPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={isAdmin ? `/jobs/${id}?tab=Updates&section=log` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <Link href={isAdmin ? `/jobs/${id}?tab=Project Updates` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isAdmin ? (
             <>

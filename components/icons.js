@@ -227,3 +227,13 @@ export function UpdatesTabIcon(props) {
     </svg>
   );
 }
+
+export function ProjectFeedIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3" y="3.5" width="14" height="4" rx="1" />
+      <rect x="3" y="8.5" width="14" height="4" rx="1" />
+      <rect x="3" y="13.5" width="9" height="3" rx="1" />
+    </svg>
+  );
+}
