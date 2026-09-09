@@ -201,16 +201,16 @@ export default function CapturePage() {
             <span style={{ display: 'block', fontSize: 12, color: '#555', marginBottom: 6 }}>
               Other details found on the page — uncheck anything you don't want saved
             </span>
-            <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: '6px 10px' }}>
+            <div style={{ maxHeight: 180, overflowY: 'auto', overflowX: 'hidden', width: '100%', boxSizing: 'border-box', border: '1px solid #eee', borderRadius: 4, padding: '6px 10px' }}>
               {extraSpecs.map((s, i) => (
-                <label key={s.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, padding: '4px 0', textAlign: 'left' }}>
+                <label key={s.key} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'start', gap: 8, fontSize: 12.5, padding: '4px 0', width: '100%', boxSizing: 'border-box' }}>
                   <input
                     type="checkbox"
                     checked={s.include}
                     onChange={e => setExtraSpecs(prev => prev.map((p, pi) => pi === i ? { ...p, include: e.target.checked } : p))}
-                    style={{ marginTop: 2, flexShrink: 0 }}
+                    style={{ marginTop: 2 }}
                   />
-                  <span style={{ textAlign: 'left', flex: 1, minWidth: 0, wordBreak: 'break-word', overflowWrap: 'break-word' }}><b>{s.key}:</b> {s.value}</span>
+                  <span style={{ textAlign: 'left', minWidth: 0, overflowWrap: 'anywhere' }}><b>{s.key}:</b> {s.value}</span>
                 </label>
               ))}
             </div>
