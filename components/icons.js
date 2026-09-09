@@ -185,3 +185,45 @@ export function InternalUpdatesIcon(props) {
     </svg>
   );
 }
+
+export function OverviewIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3" y="3" width="14" height="14" rx="2" />
+      <path d="M6 7.2h8" strokeWidth="2.2" />
+      <path d="M6 10.6h8M6 13.6h5" />
+    </svg>
+  );
+}
+
+export function PhotosIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="2.5" y="4" width="15" height="12" rx="1.5" />
+      <circle cx="7" cy="8.3" r="1.6" />
+      <path d="M3 14.5l4-4 3 2.8 3.5-4 3.5 4.2" />
+    </svg>
+  );
+}
+
+export function MaterialSelectionsTabIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3" y="3" width="7" height="7" rx="1.3" />
+      <rect x="11" y="3" width="6" height="6" rx="1.3" opacity="0.55" />
+      <rect x="3" y="11" width="6" height="6" rx="1.3" opacity="0.55" />
+      <path d="M12.5 13l1.8 1.8 3-3.2" />
+    </svg>
+  );
+}
+
+export function UpdatesTabIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M3 14c2-6 5-9 7-9s5 3 7 9" />
+      <circle cx="3" cy="14.3" r="1.3" />
+      <circle cx="10" cy="5.3" r="1.3" />
+      <circle cx="17" cy="14.3" r="1.3" />
+    </svg>
+  );
+}

@@ -491,6 +491,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: color 0.12s, border-color 0.12s;
 }
 .stage-tab:hover{ color: var(--ink); }

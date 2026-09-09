@@ -21,6 +21,10 @@ import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
+import {
+  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, ChangeOrderIcon, WorkOrderIcon,
+  InvoiceIcon, ReceiptIcon, PhotosIcon, MaterialSelectionsTabIcon, UpdatesTabIcon, InternalUpdatesIcon,
+} from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
 // the 12 card components below directly — now each lives in its own
@@ -51,23 +55,23 @@ import InvoiceCard from '../../../components/InvoiceCard';
 // together. `hideWhen(job)` lets a tab stay out of the way until it's
 // actually earned relevance for this job's stage.
 const TABS = [
-  { key: 'Overview', label: 'Overview' },
+  { key: 'Overview', label: 'Overview', icon: OverviewIcon },
   {
-    key: 'Customer', label: 'Customer',
+    key: 'Customer', label: 'Customer', icon: PersonIcon,
     sections: [
       { key: 'details', label: 'Details' },
       { key: 'portal', label: 'Portal & Notifications' },
     ],
   },
   {
-    key: 'Estimate', label: 'Estimate',
+    key: 'Estimate', label: 'Estimate', icon: CalculatorIcon,
     sections: [
       { key: 'scope', label: 'Scope' },
       { key: 'pricing', label: 'Pricing' },
     ],
   },
   {
-    key: 'Financials', label: 'Financials',
+    key: 'Financials', label: 'Financials', icon: FinanceIcon,
     // Cost summary / budget-vs-actual overview only now — Change Orders,
     // Work Orders, Invoicing, and Receipts were split out into their own
     // tabs (Sep 2026) the same way Material Selections was earlier, so
@@ -75,31 +79,31 @@ const TABS = [
     hideWhen: (job) => isOpportunity(job),
   },
   {
-    key: 'Change Orders', label: 'Change Orders',
+    key: 'Change Orders', label: 'Change Orders', icon: ChangeOrderIcon,
     hideWhen: (job) => isOpportunity(job),
   },
   {
-    key: 'Work Orders', label: 'Work Orders',
+    key: 'Work Orders', label: 'Work Orders', icon: WorkOrderIcon,
     hideWhen: (job) => isOpportunity(job),
   },
   {
-    key: 'Invoicing', label: 'Invoicing',
+    key: 'Invoicing', label: 'Invoicing', icon: InvoiceIcon,
     hideWhen: (job) => isOpportunity(job),
   },
   {
-    key: 'Receipts', label: 'Receipts',
+    key: 'Receipts', label: 'Receipts', icon: ReceiptIcon,
     hideWhen: (job) => isOpportunity(job),
   },
-  { key: 'Photos', label: 'Photos' },
-  { key: 'Material Selections', label: 'Material Selections' },
+  { key: 'Photos', label: 'Photos', icon: PhotosIcon },
+  { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
   {
-    key: 'Updates', label: 'Updates',
+    key: 'Updates', label: 'Updates', icon: UpdatesTabIcon,
     sections: [
       { key: 'log', label: 'Progress & Documents' },
       { key: 'messages', label: 'Messages' },
     ],
   },
-  { key: 'Internal Updates', label: 'Internal Updates' },
+  { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
 ];
 
 export default function JobDetailPage() {
@@ -480,7 +484,10 @@ export default function JobDetailPage() {
 
         <div className="stage-tabs">
           {TABS.filter(t => !t.hideWhen || !t.hideWhen(job)).map(t => (
-            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>{t.label}</button>
+            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
+              {t.icon && <t.icon width={16} height={16} />}
+              {t.label}
+            </button>
           ))}
         </div>
 
