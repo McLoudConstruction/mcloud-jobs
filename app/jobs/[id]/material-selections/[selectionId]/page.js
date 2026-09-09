@@ -9,8 +9,39 @@ import ImageDropzone from '../../../../../components/ImageDropzone';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
+// Maps common material/finish color language to a representative swatch
+// color for the hover/pin border — free text ("Spot Resist Stainless",
+// "Oil Rubbed Bronze") rather than a fixed palette, so this matches by
+// keyword rather than exact value. Falls back to the app's own brass
+// accent for anything unrecognized, rather than showing nothing.
+function colorForSwatch(colorText) {
+  if (!colorText) return null;
+  const t = colorText.toLowerCase();
+  const table = [
+    [['chrome', 'stainless', 'nickel', 'silver', 'platinum', 'pewter'], '#adb5bd'],
+    [['bronze', 'oil rubbed', 'copper', 'rust'], '#6b4226'],
+    [['brass', 'gold', 'brushed gold'], '#b8860b'],
+    [['black', 'matte black', 'onyx', 'graphite'], '#1a1a1a'],
+    [['white', 'bisque', 'almond', 'linen', 'ivory'], '#f0ede4'],
+    [['gray', 'grey', 'slate', 'charcoal'], '#6b7280'],
+    [['espresso', 'walnut', 'dark wood', 'ebony'], '#3e2723'],
+    [['oak', 'natural wood', 'honey', 'maple'], '#c19a6b'],
+    [['cherry', 'mahogany'], '#5d2e1f'],
+    [['red'], '#c0392b'],
+    [['blue', 'navy'], '#2c5282'],
+    [['green'], '#2f6b3a'],
+    [['beige', 'tan'], '#d2b48c'],
+  ];
+  for (const [keywords, hex] of table) {
+    if (keywords.some(k => t.indexOf(k) !== -1)) return hex;
+  }
+  return '#9B773D'; // brass accent — unrecognized color text still gets a visible cue
+}
+
 function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, selectionStatus, onChoose, onDelete, choosing }) {
   const [expanded, setExpanded] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const MAX_VISIBLE_ROWS = 4;
 
   const detailRows = [];
@@ -34,12 +65,29 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
     opt.color && `Color: ${opt.color}`,
   ].filter(Boolean);
 
+  const swatch = colorForSwatch(opt.color);
+  const showSwatchBorder = swatch && (hovering || pinned);
+  const borderColor = isChosen ? 'var(--accent)' : showSwatchBorder ? swatch : 'var(--line)';
+  const borderWidth = isChosen || showSwatchBorder ? 2 : 1;
+
   return (
-    <div className="card material-option-card" style={isChosen ? { borderColor: 'var(--accent)', borderWidth: 2 } : undefined}>
+    <div
+      className="material-option-card"
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      onClick={() => setPinned(p => !p)}
+      style={{
+        border: `${borderWidth}px solid ${borderColor}`,
+        borderRadius: 8,
+        padding: 14,
+        cursor: swatch ? 'pointer' : 'default',
+        transition: 'border-color 150ms ease',
+      }}
+    >
       {/* Photo + price, front and center */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         {photoUrl && (
-          <button type="button" className="selection-photo-btn no-print" onClick={() => onExpandPhoto(photoUrl)} aria-label={`Expand photo of ${opt.item}`}>
+          <button type="button" className="selection-photo-btn no-print" onClick={e => { e.stopPropagation(); onExpandPhoto(photoUrl); }} aria-label={`Expand photo of ${opt.item}`}>
             <img src={photoUrl} alt={opt.item} style={{ width: 100, height: 100, objectFit: 'contain' }} />
           </button>
         )}
@@ -68,7 +116,7 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
             <button
               type="button"
               className="no-print"
-              onClick={() => setExpanded(e => !e)}
+              onClick={e => { e.stopPropagation(); setExpanded(x => !x); }}
               style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '4px 0' }}
             >
               {expanded ? 'Show less' : `+ ${hiddenCount} more`}
@@ -81,12 +129,12 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
         <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: '#3a6b45', textAlign: 'center' }}>✓ Selected</div>
       )}
       {!isAdmin && selectionStatus === 'sent' && (
-        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={() => onChoose(opt.id)} disabled={choosing}>
+        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12 }} onClick={e => { e.stopPropagation(); onChoose(opt.id); }} disabled={choosing}>
           {choosing ? 'Submitting…' : 'Choose This'}
         </button>
       )}
       {isAdmin && isDraft && (
-        <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={() => onDelete(opt.id)}>Remove</button>
+        <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={e => { e.stopPropagation(); onDelete(opt.id); }}>Remove</button>
       )}
     </div>
   );
@@ -201,27 +249,27 @@ export default function MaterialSelectionPage() {
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
           {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
           {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
-        </div>
 
-        <div className="material-options-grid">
-          {options.map(opt => (
-            <OptionCard
-              key={opt.id}
-              opt={opt}
-              isChosen={selection.selected_option_id === opt.id}
-              photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
-              onExpandPhoto={setLightboxUrl}
-              isAdmin={isAdmin}
-              isDraft={isDraft}
-              selectionStatus={selection.status}
-              onChoose={chooseOption}
-              onDelete={deleteOption}
-              choosing={choosing}
-            />
-          ))}
-        </div>
+          <div className="material-options-grid" style={{ marginTop: 18 }}>
+            {options.map(opt => (
+              <OptionCard
+                key={opt.id}
+                opt={opt}
+                isChosen={selection.selected_option_id === opt.id}
+                photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
+                onExpandPhoto={setLightboxUrl}
+                isAdmin={isAdmin}
+                isDraft={isDraft}
+                selectionStatus={selection.status}
+                onChoose={chooseOption}
+                onDelete={deleteOption}
+                choosing={choosing}
+              />
+            ))}
+          </div>
 
-        {options.length === 0 && <div className="empty-state">No options added yet.</div>}
+          {options.length === 0 && <div className="empty-state">No options added yet.</div>}
+        </div>
 
         {isAdmin && isDraft && (
           <div className="card no-print">
