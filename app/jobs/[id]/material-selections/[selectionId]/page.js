@@ -82,6 +82,9 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
         padding: 14,
         cursor: swatch ? 'pointer' : 'default',
         transition: 'border-color 150ms ease',
+        height: '100%',
+        alignSelf: 'stretch',
+        boxSizing: 'border-box',
       }}
     >
       {/* Photo + price, front and center */}
