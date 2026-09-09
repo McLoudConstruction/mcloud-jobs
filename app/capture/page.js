@@ -203,14 +203,14 @@ export default function CapturePage() {
             </span>
             <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: '6px 10px' }}>
               {extraSpecs.map((s, i) => (
-                <label key={s.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, padding: '4px 0' }}>
+                <label key={s.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, padding: '4px 0', textAlign: 'left' }}>
                   <input
                     type="checkbox"
                     checked={s.include}
                     onChange={e => setExtraSpecs(prev => prev.map((p, pi) => pi === i ? { ...p, include: e.target.checked } : p))}
-                    style={{ marginTop: 2 }}
+                    style={{ marginTop: 2, flexShrink: 0 }}
                   />
-                  <span><b>{s.key}:</b> {s.value}</span>
+                  <span style={{ textAlign: 'left', flex: 1 }}><b>{s.key}:</b> {s.value}</span>
                 </label>
               ))}
             </div>
