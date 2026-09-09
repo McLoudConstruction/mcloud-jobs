@@ -893,13 +893,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   position: fixed; inset: 0; background: rgba(10,9,7,0.82); z-index: 1200;
   display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
 }
-.photo-lightbox-overlay img{ max-width: 90vw; max-height: 88vh; border-radius: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.photo-lightbox-inner{ position: relative; display: inline-block; cursor: default; }
+.photo-lightbox-overlay img{ display: block; width: min(85vw, 1000px); height: auto; max-height: 88vh; object-fit: contain; border-radius: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 .photo-lightbox-close{
-  position: absolute; top: 18px; right: 22px; width: 36px; height: 36px; border-radius: 50%;
-  border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 20px; cursor: pointer;
+  position: absolute; top: -14px; right: -14px; width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid #fff; background: rgba(20,18,15,0.9); color: #fff; font-size: 18px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; line-height: 1;
 }
-.photo-lightbox-close:hover{ background: rgba(255,255,255,0.28); }
+.photo-lightbox-close:hover{ background: rgba(20,18,15,1); }
 .estimate-margin-total-row td { border-bottom: 1px solid var(--panel-line); font-weight: 700; color: var(--heading); }
 .estimate-table { display: flex; flex-direction: column; }
 .estimate-row { display: grid; grid-template-columns: 2fr 90px 110px 100px 90px; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }

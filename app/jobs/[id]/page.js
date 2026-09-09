@@ -17,7 +17,7 @@ import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
-import MaterialSelectionsCard from '../../../components/MaterialSelectionsCard';
+import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import { compressImage } from '../../../lib/imageCompress';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
@@ -58,6 +58,7 @@ const TABS = [
     hideWhen: (job) => isOpportunity(job),
   },
   { key: 'Photos', label: 'Photos' },
+  { key: 'Material Selections', label: 'Material Selections' },
   {
     key: 'Updates', label: 'Updates',
     sections: [
@@ -562,12 +563,6 @@ export default function JobDetailPage() {
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' ? (
               <>
-                {/* Moved here from Estimate > Scope (Aug 2026) — selections get
-                    made once a job is actually underway, not while it's still
-                    being priced. Scope and Estimate stay purely pre-approval;
-                    this now sits alongside the other things that happen during
-                    the job (progress updates, issued documents). */}
-                <MaterialSelectionsCard jobId={id} />
                 <UpdatesCard jobId={id} updates={updates} />
                 {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
                   <ReviewRequestCard job={job} onSave={saveJob} />
@@ -577,11 +572,24 @@ export default function JobDetailPage() {
               <div className="card">
                 <h3>Progress Updates</h3>
                 <div className="empty-state">
-                  Progress updates and material selections become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+                  Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
                 </div>
               </div>
             )}
           </>
+        )}
+
+        {tab === 'Material Selections' && (
+          phaseForStage(job.stage) !== 'opportunity' ? (
+            <JobMaterialSelectionsPanel jobId={id} />
+          ) : (
+            <div className="card">
+              <h3>Material Selections</h3>
+              <div className="empty-state">
+                Material selections become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            </div>
+          )
         )}
 
         {tab === 'Updates' && section === 'messages' && (
