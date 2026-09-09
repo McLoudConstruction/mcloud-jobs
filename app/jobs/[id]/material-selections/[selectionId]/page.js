@@ -65,10 +65,11 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
     opt.color && `Color: ${opt.color}`,
   ].filter(Boolean);
 
-  const swatch = colorForSwatch(opt.color);
-  const showSwatchBorder = swatch && (hovering || pinned);
-  const borderColor = isChosen ? 'var(--accent)' : showSwatchBorder ? swatch : 'var(--line)';
-  const borderWidth = isChosen || showSwatchBorder ? 2 : 1;
+  const swatch = colorForSwatch(opt.color); // null only when no color was captured at all
+  const highlightColor = swatch || 'var(--accent)'; // still give hover/pin feedback even without captured color data
+  const showHighlight = hovering || pinned;
+  const borderColor = isChosen ? 'var(--accent)' : showHighlight ? highlightColor : 'var(--line)';
+  const borderWidth = isChosen || showHighlight ? 2 : 1;
 
   return (
     <div
@@ -80,7 +81,7 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
         border: `${borderWidth}px solid ${borderColor}`,
         borderRadius: 8,
         padding: 14,
-        cursor: swatch ? 'pointer' : 'default',
+        cursor: 'pointer',
         transition: 'border-color 150ms ease',
         height: '100%',
         alignSelf: 'stretch',
