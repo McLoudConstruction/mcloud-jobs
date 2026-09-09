@@ -152,6 +152,7 @@ export default function MaterialSelectionPage() {
   const [selection, setSelection] = useState(null);
   const [options, setOptions] = useState([]);
   const [job, setJob] = useState(null);
+  const [siblingSelections, setSiblingSelections] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_OPTION);
   const [photoFile, setPhotoFile] = useState(null);
@@ -159,6 +160,7 @@ export default function MaterialSelectionPage() {
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const isAdmin = session?.user?.app_metadata?.role === 'admin';
@@ -170,16 +172,23 @@ export default function MaterialSelectionPage() {
     if (opts) setOptions(opts);
   }, [selectionId]);
 
+  const loadSiblings = useCallback(async () => {
+    const { data } = await supabase.from('material_selections').select('id, title, status, selected_option_id').eq('job_id', id).not('sent_at', 'is', null);
+    if (data) setSiblingSelections(data);
+  }, [id]);
+
   useEffect(() => {
     if (!session) return;
     load();
+    loadSiblings();
     supabase.from('jobs').select('job_number, estimate_number, customer_name').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
     const channel = supabase.channel(`material-selection-${selectionId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selection_options', filter: `selection_id=eq.${selectionId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `id=eq.${selectionId}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `job_id=eq.${id}` }, loadSiblings)
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, selectionId, id, load]);
+  }, [session, selectionId, id, load, loadSiblings]);
 
   // Resolve signed URLs for each option's photo, since job-photos is a private bucket.
   useEffect(() => {
@@ -224,12 +233,43 @@ export default function MaterialSelectionPage() {
     await supabase.from('material_selections').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', selectionId);
   }
 
+  // Records a tentative pick — doesn't finalize anything. The customer
+  // can change their mind or pick on other sheets before the final
+  // "Submit All Selections" action below.
   async function chooseOption(optionId) {
-    if (!confirm('Choose this option? This selection will be marked approved.')) return;
     setChoosing(true);
-    const { error } = await supabase.rpc('approve_material_selection', { target_selection_id: selectionId, chosen_option_id: optionId });
+    const { error } = await supabase.rpc('pick_material_selection_option', { target_selection_id: selectionId, chosen_option_id: optionId });
     setChoosing(false);
-    if (error) alert('Failed to submit your choice: ' + error.message);
+    if (error) {
+      alert('Failed to record your pick: ' + error.message);
+      return;
+    }
+    // Update immediately rather than waiting on the realtime round-trip.
+    setSelection(prev => prev && { ...prev, selected_option_id: optionId });
+    setSiblingSelections(prev => prev.map(s => s.id === selectionId ? { ...s, selected_option_id: optionId } : s));
+  }
+
+  const totalSent = siblingSelections.length;
+  const pickedCount = siblingSelections.filter(s => s.selected_option_id).length;
+  const allPicked = totalSent > 0 && pickedCount === totalSent;
+  const jobFullyApproved = totalSent > 0 && siblingSelections.every(s => s.status === 'approved');
+
+  async function submitAllSelections() {
+    if (!allPicked) return;
+    setSubmitting(true);
+    const { error } = await supabase.rpc('submit_material_selections', { target_job_id: id });
+    if (!error) {
+      const titles = siblingSelections.map(s => s.title).join(', ');
+      await supabase.from('notifications').insert({
+        job_id: id,
+        message: `${job?.customer_name || 'Customer'} submitted material selections${job?.job_number ? ` for Job #${job.job_number}` : ''}: ${titles}.`,
+      });
+      setSiblingSelections(prev => prev.map(s => ({ ...s, status: 'approved' })));
+      setSelection(prev => prev && { ...prev, status: 'approved', approved_at: new Date().toISOString() });
+    } else {
+      alert('Failed to submit your selections: ' + error.message);
+    }
+    setSubmitting(false);
   }
 
   if (loading || !session || !selection) return null;
@@ -256,6 +296,28 @@ export default function MaterialSelectionPage() {
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
           {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
           {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
+
+          {!isAdmin && totalSent > 0 && (
+            <div style={{
+              marginTop: 14, padding: '10px 14px', borderRadius: 8,
+              background: jobFullyApproved ? 'rgba(58, 107, 69, 0.1)' : 'rgba(155, 119, 61, 0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: jobFullyApproved ? '#3a6b45' : 'var(--heading)' }}>
+                {jobFullyApproved ? '✓ All materials submitted' : `${pickedCount}/${totalSent} Materials Selected`}
+              </div>
+              {!jobFullyApproved && (
+                <button
+                  className="btn btn-primary btn-sm no-print"
+                  onClick={submitAllSelections}
+                  disabled={!allPicked || submitting}
+                  title={!allPicked ? 'Pick an option on every sheet before submitting' : undefined}
+                >
+                  {submitting ? 'Submitting…' : allPicked ? 'Submit All Selections' : `Pick ${totalSent - pickedCount} more to submit`}
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="material-options-grid" style={{ marginTop: 18 }}>
             {options.map(opt => (
