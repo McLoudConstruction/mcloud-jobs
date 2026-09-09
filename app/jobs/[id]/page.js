@@ -581,7 +581,7 @@ export default function JobDetailPage() {
 
         {tab === 'Material Selections' && (
           phaseForStage(job.stage) !== 'opportunity' ? (
-            <JobMaterialSelectionsPanel jobId={id} />
+            <JobMaterialSelectionsPanel jobId={id} job={job} />
           ) : (
             <div className="card">
               <h3>Material Selections</h3>
