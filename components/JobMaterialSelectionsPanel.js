@@ -182,7 +182,7 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
                       checked={checkedIds.has(s.id)}
                       onChange={() => toggleChecked(s.id)}
                       onClick={e => e.stopPropagation()}
-                      style={{ marginTop: 3, flexShrink: 0 }}
+                      style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16, padding: 0, background: 'none', border: 'none' }}
                       aria-label={`Select ${s.title} to issue`}
                     />
                   )}
