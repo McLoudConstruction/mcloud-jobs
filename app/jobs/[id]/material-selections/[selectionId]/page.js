@@ -55,7 +55,7 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
       style={{
         border: `${borderWidth}px solid ${borderColor}`,
         borderRadius: 8,
-        padding: 14,
+        padding: 12,
         cursor: selectable ? 'pointer' : 'default',
         transition: 'border-color 150ms ease, background-color 150ms ease',
         height: '100%',
@@ -63,43 +63,57 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
         boxSizing: 'border-box',
         backgroundColor: isChosen ? 'rgba(155, 119, 61, 0.08)' : 'transparent',
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {isChosen && (
         <div style={{
           position: 'absolute', top: 10, right: 10,
-          width: 24, height: 24, borderRadius: '50%',
+          width: 22, height: 22, borderRadius: '50%',
           background: 'var(--accent)', color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 700,
+          fontSize: 13, fontWeight: 700,
         }}>✓</div>
       )}
 
-      {/* Photo + price, front and center */}
-      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-        {photoUrl && (
-          <button type="button" className="selection-photo-btn no-print" onClick={e => { e.stopPropagation(); onExpandPhoto(photoUrl); }} aria-label={`Expand photo of ${opt.item}`}>
-            <img src={photoUrl} alt={opt.item} style={{ width: 100, height: 100, objectFit: 'contain' }} />
-          </button>
-        )}
-        {priceDisplay && (
-          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--heading)', marginTop: 6 }}>{priceDisplay}</div>
-        )}
+      {/* Thumbnail top-left, in line with the name; price directly below
+          the name. A fixed-size thumbnail slot is always reserved, with
+          or without a photo, so every card lines up the same way. */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', paddingRight: isChosen ? 26 : 0 }}>
+        <div style={{ width: 56, height: 56, flexShrink: 0 }}>
+          {photoUrl ? (
+            <button
+              type="button"
+              className="selection-photo-btn no-print"
+              onClick={e => { e.stopPropagation(); onExpandPhoto(photoUrl); }}
+              aria-label={`Expand photo of ${opt.item}`}
+              style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', width: '100%', height: '100%' }}
+            >
+              <img src={photoUrl} alt={opt.item} style={{ width: 56, height: 56, objectFit: 'contain' }} />
+            </button>
+          ) : (
+            <div style={{ width: '100%', height: '100%', borderRadius: 6, background: 'var(--line)', opacity: 0.25 }} />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{opt.item}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--heading)', marginTop: 2, minHeight: '1.2em' }}>
+            {priceDisplay || '\u00A0'}
+          </div>
+        </div>
       </div>
-
-      {/* Simple header */}
-      <div style={{ fontWeight: 700, fontSize: 14, textAlign: 'center' }}>{opt.item}</div>
 
       {/* Brand / Model / Color, all on one row */}
       {optionLine.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 14px', fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 6 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px', fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8 }}>
           {optionLine.map(line => <span key={line}>{line}</span>)}
         </div>
       )}
 
       {/* Everything else, capped with a "+N more" expander */}
       {detailRows.length > 0 && (
-        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 10, lineHeight: 1.7 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, lineHeight: 1.5 }}>
           {visibleRows.map(([key, value]) => (
             <div key={key}><b>{key}:</b> {value}</div>
           ))}
@@ -108,7 +122,7 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
               type="button"
               className="no-print"
               onClick={e => { e.stopPropagation(); setExpanded(x => !x); }}
-              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '4px 0' }}
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, padding: '4px 0' }}
             >
               {expanded ? 'Show less' : `+ ${hiddenCount} more`}
             </button>
@@ -116,17 +130,19 @@ function OptionCard({ opt, isChosen, photoUrl, onExpandPhoto, isAdmin, isDraft, 
         </div>
       )}
 
-      {isChosen && (
-        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: 'var(--accent)', textAlign: 'center' }}>✓ This is your selection</div>
-      )}
-      {selectable && !isChosen && (
-        <button className="btn btn-primary btn-sm no-print" style={{ marginTop: 12, width: '100%' }} onClick={e => { e.stopPropagation(); onChoose(opt.id); }} disabled={choosing}>
-          {choosing ? 'Submitting…' : 'Choose This'}
-        </button>
-      )}
-      {isAdmin && isDraft && (
-        <button className="btn btn-sm btn-danger no-print" style={{ marginTop: 12 }} onClick={e => { e.stopPropagation(); onDelete(opt.id); }}>Remove</button>
-      )}
+      {/* Bottom action slot — same position on every card regardless of
+          how much detail is above it. */}
+      <div style={{ marginTop: 'auto', paddingTop: 10 }}>
+        {isChosen ? (
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textAlign: 'center' }}>✓ This is your selection</div>
+        ) : selectable ? (
+          <button className="btn btn-primary btn-sm no-print" style={{ width: '100%' }} onClick={e => { e.stopPropagation(); onChoose(opt.id); }} disabled={choosing}>
+            {choosing ? 'Submitting…' : 'Choose This'}
+          </button>
+        ) : isAdmin && isDraft ? (
+          <button className="btn btn-sm btn-danger no-print" onClick={e => { e.stopPropagation(); onDelete(opt.id); }}>Remove</button>
+        ) : null}
+      </div>
     </div>
   );
 }
