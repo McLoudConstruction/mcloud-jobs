@@ -142,3 +142,46 @@ export function SignOutIcon(props) {
     </svg>
   );
 }
+
+export function ReceiptIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M5.5 2.5h9v14l-1-.8-1 .8-1-.8-1 .8-1-.8-1 .8-1-.8-1 .8V2.5z" />
+      <path d="M7.3 6h5.4M7.3 8.6h5.4M7.3 11.2h3.5" />
+    </svg>
+  );
+}
+
+export function WorkOrderIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="4" y="3.5" width="12" height="14" rx="1.5" />
+      <rect x="7.3" y="2" width="5.4" height="3" rx="1" />
+      <path d="M6.7 9l1.3 1.3L10.3 8" />
+      <path d="M12 9h2.3" />
+      <path d="M6.7 13l1.3 1.3L10.3 12" />
+      <path d="M12 13h2.3" />
+    </svg>
+  );
+}
+
+export function ChangeOrderIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M6 2.5h5.5l3 3v12H6z" />
+      <path d="M11.5 2.5v3h3" />
+      <path d="M8 15.5l1.2-3.4 5-5 2.2 2.2-5 5-3.4 1.2z" />
+    </svg>
+  );
+}
+
+export function InternalUpdatesIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3.5" y="3" width="9.5" height="14" rx="1.3" />
+      <path d="M6 6.5h4.5M6 9h4.5M6 11.5h3" />
+      <rect x="12" y="10.3" width="5.3" height="4.4" rx="1" />
+      <path d="M13.1 10.3V9a1.55 1.55 0 013.1 0v1.3" />
+    </svg>
+  );
+}

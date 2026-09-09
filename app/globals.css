@@ -291,7 +291,12 @@ a { color: inherit; text-decoration: none; }
   border-color: var(--accent);
 }
 .btn-primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
-.btn-danger:hover{ border-color: #c0524f; color: #c0524f; }
+.btn-danger{
+  background: #a13f3f;
+  color: #ffffff;
+  border-color: #a13f3f;
+}
+.btn-danger:hover{ background: #8a3535; border-color: #8a3535; color: #fff; }
 .btn-sm{ padding: 6px 10px; font-size: 12px; }
 
 label{ display:block; font-size: 12px; color: var(--ink-soft); margin: 12px 0 5px; }
@@ -465,6 +470,17 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
    it's used (job stage tabs, section sub-nav, portal mode switch, sub
    portal tabs all share this same class). */
 .stage-tabs{ display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: nowrap; border-bottom: 1px solid var(--line); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.job-quick-access{ display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.job-quick-access-btn{
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 12px; min-width: 68px;
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px;
+  color: var(--ink-soft); cursor: pointer;
+  font-size: 10.5px; font-weight: 600; font-family: inherit;
+  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
+}
+.job-quick-access-btn:hover{ border-color: var(--accent); color: var(--accent); background: var(--card-bg); }
+.job-quick-access-btn span{ text-align: center; line-height: 1.2; }
 .stage-tab{ flex-shrink: 0;
   padding: 10px 2px;
   border-radius: 0;

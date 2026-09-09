@@ -29,7 +29,6 @@ const NAV_ITEMS = [
       { href: '/invoices', label: 'Invoicing' },
       { href: '/material-selections', label: 'Material Selections' },
       { href: '/jobs/calendar', label: 'Calendar' },
-      { href: '/jobs/lost', label: 'Closed Lost' },
     ],
   },
   {

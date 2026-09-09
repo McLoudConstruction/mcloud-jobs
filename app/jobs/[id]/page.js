@@ -29,6 +29,7 @@ import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedPro
 // possible to open "the Scope tab" without wading through 1,500+
 // unrelated lines to find it.
 import JobMessagesCard from '../../../components/JobMessagesCard';
+import JobQuickAccessIcons from '../../../components/JobQuickAccessIcons';
 import ReviewRequestCard from '../../../components/ReviewRequestCard';
 import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
 import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
@@ -454,7 +455,6 @@ export default function JobDetailPage() {
             {job.stage === 'lost' && (
               <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
             )}
-            <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
           </div>
         </div>
         {inviteResult && (
@@ -484,6 +484,7 @@ export default function JobDetailPage() {
           ))}
         </div>
 
+        <JobQuickAccessIcons job={job} onNavigate={goToTab} />
         {activeTabDef?.sections && (
           <div className="tab-sections">
             <div className="tab-sections-pills">
@@ -513,10 +514,19 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Overview' && (
-          <div className="overview-split">
-            <ProjectInfoCard job={job} onSave={saveJob} />
-            <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
-          </div>
+          <>
+            <div className="overview-split">
+              <ProjectInfoCard job={job} onSave={saveJob} />
+              <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
+            </div>
+            <div className="card" style={{ marginTop: 20 }}>
+              <h3>Danger Zone</h3>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                Permanently deletes this job and everything attached to it. This cannot be undone.
+              </div>
+              <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
+            </div>
+          </>
         )}
 
         {tab === 'Customer' && section === 'details' && (
