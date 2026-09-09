@@ -17,6 +17,7 @@ export default function MaterialSelectionPage() {
   const [options, setOptions] = useState([]);
   const [job, setJob] = useState(null);
   const [siblingSelections, setSiblingSelections] = useState([]);
+  const [optionsBySelection, setOptionsBySelection] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_OPTION);
   const [photoFile, setPhotoFile] = useState(null);
@@ -37,8 +38,15 @@ export default function MaterialSelectionPage() {
   }, [selectionId]);
 
   const loadSiblings = useCallback(async () => {
-    const { data } = await supabase.from('material_selections').select('id, title, status, selected_option_id').eq('job_id', id).not('sent_at', 'is', null);
-    if (data) setSiblingSelections(data);
+    const { data } = await supabase.from('material_selections').select('id, title, notes, status, selected_option_id').eq('job_id', id).not('sent_at', 'is', null).order('created_at', { ascending: true });
+    setSiblingSelections(data || []);
+
+    const ids = (data || []).map(s => s.id);
+    if (ids.length === 0) { setOptionsBySelection({}); return; }
+    const { data: opts } = await supabase.from('material_selection_options').select('*').in('selection_id', ids).order('display_order');
+    const grouped = {};
+    (opts || []).forEach(o => { (grouped[o.selection_id] = grouped[o.selection_id] || []).push(o); });
+    setOptionsBySelection(grouped);
   }, [id]);
 
   useEffect(() => {
@@ -55,13 +63,16 @@ export default function MaterialSelectionPage() {
   }, [session, selectionId, id, load, loadSiblings]);
 
   // Resolve signed URLs for each option's photo, since job-photos is a private bucket.
+  // Covers the current sheet's options (admin single-sheet view) plus every
+  // sibling sheet's options (customer scroll-through-everything view).
   useEffect(() => {
-    options.forEach(async opt => {
+    const all = [...options, ...Object.values(optionsBySelection).flat()];
+    all.forEach(async opt => {
       if (!opt.photo_storage_path || photoUrls[opt.id]) return;
       const { data } = await supabase.storage.from('job-photos').createSignedUrl(opt.photo_storage_path, 3600);
       if (data) setPhotoUrls(prev => ({ ...prev, [opt.id]: data.signedUrl }));
     });
-  }, [options, photoUrls]);
+  }, [options, optionsBySelection, photoUrls]);
 
   async function addOption(e) {
     e.preventDefault();
@@ -99,18 +110,22 @@ export default function MaterialSelectionPage() {
 
   // Records a tentative pick — doesn't finalize anything. The customer
   // can change their mind or pick on other sheets before the final
-  // "Submit All Selections" action below.
-  async function chooseOption(optionId) {
+  // "Submit All Selections" action below. Works against any sheet, not
+  // just the one in the URL, since customers see every sheet stacked on
+  // one page rather than navigating between them individually.
+  async function chooseOption(targetSelectionId, optionId) {
     setChoosing(true);
-    const { error } = await supabase.rpc('pick_material_selection_option', { target_selection_id: selectionId, chosen_option_id: optionId });
+    const { error } = await supabase.rpc('pick_material_selection_option', { target_selection_id: targetSelectionId, chosen_option_id: optionId });
     setChoosing(false);
     if (error) {
       alert('Failed to record your pick: ' + error.message);
       return;
     }
     // Update immediately rather than waiting on the realtime round-trip.
-    setSelection(prev => prev && { ...prev, selected_option_id: optionId });
-    setSiblingSelections(prev => prev.map(s => s.id === selectionId ? { ...s, selected_option_id: optionId } : s));
+    if (targetSelectionId === selectionId) {
+      setSelection(prev => prev && { ...prev, selected_option_id: optionId });
+    }
+    setSiblingSelections(prev => prev.map(s => s.id === targetSelectionId ? { ...s, selected_option_id: optionId } : s));
   }
 
   const totalSent = siblingSelections.length;
@@ -146,30 +161,20 @@ export default function MaterialSelectionPage() {
       <div className="no-print doc-toolbar">
         <Link href={isAdmin ? `/jobs/${id}?tab=Updates&section=log` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className={`badge badge-${isApproved ? 'paid' : selection.status === 'sent' ? 'active' : 'draft'}`}>
-            {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}
-          </span>
-          {isAdmin && isDraft && options.length > 0 && (
-            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
-          )}
-        </div>
-      </div>
-
-      <div className="container" style={{ paddingTop: 24, maxWidth: 900 }} id="doc-preview">
-        <div className="card">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
-          {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
-          {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
-
-          {!isAdmin && totalSent > 0 && (
-            <div style={{
-              marginTop: 14, padding: '10px 14px', borderRadius: 8,
-              background: jobFullyApproved ? 'rgba(58, 107, 69, 0.1)' : 'rgba(155, 119, 61, 0.08)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: jobFullyApproved ? '#3a6b45' : 'var(--heading)' }}>
+          {isAdmin ? (
+            <>
+              <span className={`badge badge-${isApproved ? 'paid' : selection.status === 'sent' ? 'active' : 'draft'}`}>
+                {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}
+              </span>
+              {isDraft && options.length > 0 && (
+                <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+              )}
+            </>
+          ) : totalSent > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: jobFullyApproved ? '#7fbf8f' : 'var(--header-text)' }}>
                 {jobFullyApproved ? '✓ All materials submitted' : `${pickedCount}/${totalSent} Materials Selected`}
-              </div>
+              </span>
               {!jobFullyApproved && (
                 <button
                   className="btn btn-primary btn-sm no-print"
@@ -177,55 +182,105 @@ export default function MaterialSelectionPage() {
                   disabled={!allPicked || submitting}
                   title={!allPicked ? 'Pick an option on every sheet before submitting' : undefined}
                 >
-                  {submitting ? 'Submitting…' : allPicked ? 'Submit All Selections' : `Pick ${totalSent - pickedCount} more to submit`}
+                  {submitting ? 'Submitting…' : allPicked ? 'Submit All Selections' : `Pick ${totalSent - pickedCount} more`}
                 </button>
               )}
             </div>
           )}
-
-          <div className="material-options-grid" style={{ marginTop: 18 }}>
-            {options.map(opt => (
-              <MaterialOptionCard
-                key={opt.id}
-                opt={opt}
-                isChosen={selection.selected_option_id === opt.id}
-                photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
-                onExpandPhoto={setLightboxUrl}
-                isAdmin={isAdmin}
-                isDraft={isDraft}
-                selectionStatus={selection.status}
-                onChoose={chooseOption}
-                onDelete={deleteOption}
-                choosing={choosing}
-              />
-            ))}
-          </div>
-
-          {options.length === 0 && <div className="empty-state">No options added yet.</div>}
         </div>
+      </div>
 
-        {isAdmin && isDraft && (
-          <div className="card no-print">
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={() => setShowForm(s => !s)}>{showForm ? 'Cancel' : '+ Add Option'}</button>
-            </div>
-            {showForm && (
-              <form onSubmit={addOption} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
-                <div className="two-col">
-                  <div><label>Brand</label><input value={form.brand} onChange={e => setForm(prev => ({ ...prev, brand: e.target.value }))} /></div>
-                  <div><label>Item *</label><input value={form.item} onChange={e => setForm(prev => ({ ...prev, item: e.target.value }))} placeholder="e.g. Dishwasher" required /></div>
-                  <div><label>Model Number</label><input value={form.model_number} onChange={e => setForm(prev => ({ ...prev, model_number: e.target.value }))} /></div>
-                  <div><label>Color</label><input value={form.color} onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))} /></div>
-                </div>
-                <div style={{ marginTop: 10 }}>
-                  <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
-                </div>
-                <div className="section-actions">
-                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Option'}</button>
-                </div>
-              </form>
+      <div className="container" style={{ paddingTop: 24, maxWidth: 900 }} id="doc-preview">
+        {!isAdmin ? (
+          // Customer view: every sent sheet stacked on one scrollable page,
+          // instead of navigating between sheets one at a time.
+          <>
+            {siblingSelections.length === 0 && (
+              <div className="card"><div className="empty-state">Nothing to review yet.</div></div>
             )}
-          </div>
+            {siblingSelections.map(sib => {
+              const sibOptions = optionsBySelection[sib.id] || [];
+              return (
+                <div key={sib.id} className="card" style={{ marginBottom: 20 }}>
+                  <h2 style={{ margin: 0, color: 'var(--heading)' }}>{sib.title}</h2>
+                  {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
+                  {sib.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{sib.notes}</p>}
+
+                  <div className="material-options-grid" style={{ marginTop: 18 }}>
+                    {sibOptions.map(opt => (
+                      <MaterialOptionCard
+                        key={opt.id}
+                        opt={opt}
+                        isChosen={sib.selected_option_id === opt.id}
+                        photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
+                        onExpandPhoto={setLightboxUrl}
+                        isAdmin={false}
+                        isDraft={false}
+                        selectionStatus={sib.status}
+                        onChoose={optionId => chooseOption(sib.id, optionId)}
+                        onDelete={() => {}}
+                        choosing={choosing}
+                      />
+                    ))}
+                  </div>
+                  {sibOptions.length === 0 && <div className="empty-state">No options added yet.</div>}
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          // Admin view: unchanged — one sheet at a time, with editing tools.
+          <>
+            <div className="card">
+              <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
+              {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
+              {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
+
+              <div className="material-options-grid" style={{ marginTop: 18 }}>
+                {options.map(opt => (
+                  <MaterialOptionCard
+                    key={opt.id}
+                    opt={opt}
+                    isChosen={selection.selected_option_id === opt.id}
+                    photoUrl={photoUrls[opt.id] || opt.photo_external_url || null}
+                    onExpandPhoto={setLightboxUrl}
+                    isAdmin={isAdmin}
+                    isDraft={isDraft}
+                    selectionStatus={selection.status}
+                    onChoose={optionId => chooseOption(selectionId, optionId)}
+                    onDelete={deleteOption}
+                    choosing={choosing}
+                  />
+                ))}
+              </div>
+
+              {options.length === 0 && <div className="empty-state">No options added yet.</div>}
+            </div>
+
+            {isDraft && (
+              <div className="card no-print">
+                <div className="section-actions" style={{ marginTop: 0 }}>
+                  <button className="btn btn-sm" onClick={() => setShowForm(s => !s)}>{showForm ? 'Cancel' : '+ Add Option'}</button>
+                </div>
+                {showForm && (
+                  <form onSubmit={addOption} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
+                    <div className="two-col">
+                      <div><label>Brand</label><input value={form.brand} onChange={e => setForm(prev => ({ ...prev, brand: e.target.value }))} /></div>
+                      <div><label>Item *</label><input value={form.item} onChange={e => setForm(prev => ({ ...prev, item: e.target.value }))} placeholder="e.g. Dishwasher" required /></div>
+                      <div><label>Model Number</label><input value={form.model_number} onChange={e => setForm(prev => ({ ...prev, model_number: e.target.value }))} /></div>
+                      <div><label>Color</label><input value={form.color} onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))} /></div>
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
+                    </div>
+                    <div className="section-actions">
+                      <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Option'}</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
