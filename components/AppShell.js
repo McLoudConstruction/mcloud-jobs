@@ -6,8 +6,6 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
-import { useStaffAuth } from '../lib/staffAuthContext';
-import { canAccessPath } from '../lib/permissions';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -73,7 +71,6 @@ function getCurrentSection(pathname) {
 export default function AppShell({ children }) {
   const { theme, setTheme } = useTheme();
   const { settings } = useSettings();
-  const { role } = useStaffAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
@@ -149,12 +146,6 @@ export default function AppShell({ children }) {
 
   const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
   const currentSection = getCurrentSection(pathname);
-  const visibleNavItems = NAV_ITEMS.filter(item => canAccessPath(role, item.href));
-  const canSeeSettings = canAccessPath(role, '/settings');
-  // /invoices normally surfaces as a sub-tab under "Projects" (/jobs) —
-  // roles like Bookkeeper can see invoicing without full Projects access,
-  // so they need a direct link since the nested one won't show for them.
-  const needsDirectInvoicingLink = canAccessPath(role, '/invoices') && !canAccessPath(role, '/jobs');
 
   return (
     <div className="shell">
@@ -184,7 +175,7 @@ export default function AppShell({ children }) {
         >
           <div className="shell-sidebar-inner">
             <div className="shell-nav-links">
-              {visibleNavItems.map(item => (
+              {NAV_ITEMS.map(item => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -201,17 +192,6 @@ export default function AppShell({ children }) {
                   <span className="shell-nav-label">{item.label}</span>
                 </Link>
               ))}
-              {needsDirectInvoicingLink && (
-                <Link
-                  href="/invoices"
-                  className={`shell-nav-link ${pathname === '/invoices' || pathname.startsWith('/invoices/') ? 'active' : ''}`}
-                  onClick={closeOnMobile}
-                  title={!isMobile && !navOpen ? 'Invoicing' : undefined}
-                >
-                  <JobDashboardIcon className="shell-nav-icon" />
-                  <span className="shell-nav-label">Invoicing</span>
-                </Link>
-              )}
             </div>
 
             <div>
@@ -236,7 +216,6 @@ export default function AppShell({ children }) {
                 className={`shell-nav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
                 onClick={closeOnMobile}
                 title={!isMobile && !navOpen ? 'Settings' : undefined}
-                style={canSeeSettings ? undefined : { display: 'none' }}
               >
                 <SettingsIcon className="shell-nav-icon" />
                 <span className="shell-nav-label">Settings</span>
@@ -254,6 +233,31 @@ export default function AppShell({ children }) {
         </div>
 
         {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
+
+        {isMobile && (
+          <nav className="shell-bottomnav">
+            {NAV_ITEMS.map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`shell-bottomnav-link ${isSectionActive(item, pathname) ? 'active' : ''}`}
+                aria-label={item.label}
+              >
+                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                  <item.icon className="shell-bottomnav-icon" />
+                  {item.href === '/messages' && unreadCount > 0 && <span className="shell-bottomnav-dot" />}
+                </span>
+              </Link>
+            ))}
+            <Link
+              href="/settings"
+              className={`shell-bottomnav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
+              aria-label="Settings"
+            >
+              <SettingsIcon className="shell-bottomnav-icon" />
+            </Link>
+          </nav>
+        )}
 
         <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0, transition: 'margin-left 0.2s ease' }}>
           {currentSection && (
