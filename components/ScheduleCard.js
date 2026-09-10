@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { recomputeSequentialDates } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
@@ -225,6 +225,19 @@ export default function ScheduleCard({ jobId, job }) {
     await supabase.from('jobs').update({ schedule_stale_at: null }).eq('id', jobId);
   }
 
+  // Persists a drag (move) or edge-resize (duration change) from the
+  // Timeline view. Deliberately independent of every other phase — no
+  // cascade, overlap allowed — since dragging on a calendar is a direct,
+  // confident placement, not a "shift everything downstream" edit like
+  // the List view's duration field is. Never sets needs_review: you were
+  // looking right at it when you dropped it.
+  async function updatePhaseDates(phaseId, { start_date, end_date, duration_days }) {
+    await supabase.from('job_phases').update({
+      start_date, end_date, duration_days, source: 'manual', needs_review: false,
+    }).eq('id', phaseId);
+    await loadPhases();
+  }
+
   const totalDays = (!draft && phases.length > 0)
     ? Math.round((new Date(phases[phases.length - 1].end_date) - new Date(phases[0].start_date)) / 86400000) + 1
     : null;
@@ -301,7 +314,7 @@ export default function ScheduleCard({ jobId, job }) {
             <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
           </div>
 
-          {view === 'timeline' && <TimelineView phases={phases} />}
+          {view === 'timeline' && <TimelineView phases={phases} onPhaseUpdate={updatePhaseDates} />}
 
           {view === 'list' && <Legend phases={phases} />}
           {view === 'list' && phases.map(p => (
@@ -340,10 +353,7 @@ export default function ScheduleCard({ jobId, job }) {
   );
 }
 
-// Fixed pixel width per day column. A real per-day header needs actual
-// columns to hang dates on — percentage-of-container bars (the previous
-// approach) can't do that since there's no fixed unit to divide by.
-// This width is also what a future drag/resize feature would snap to.
+// Fixed pixel width per day column — what drag/resize below snaps to.
 const DAY_WIDTH = 30;
 const LABEL_WIDTH = 128;
 
@@ -365,14 +375,89 @@ function weekendShading(minDate) {
   return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, var(--panel) ${bandStart}px, var(--panel) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
 }
 
-// Day-by-day Gantt-style grid. Editing still happens in List view — this
-// is for seeing dates, weekends, and overlap at a glance, not (yet) for
-// dragging. The label column stays pinned via position:sticky while the
-// day grid scrolls horizontally underneath it, same pattern as a frozen
-// spreadsheet column.
-function TimelineView({ phases }) {
-  const minDate = new Date(phases[0].start_date + 'T00:00:00');
-  const maxDate = new Date(phases[phases.length - 1].end_date + 'T00:00:00');
+function toISO(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addCalendarDays(date, delta) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + delta);
+  return d;
+}
+
+// Day-by-day Gantt-style grid, with drag support:
+// - dragging a bar's body moves it (shifts start+end together, duration
+//   unchanged)
+// - dragging either edge resizes it (changes duration, other edge stays
+//   anchored)
+// Both operate on this one phase only — no cascade to phases around it,
+// and overlap is allowed, since a manual placement on a calendar is a
+// deliberate choice, not something that should ripple.
+function TimelineView({ phases, onPhaseUpdate }) {
+  const [dragState, setDragState] = useState(null); // { phaseId, mode, startX, origStart, origEnd }
+  const [previewDates, setPreviewDates] = useState(null); // { phaseId, start_date, end_date } — live feedback while dragging
+  const previewRef = useRef(null);
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    function handleMove(e) {
+      const deltaX = e.clientX - dragState.startX;
+      const dayDelta = Math.round(deltaX / DAY_WIDTH);
+      const origStart = new Date(dragState.origStart + 'T00:00:00');
+      const origEnd = new Date(dragState.origEnd + 'T00:00:00');
+      let newStart = origStart, newEnd = origEnd;
+
+      if (dragState.mode === 'move') {
+        newStart = addCalendarDays(origStart, dayDelta);
+        newEnd = addCalendarDays(origEnd, dayDelta);
+      } else if (dragState.mode === 'resize-left') {
+        newStart = addCalendarDays(origStart, dayDelta);
+        if (newStart > origEnd) newStart = origEnd; // never invert below 1 day
+      } else if (dragState.mode === 'resize-right') {
+        newEnd = addCalendarDays(origEnd, dayDelta);
+        if (newEnd < origStart) newEnd = origStart;
+      }
+
+      const next = { phaseId: dragState.phaseId, start_date: toISO(newStart), end_date: toISO(newEnd) };
+      previewRef.current = next;
+      setPreviewDates(next);
+    }
+
+    function handleUp() {
+      const result = previewRef.current;
+      if (result) {
+        const start = new Date(result.start_date + 'T00:00:00');
+        const end = new Date(result.end_date + 'T00:00:00');
+        const duration_days = Math.round((end - start) / 86400000) + 1;
+        onPhaseUpdate(result.phaseId, { start_date: result.start_date, end_date: result.end_date, duration_days });
+      }
+      previewRef.current = null;
+      setPreviewDates(null);
+      setDragState(null);
+    }
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [dragState, onPhaseUpdate]);
+
+  function startDrag(phase, mode, e) {
+    e.preventDefault();
+    setDragState({ phaseId: phase.id, mode, startX: e.clientX, origStart: phase.start_date, origEnd: phase.end_date });
+  }
+
+  // Substitute live drag/resize positions so the grid (and its bounds)
+  // reflect what you're currently doing, not just what's saved yet.
+  const effectivePhases = phases.map(p =>
+    (previewDates && p.id === previewDates.phaseId) ? { ...p, start_date: previewDates.start_date, end_date: previewDates.end_date } : p
+  );
+
+  const minDate = new Date(Math.min(...effectivePhases.map(p => new Date(p.start_date + 'T00:00:00'))));
+  const maxDate = new Date(Math.max(...effectivePhases.map(p => new Date(p.end_date + 'T00:00:00'))));
   const totalSpan = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
   const gridWidth = totalSpan * DAY_WIDTH;
   const weekendBg = weekendShading(minDate);
@@ -382,15 +467,14 @@ function TimelineView({ phases }) {
   const todayOffset = Math.round((today - minDate) / 86400000);
   const showToday = todayOffset >= 0 && todayOffset < totalSpan;
 
-  const days = Array.from({ length: totalSpan }, (_, i) => {
-    const d = new Date(minDate);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  const days = Array.from({ length: totalSpan }, (_, i) => addCalendarDays(minDate, i));
 
   return (
     <div style={{ marginBottom: 8 }}>
       <Legend phases={phases} />
+      <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
+        Drag a bar to move it, or its edges to resize — phases can overlap here, and moving one doesn't shift the others.
+      </div>
       <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
         <div style={{ width: LABEL_WIDTH + gridWidth }}>
           <div style={{ display: 'flex' }}>
@@ -405,11 +489,12 @@ function TimelineView({ phases }) {
             </div>
           </div>
 
-          {phases.map(p => {
+          {effectivePhases.map(p => {
             const start = new Date(p.start_date + 'T00:00:00');
             const end = new Date(p.end_date + 'T00:00:00');
             const offsetDays = Math.round((start - minDate) / 86400000);
             const spanDays = Math.round((end - start) / 86400000) + 1;
+            const isDragging = dragState?.phaseId === p.id;
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
                 <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 0', fontSize: 10.5, lineHeight: 1.25 }}>
@@ -421,14 +506,28 @@ function TimelineView({ phases }) {
                     <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * DAY_WIDTH, width: 2, background: 'var(--accent)' }} />
                   )}
                   <div
-                    title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)}`}
+                    title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)} · drag to move, edges to resize`}
+                    onPointerDown={e => startDrag(p, 'move', e)}
                     style={{
                       position: 'absolute', top: 5, bottom: 5,
-                      left: offsetDays * DAY_WIDTH + 2, width: spanDays * DAY_WIDTH - 4,
+                      left: offsetDays * DAY_WIDTH + 2, width: Math.max(spanDays * DAY_WIDTH - 4, DAY_WIDTH - 4),
                       borderRadius: 4,
                       background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
+                      opacity: isDragging ? 0.75 : 1,
+                      boxShadow: isDragging ? '0 0 0 2px var(--accent)' : 'none',
+                      cursor: isDragging && dragState.mode === 'move' ? 'grabbing' : 'grab',
+                      touchAction: 'none',
                     }}
-                  />
+                  >
+                    <div
+                      onPointerDown={e => { e.stopPropagation(); startDrag(p, 'resize-left', e); }}
+                      style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 7, cursor: 'ew-resize', touchAction: 'none' }}
+                    />
+                    <div
+                      onPointerDown={e => { e.stopPropagation(); startDrag(p, 'resize-right', e); }}
+                      style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 7, cursor: 'ew-resize', touchAction: 'none' }}
+                    />
+                  </div>
                 </div>
               </div>
             );
