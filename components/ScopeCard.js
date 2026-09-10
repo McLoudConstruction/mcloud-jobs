@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import AIScopeGenerator from './AIScopeGenerator';
+import { flagScheduleStale } from '../lib/scheduleStale';
 
 export default function ScopeCard({ job, jobId, onSave }) {
   const [items, setItems] = useState((job.scope_items || []).map(i => i.text || ''));
@@ -13,7 +14,8 @@ export default function ScopeCard({ job, jobId, onSave }) {
 
   async function saveTradeActions(tradeActions) {
     const { error } = await supabase.from('job_scope_actions').insert(tradeActions.map(a => ({ ...a, job_id: jobId })));
-    if (error) alert('Failed to save the generated trade actions: ' + error.message);
+    if (error) { alert('Failed to save the generated trade actions: ' + error.message); return; }
+    await flagScheduleStale(jobId);
   }
 
   return (

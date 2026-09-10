@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { SERVICES_OFFERED } from '../lib/constants';
+import { flagScheduleStale } from '../lib/scheduleStale';
 
 const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '', quantity: 1 };
 
@@ -56,6 +57,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     // Don't rely solely on the realtime subscription — refresh directly
     // so the change shows up immediately.
     await load();
+    await flagScheduleStale(jobId);
   }
 
   async function remove(id) {
@@ -63,6 +65,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     const { error } = await supabase.from('job_scope_actions').delete().eq('id', id);
     if (error) { setError(error.message); return; }
     await load();
+    await flagScheduleStale(jobId);
   }
 
   const grouped = actions.reduce((acc, a) => {

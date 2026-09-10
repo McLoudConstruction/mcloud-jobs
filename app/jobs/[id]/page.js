@@ -39,9 +39,9 @@ import NotificationSettingsCard from '../../../components/NotificationSettingsCa
 import CustomerInfoCard from '../../../components/CustomerInfoCard';
 import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
+import ScheduleCard from '../../../components/ScheduleCard';
 import PriceCard from '../../../components/PriceCard';
 import TermsCard from '../../../components/TermsCard';
-import ProposalsCard from '../../../components/ProposalsCard';
 import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
 import UpdatesCard from '../../../components/UpdatesCard';
 import InvoiceCard from '../../../components/InvoiceCard';
@@ -69,8 +69,8 @@ const TABS = [
     key: 'Estimate', label: 'Estimate', icon: CalculatorIcon,
     sections: [
       { key: 'scope', label: 'Scope' },
+      { key: 'schedule', label: 'Schedule' },
       { key: 'pricing', label: 'Pricing' },
-      { key: 'proposals', label: 'Proposals' },
     ],
   },
   {
@@ -569,14 +569,14 @@ export default function JobDetailPage() {
           </div>
         )}
 
+        {tab === 'Estimate' && section === 'schedule' && (
+          <ScheduleCard job={job} jobId={id} />
+        )}
+
         {tab === 'Estimate' && section === 'pricing' && (
           <EstimateTab job={job} jobId={id}>
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
-        )}
-
-        {tab === 'Estimate' && section === 'proposals' && (
-          <ProposalsCard job={job} jobId={id} onSave={saveJob} />
         )}
 
         {tab === 'Financials' && section === 'overview' && (
