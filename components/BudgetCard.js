@@ -57,11 +57,37 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
   // ── Priced line items (Estimate → Pricing) ──────────────────────────
   // What was actually keyed in when the job was priced out — the
   // baseline everything else on this page gets measured against.
+  //
+  // Committed/Actual can only be shown at the group level, not per
+  // individual line — job_costs entries (from receipts/work orders/
+  // manual entry) aren't linked to a specific job_estimate_items row,
+  // only tagged with a broad category. Materials comes from job_costs
+  // category 'materials'; Subcontractor Cost comes from category
+  // 'subcontractor' (what Work Orders log). Status follows the same
+  // committed/actual meaning as the rest of this page: 'committed' is
+  // an issued work order or other obligation not yet paid out;
+  // 'actual' is a receipt, an invoiced work order, or any other cost
+  // that's actually gone out the door.
   const pricedMaterials = estimateItems.filter(it => it.category === 'material').map(it => ({ ...it, total: lineTotal(it) }));
   const pricedLabor = estimateItems.filter(it => it.category === 'labor').map(it => ({ ...it, total: lineTotal(it) }));
-  const pricedMaterialsTotal = pricedMaterials.reduce((s, it) => s + it.total, 0);
-  const pricedLaborTotal = pricedLabor.reduce((s, it) => s + it.total, 0);
-  const pricedGrandTotal = pricedMaterialsTotal + pricedLaborTotal;
+  const pricedMaterialsEstimated = pricedMaterials.reduce((s, it) => s + it.total, 0);
+  const pricedLaborEstimated = pricedLabor.reduce((s, it) => s + it.total, 0);
+
+  const materialsCommitted = costs.filter(c => c.category === 'materials' && c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
+  const materialsActual = costs.filter(c => c.category === 'materials' && c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
+  const subcontractorCommitted = costs.filter(c => c.category === 'subcontractor' && c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
+  const subcontractorActual = costs.filter(c => c.category === 'subcontractor' && c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
+
+  // Sales tax — same formula as the Estimate tab's Pricing page (tax
+  // applies to materials only, not subcontractor cost), so this total
+  // actually reconciles with what's on that page instead of quietly
+  // running short by whatever the tax line came to.
+  const taxPercent = job.estimate_sales_tax_percent != null ? Number(job.estimate_sales_tax_percent) : 0;
+  const salesTaxEstimated = pricedMaterialsEstimated * (taxPercent / 100);
+
+  const estimatedTotal = pricedMaterialsEstimated + salesTaxEstimated + pricedLaborEstimated;
+  const committedTotal = materialsCommitted + subcontractorCommitted;
+  const actualTotal = materialsActual + subcontractorActual;
 
   // ── Cost breakdown by category ──────────────────────────────────────
   const byCategory = {};
@@ -112,48 +138,78 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
           Priced Line Items
         </div>
         <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 10 }}>
-          Every line from the Estimate tab's Pricing page, as keyed in — this is the plan; actuals are tracked further down.
+          Estimated is every line from the Estimate tab's Pricing page, including sales tax. Committed and Actual are only trackable by group, not per line: Committed is issued work orders/POs not yet paid; Actual is receipts, invoiced work orders, and other logged expenses.
         </div>
 
         {estimateItems.length === 0 && <div className="empty-state">Nothing priced out yet — add materials and subcontractor cost on the Estimate tab.</div>}
 
-        {pricedMaterials.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div className="budget-line-group-label">Materials</div>
-            {pricedMaterials.map(it => (
-              <div className="budget-line-row" key={it.id}>
-                <span>{it.description}</span>
-                <b>{fmtMoney(it.total)}</b>
-              </div>
-            ))}
-            <div className="budget-line-row budget-line-subtotal">
-              <span>Materials subtotal</span>
-              <b>{fmtMoney(pricedMaterialsTotal)}</b>
-            </div>
-          </div>
-        )}
-
-        {pricedLabor.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div className="budget-line-group-label">Subcontractor Cost</div>
-            {pricedLabor.map(it => (
-              <div className="budget-line-row" key={it.id}>
-                <span>{it.unit_label || it.description}</span>
-                <b>{fmtMoney(it.total)}</b>
-              </div>
-            ))}
-            <div className="budget-line-row budget-line-subtotal">
-              <span>Subcontractor Cost subtotal</span>
-              <b>{fmtMoney(pricedLaborTotal)}</b>
-            </div>
-          </div>
-        )}
-
         {estimateItems.length > 0 && (
-          <div className="budget-line-row budget-line-grand-total">
-            <span>Total Priced</span>
-            <b>{fmtMoney(pricedGrandTotal)}</b>
-          </div>
+          <>
+            <div className="budget-line-row budget-line-header">
+              <span>Description</span>
+              <b>Estimated Cost</b>
+              <b>Committed Cost</b>
+              <b>Actual Cost</b>
+            </div>
+
+            {pricedMaterials.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div className="budget-line-group-label">Materials</div>
+                {pricedMaterials.map(it => (
+                  <div className="budget-line-row" key={it.id}>
+                    <span>{it.description}</span>
+                    <b>{fmtMoney(it.total)}</b>
+                    <span className="budget-line-na">—</span>
+                    <span className="budget-line-na">—</span>
+                  </div>
+                ))}
+                <div className="budget-line-row budget-line-subtotal">
+                  <span>Materials subtotal</span>
+                  <b>{fmtMoney(pricedMaterialsEstimated)}</b>
+                  <b>{fmtMoney(materialsCommitted)}</b>
+                  <b>{fmtMoney(materialsActual)}</b>
+                </div>
+              </div>
+            )}
+
+            {taxPercent > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div className="budget-line-row">
+                  <span>Sales Tax ({taxPercent}% of materials)</span>
+                  <b>{fmtMoney(salesTaxEstimated)}</b>
+                  <span className="budget-line-na">—</span>
+                  <span className="budget-line-na" title="Any tax paid is already folded into what receipts log as their total — not broken out separately.">—</span>
+                </div>
+              </div>
+            )}
+
+            {pricedLabor.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div className="budget-line-group-label">Subcontractor Cost</div>
+                {pricedLabor.map(it => (
+                  <div className="budget-line-row" key={it.id}>
+                    <span>{it.unit_label || it.description}</span>
+                    <b>{fmtMoney(it.total)}</b>
+                    <span className="budget-line-na">—</span>
+                    <span className="budget-line-na">—</span>
+                  </div>
+                ))}
+                <div className="budget-line-row budget-line-subtotal">
+                  <span>Subcontractor Cost subtotal</span>
+                  <b>{fmtMoney(pricedLaborEstimated)}</b>
+                  <b>{fmtMoney(subcontractorCommitted)}</b>
+                  <b>{fmtMoney(subcontractorActual)}</b>
+                </div>
+              </div>
+            )}
+
+            <div className="budget-line-row budget-line-grand-total">
+              <span>Total</span>
+              <b>{fmtMoney(estimatedTotal)}</b>
+              <b>{fmtMoney(committedTotal)}</b>
+              <b>{fmtMoney(actualTotal)}</b>
+            </div>
+          </>
         )}
       </div>
 

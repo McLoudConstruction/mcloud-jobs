@@ -1037,8 +1037,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 
 /* ─── Budget drill-down (Financials → Budget) ───────────────────────── */
 .budget-line-group-label{ font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
-.budget-line-row{ display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
-.budget-line-row span{ color: var(--ink); padding-right: 12px; }
+.budget-line-row{ display: grid; grid-template-columns: 1fr 100px 100px 100px; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.budget-line-row span{ color: var(--ink); }
+.budget-line-row b{ text-align: right; }
+.budget-line-header{ border-bottom: 1px solid var(--panel-line); padding-bottom: 8px; margin-bottom: 4px; }
+.budget-line-header b{ font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); text-align: right; }
+.budget-line-na{ text-align: right; color: var(--ink-soft); }
 .budget-line-subtotal{ border-bottom: none; padding-top: 4px; color: var(--ink-soft); }
 .budget-line-subtotal span{ color: var(--ink-soft); font-style: italic; }
 .budget-line-grand-total{ border-top: 2px solid var(--panel-line); border-bottom: none; padding-top: 10px; font-size: 14.5px; }
