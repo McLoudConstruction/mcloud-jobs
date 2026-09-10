@@ -113,45 +113,44 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
     <div className="camera-overlay">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
+      <div className="camera-topbar" style={reviewFile ? { visibility: 'hidden' } : undefined}>
+        <button className="camera-icon-btn" onClick={handleClose} type="button" aria-label="Close camera">✕</button>
+        {title && <span className="camera-title">{title}</span>}
+        {count > 0 && <span className="camera-count-badge">{count} added</span>}
+      </div>
+
+      <div className="camera-viewport">
+        {/* Always mounted — swapping this out on every review/retake was
+            what caused the black screen: a fresh <video> node has no
+            srcObject, so the stream needs re-attaching, not remounting. */}
+        <video ref={videoRef} className="camera-video" autoPlay playsInline muted style={reviewFile ? { display: 'none' } : undefined} />
+        {starting && !error && !reviewFile && <div className="camera-status">Starting camera…</div>}
+        {error && !reviewFile && (
+          <div className="camera-error">
+            <p>{error}</p>
+            <button className="btn btn-primary btn-sm" onClick={() => fallbackInputRef.current?.click()} type="button">
+              Choose from library
+            </button>
+          </div>
+        )}
+        {reviewFile && (
+          <img src={reviewFile.previewUrl} alt="Captured preview" className="camera-review-image" />
+        )}
+      </div>
+
       {!reviewFile && (
-        <>
-          <div className="camera-topbar">
-            <button className="camera-icon-btn" onClick={handleClose} type="button" aria-label="Close camera">✕</button>
-            {title && <span className="camera-title">{title}</span>}
-            {count > 0 && <span className="camera-count-badge">{count} added</span>}
-          </div>
-
-          <div className="camera-viewport">
-            <video ref={videoRef} className="camera-video" autoPlay playsInline muted />
-            {starting && !error && <div className="camera-status">Starting camera…</div>}
-            {error && (
-              <div className="camera-error">
-                <p>{error}</p>
-                <button className="btn btn-primary btn-sm" onClick={() => fallbackInputRef.current?.click()} type="button">
-                  Choose from library
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="camera-controls">
-            <button className="camera-flip-btn" onClick={() => setFacingMode(m => (m === 'environment' ? 'user' : 'environment'))} type="button" aria-label="Flip camera">⟳</button>
-            <button className="camera-shutter-btn" onClick={handleSnap} disabled={!!error || starting} type="button" aria-label="Take photo" />
-            <span style={{ width: 44 }} />
-          </div>
-        </>
+        <div className="camera-controls">
+          <button className="camera-flip-btn" onClick={() => setFacingMode(m => (m === 'environment' ? 'user' : 'environment'))} type="button" aria-label="Flip camera">⟳</button>
+          <button className="camera-shutter-btn" onClick={handleSnap} disabled={!!error || starting} type="button" aria-label="Take photo" />
+          <span style={{ width: 44 }} />
+        </div>
       )}
 
       {reviewFile && (
-        <>
-          <div className="camera-viewport">
-            <img src={reviewFile.previewUrl} alt="Captured preview" className="camera-review-image" />
-          </div>
-          <div className="camera-review-controls">
-            <button className="btn btn-sm" onClick={handleRetake} type="button">Retake</button>
-            <button className="btn btn-primary btn-sm" onClick={handleUsePhoto} type="button">Use Photo</button>
-          </div>
-        </>
+        <div className="camera-review-controls">
+          <button className="btn btn-sm" onClick={handleRetake} type="button">Retake</button>
+          <button className="btn btn-primary btn-sm" onClick={handleUsePhoto} type="button">Use Photo</button>
+        </div>
       )}
 
       <input
