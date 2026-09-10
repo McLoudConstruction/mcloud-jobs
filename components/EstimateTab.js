@@ -125,17 +125,39 @@ export default function EstimateTab({ job, jobId, children }) {
     }
   }
 
+  const [rowStatus, setRowStatus] = useState({}); // { [itemId]: 'saved' | 'error' }
+
+  function flashRowStatus(itemId, status, duration) {
+    setRowStatus(prev => ({ ...prev, [itemId]: status }));
+    setTimeout(() => {
+      setRowStatus(prev => {
+        if (prev[itemId] !== status) return prev; // a newer save/error already replaced this one
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    }, duration);
+  }
+
   function updateLocalItem(itemId, field, value) {
     setItems(prev => prev.map(it => it.id === itemId ? { ...it, [field]: value } : it));
   }
 
   async function persistItem(itemId, field, value) {
-    await supabase.from('job_estimate_items').update({ [field]: value }).eq('id', itemId);
+    const { error } = await supabase.from('job_estimate_items').update({ [field]: value }).eq('id', itemId);
+    flashRowStatus(itemId, error ? 'error' : 'saved', error ? 4000 : 1400);
   }
 
   async function deleteItem(itemId) {
+    const removed = items.find(it => it.id === itemId);
     setItems(prev => prev.filter(it => it.id !== itemId));
-    await supabase.from('job_estimate_items').delete().eq('id', itemId);
+    const { error } = await supabase.from('job_estimate_items').delete().eq('id', itemId);
+    if (error && removed) {
+      // The delete didn't actually happen server-side — put it back
+      // instead of leaving the person thinking it's gone.
+      setItems(prev => [...prev, removed]);
+      flashRowStatus(itemId, 'error', 4000);
+    }
   }
 
   async function savePriceBook(item) {
@@ -263,7 +285,7 @@ export default function EstimateTab({ job, jobId, children }) {
                 <div></div>
               </div>
               {materialItems.map(it => (
-                <div key={it.id} className="estimate-row">
+                <div key={it.id} className={`estimate-row ${rowStatus[it.id] === 'saved' ? 'row-flash-saved' : rowStatus[it.id] === 'error' ? 'row-flash-error' : ''}`}>
                   <div>
                     <input
                       value={it.description}
@@ -272,6 +294,7 @@ export default function EstimateTab({ job, jobId, children }) {
                     />
                     {it.source === 'suggested' && <span className="estimate-tag">Suggested</span>}
                     {it.buffer_note && <div className="estimate-buffer-note">{it.buffer_note}</div>}
+                    {rowStatus[it.id] === 'error' && <div style={{ fontSize: 11, color: '#a13f3f', marginTop: 3 }}>Couldn't save — try again</div>}
                   </div>
                   <div>
                     <input
@@ -341,7 +364,7 @@ export default function EstimateTab({ job, jobId, children }) {
                 <div></div>
               </div>
               {laborItems.map(it => (
-                <div key={it.id} className="estimate-row">
+                <div key={it.id} className={`estimate-row ${rowStatus[it.id] === 'saved' ? 'row-flash-saved' : rowStatus[it.id] === 'error' ? 'row-flash-error' : ''}`}>
                   <div>
                     <input
                       value={it.description}
@@ -349,6 +372,7 @@ export default function EstimateTab({ job, jobId, children }) {
                       onBlur={e => persistItem(it.id, 'description', e.target.value)}
                     />
                     {it.source === 'suggested' && <span className="estimate-tag">Suggested</span>}
+                    {rowStatus[it.id] === 'error' && <div style={{ fontSize: 11, color: '#a13f3f', marginTop: 3 }}>Couldn't save — try again</div>}
                   </div>
                   <div>
                     <select
