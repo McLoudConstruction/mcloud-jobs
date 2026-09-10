@@ -22,8 +22,8 @@ import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
-  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, ChangeOrderIcon, WorkOrderIcon,
-  InvoiceIcon, ReceiptIcon, PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon,
+  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon,
+  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -72,27 +72,20 @@ const TABS = [
   },
   {
     key: 'Financials', label: 'Financials', icon: FinanceIcon,
-    // Cost summary / budget-vs-actual overview only now — Change Orders,
-    // Work Orders, Invoicing, and Receipts were split out into their own
-    // tabs (Sep 2026) the same way Material Selections was earlier, so
-    // each is one click away instead of a scroll inside a shared tab.
+    // Change Orders, Work Orders, Invoicing, and Receipts live here as
+    // sections (Sep 2026, take 2) rather than their own top-level tabs.
+    // They used to be split out specifically to avoid scrolling through
+    // one long stacked page — that's still true here: each section swaps
+    // the whole view instead of stacking, so nothing's lost, but the top
+    // tab row isn't carrying five finance-related entries side by side.
     hideWhen: (job) => isOpportunity(job),
-  },
-  {
-    key: 'Change Orders', label: 'Change Orders', icon: ChangeOrderIcon,
-    hideWhen: (job) => isOpportunity(job),
-  },
-  {
-    key: 'Work Orders', label: 'Work Orders', icon: WorkOrderIcon,
-    hideWhen: (job) => isOpportunity(job),
-  },
-  {
-    key: 'Invoicing', label: 'Invoicing', icon: InvoiceIcon,
-    hideWhen: (job) => isOpportunity(job),
-  },
-  {
-    key: 'Receipts', label: 'Receipts', icon: ReceiptIcon,
-    hideWhen: (job) => isOpportunity(job),
+    sections: [
+      { key: 'overview', label: 'Overview' },
+      { key: 'change_orders', label: 'Change Orders' },
+      { key: 'work_orders', label: 'Work Orders' },
+      { key: 'invoicing', label: 'Invoicing' },
+      { key: 'receipts', label: 'Receipts' },
+    ],
   },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon },
   { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
@@ -569,19 +562,19 @@ export default function JobDetailPage() {
           </EstimateTab>
         )}
 
-        {tab === 'Financials' && (
+        {tab === 'Financials' && section === 'overview' && (
           <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
         )}
 
-        {tab === 'Change Orders' && (
+        {tab === 'Financials' && section === 'change_orders' && (
           <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
         )}
 
-        {tab === 'Work Orders' && (
+        {tab === 'Financials' && section === 'work_orders' && (
           <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
         )}
 
-        {tab === 'Invoicing' && (
+        {tab === 'Financials' && section === 'invoicing' && (
           <>
             {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
               <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
@@ -600,7 +593,7 @@ export default function JobDetailPage() {
           </>
         )}
 
-        {tab === 'Receipts' && (
+        {tab === 'Financials' && section === 'receipts' && (
           <ReceiptsCard jobId={id} />
         )}
 

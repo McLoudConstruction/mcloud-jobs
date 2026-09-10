@@ -512,27 +512,35 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .section-subnav .stage-tab{ flex-shrink: 0; }
 .section-subnav .stage-tab{ text-decoration: none; }
 
-/* Sub-sections within a job-detail tab (e.g. Estimate: Scope / Pricing).
-   Deliberately smaller and pill-shaped rather than underlined, so it
-   reads as "a mode within this tab" and never gets mistaken for another
-   top-level tab. */
+/* Sub-sections within a job-detail tab (e.g. Estimate: Scope / Pricing;
+   Financials: Overview / Change Orders / Work Orders / Invoicing /
+   Receipts). A bordered segmented control rather than floating pills —
+   reads as "a mode within this tab" without the chip/tag look, and
+   still can't be mistaken for the underlined top-level tab row above. */
 .tab-sections{ display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -10px 0 18px; }
-.tab-sections-pills{ display: flex; gap: 6px; flex-wrap: wrap; }
+.tab-sections-pills{
+  display: flex; flex-wrap: wrap;
+  border: 1px solid var(--panel-line);
+  border-radius: 7px;
+  overflow: hidden;
+  width: fit-content;
+}
 .tab-sections-actions{ display: flex; gap: 8px; flex-wrap: wrap; }
 .tab-section-btn{
   flex-shrink: 0;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 11.5px;
+  padding: 7px 14px;
+  font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--line);
-  background: transparent;
+  border: none;
+  border-right: 1px solid var(--panel-line);
+  background: var(--panel);
   color: var(--ink-soft);
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color 0.12s, background-color 0.12s;
 }
-.tab-section-btn:hover{ color: var(--ink); border-color: var(--ink-soft); }
-.tab-section-btn.active{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab-section-btn:last-child{ border-right: none; }
+.tab-section-btn:hover{ color: var(--ink); background: var(--card-bg); }
+.tab-section-btn.active{ background: var(--accent); color: #fff; }
 
 .badge{
   display: inline-block;

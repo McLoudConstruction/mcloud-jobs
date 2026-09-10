@@ -10,12 +10,12 @@ const ITEMS = [
   { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate', section: 'pricing' },
   { key: 'contract', label: 'Contract Signed', tab: 'Project Updates' },
   { key: 'selections', label: 'Material Selections', tab: 'Material Selections' },
-  { key: 'workOrders', label: 'Work Orders Issued', tab: 'Work Orders' },
-  { key: 'receipts', label: 'Receipts Logged', tab: 'Receipts' },
+  { key: 'workOrders', label: 'Work Orders Issued', tab: 'Financials', section: 'work_orders' },
+  { key: 'receipts', label: 'Receipts Logged', tab: 'Financials', section: 'receipts' },
   { key: 'photos', label: 'Photos', tab: 'Photos' },
   { key: 'updates', label: 'Progress Updates Sent', tab: 'Project Updates' },
-  { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Change Orders' },
-  { key: 'invoicing', label: 'Invoicing', tab: 'Invoicing' },
+  { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Financials', section: 'change_orders' },
+  { key: 'invoicing', label: 'Invoicing', tab: 'Financials', section: 'invoicing' },
 ];
 
 export default function ProjectMilestonesCard({ job, jobId, onTabChange }) {
