@@ -583,7 +583,7 @@ export default function JobDetailPage() {
 
         {tab === 'Invoicing' && (
           <>
-            {(job.stage === 'active' || job.stage === 'completed') && (
+            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
               <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
             )}
             <DrawsCard jobId={id} />

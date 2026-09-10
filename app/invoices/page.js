@@ -66,7 +66,7 @@ export default function InvoicesDashboardPage() {
     const flaggedReady = j.ready_to_invoice && !j.invoice_amount && !usesDraws;
     if (flaggedReady) urgency = Math.max(urgency, 3);
 
-    return { ...j, usesDraws, status, urgency, outstanding, flaggedReady: !!j.ready_to_invoice };
+    return { ...j, usesDraws, status, urgency, outstanding, flaggedReady };
   })
     .sort((a, b) => {
       if (b.urgency !== a.urgency) return b.urgency - a.urgency;
