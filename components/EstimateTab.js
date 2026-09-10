@@ -83,6 +83,7 @@ export default function EstimateTab({ job, jobId, children }) {
   }
 
   const [suggestingTrades, setSuggestingTrades] = useState(false);
+  const [tradesError, setTradesError] = useState('');
   const [pushing, setPushing] = useState(false);
   const [pushedFlash, setPushedFlash] = useState('');
 
@@ -92,6 +93,7 @@ export default function EstimateTab({ job, jobId, children }) {
   // relationships, not something a model should ever invent.
   async function suggestTradesFromActions() {
     setSuggestingTrades(true);
+    setTradesError('');
     try {
       const trades = [...new Set(actions.map(a => a.trade).filter(Boolean))];
       // Re-read what's already there directly from the database right
@@ -102,7 +104,7 @@ export default function EstimateTab({ job, jobId, children }) {
       const existingTrades = new Set((currentLabor || []).map(it => it.unit_label));
       const toAdd = trades.filter(t => !existingTrades.has(t));
       if (toAdd.length === 0) return;
-      await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
+      const { error: insertError } = await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
         job_id: jobId,
         category: 'labor',
         description: `${trade} — labor/subcontractor cost`,
@@ -111,6 +113,13 @@ export default function EstimateTab({ job, jobId, children }) {
         unit_price: 0,
         source: 'suggested',
       })));
+      if (insertError) throw insertError;
+      // Same fix as suggestMaterials above — don't wait on the realtime
+      // subscription to pick this up, refresh directly so the new rows
+      // show immediately instead of needing a manual page reload.
+      await loadItems();
+    } catch (err) {
+      setTradesError(err.message);
     } finally {
       setSuggestingTrades(false);
     }
@@ -321,6 +330,7 @@ export default function EstimateTab({ job, jobId, children }) {
                 {suggestingTrades ? 'Adding…' : 'Add a row per trade from action list'}
               </button>
             </div>
+            {tradesError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{tradesError}</div>}
 
             <div className="estimate-table" style={{ marginTop: 16 }}>
               <div className="estimate-row estimate-header-row">
