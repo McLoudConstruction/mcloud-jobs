@@ -4,11 +4,11 @@ import { supabase } from '../lib/supabaseClient';
 import { SERVICES_OFFERED } from '../lib/constants';
 import { flagScheduleStale } from '../lib/scheduleStale';
 
-const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '', quantity: 1 };
+const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '', quantity: 1, area: '' };
 
 export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   const [actions, setActions] = useState([]);
-  const [view, setView] = useState('trade'); // 'trade' | 'flat'
+  const [view, setView] = useState('trade'); // 'trade' | 'area' | 'flat'
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_ROW);
   const [editingId, setEditingId] = useState(null);
@@ -34,7 +34,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   }
 
   function startEdit(a) {
-    setForm({ description: a.description, trade: a.trade || SERVICES_OFFERED[0], unit_label: a.unit_label || '', quantity: a.quantity ?? 1 });
+    setForm({ description: a.description, trade: a.trade || SERVICES_OFFERED[0], unit_label: a.unit_label || '', quantity: a.quantity ?? 1, area: a.area || '' });
     setEditingId(a.id);
     setShowForm(true);
   }
@@ -42,7 +42,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   async function save(e) {
     e.preventDefault();
     if (!form.description.trim()) return;
-    const payload = { ...form, quantity: Number(form.quantity) || 1 };
+    const payload = { ...form, quantity: Number(form.quantity) || 1, area: form.area.trim() || null };
     let error;
     if (editingId) {
       ({ error } = await supabase.from('job_scope_actions').update(payload).eq('id', editingId));
@@ -75,6 +75,14 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     return acc;
   }, {});
 
+  const groupedByArea = actions.reduce((acc, a) => {
+    const key = a.area || 'Whole job';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(a);
+    return acc;
+  }, {});
+  const usesAreas = Object.keys(groupedByArea).some(k => k !== 'Whole job');
+
   return (
     <div className="card">
       <h3>Exhaustive Action List &amp; Trade Breakdown</h3>
@@ -86,6 +94,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
 
       <div className="section-actions" style={{ marginTop: 0 }}>
         <button className={`btn btn-sm ${view === 'trade' ? 'btn-primary' : ''}`} onClick={() => setView('trade')}>By Trade</button>
+        {usesAreas && <button className={`btn btn-sm ${view === 'area' ? 'btn-primary' : ''}`} onClick={() => setView('area')}>By Area</button>}
         <button className={`btn btn-sm ${view === 'flat' ? 'btn-primary' : ''}`} onClick={() => setView('flat')}>Flat List</button>
         {!readOnly && <button className="btn btn-sm" onClick={startAdd}>{showForm && !editingId ? 'Cancel' : '+ Add action'}</button>}
       </div>
@@ -103,6 +112,10 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
             </div>
             <div><label>Unit</label><input value={form.unit_label} onChange={e => update('unit_label', e.target.value)} placeholder="e.g. faucet" /></div>
             <div><label>Quantity</label><input type="number" min="0" step="1" value={form.quantity} onChange={e => update('quantity', e.target.value)} /></div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label>Area <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>(optional — for jobs stepped across multiple spaces)</span></label>
+            <input value={form.area} onChange={e => update('area', e.target.value)} placeholder="e.g. Bathroom 1 — leave blank if it's for the whole job" />
           </div>
           {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
           <div className="section-actions">
@@ -132,6 +145,21 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
         </div>
       )}
 
+      {actions.length > 0 && view === 'area' && (
+        <div style={{ marginTop: 14 }}>
+          {Object.entries(groupedByArea).map(([area, rows]) => (
+            <div key={area} style={{ marginBottom: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>
+                {area} <span style={{ color: 'var(--ink-soft)', fontWeight: 400, textTransform: 'none' }}>({rows.length})</span>
+              </div>
+              {rows.map(a => (
+                <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {actions.length > 0 && view === 'flat' && (
         <div style={{ marginTop: 14 }}>
           {actions.map(a => (
@@ -148,7 +176,7 @@ function ActionRow({ a, showTrade, readOnly, onEdit, onRemove }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
       <div>
         <b>{a.quantity}{a.unit_label ? ` ${a.unit_label}${a.quantity === 1 ? '' : 's'}` : ''}</b> — {a.description}
-        {showTrade && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{a.trade || 'Other'}</div>}
+        {showTrade && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{a.trade || 'Other'}{a.area ? ` · ${a.area}` : ''}</div>}
       </div>
       {!readOnly && (
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

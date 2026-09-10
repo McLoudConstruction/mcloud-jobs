@@ -31,6 +31,32 @@
   --accent-hover: var(--rust-dim);
 
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+
+  /* Schedule page — one hue per trade (SERVICES_OFFERED), so a phase's
+     color is meaningful across the whole app rather than assigned per
+     screen. Deliberately skips the amber/gold hue band (~25-65) since
+     --gold is reserved for the schedule's "needs review" flag — a trade
+     landing on a look-alike hue would make that flag ambiguous. */
+  --trade-framing: hsl(0, 52%, 42%);
+  --trade-roofing: hsl(17, 52%, 42%);
+  --trade-electrical: hsl(74, 52%, 42%);
+  --trade-plumbing: hsl(91, 52%, 42%);
+  --trade-hvac: hsl(107, 52%, 42%);
+  --trade-drywall: hsl(124, 52%, 42%);
+  --trade-painting: hsl(141, 52%, 42%);
+  --trade-flooring: hsl(158, 52%, 42%);
+  --trade-tile: hsl(175, 52%, 42%);
+  --trade-cabinetry: hsl(192, 52%, 42%);
+  --trade-countertops: hsl(208, 52%, 42%);
+  --trade-concrete-foundation: hsl(225, 52%, 42%);
+  --trade-masonry: hsl(242, 52%, 42%);
+  --trade-windows-doors: hsl(259, 52%, 42%);
+  --trade-insulation: hsl(276, 52%, 42%);
+  --trade-siding: hsl(293, 52%, 42%);
+  --trade-demo-site-prep: hsl(309, 52%, 42%);
+  --trade-landscaping: hsl(326, 52%, 42%);
+  --trade-general-labor: hsl(343, 52%, 42%);
+  --trade-neutral: #b4b2a9;
 }
 
 [data-theme="dark"]{
@@ -58,6 +84,27 @@
 
   --accent: var(--rust);
   --accent-hover: var(--rust-dim);
+
+  --trade-framing: hsl(0, 50%, 64%);
+  --trade-roofing: hsl(17, 50%, 64%);
+  --trade-electrical: hsl(74, 50%, 64%);
+  --trade-plumbing: hsl(91, 50%, 64%);
+  --trade-hvac: hsl(107, 50%, 64%);
+  --trade-drywall: hsl(124, 50%, 64%);
+  --trade-painting: hsl(141, 50%, 64%);
+  --trade-flooring: hsl(158, 50%, 64%);
+  --trade-tile: hsl(175, 50%, 64%);
+  --trade-cabinetry: hsl(192, 50%, 64%);
+  --trade-countertops: hsl(208, 50%, 64%);
+  --trade-concrete-foundation: hsl(225, 50%, 64%);
+  --trade-masonry: hsl(242, 50%, 64%);
+  --trade-windows-doors: hsl(259, 50%, 64%);
+  --trade-insulation: hsl(276, 50%, 64%);
+  --trade-siding: hsl(293, 50%, 64%);
+  --trade-demo-site-prep: hsl(309, 50%, 64%);
+  --trade-landscaping: hsl(326, 50%, 64%);
+  --trade-general-labor: hsl(343, 50%, 64%);
+  --trade-neutral: #5f5e5a;
 }
 
 html, body{

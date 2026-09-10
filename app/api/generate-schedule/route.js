@@ -70,6 +70,8 @@ For each phase key listed above, estimate a realistic duration in business days,
 
 Note: "Electrical" and "Plumbing" actions can belong to either the rough-in phase or the finish phase depending on what the action actually describes (e.g. "run wiring to new outlets" is rough-in; "install outlet covers and switch plates" is finish) — split your duration estimate for each phase accordingly rather than assuming all electrical/plumbing time belongs to just one of them.
 
+Note: "Tile" actions can belong to either the interior_finishes phase or the finish_trades phase — floor tile and shower/tub-surround tile go in interior_finishes (before countertops), but backsplash tile and any tile that sits against or borders a countertop always goes in finish_trades (after countertops, since it has to be cut and fitted to the actual countertop edge). Split your duration estimate accordingly rather than putting all tile time in one phase.
+
 Respond with a single JSON object mapping each phase key to a whole number of business days, shaped exactly like this, with no other text:
 {"durations": {"${skeleton[0].key}": 2, "${skeleton[1]?.key || 'phase_key'}": 3}}`;
 

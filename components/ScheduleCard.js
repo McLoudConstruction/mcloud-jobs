@@ -2,10 +2,60 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { recomputeSequentialDates } from '../lib/scheduleDates';
+import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Small color swatch used in both List and Timeline rows — needs_review
+// always wins over the trade color(s), since that flag is meant to be
+// unambiguous regardless of what trade the phase belongs to.
+function PhaseSwatch({ phase, size = 14 }) {
+  return (
+    <span
+      style={{
+        display: 'inline-block', width: size, height: size, borderRadius: 3,
+        background: phase.needs_review ? 'var(--gold)' : phaseBackground(phase),
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+// Distinct trades represented across the current phase set, for the
+// legend — only what's actually present, not the full 19-trade list.
+function legendEntries(phases) {
+  const seen = new Map();
+  for (const p of phases) {
+    for (const t of tradesForPhase(p)) {
+      if (!seen.has(t)) seen.set(t, true);
+    }
+  }
+  return [...seen.keys()];
+}
+
+function Legend({ phases }) {
+  const trades = legendEntries(phases);
+  const anyFlagged = phases.some(p => p.needs_review);
+  if (trades.length === 0 && !anyFlagged) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+      {trades.map(t => (
+        <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <PhaseSwatch phase={{ trade: t, phase_key: null }} size={10} />
+          {t}
+        </span>
+      ))}
+      {anyFlagged && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <PhaseSwatch phase={{ needs_review: true }} size={10} />
+          Check on this
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function ScheduleCard({ jobId, job }) {
@@ -214,12 +264,16 @@ export default function ScheduleCard({ jobId, job }) {
       {draft && (
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Review before confirming</div>
+          <Legend phases={draft} />
           {draft.map((p, i) => (
             <div key={p.phase_key + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, gap: 10, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
-              <div>
-                <b>{p.label}</b>
-                {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · {p.orphaned ? 'trade no longer in breakdown' : 'duration kept from your edit — review'}</span>}
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
+                <div>
+                  <b>{p.label}</b>
+                  {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · {p.orphaned ? 'trade no longer in breakdown' : 'duration kept from your edit — review'}</span>}
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 <input type="number" min="1" value={p.duration_days} onChange={e => updateDraftDuration(i, e.target.value)} onBlur={() => finalizeDraftDuration(i)} style={{ width: 56 }} />
@@ -249,10 +303,12 @@ export default function ScheduleCard({ jobId, job }) {
 
           {view === 'timeline' && <TimelineView phases={phases} />}
 
+          {view === 'list' && <Legend phases={phases} />}
           {view === 'list' && phases.map(p => (
             <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
               {editingId === p.id ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PhaseSwatch phase={p} />
                   <b style={{ flex: 1 }}>{p.label}</b>
                   <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
                   <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
@@ -261,10 +317,13 @@ export default function ScheduleCard({ jobId, job }) {
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                  <div>
-                    <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · edited</span>}
-                    {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
-                    <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} business days)</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
+                    <div>
+                      <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · edited</span>}
+                      {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} business days)</div>
+                    </div>
                   </div>
                   <button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button>
                 </div>
@@ -297,6 +356,7 @@ function TimelineView({ phases }) {
 
   return (
     <div style={{ marginBottom: 8 }}>
+      <Legend phases={phases} />
       <div style={{ display: 'flex', fontSize: 10, color: 'var(--ink-soft)', marginBottom: 6 }}>
         <div style={{ width: 120, flexShrink: 0 }} />
         <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between' }}>
@@ -321,8 +381,7 @@ function TimelineView({ phases }) {
                   position: 'absolute', top: 0, bottom: 0,
                   left: `${leftPct}%`, width: `${widthPct}%`,
                   borderRadius: 4,
-                  background: p.needs_review ? 'var(--gold)' : 'var(--accent)',
-                  opacity: p.needs_review ? 0.85 : 1,
+                  background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
                 }}
               />
             </div>
