@@ -1049,14 +1049,6 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .budget-line-subtotal span{ color: var(--ink-soft); font-style: italic; }
 .budget-line-grand-total{ border-top: 2px solid var(--panel-line); border-bottom: none; padding-top: 10px; font-size: 14.5px; }
 .budget-line-grand-total span{ font-weight: 700; color: var(--heading); }
-.budget-legend{ display: flex; gap: 16px; font-size: 11px; color: var(--ink-soft); margin-bottom: 12px; }
-.budget-legend-swatch{ display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-.budget-cat-row{ margin-bottom: 12px; }
-.budget-cat-row-head{ display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
-.budget-cat-row-head b{ color: var(--heading); }
-.budget-cat-bar{ display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-line); }
-.budget-cat-bar-actual{ background: var(--accent); }
-.budget-cat-bar-committed{ background: var(--gold); opacity: 0.55; }
 
 .budget-burn-wrap{ margin-bottom: 22px; }
 .budget-burn-track{ height: 14px; border-radius: 7px; background: var(--panel); border: 1px solid var(--panel-line); overflow: hidden; }

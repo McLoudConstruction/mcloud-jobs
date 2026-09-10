@@ -565,11 +565,11 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Financials' && section === 'overview' && (
-          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} />
+          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
         )}
 
         {tab === 'Financials' && section === 'budget' && (
-          <BudgetCard jobId={id} job={job} changeOrders={changeOrders} />
+          <BudgetCard jobId={id} job={job} />
         )}
 
         {tab === 'Financials' && section === 'change_orders' && (

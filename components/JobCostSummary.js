@@ -11,20 +11,28 @@ function fmtMoney(v) {
 
 const EMPTY_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
 
-export default function JobCostSummary({ jobId, contractPrice, projectedCost, changeOrders }) {
+export default function JobCostSummary({ jobId, contractPrice, projectedCost, changeOrders, invoiceAmount, invoiceStatus }) {
   const [costs, setCosts] = useState([]);
+  const [draws, setDraws] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const loadCosts = useCallback(async () => {
-    const { data } = await supabase.from('job_costs').select('*').eq('job_id', jobId).order('cost_date', { ascending: false });
-    if (data) setCosts(data);
+    const [{ data: c }, { data: d }] = await Promise.all([
+      supabase.from('job_costs').select('*').eq('job_id', jobId).order('cost_date', { ascending: false }),
+      supabase.from('invoices').select('*').eq('job_id', jobId),
+    ]);
+    if (c) setCosts(c);
+    if (d) setDraws(d);
   }, [jobId]);
 
   useEffect(() => {
     loadCosts();
-    const channel = supabase.channel(`job-costs-${jobId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'job_costs', filter: `job_id=eq.${jobId}` }, loadCosts).subscribe();
+    const channel = supabase.channel(`job-costs-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_costs', filter: `job_id=eq.${jobId}` }, loadCosts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${jobId}` }, loadCosts)
+      .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, loadCosts]);
 
@@ -61,6 +69,26 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
   const margin = adjustedContractValue != null ? adjustedContractValue - totalCosts : null;
   const marginPercent = margin != null && adjustedContractValue ? (margin / adjustedContractValue) * 100 : null;
   const isOverBudget = projectedCost != null && projectedCost > 0 && totalCosts > Number(projectedCost);
+
+  // ── Cash position ────────────────────────────────────────────────────
+  // A job either uses draws (multiple invoices/progress billing) or a
+  // single invoice — never both, same assumption DrawsCard/InvoiceCard
+  // already make. Falls back to the single-invoice fields on the job
+  // itself when no draws exist.
+  const usesDraws = draws.length > 0;
+  const collected = usesDraws
+    ? draws.filter(d => d.status === 'paid').reduce((s, d) => s + Number(d.amount || 0), 0)
+    : (invoiceStatus === 'paid' ? Number(invoiceAmount || 0) : 0);
+  const outstanding = usesDraws
+    ? draws.filter(d => d.status === 'sent').reduce((s, d) => s + Number(d.amount || 0), 0)
+    : (invoiceStatus === 'sent' ? Number(invoiceAmount || 0) : 0);
+  const notYetBilled = usesDraws
+    ? draws.filter(d => d.status === 'not_sent').reduce((s, d) => s + Number(d.amount || 0), 0)
+    : (!invoiceAmount ? (adjustedContractValue || 0) : 0);
+  // Only cash actually spent counts against cash collected — committed
+  // costs haven't left the bank account yet, so they don't belong here
+  // the way they do in the accrual-style margin figure above.
+  const netCash = collected - totalActual;
 
   return (
     <div className="card">
@@ -100,6 +128,33 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
         <div>
           <div className="portal-info-label">Margin %</div>
           <div className="portal-info-value" style={{ color: marginPercent != null && marginPercent < 0 ? '#a13f3f' : undefined }}>{marginPercent != null ? `${marginPercent.toFixed(1)}%` : '—'}</div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 10 }}>
+          Cash Position
+        </div>
+        <div className="portal-info-grid">
+          <div>
+            <div className="portal-info-label">Collected</div>
+            <div className="portal-info-value" style={{ color: '#3a6b45' }}>{fmtMoney(collected)}</div>
+          </div>
+          <div>
+            <div className="portal-info-label">Outstanding (sent, unpaid)</div>
+            <div className="portal-info-value">{fmtMoney(outstanding)}</div>
+          </div>
+          <div>
+            <div className="portal-info-label">Not Yet Billed</div>
+            <div className="portal-info-value">{fmtMoney(notYetBilled)}</div>
+          </div>
+          <div>
+            <div className="portal-info-label">Net Cash Position</div>
+            <div className="portal-info-value" style={{ color: netCash < 0 ? '#a13f3f' : '#3a6b45' }}>{fmtMoney(netCash)}</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
+          Net cash position is what's been collected minus what's actually been spent — committed-but-unpaid costs aren't counted against it yet.
         </div>
       </div>
 
