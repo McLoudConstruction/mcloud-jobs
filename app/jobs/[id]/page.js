@@ -96,8 +96,12 @@ const TABS = [
   },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon },
   { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
-  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon },
-  { key: 'Messages', label: 'Messages', icon: MessagesIcon },
+  // Kept in TABS (so goToTab/#? URL params/the "land somewhere valid"
+  // safety effect all still work) but left out of the tab-button row
+  // below — each now has its own quick-access button up in the job
+  // header instead, so showing them again here was pure duplication.
+  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
+  { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
   { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
 ];
 
@@ -484,7 +488,7 @@ export default function JobDetailPage() {
 
 
         <div className="stage-tabs">
-          {TABS.filter(t => !t.hideWhen || !t.hideWhen(job)).map(t => (
+          {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
             <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
               {t.icon && <t.icon width={16} height={16} />}
               {t.label}
