@@ -879,8 +879,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .contact-card{
   display: flex; justify-content: space-between; align-items: flex-start;
   padding: 16px 18px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 7px; margin-bottom: 10px;
-}
-.contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
+}.contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
 .contact-card .contact-meta{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.6; }
 
 .sales-route-card{ cursor: pointer; }
@@ -1222,3 +1221,68 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .internal-log-date { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
 .internal-log-photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .internal-log-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 5px; flex: 0 0 56px; }
+
+/* ---------- Full-screen in-browser camera (CameraCapture.js) ---------- */
+.camera-overlay{
+  position: fixed; inset: 0; z-index: 1300;
+  background: #0a0907;
+  display: flex; flex-direction: column;
+  color: #fff;
+}
+.camera-topbar{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  flex-shrink: 0;
+}
+.camera-icon-btn{
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); border: none; color: #fff;
+  font-size: 18px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.camera-title{ font-size: 13.5px; font-weight: 600; letter-spacing: 0.02em; }
+.camera-count-badge{
+  font-size: 11.5px; font-weight: 700; color: #fff;
+  background: rgba(255,255,255,0.14); border-radius: 20px; padding: 4px 10px;
+}
+.camera-viewport{
+  flex: 1; min-height: 0; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; overflow: hidden;
+}
+.camera-video{ width: 100%; height: 100%; object-fit: cover; }
+.camera-review-image{ width: 100%; height: 100%; object-fit: contain; background: #000; }
+.camera-status{
+  position: absolute; color: rgba(255,255,255,0.75); font-size: 13px;
+}
+.camera-error{
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 30px; text-align: center;
+}
+.camera-error p{ color: rgba(255,255,255,0.85); font-size: 13.5px; line-height: 1.5; margin: 0; max-width: 320px; }
+.camera-controls{
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 30px;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+}
+.camera-flip-btn{
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); border: none; color: #fff;
+  font-size: 20px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.camera-shutter-btn{
+  width: 70px; height: 70px; border-radius: 50%;
+  background: #fff; border: 4px solid rgba(255,255,255,0.35);
+  cursor: pointer; flex-shrink: 0;
+}
+.camera-shutter-btn:disabled{ opacity: 0.4; cursor: default; }
+.camera-review-controls{
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 20px 30px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+.camera-review-controls .btn{ min-width: 120px; text-align: center; justify-content: center; }
