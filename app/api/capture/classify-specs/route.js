@@ -67,6 +67,7 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
       body: JSON.stringify({
         model: 'claude-sonnet-5',
         max_tokens: 2000,
+        thinking: { type: 'disabled' },
         messages: [{ role: 'user', content: prompt }],
       }),
     });

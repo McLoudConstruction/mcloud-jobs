@@ -99,6 +99,11 @@ Do not include any preamble, explanation, or markdown code fences — your entir
         // (30-40 granular actions, each with 4 fields) — this needs real
         // headroom, not just a bit more than the simple customer-only case.
         max_tokens: includeTradeBreakdown ? 8000 : 2048,
+        // Structured extraction from a known input, not open reasoning —
+        // Sonnet 5's adaptive thinking would otherwise eat into this same
+        // max_tokens budget (it's a hard cap on thinking + output
+        // combined) and risk truncating the actual scope text.
+        thinking: { type: 'disabled' },
         messages: [{ role: 'user', content: prompt }],
       }),
     });

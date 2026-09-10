@@ -45,7 +45,12 @@ If you cannot confidently read a field, use null for that field rather than gues
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 512,
+        max_tokens: 768,
+        // Small structured extraction, not open reasoning — same fix as
+        // the other AI routes: disable adaptive thinking so the (already
+        // tight) token budget goes entirely to the actual output instead
+        // of being silently eaten by thinking tokens first.
+        thinking: { type: 'disabled' },
         messages: [
           {
             role: 'user',

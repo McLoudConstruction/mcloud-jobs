@@ -53,7 +53,16 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 6000,
+        max_tokens: 8000,
+        // This is pure structured-JSON extraction from a fixed action
+        // list — no multi-step reasoning needed. Sonnet 5 has adaptive
+        // thinking on by default, and max_tokens is a hard cap on
+        // thinking + response text combined, so leaving thinking on
+        // here was eating into the budget meant for the materials list
+        // itself and causing exactly the truncation this route already
+        // has error handling for. Disabling it puts the full budget
+        // toward the actual output.
+        thinking: { type: 'disabled' },
         messages: [{ role: 'user', content: prompt }],
       }),
     });
