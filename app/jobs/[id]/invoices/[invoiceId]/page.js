@@ -44,7 +44,8 @@ export default function DrawInvoiceDocumentPage() {
 
   async function markSent() {
     if (draw.status === 'not_sent') {
-      await supabase.from('invoices').update({ status: 'sent', invoiced_at: draw.invoiced_at || new Date().toISOString() }).eq('id', invoiceId);
+      const { error } = await supabase.from('invoices').update({ status: 'sent', invoiced_at: draw.invoiced_at || new Date().toISOString() }).eq('id', invoiceId);
+      if (error) alert("The email sent, but recording it as sent didn't save: " + error.message + ". If you reload this page, it may look unsent — that's just this tracking flag, not the email itself.");
       load();
     }
     setJustSent(true);

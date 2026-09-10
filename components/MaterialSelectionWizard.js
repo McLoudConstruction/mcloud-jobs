@@ -16,6 +16,7 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
   const [form, setForm] = useState(EMPTY_OPTION);
   const [photoFile, setPhotoFile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useState(() => { setMounted(true); });
 
@@ -35,12 +36,14 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
     e.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
-    const { data } = await supabase.from('material_selections').insert({
+    setError('');
+    const { data, error: insertError } = await supabase.from('material_selections').insert({
       job_id: jobId,
       title: title.trim(),
       notes: notes.trim() || null,
     }).select().single();
     setSaving(false);
+    if (insertError) { setError(insertError.message); return; }
     if (data) {
       setSelectionId(data.id);
       setStep('options');
@@ -51,13 +54,14 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
     e.preventDefault();
     if (!form.item.trim()) return;
     setSaving(true);
+    setError('');
     let photo_storage_path = null;
     if (photoFile) {
       const path = `selections/${selectionId}/${Date.now()}-${photoFile.name}`;
       const { error: uploadErr } = await supabase.storage.from('job-photos').upload(path, photoFile);
       if (!uploadErr) photo_storage_path = path;
     }
-    const { data } = await supabase.from('material_selection_options').insert({
+    const { data, error: insertError } = await supabase.from('material_selection_options').insert({
       selection_id: selectionId,
       brand: form.brand.trim() || null,
       item: form.item.trim(),
@@ -67,6 +71,7 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
       display_order: savedOptions.length,
     }).select().single();
     setSaving(false);
+    if (insertError) { setError(insertError.message); return; }
     if (data) {
       setSavedOptions(prev => [...prev, data]);
       setForm(EMPTY_OPTION);
@@ -96,6 +101,7 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Kitchen Dishwasher" required autoFocus />
             <label style={{ marginTop: 10 }}>Notes (optional)</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+            {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Creating…' : 'Next: Add Options →'}</button>
               <button className="btn btn-sm" type="button" onClick={finishAndClose}>Cancel</button>
@@ -134,6 +140,7 @@ export default function MaterialSelectionWizard({ jobId, open, onClose }) {
               <div style={{ marginTop: 8 }}>
                 <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
               </div>
+              {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
               <div className="section-actions">
                 <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add This Option'}</button>
               </div>

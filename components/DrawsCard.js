@@ -16,6 +16,7 @@ export default function DrawsCard({ jobId }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const loadDraws = useCallback(async () => {
     const { data } = await supabase.from('invoices').select('*').eq('job_id', jobId).order('created_at', { ascending: true });
@@ -34,24 +35,34 @@ export default function DrawsCard({ jobId }) {
     e.preventDefault();
     if (!form.amount) return;
     setSaving(true);
-    await supabase.from('invoices').insert({
+    setError('');
+    const { error: insertError } = await supabase.from('invoices').insert({
       job_id: jobId,
       description: form.description || `Draw ${draws.length + 1}`,
       amount: parseFloat(form.amount),
       status: 'not_sent',
     });
     setSaving(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
     setForm(EMPTY_FORM);
     setShowForm(false);
+    await loadDraws();
   }
 
   async function markPaid(d) {
-    await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', d.id);
+    const { error: updateError } = await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', d.id);
+    if (updateError) { setError(updateError.message); return; }
+    await loadDraws();
   }
 
   async function deleteDraw(d) {
     if (!confirm('Delete this draw? This cannot be undone.')) return;
-    await supabase.from('invoices').delete().eq('id', d.id);
+    const { error: deleteError } = await supabase.from('invoices').delete().eq('id', d.id);
+    if (deleteError) { setError(deleteError.message); return; }
+    await loadDraws();
   }
 
   if (draws.length === 0 && !showForm) {
@@ -77,6 +88,7 @@ export default function DrawsCard({ jobId }) {
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
         {fmtMoney(paidTotal)} collected of {fmtMoney(total)} across {draws.length} draw{draws.length === 1 ? '' : 's'}
       </div>
+      {error && <div style={{ fontSize: 12, color: '#a13f3f', marginBottom: 10 }}>{error}</div>}
 
       {draws.map(d => (
         <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>

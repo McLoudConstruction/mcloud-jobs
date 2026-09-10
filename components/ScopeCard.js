@@ -12,7 +12,8 @@ export default function ScopeCard({ job, jobId, onSave }) {
   function save() { onSave({ scope_items: items.filter(t => t.trim()).map(text => ({ text })) }); }
 
   async function saveTradeActions(tradeActions) {
-    await supabase.from('job_scope_actions').insert(tradeActions.map(a => ({ ...a, job_id: jobId })));
+    const { error } = await supabase.from('job_scope_actions').insert(tradeActions.map(a => ({ ...a, job_id: jobId })));
+    if (error) alert('Failed to save the generated trade actions: ' + error.message);
   }
 
   return (

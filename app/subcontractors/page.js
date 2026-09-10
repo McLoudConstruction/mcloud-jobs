@@ -131,6 +131,7 @@ export default function SubcontractorsPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
@@ -176,7 +177,8 @@ export default function SubcontractorsPage() {
       if (error) throw error;
       const oldPath = form[field];
       if (oldPath) await supabase.storage.from('subcontractor-docs').remove([oldPath]);
-      await supabase.from('companies').update({ [field]: path }).eq('id', editingId);
+      const { error: updateError } = await supabase.from('companies').update({ [field]: path }).eq('id', editingId);
+      if (updateError) throw updateError;
       setForm(prev => ({ ...prev, [field]: path }));
     } catch (err) {
       alert('Upload failed: ' + err.message);
@@ -205,7 +207,8 @@ export default function SubcontractorsPage() {
     if (!path || !editingId) return;
     if (!confirm(`Remove the ${kind.toUpperCase()} on file?`)) return;
     await supabase.storage.from('subcontractor-docs').remove([path]);
-    await supabase.from('companies').update({ [field]: null }).eq('id', editingId);
+    const { error } = await supabase.from('companies').update({ [field]: null }).eq('id', editingId);
+    if (error) { alert('Failed to remove: ' + error.message); return; }
     setForm(prev => ({ ...prev, [field]: '' }));
   }
 
@@ -266,6 +269,7 @@ export default function SubcontractorsPage() {
       setApplyResult(`Invite sent to ${applyEmail.trim()}.`);
       setApplyEmail('');
       setApplyCompanyHint('');
+      await loadApplications();
     } catch (err) {
       setApplyResult(`Failed: ${err.message}`);
     } finally {
@@ -323,6 +327,7 @@ export default function SubcontractorsPage() {
       }
 
       setReviewingApp(null);
+      await Promise.all([loadApplications(), loadSubs()]);
     } catch (err) {
       alert('Failed to approve: ' + err.message);
     } finally {
@@ -352,6 +357,7 @@ export default function SubcontractorsPage() {
       setDeclineReason('');
       setDeclineReasonOther('');
       setReviewingApp(null);
+      await loadApplications();
     } catch (err) {
       alert('Failed to decline: ' + err.message);
     } finally {
@@ -375,14 +381,22 @@ export default function SubcontractorsPage() {
     e.preventDefault();
     if (!form.company_name.trim()) return;
     setSaving(true);
+    setSaveError('');
     const { w9_storage_path, coi_storage_path, ...rest } = form;
     const payload = { ...rest, company_type: SUBCONTRACTOR_TYPE, coi_expires_at: form.coi_expires_at || null };
     let companyId = editingId;
+    let mutationError;
     if (editingId) {
-      await supabase.from('companies').update(payload).eq('id', editingId);
+      ({ error: mutationError } = await supabase.from('companies').update(payload).eq('id', editingId));
     } else {
-      const { data } = await supabase.from('companies').insert(payload).select().single();
+      const { data, error: insertError } = await supabase.from('companies').insert(payload).select().single();
       companyId = data ? data.id : null;
+      mutationError = insertError;
+    }
+    if (mutationError) {
+      setSaving(false);
+      setSaveError(mutationError.message);
+      return;
     }
     if (companyId) {
       await syncCompanyContact({
@@ -397,6 +411,9 @@ export default function SubcontractorsPage() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await loadSubs();
   }
 
   function startEdit(c) {
@@ -414,12 +431,18 @@ export default function SubcontractorsPage() {
 
   async function removeSub(id) {
     if (!confirm('Delete this subcontractor?')) return;
-    await supabase.from('companies').delete().eq('id', id);
+    const { error } = await supabase.from('companies').delete().eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadSubs();
   }
 
   async function saveCustomField(sub, key, value) {
-    const nextFields = await updateCustomFieldValue('companies', sub.id, sub.custom_fields, key, value);
-    setSubs(prev => prev.map(s => (s.id === sub.id ? { ...s, custom_fields: nextFields } : s)));
+    try {
+      const nextFields = await updateCustomFieldValue('companies', sub.id, sub.custom_fields, key, value);
+      setSubs(prev => prev.map(s => (s.id === sub.id ? { ...s, custom_fields: nextFields } : s)));
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
   }
 
   async function invitePortal(c) {
@@ -436,16 +459,19 @@ export default function SubcontractorsPage() {
       if (error) { setInviting(false); setInviteResult(`Failed to invite ${email}: ${error.message}`); return; }
     }
     const now = new Date().toISOString();
-    await supabase.from('sub_portal_users').upsert(
+    const { error: upsertError } = await supabase.from('sub_portal_users').upsert(
       [
         { company_id: c.id, email: c.contact_email, role: 'admin', invited_at: now },
         ...(c.crew_email && c.crew_email !== c.contact_email ? [{ company_id: c.id, email: c.crew_email, role: 'crew', invited_at: now }] : []),
       ],
       { onConflict: 'company_id,email' }
     );
-    await supabase.from('companies').update({ portal_invited_at: now }).eq('id', c.id);
+    if (upsertError) { setInviting(false); setInviteResult(`Invited via email, but failed to record portal access: ${upsertError.message}`); return; }
+    const { error: updateError } = await supabase.from('companies').update({ portal_invited_at: now }).eq('id', c.id);
     setInviting(false);
+    if (updateError) { setInviteResult(`Invited, but failed to update the invite timestamp: ${updateError.message}`); return; }
     setInviteResult(`Invited ${emails.join(' and ')}. Every future work order for this sub will show up automatically — no need to re-invite. They can add more logins themselves under Settings once inside the portal.`);
+    await loadSubs();
   }
 
   async function handleImportFile(e) {
@@ -588,6 +614,7 @@ export default function SubcontractorsPage() {
               </div>
             </div>
 
+            {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save subcontractor')}</button>
             </div>

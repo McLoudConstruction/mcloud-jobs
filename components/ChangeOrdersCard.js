@@ -3,29 +3,43 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 
-export default function ChangeOrdersCard({ jobId, changeOrders }) {
+export default function ChangeOrdersCard({ jobId, changeOrders, onChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ description: '', amount: '', co_date: new Date().toISOString().slice(0, 10) });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
   async function submit() {
     setSaving(true);
-    await supabase.from('change_orders').insert({
+    setError('');
+    const { error: insertError } = await supabase.from('change_orders').insert({
       job_id: jobId,
       description: form.description,
       amount: form.amount ? parseFloat(String(form.amount).replace(/[^0-9.]/g, '')) : null,
       co_date: form.co_date,
     });
     setSaving(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
     setShowForm(false);
     setForm({ description: '', amount: '', co_date: new Date().toISOString().slice(0, 10) });
+    // Don't rely solely on the parent's realtime subscription — refresh
+    // directly so the new change order shows up immediately.
+    await onChanged?.();
   }
 
   async function removeCo(coId) {
     if (!confirm('Delete this change order?')) return;
-    await supabase.from('change_orders').delete().eq('id', coId);
+    const { error: deleteError } = await supabase.from('change_orders').delete().eq('id', coId);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    await onChanged?.();
   }
 
   return (
@@ -52,6 +66,7 @@ export default function ChangeOrdersCard({ jobId, changeOrders }) {
       )}
 
       {changeOrders.length === 0 && <div className="empty-state">No change orders yet.</div>}
+      {error && <div style={{ fontSize: 12, color: '#a13f3f', margin: '10px 0' }}>{error}</div>}
       {changeOrders.map(co => (
         <div className="update-entry" key={co.id}>
           <div className="update-date">{co.co_date} — {co.amount ? '$' + Number(co.amount).toLocaleString('en-US') : '—'}</div>

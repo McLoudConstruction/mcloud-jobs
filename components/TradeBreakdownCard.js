@@ -11,6 +11,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_ROW);
   const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('job_scope_actions').select('*').eq('job_id', jobId).order('trade', { ascending: true });
@@ -41,19 +42,27 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     e.preventDefault();
     if (!form.description.trim()) return;
     const payload = { ...form, quantity: Number(form.quantity) || 1 };
+    let error;
     if (editingId) {
-      await supabase.from('job_scope_actions').update(payload).eq('id', editingId);
+      ({ error } = await supabase.from('job_scope_actions').update(payload).eq('id', editingId));
     } else {
-      await supabase.from('job_scope_actions').insert({ ...payload, job_id: jobId });
+      ({ error } = await supabase.from('job_scope_actions').insert({ ...payload, job_id: jobId }));
     }
+    if (error) { setError(error.message); return; }
     setShowForm(false);
     setEditingId(null);
     setForm(EMPTY_ROW);
+    setError('');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await load();
   }
 
   async function remove(id) {
     if (!confirm('Remove this action?')) return;
-    await supabase.from('job_scope_actions').delete().eq('id', id);
+    const { error } = await supabase.from('job_scope_actions').delete().eq('id', id);
+    if (error) { setError(error.message); return; }
+    await load();
   }
 
   const grouped = actions.reduce((acc, a) => {
@@ -92,6 +101,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
             <div><label>Unit</label><input value={form.unit_label} onChange={e => update('unit_label', e.target.value)} placeholder="e.g. faucet" /></div>
             <div><label>Quantity</label><input type="number" min="0" step="1" value={form.quantity} onChange={e => update('quantity', e.target.value)} /></div>
           </div>
+          {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
           <div className="section-actions">
             <button className="btn btn-primary btn-sm" type="submit">{editingId ? 'Save changes' : 'Add action'}</button>
           </div>

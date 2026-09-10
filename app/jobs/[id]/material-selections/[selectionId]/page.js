@@ -23,6 +23,7 @@ export default function MaterialSelectionPage() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoUrls, setPhotoUrls] = useState({});
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [choosing, setChoosing] = useState(false);
@@ -79,13 +80,14 @@ export default function MaterialSelectionPage() {
     e.preventDefault();
     if (!form.item.trim()) return;
     setSaving(true);
+    setError('');
     let photo_storage_path = null;
     if (photoFile) {
       const path = `selections/${selectionId}/${Date.now()}-${photoFile.name}`;
       const { error: uploadErr } = await supabase.storage.from('job-photos').upload(path, photoFile);
       if (!uploadErr) photo_storage_path = path;
     }
-    await supabase.from('material_selection_options').insert({
+    const { error: insertError } = await supabase.from('material_selection_options').insert({
       selection_id: selectionId,
       brand: form.brand.trim() || null,
       item: form.item.trim(),
@@ -95,19 +97,29 @@ export default function MaterialSelectionPage() {
       display_order: options.length,
     });
     setSaving(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
     setForm(EMPTY_OPTION);
     setPhotoFile(null);
     setShowForm(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the new option shows up immediately.
+    await load();
   }
 
   async function deleteOption(optionId) {
     if (!confirm('Remove this option?')) return;
-    await supabase.from('material_selection_options').delete().eq('id', optionId);
+    const { error } = await supabase.from('material_selection_options').delete().eq('id', optionId);
+    if (error) { setError(error.message); return; }
+    await load();
   }
 
   async function sendToCustomer() {
-    await supabase.from('material_selections').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', selectionId);
+    const { error } = await supabase.from('material_selections').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', selectionId);
     setJustSent(true);
+    if (error) alert("The email sent, but recording it as sent didn't save: " + error.message + ". If you reload this page, it may look unsent — that's just this tracking flag, not the email itself.");
   }
 
   // Records a tentative pick — doesn't finalize anything. The customer
@@ -275,6 +287,7 @@ export default function MaterialSelectionPage() {
                     <div style={{ marginTop: 10 }}>
                       <ImageDropzone file={photoFile} onFileSelected={setPhotoFile} />
                     </div>
+                    {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
                     <div className="section-actions">
                       <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Option'}</button>
                     </div>

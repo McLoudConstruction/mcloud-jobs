@@ -25,6 +25,7 @@ export default function SalesDashboardPage() {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [autofillNote, setAutofillNote] = useState('');
+  const [saveError, setSaveError] = useState('');
   const searchTimer = useRef(null);
 
   const loadOpps = useCallback(async () => {
@@ -77,12 +78,14 @@ export default function SalesDashboardPage() {
     e.preventDefault();
     if (!form.company.trim() && !form.project.trim()) return;
     setSaving(true);
+    setSaveError('');
+    let mutationError;
     if (editingId) {
-      await supabase.from('opportunities').update(form).eq('id', editingId);
+      ({ error: mutationError } = await supabase.from('opportunities').update(form).eq('id', editingId));
     } else {
-      await supabase.from('opportunities').insert({ ...form, stage: 'prospecting' });
+      ({ error: mutationError } = await supabase.from('opportunities').insert({ ...form, stage: 'prospecting' }));
 
-      if (form.contact_email.trim() || form.contact_name.trim()) {
+      if (!mutationError && (form.contact_email.trim() || form.contact_name.trim())) {
         const { data: existing } = form.contact_email.trim()
           ? await supabase.from('contacts').select('id').eq('contact_email', form.contact_email.trim()).maybeSingle()
           : { data: null };
@@ -101,9 +104,16 @@ export default function SalesDashboardPage() {
       }
     }
     setSaving(false);
+    if (mutationError) {
+      setSaveError(mutationError.message);
+      return;
+    }
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await loadOpps();
   }
 
   function startEdit(o) {
@@ -119,7 +129,9 @@ export default function SalesDashboardPage() {
       setLossReasonText('');
       return;
     }
-    await supabase.from('opportunities').update({ stage }).eq('id', id);
+    const { error } = await supabase.from('opportunities').update({ stage }).eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadOpps();
   }
 
   function convertToJob(id) {
@@ -127,14 +139,18 @@ export default function SalesDashboardPage() {
   }
 
   async function confirmLoss() {
-    await supabase.from('opportunities').update({ stage: 'lost', loss_reason: lossReasonText }).eq('id', lossReasonPromptId);
+    const { error } = await supabase.from('opportunities').update({ stage: 'lost', loss_reason: lossReasonText }).eq('id', lossReasonPromptId);
+    if (error) { setSaveError(error.message); return; }
     setLossReasonPromptId(null);
     setLossReasonText('');
+    await loadOpps();
   }
 
   async function removeOpp(id) {
     if (!confirm('Delete this opportunity?')) return;
-    await supabase.from('opportunities').delete().eq('id', id);
+    const { error } = await supabase.from('opportunities').delete().eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadOpps();
   }
 
   const stats = useMemo(() => {
@@ -229,6 +245,7 @@ export default function SalesDashboardPage() {
             {autofillNote && <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 6 }}>{autofillNote}</div>}
             <label>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+            {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Create lead')}</button>
             </div>

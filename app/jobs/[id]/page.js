@@ -280,6 +280,10 @@ export default function JobDetailPage() {
       }
     }
     flashSaved();
+    // Merge locally rather than depending solely on the jobs realtime
+    // channel — this is the single most-used save path in the app, so
+    // it's worth not leaving it dependent on realtime at all.
+    setJob(prev => ({ ...prev, ...patch }));
     return true;
   }
 
@@ -353,7 +357,12 @@ export default function JobDetailPage() {
 
   async function deleteJob() {
     if (!confirm('Permanently delete this job? This cannot be undone.')) return;
-    await supabase.from('jobs').delete().eq('id', id);
+    const { error } = await supabase.from('jobs').delete().eq('id', id);
+    if (error) {
+      setFlash(`Delete failed: ${error.message}`);
+      setTimeout(() => setFlash(''), 8000);
+      return;
+    }
     router.push('/jobs');
   }
 
@@ -573,7 +582,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Financials' && section === 'change_orders' && (
-          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} />
+          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
         )}
 
         {tab === 'Financials' && section === 'work_orders' && (
@@ -616,7 +625,7 @@ export default function JobDetailPage() {
             <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
             {phaseForStage(job.stage) !== 'opportunity' ? (
               <>
-                <UpdatesCard jobId={id} updates={updates} />
+                <UpdatesCard jobId={id} updates={updates} onChanged={loadUpdates} />
                 {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
                   <ReviewRequestCard job={job} onSave={saveJob} />
                 )}

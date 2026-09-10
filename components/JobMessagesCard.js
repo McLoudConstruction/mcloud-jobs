@@ -11,6 +11,7 @@ export default function JobMessagesCard({ jobId, job }) {
   const [msgs, setMsgs] = useState([]);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
 
   const load = useCallback(() => {
     supabase.from('job_questions').select('*').eq('job_id', jobId).order('created_at', { ascending: true }).then(({ data }) => { if (data) setMsgs(data); });
@@ -28,12 +29,18 @@ export default function JobMessagesCard({ jobId, job }) {
     e.preventDefault();
     if (!reply.trim()) return;
     setSending(true);
-    await supabase.from('job_questions').insert({
+    setSendError('');
+    const { error: insertError } = await supabase.from('job_questions').insert({
       job_id: jobId,
       customer_email: job.customer_email || job.billing_email || null,
       sender: 'admin',
       message: reply.trim(),
     });
+    if (insertError) {
+      setSending(false);
+      setSendError(insertError.message);
+      return;
+    }
     const unanswered = msgs.filter(m => m.sender === 'customer' && !m.responded_at);
     if (unanswered.length > 0) {
       const now = new Date().toISOString();
@@ -41,6 +48,9 @@ export default function JobMessagesCard({ jobId, job }) {
     }
     setReply('');
     setSending(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the sent message shows up immediately.
+    await load();
   }
 
   return (
@@ -70,6 +80,7 @@ export default function JobMessagesCard({ jobId, job }) {
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder={`Message ${job.customer_name || 'the customer'}…`} rows={2} />
         <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending…' : 'Send'}</button>
       </form>
+      {sendError && <div style={{ fontSize: 12, color: '#a13f3f', padding: '0 18px 14px' }}>{sendError}</div>}
     </div>
   );
 }

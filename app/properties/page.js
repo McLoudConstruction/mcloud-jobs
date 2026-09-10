@@ -59,6 +59,7 @@ export default function PropertiesPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [importing, setImporting] = useState(false);
@@ -108,11 +109,19 @@ export default function PropertiesPage() {
     };
 
     let propertyId = editingId;
+    let mutationError;
     if (editingId) {
-      await supabase.from('properties').update(payload).eq('id', editingId);
+      ({ error: mutationError } = await supabase.from('properties').update(payload).eq('id', editingId));
     } else {
-      const { data } = await supabase.from('properties').insert(payload).select().single();
+      const { data, error: insertError } = await supabase.from('properties').insert(payload).select().single();
       propertyId = data ? data.id : null;
+      mutationError = insertError;
+    }
+
+    if (mutationError) {
+      setSaving(false);
+      setSaveError(mutationError.message);
+      return;
     }
 
     // Same rule as Companies: a contact name here becomes a real, linked
@@ -135,6 +144,10 @@ export default function PropertiesPage() {
     setEditingId(null);
     setShowForm(false);
     setShowContactForm(false);
+    setSaveError('');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await loadProperties();
   }
 
   function startEdit(p) {
@@ -154,16 +167,24 @@ export default function PropertiesPage() {
 
   async function removeProperty(id) {
     if (!confirm('Delete this property?')) return;
-    await supabase.from('properties').delete().eq('id', id);
+    const { error } = await supabase.from('properties').delete().eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadProperties();
   }
 
   async function saveCustomField(property, key, value) {
-    const nextFields = await updateCustomFieldValue('properties', property.id, property.custom_fields, key, value);
-    setProperties(prev => prev.map(p => (p.id === property.id ? { ...p, custom_fields: nextFields } : p)));
+    try {
+      const nextFields = await updateCustomFieldValue('properties', property.id, property.custom_fields, key, value);
+      setProperties(prev => prev.map(p => (p.id === property.id ? { ...p, custom_fields: nextFields } : p)));
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
   }
 
   async function markVisited(id, visitedAtIso) {
-    await supabase.from('properties').update({ last_visited_at: visitedAtIso }).eq('id', id);
+    const { error } = await supabase.from('properties').update({ last_visited_at: visitedAtIso }).eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadProperties();
   }
 
   function updateContactForm(field, value) {
@@ -381,6 +402,7 @@ export default function PropertiesPage() {
               </div>
             )}
 
+            {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
             </div>

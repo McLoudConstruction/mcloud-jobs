@@ -98,6 +98,9 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
 
     setCheckedIds(new Set());
     setIssuing(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the status change shows up immediately.
+    await load();
   }
 
   return (

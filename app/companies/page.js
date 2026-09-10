@@ -52,6 +52,7 @@ export default function CompaniesPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
@@ -81,11 +82,19 @@ export default function CompaniesPage() {
     setSaving(true);
 
     let companyId = editingId;
+    let mutationError;
     if (editingId) {
-      await supabase.from('companies').update(form).eq('id', editingId);
+      ({ error: mutationError } = await supabase.from('companies').update(form).eq('id', editingId));
     } else {
-      const { data } = await supabase.from('companies').insert(form).select().single();
+      const { data, error: insertError } = await supabase.from('companies').insert(form).select().single();
       companyId = data ? data.id : null;
+      mutationError = insertError;
+    }
+
+    if (mutationError) {
+      setSaving(false);
+      setSaveError(mutationError.message);
+      return;
     }
 
     // A contact name on this form becomes a real, linked Person in
@@ -106,6 +115,10 @@ export default function CompaniesPage() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    setSaveError('');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await loadCompanies();
   }
 
   function startEdit(c) {
@@ -122,12 +135,18 @@ export default function CompaniesPage() {
 
   async function removeCompany(id) {
     if (!confirm('Delete this company?')) return;
-    await supabase.from('companies').delete().eq('id', id);
+    const { error } = await supabase.from('companies').delete().eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadCompanies();
   }
 
   async function saveCustomField(company, key, value) {
-    const nextFields = await updateCustomFieldValue('companies', company.id, company.custom_fields, key, value);
-    setCompanies(prev => prev.map(c => (c.id === company.id ? { ...c, custom_fields: nextFields } : c)));
+    try {
+      const nextFields = await updateCustomFieldValue('companies', company.id, company.custom_fields, key, value);
+      setCompanies(prev => prev.map(c => (c.id === company.id ? { ...c, custom_fields: nextFields } : c)));
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
   }
 
   async function handleImportFile(e) {
@@ -209,6 +228,7 @@ export default function CompaniesPage() {
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+            {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save company')}</button>
             </div>

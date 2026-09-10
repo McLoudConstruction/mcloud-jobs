@@ -180,9 +180,14 @@ export default function ChangeOrderDocumentPage() {
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
           const sentAt = new Date().toISOString();
-          await supabase.from('change_orders').update({ sent_at: sentAt }).eq('id', changeOrderId);
+          const { error } = await supabase.from('change_orders').update({ sent_at: sentAt }).eq('id', changeOrderId);
           setCo(prev => prev ? { ...prev, sent_at: sentAt } : prev);
           setJustSent(true);
+          // The email genuinely already went out by this point (that's
+          // what triggered this callback) — this write is just recording
+          // it. If it fails, don't imply the send itself failed; just
+          // flag that the "sent" status may not survive a page reload.
+          if (error) alert("The email sent, but recording it as sent didn't save: " + error.message + ". If you reload this page, it may look unsent — that's just this tracking flag, not the email itself.");
         }}
       />
 

@@ -73,6 +73,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
@@ -149,16 +150,25 @@ export default function CustomersPage() {
     // text is still saved; it just isn't linked to a Properties record.
     payload.property_id = await findPropertyIdByName(form.property);
 
+    let mutationError;
     if (editingId) {
-      await supabase.from('contacts').update(payload).eq('id', editingId);
+      ({ error: mutationError } = await supabase.from('contacts').update(payload).eq('id', editingId));
     } else {
-      await supabase.from('contacts').insert(payload);
+      ({ error: mutationError } = await supabase.from('contacts').insert(payload));
     }
     setSaving(false);
+    if (mutationError) {
+      setSaveError(mutationError.message);
+      return;
+    }
     setForm(EMPTY_FORM);
     setSameAsBilling(false);
     setEditingId(null);
     setShowForm(false);
+    setSaveError('');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the change shows up immediately.
+    await loadContacts();
   }
 
   function startEdit(contact) {
@@ -177,12 +187,18 @@ export default function CustomersPage() {
 
   async function removeContact(id) {
     if (!confirm('Delete this contact?')) return;
-    await supabase.from('contacts').delete().eq('id', id);
+    const { error } = await supabase.from('contacts').delete().eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    await loadContacts();
   }
 
   async function saveCustomField(contact, key, value) {
-    const nextFields = await updateCustomFieldValue('contacts', contact.id, contact.custom_fields, key, value);
-    setContacts(prev => prev.map(c => (c.id === contact.id ? { ...c, custom_fields: nextFields } : c)));
+    try {
+      const nextFields = await updateCustomFieldValue('contacts', contact.id, contact.custom_fields, key, value);
+      setContacts(prev => prev.map(c => (c.id === contact.id ? { ...c, custom_fields: nextFields } : c)));
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
   }
 
   async function handleImportFile(e) {
@@ -338,6 +354,7 @@ export default function CustomersPage() {
 
                   <label style={{ marginTop: 16 }}>Notes</label>
                   <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+                  {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
                   <div className="section-actions">
                     <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
                   </div>

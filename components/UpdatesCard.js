@@ -10,13 +10,19 @@ function fmtDate(v) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function UpdatesCard({ jobId, updates }) {
+function fmtDateTime(v) {
+  if (!v) return '—';
+  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+export default function UpdatesCard({ jobId, updates, onChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     update_date: new Date().toISOString().slice(0, 10),
     work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '',
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Photos staged while composing — attached to the update at submit time
   // rather than requiring you to save the text first and then find it in
@@ -113,12 +119,18 @@ export default function UpdatesCard({ jobId, updates }) {
 
   async function submit() {
     setSaving(true);
+    setError('');
     // Client-generated id (same pattern already used for offline-synced
     // internal updates) so the photos below can be linked to this exact
     // update in the same submit action, instead of needing a second
     // round-trip after the insert to learn the new row's id.
     const updateId = crypto.randomUUID();
-    await supabase.from('job_updates').insert({ id: updateId, job_id: jobId, ...form, estimated_completion: form.estimated_completion || null });
+    const { error: insertError } = await supabase.from('job_updates').insert({ id: updateId, job_id: jobId, ...form, estimated_completion: form.estimated_completion || null });
+    if (insertError) {
+      setSaving(false);
+      setError(insertError.message);
+      return;
+    }
 
     for (const { file } of stagedPhotos) {
       try {
@@ -170,6 +182,9 @@ export default function UpdatesCard({ jobId, updates }) {
     setForm({ update_date: new Date().toISOString().slice(0, 10), work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '' });
     setStagedPhotos([]);
     setSelectedExisting([]);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the new update shows up immediately.
+    await onChanged?.();
   }
 
   function cancelCompose() {
@@ -181,7 +196,9 @@ export default function UpdatesCard({ jobId, updates }) {
 
   async function removeUpdate(updateId) {
     if (!confirm('Delete this update entry?')) return;
-    await supabase.from('job_updates').delete().eq('id', updateId);
+    const { error } = await supabase.from('job_updates').delete().eq('id', updateId);
+    if (error) { setError(error.message); return; }
+    await onChanged?.();
   }
 
   return (
@@ -252,6 +269,7 @@ export default function UpdatesCard({ jobId, updates }) {
               <button className="btn btn-primary btn-sm" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Post update'}</button>
               <button className="btn btn-sm" onClick={cancelCompose}>Cancel</button>
             </div>
+            {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
           </div>
 
           <div className="internal-log-sidebar">

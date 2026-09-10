@@ -21,6 +21,7 @@ export default function ReceiptsCard({ jobId }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [aiNote, setAiNote] = useState('');
   const [replacingId, setReplacingId] = useState(null);
+  const [saveError, setSaveError] = useState('');
   const fileInputRef = useRef(null);
 
   const loadReceipts = useCallback(async () => {
@@ -103,6 +104,7 @@ export default function ReceiptsCard({ jobId }) {
   async function saveReceipt() {
     if (!pendingPath || !form.amount) return;
     setUploading(true);
+    setSaveError('');
     const { data: receipt, error } = await supabase.from('receipts').insert({
       job_id: jobId,
       vendor_name: form.vendor_name || null,
@@ -114,21 +116,33 @@ export default function ReceiptsCard({ jobId }) {
       notes: form.notes || null,
     }).select().single();
 
-    if (!error && receipt) {
-      await supabase.from('job_costs').insert({
-        job_id: jobId,
-        category: form.category,
-        description: form.vendor_name ? `Receipt — ${form.vendor_name}` : 'Receipt',
-        amount: parseFloat(form.amount),
-        cost_date: form.receipt_date,
-        status: 'actual',
-        source_type: 'receipt',
-        receipt_id: receipt.id,
-        vendor_name: form.vendor_name || null,
-      });
+    if (error || !receipt) {
+      setUploading(false);
+      setSaveError(error?.message || 'Failed to save receipt.');
+      return;
+    }
+
+    const { error: costError } = await supabase.from('job_costs').insert({
+      job_id: jobId,
+      category: form.category,
+      description: form.vendor_name ? `Receipt — ${form.vendor_name}` : 'Receipt',
+      amount: parseFloat(form.amount),
+      cost_date: form.receipt_date,
+      status: 'actual',
+      source_type: 'receipt',
+      receipt_id: receipt.id,
+      vendor_name: form.vendor_name || null,
+    });
+    if (costError) {
+      setUploading(false);
+      setSaveError(costError.message);
+      return;
     }
     setUploading(false);
     cancelPending();
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the new receipt shows up immediately.
+    await loadReceipts();
   }
 
   function cancelPending() {
@@ -143,7 +157,12 @@ export default function ReceiptsCard({ jobId }) {
     if (!confirm('Delete this receipt? This also removes its linked job cost entry.')) return;
     if (receipt.storage_path) await supabase.storage.from('receipts').remove([receipt.storage_path]);
     await supabase.from('job_costs').delete().eq('receipt_id', receipt.id);
-    await supabase.from('receipts').delete().eq('id', receipt.id);
+    const { error } = await supabase.from('receipts').delete().eq('id', receipt.id);
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
+    await loadReceipts();
   }
 
   async function replacePhoto(e, receipt) {
@@ -156,7 +175,9 @@ export default function ReceiptsCard({ jobId }) {
       const { error } = await supabase.storage.from('receipts').upload(newPath, compressed, { contentType: 'image/jpeg' });
       if (error) throw error;
       if (receipt.storage_path) await supabase.storage.from('receipts').remove([receipt.storage_path]);
-      await supabase.from('receipts').update({ storage_path: newPath }).eq('id', receipt.id);
+      const { error: updateError } = await supabase.from('receipts').update({ storage_path: newPath }).eq('id', receipt.id);
+      if (updateError) throw updateError;
+      await loadReceipts();
     } catch (err) {
       alert('Failed to replace photo: ' + err.message);
     } finally {
@@ -204,6 +225,7 @@ export default function ReceiptsCard({ jobId }) {
           </div>
           <label style={{ marginTop: 8 }}>Notes</label>
           <textarea value={form.notes} onChange={e => updateForm('notes', e.target.value)} rows={2} />
+          {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
           <div className="section-actions">
             <button className="btn btn-primary btn-sm" onClick={saveReceipt} disabled={uploading || scanning || !form.amount}>
               {uploading ? 'Saving…' : 'Save receipt'}

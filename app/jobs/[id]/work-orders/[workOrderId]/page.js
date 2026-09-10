@@ -90,7 +90,10 @@ export default function WorkOrderDocumentPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to send.');
       setSendResult({ ok: true, message: `Sent to ${sendEmail}.` });
       setSent(true);
-      await supabase.from('work_orders').update({ sent_at: new Date().toISOString() }).eq('id', workOrderId);
+      const { error: updateError } = await supabase.from('work_orders').update({ sent_at: new Date().toISOString() }).eq('id', workOrderId);
+      if (updateError) {
+        setSendResult({ ok: true, message: `Sent to ${sendEmail}, but recording it as sent didn't save (${updateError.message}) — that's just a tracking flag, not the email itself.` });
+      }
     } catch (err) {
       setSendResult({ ok: false, message: err.message });
     } finally {

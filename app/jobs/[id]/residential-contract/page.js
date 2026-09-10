@@ -333,9 +333,10 @@ export default function ContractDocumentPage() {
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
           const sentAt = new Date().toISOString();
-          await supabase.from('jobs').update({ contract_sent_at: sentAt }).eq('id', id);
+          const { error } = await supabase.from('jobs').update({ contract_sent_at: sentAt }).eq('id', id);
           setJob(prev => prev ? { ...prev, contract_sent_at: sentAt } : prev);
           setJustSent(true);
+          if (error) alert("The email sent, but recording it as sent didn't save: " + error.message + ". If you reload this page, it may look unsent — that's just this tracking flag, not the email itself.");
         }}
       />
 
