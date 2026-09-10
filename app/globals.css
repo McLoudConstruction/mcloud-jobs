@@ -855,7 +855,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
     left: 0; right: 0; bottom: 0;
     z-index: 50;
     background: #1c1b19;
-    padding: 6px 2px calc(6px + env(safe-area-inset-bottom));
+    padding: 6px 2px calc(10px + env(safe-area-inset-bottom));
     justify-content: space-around;
     align-items: center;
   }

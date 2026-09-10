@@ -1,9 +1,14 @@
 import './globals.css';
 import { SettingsProvider } from '../lib/useSettings';
 import { ThemeProvider } from '../lib/useTheme';
-import { StaffAuthProvider } from '../lib/staffAuthContext';
 import BrandAccentInjector from '../components/BrandAccentInjector';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export const metadata = {
   title: 'McLoud Jobs',
@@ -25,11 +30,9 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeProvider>
           <SettingsProvider>
-            <StaffAuthProvider>
-              <BrandAccentInjector />
-              <ServiceWorkerRegister />
-              {children}
-            </StaffAuthProvider>
+            <BrandAccentInjector />
+            <ServiceWorkerRegister />
+            {children}
           </SettingsProvider>
         </ThemeProvider>
       </body>
