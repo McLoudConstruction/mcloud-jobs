@@ -5,6 +5,7 @@ import { useSettings } from '../lib/useSettings';
 import { watermarkImage } from '../lib/watermark';
 import { compressImage } from '../lib/imageCompress';
 import PhotoMarkupEditor from './PhotoMarkupEditor';
+import CameraCapture from './CameraCapture';
 
 export default function PhotoGallery({ jobId, updateId, title, allowUpload = true, bare = false }) {
   const { settings } = useSettings();
@@ -13,6 +14,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [uploading, setUploading] = useState(false);
   const [uploadNote, setUploadNote] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [generalPhotos, setGeneralPhotos] = useState([]);
   const [generalUrls, setGeneralUrls] = useState({});
   const [markupPhoto, setMarkupPhoto] = useState(null); // { id, url } of photo currently being marked up
@@ -48,6 +50,21 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     if (photos.length) loadUrls();
   }, [photos]);
 
+  async function uploadOnePhoto(file) {
+    const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
+    const path = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+    const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, watermarked, {
+      contentType: 'image/jpeg',
+    });
+    if (uploadError) throw uploadError;
+
+    await supabase.from('job_photos').insert({
+      job_id: jobId,
+      update_id: updateId || null,
+      storage_path: path,
+    });
+  }
+
   async function handleFiles(e) {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -56,18 +73,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
     for (const file of files) {
       try {
-        const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
-        const path = `${jobId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
-        const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, watermarked, {
-          contentType: 'image/jpeg',
-        });
-        if (uploadError) throw uploadError;
-
-        await supabase.from('job_photos').insert({
-          job_id: jobId,
-          update_id: updateId || null,
-          storage_path: path,
-        });
+        await uploadOnePhoto(file);
       } catch (err) {
         setUploadNote(`Upload failed: ${err.message}`);
         setUploading(false);
@@ -79,6 +85,23 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setTimeout(() => setUploadNote(''), 3000);
+  }
+
+  // Called once per photo as the camera accepts it (retake/use flow), so
+  // each shot uploads in the background while the camera stays open for
+  // the next one, instead of batching until the whole session ends.
+  async function handleCameraPhoto(file) {
+    setUploading(true);
+    setUploadNote('Uploading photo…');
+    try {
+      await uploadOnePhoto(file);
+      setUploadNote('Photo uploaded.');
+    } catch (err) {
+      setUploadNote(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadNote(''), 2000);
+    }
   }
 
   async function removePhoto(photo) {
@@ -141,14 +164,16 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             multiple
             onChange={handleFiles}
             style={{ display: 'none' }}
           />
           <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              {uploading ? 'Uploading…' : 'Take / Add Photos'}
+            <button className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)} disabled={uploading} type="button">
+              {uploading ? 'Uploading…' : 'Take Photos'}
+            </button>
+            <button className="btn btn-sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} type="button">
+              Upload from library
             </button>
             {updateId && (
               <button className="btn btn-sm" onClick={openPicker} type="button">Attach existing photo</button>
@@ -207,11 +232,21 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     </>
   );
 
-  if (bare) return <>{content}{markupPhoto && <PhotoMarkupEditor imageUrl={markupPhoto.url} onSave={saveMarkup} onClose={() => setMarkupPhoto(null)} />}</>;
+  const cameraOverlay = (
+    <CameraCapture
+      open={cameraOpen}
+      onClose={() => setCameraOpen(false)}
+      onPhotoAccepted={handleCameraPhoto}
+      title={title || 'Photos'}
+    />
+  );
+
+  if (bare) return <>{content}{markupPhoto && <PhotoMarkupEditor imageUrl={markupPhoto.url} onSave={saveMarkup} onClose={() => setMarkupPhoto(null)} />}{cameraOverlay}</>;
   return (
     <div className="card">
       {content}
       {markupPhoto && <PhotoMarkupEditor imageUrl={markupPhoto.url} onSave={saveMarkup} onClose={() => setMarkupPhoto(null)} />}
+      {cameraOverlay}
     </div>
   );
 }

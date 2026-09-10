@@ -5,6 +5,7 @@ import { compressImage } from '../lib/imageCompress';
 import { queueNote, queueTimeEntry, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
 import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
+import CameraCapture from './CameraCapture';
 
 function SyncBadge({ jobId }) {
   const { isOnline, pendingCount, failedCount, sync } = useOfflineSync(jobId);
@@ -35,6 +36,7 @@ export default function OfflineFieldLog({ jobId, session }) {
   const [savingEntry, setSavingEntry] = useState(false);
 
   const [checklist, setChecklist] = useState([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const loadChecklist = useCallback(async () => {
     const { data, error } = await supabase.from('checklist_items').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -76,12 +78,23 @@ export default function OfflineFieldLog({ jobId, session }) {
     setSavingEntry(false);
   }
 
+  async function queuePhotoFile(file) {
+    const compressed = await compressImage(file);
+    await queuePhoto({ jobId, file: compressed, createdByEmail });
+  }
+
   async function handlePhotoCapture(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const compressed = await compressImage(file);
-    await queuePhoto({ jobId, file: compressed, createdByEmail });
+    await queuePhotoFile(file);
+  }
+
+  // Called once per photo as the camera accepts it — each shot is queued
+  // (and syncs immediately if online) while the camera stays open, ready
+  // for the next photo without reopening the OS camera app each time.
+  async function handleCameraPhoto(file) {
+    await queuePhotoFile(file);
   }
 
   async function handleToggleChecklistItem(item) {
@@ -119,10 +132,14 @@ export default function OfflineFieldLog({ jobId, session }) {
 
       <section className="field-log-section">
         <h3>Add a photo</h3>
-        <label className="field-photo-button">
-          Take or choose a photo
-          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} style={{ display: 'none' }} />
-        </label>
+        <div className="section-actions" style={{ marginTop: 0 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)} type="button">Take Photos</button>
+          <label className="field-photo-button" style={{ margin: 0 }}>
+            Choose from library
+            <input type="file" accept="image/*" onChange={handlePhotoCapture} style={{ display: 'none' }} />
+          </label>
+        </div>
+        <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Field Photo" />
       </section>
 
       <section className="field-log-section">

@@ -4,10 +4,11 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
+import StaffUsersPanel from '../../components/StaffUsersPanel';
 import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'AI Features', 'Automatic Communications'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'AI Features', 'Automatic Communications', 'Users'];
 
 const AI_FEATURES = [
   { key: 'scope', name: 'Scope of Work Generation', description: 'Turns a rough job description into a customer-facing scope, plus an exhaustive trade-tagged action list on the estimating side.' },
@@ -341,6 +342,8 @@ export default function SettingsPage() {
           ))}
         </div>
         )}
+
+        {tab === 'Users' && <StaffUsersPanel session={session} />}
       </div>
     </AppShell>
   );

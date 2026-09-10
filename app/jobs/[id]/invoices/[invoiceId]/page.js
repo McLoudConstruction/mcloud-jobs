@@ -28,6 +28,7 @@ export default function DrawInvoiceDocumentPage() {
   const [job, setJob] = useState(null);
   const [draw, setDraw] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,6 +47,7 @@ export default function DrawInvoiceDocumentPage() {
       await supabase.from('invoices').update({ status: 'sent', invoiced_at: draw.invoiced_at || new Date().toISOString() }).eq('id', invoiceId);
       load();
     }
+    setJustSent(true);
   }
 
   async function downloadDocument() {
@@ -74,7 +76,7 @@ export default function DrawInvoiceDocumentPage() {
             {downloading ? 'Preparing…' : 'Download/Print Document'}
           </button>
           {session?.user?.app_metadata?.role === 'admin' && (
-            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>{justSent ? '✓ Sent' : 'Send to Customer'}</button>
           )}
         </div>
       </div>

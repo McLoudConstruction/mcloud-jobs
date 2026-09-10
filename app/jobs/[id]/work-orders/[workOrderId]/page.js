@@ -31,6 +31,7 @@ export default function WorkOrderDocumentPage() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
   const [showSend, setShowSend] = useState(false);
+  const [sent, setSent] = useState(false); // locks the Send button to "Sent" for this page visit
 
   const load = useCallback(async () => {
     const { data: woData } = await supabase.from('work_orders').select('*').eq('id', workOrderId).single();
@@ -63,7 +64,7 @@ export default function WorkOrderDocumentPage() {
   }
 
   async function sendToSubcontractor() {
-    if (!sendEmail.trim()) return;
+    if (!sendEmail.trim() || sent || sending) return;
     setSending(true);
     setSendResult(null);
     try {
@@ -88,6 +89,7 @@ export default function WorkOrderDocumentPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send.');
       setSendResult({ ok: true, message: `Sent to ${sendEmail}.` });
+      setSent(true);
       await supabase.from('work_orders').update({ sent_at: new Date().toISOString() }).eq('id', workOrderId);
     } catch (err) {
       setSendResult({ ok: false, message: err.message });
@@ -108,15 +110,15 @@ export default function WorkOrderDocumentPage() {
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}
           </button>
-          <button className="btn btn-sm" onClick={() => setShowSend(s => !s)}>Email to Subcontractor</button>
+          <button className="btn btn-sm" onClick={() => setShowSend(s => !s)}>{sent ? '✓ Sent' : 'Email to Subcontractor'}</button>
         </div>
       </div>
 
       {showSend && (
         <div className="no-print" style={{ padding: '14px 24px', background: '#faf6ec', borderBottom: '1px solid #c4c1a6', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <input style={{ maxWidth: 280 }} type="email" placeholder="subcontractor@email.com" value={sendEmail} onChange={e => setSendEmail(e.target.value)} />
-          <button className="btn btn-primary btn-sm" onClick={sendToSubcontractor} disabled={sending || !sendEmail.trim()}>
-            {sending ? 'Sending…' : 'Send'}
+          <button className="btn btn-primary btn-sm" onClick={sendToSubcontractor} disabled={sending || sent || !sendEmail.trim()}>
+            {sent ? '✓ Sent' : sending ? 'Sending…' : 'Send'}
           </button>
           {sendResult && (
             <span style={{ fontSize: 12.5, color: sendResult.ok ? '#3a6b45' : '#a13f3f' }}>{sendResult.message}</span>

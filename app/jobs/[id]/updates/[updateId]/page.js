@@ -21,6 +21,7 @@ export default function UpdateDocumentPage() {
   const [job, setJob] = useState(null);
   const [update, setUpdate] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [photoUrls, setPhotoUrls] = useState([]);
 
   const load = useCallback(async () => {
@@ -88,7 +89,7 @@ export default function UpdateDocumentPage() {
             {downloading ? 'Preparing…' : 'Download/Print Document'}
           </button>
           {session?.user?.app_metadata?.role === 'admin' && (
-            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>{justSent ? '✓ Sent' : 'Send to Customer'}</button>
           )}
         </div>
       </div>
@@ -145,6 +146,7 @@ export default function UpdateDocumentPage() {
           const sentAt = new Date().toISOString();
           await supabase.from('job_updates').update({ sent_at: sentAt }).eq('id', updateId);
           setUpdate(prev => prev ? { ...prev, sent_at: sentAt } : prev);
+          setJustSent(true);
         }}
       />
 

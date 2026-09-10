@@ -44,6 +44,7 @@ import TermsCard from '../../../components/TermsCard';
 import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
 import UpdatesCard from '../../../components/UpdatesCard';
 import InvoiceCard from '../../../components/InvoiceCard';
+import ReadyToInvoiceCard from '../../../components/ReadyToInvoiceCard';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
 // at very different altitudes (a customer contact form next to internal
@@ -578,6 +579,9 @@ export default function JobDetailPage() {
 
         {tab === 'Invoicing' && (
           <>
+            {(job.stage === 'active' || job.stage === 'completed') && (
+              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
+            )}
             <DrawsCard jobId={id} />
             {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
               <InvoiceCard job={job} onSave={saveJob} jobId={id} />

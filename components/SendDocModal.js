@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabaseClient';
 export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, jobId, onPrint, onSendSuccess }) {
   const [email, setEmail] = useState(defaultEmail || '');
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false); // locks both buttons after a successful send, for the life of this page visit
   const [result, setResult] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [notifyList, setNotifyList] = useState([]);
@@ -34,6 +35,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
   if (!open || !mounted) return null;
 
   async function send(withAttachment) {
+    if (sent || sending) return; // already sent this visit, or a send is already in flight — block accidental double-send
     setSending(true);
     setResult(null);
     try {
@@ -60,6 +62,7 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       const recipientCount = 1 + notifyList.length;
       const recipientNote = recipientCount > 1 ? ` and ${notifyList.length} other contact${notifyList.length === 1 ? '' : 's'} on the notification list` : '';
       setResult({ ok: true, message: withAttachment ? `Sent to ${email}${recipientNote}, with the PDF attached.` : `Sent to ${email}${recipientNote} — they'll find it waiting in the Customer Portal.` });
+      setSent(true);
       if (onSendSuccess) onSendSuccess();
     } catch (err) {
       setResult({ ok: false, message: err.message });
@@ -86,12 +89,18 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
           </div>
         )}
 
+        {sent && (
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+            Already sent this visit — reopen this page if you need to send another copy.
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }}>
-          <button className="btn btn-primary btn-sm" onClick={() => send(false)} disabled={sending || !email.trim()}>
-            {sending ? 'Working…' : 'Send to Customer Portal (email notification only)'}
+          <button className="btn btn-primary btn-sm" onClick={() => send(false)} disabled={sending || sent || !email.trim()}>
+            {sent ? '✓ Sent' : sending ? 'Working…' : 'Send to Customer Portal (email notification only)'}
           </button>
-          <button className="btn btn-sm" onClick={() => send(true)} disabled={sending || !email.trim()}>
-            {sending ? 'Working…' : 'Email with PDF Attached'}
+          <button className="btn btn-sm" onClick={() => send(true)} disabled={sending || sent || !email.trim()}>
+            {sent ? '✓ Sent' : sending ? 'Working…' : 'Email with PDF Attached'}
           </button>
         </div>
       </div>

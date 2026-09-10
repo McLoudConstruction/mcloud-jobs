@@ -36,6 +36,7 @@ export default function ProposalDocumentPage() {
   const { id } = useParams();
   const [job, setJob] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [downloading, setDownloading] = useState(false);
 
   const loadJob = useCallback(async () => {
@@ -84,7 +85,7 @@ export default function ProposalDocumentPage() {
             {downloading ? 'Preparing…' : 'Download/Print Document'}
           </button>
           {session?.user?.app_metadata?.role === 'admin' && (
-            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+            <button className="btn btn-sm" onClick={() => setModalOpen(true)}>{justSent ? '✓ Sent' : 'Send to Customer'}</button>
           )}
           {!job.contract_finalized_at && (
             <Link href={contractPathFor(job)} className="btn btn-primary btn-sm">Sign the Contract →</Link>
@@ -162,6 +163,7 @@ export default function ProposalDocumentPage() {
           const sentAt = new Date().toISOString();
           await supabase.from('jobs').update({ proposal_sent_at: sentAt }).eq('id', id);
           setJob(prev => prev ? { ...prev, proposal_sent_at: sentAt } : prev);
+          setJustSent(true);
         }}
       />
 

@@ -63,7 +63,10 @@ export default function InvoicesDashboardPage() {
       else { status = 'Paid'; urgency = 0; }
     }
 
-    return { ...j, usesDraws, status, urgency, outstanding };
+    const flaggedReady = j.ready_to_invoice && !j.invoice_amount && !usesDraws;
+    if (flaggedReady) urgency = Math.max(urgency, 3);
+
+    return { ...j, usesDraws, status, urgency, outstanding, flaggedReady: !!j.ready_to_invoice };
   })
     .sort((a, b) => {
       if (b.urgency !== a.urgency) return b.urgency - a.urgency;
@@ -91,6 +94,7 @@ export default function InvoicesDashboardPage() {
               { key: 'stage', label: 'Stage', defaultWidth: 110, render: r => r.stage },
               { key: 'expected_close_date', label: 'Expected Close', defaultWidth: 130, filterable: false, render: r => fmtDate(r.expected_close_date) },
               { key: 'billing_type', label: 'Billing Type', defaultWidth: 120, filterable: false, render: r => r.usesDraws ? 'Draws' : 'Single Invoice' },
+              { key: 'flaggedReady', label: 'Ready to Invoice', defaultWidth: 130, filterable: false, render: r => r.flaggedReady ? <span style={{ color: '#3a6b45', fontWeight: 700 }}>Yes</span> : '—' },
               { key: 'status', label: 'Status', defaultWidth: 220, render: r => r.status },
               { key: 'outstanding', label: 'Outstanding', defaultWidth: 120, filterable: false, render: r => fmtMoney(r.outstanding) },
             ]}

@@ -24,6 +24,7 @@ export default function MaterialSelectionPage() {
   const [photoUrls, setPhotoUrls] = useState({});
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [choosing, setChoosing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
@@ -106,6 +107,7 @@ export default function MaterialSelectionPage() {
 
   async function sendToCustomer() {
     await supabase.from('material_selections').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', selectionId);
+    setJustSent(true);
   }
 
   // Records a tentative pick — doesn't finalize anything. The customer
@@ -167,7 +169,7 @@ export default function MaterialSelectionPage() {
                 {isApproved ? 'Approved' : selection.status === 'sent' ? 'Awaiting Customer' : 'Draft'}
               </span>
               {isDraft && options.length > 0 && (
-                <button className="btn btn-sm" onClick={() => setModalOpen(true)}>Send to Customer</button>
+                <button className="btn btn-sm" onClick={() => setModalOpen(true)}>{justSent ? '✓ Sent' : 'Send to Customer'}</button>
               )}
             </>
           ) : totalSent > 0 && (

@@ -249,6 +249,54 @@ a { color: inherit; text-decoration: none; }
   font-size: 15px; font-weight: 700; min-width: 140px;
 }
 
+.camera-overlay{
+  position: fixed; inset: 0; background: #000; z-index: 300;
+  display: flex; flex-direction: column;
+}
+.camera-topbar{
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; background: rgba(0,0,0,0.55); position: relative; z-index: 2;
+}
+.camera-icon-btn{
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15);
+  color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.camera-title{ color: #f2efe6; font-size: 13px; font-weight: 600; }
+.camera-count-badge{
+  background: var(--rust); color: #fff; font-size: 11.5px; font-weight: 700;
+  padding: 4px 10px; border-radius: 20px;
+}
+.camera-viewport{ flex: 1; position: relative; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
+.camera-video{ width: 100%; height: 100%; object-fit: cover; }
+.camera-review-image{ width: 100%; height: 100%; object-fit: contain; background: #000; }
+.camera-status{
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #f2efe6; font-size: 13px; font-weight: 600;
+}
+.camera-error{
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center; background: rgba(0,0,0,0.75);
+}
+.camera-error p{ color: #f2efe6; font-size: 13.5px; max-width: 320px; }
+.camera-controls{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 28px calc(22px + env(safe-area-inset-bottom, 0px)); background: rgba(0,0,0,0.55);
+}
+.camera-shutter-btn{
+  width: 68px; height: 68px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.35);
+  cursor: pointer; padding: 0;
+}
+.camera-shutter-btn:disabled{ opacity: 0.4; cursor: default; }
+.camera-flip-btn{
+  width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15);
+  color: #fff; font-size: 20px; cursor: pointer;
+}
+.camera-review-controls{
+  display: flex; gap: 12px; justify-content: center; align-items: center;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom, 0px)); background: rgba(0,0,0,0.55);
+}
+.camera-review-controls .btn{ flex: 1; max-width: 200px; text-align: center; }
+
 .topbar{
   display: flex;
   align-items: center;
