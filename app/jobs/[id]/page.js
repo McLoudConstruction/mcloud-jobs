@@ -41,6 +41,7 @@ import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
 import PriceCard from '../../../components/PriceCard';
 import TermsCard from '../../../components/TermsCard';
+import ProposalsCard from '../../../components/ProposalsCard';
 import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
 import UpdatesCard from '../../../components/UpdatesCard';
 import InvoiceCard from '../../../components/InvoiceCard';
@@ -69,6 +70,7 @@ const TABS = [
     sections: [
       { key: 'scope', label: 'Scope' },
       { key: 'pricing', label: 'Pricing' },
+      { key: 'proposals', label: 'Proposals' },
     ],
   },
   {
@@ -571,6 +573,10 @@ export default function JobDetailPage() {
           <EstimateTab job={job} jobId={id}>
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
+        )}
+
+        {tab === 'Estimate' && section === 'proposals' && (
+          <ProposalsCard job={job} jobId={id} onSave={saveJob} />
         )}
 
         {tab === 'Financials' && section === 'overview' && (

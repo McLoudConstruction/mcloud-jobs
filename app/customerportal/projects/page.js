@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useCustomerPortalJobs } from '../../../lib/useCustomerPortalJobs';
-import { STAGE_LABELS } from '../../../lib/constants';
+import { STAGE_LABELS, STAGE_ORDER } from '../../../lib/constants';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
@@ -55,6 +55,9 @@ export default function CustomerHomePage() {
   if (jobsLoaded && jobs.length === 0) return <CustomerPortalShell><NoActiveProjectNotice /></CustomerPortalShell>;
 
   const hasVisit = job && (job.scheduled_start_date || job.scheduled_end_date);
+  // Est. completion isn't meaningful (or decided) until the project has
+  // reached the Scheduled stage or later — hide it before that.
+  const showEstCompletion = job && STAGE_ORDER.indexOf(job.stage) >= STAGE_ORDER.indexOf('scheduled');
 
   return (
     <CustomerPortalShell>
@@ -77,7 +80,7 @@ export default function CustomerHomePage() {
               <span className="portal-summary-item"><b>{job.customer_name || '—'}</b></span>
               {job.project_address && <span className="portal-summary-item">{job.project_address}</span>}
               {job.job_type && <span className="portal-summary-item">{job.job_type}</span>}
-              <span className="portal-summary-item">Est. completion {fmtDate(job.expected_close_date)}</span>
+              {showEstCompletion && <span className="portal-summary-item">Est. completion {fmtDate(job.expected_close_date)}</span>}
               <span className={`badge badge-${job.stage} portal-summary-badge`}>{STAGE_LABELS[job.stage]}</span>
             </div>
 
