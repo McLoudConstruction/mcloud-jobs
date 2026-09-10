@@ -88,8 +88,25 @@ export default function ScheduleCard({ jobId, job }) {
     return recomputeSequentialDates(sequenced, anchorDate);
   }
 
-  function updateDraftDuration(index, duration) {
-    const updated = draft.map((p, i) => i === index ? { ...p, duration_days: Math.max(1, Number(duration) || 1) } : p);
+  // Keeps whatever's actually typed in the box (including empty, mid-edit)
+  // rather than clamping on every keystroke — clamping immediately is what
+  // made backspacing "1" to type "3" impossible, since Number('') || 1
+  // snapped the field back to 1 before a new digit could be entered.
+  // Dates are recomputed using a provisional fallback so the rest of the
+  // list still looks right while this field is mid-edit, but that
+  // fallback never overwrites what's actually in the box.
+  function updateDraftDuration(index, rawValue) {
+    const updated = draft.map((p, i) => i === index ? { ...p, duration_days: rawValue } : p);
+    const forDates = updated.map(p => ({ ...p, duration_days: Number(p.duration_days) > 0 ? Number(p.duration_days) : 1 }));
+    const recomputed = recomputeSequentialDates(forDates, startDate);
+    setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
+  }
+
+  // Clamps to a valid integer once the field loses focus, so it never
+  // stays blank or invalid after you click away.
+  function finalizeDraftDuration(index) {
+    const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
+    const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
     setDraft(recomputeSequentialDates(updated, startDate));
   }
 
@@ -97,13 +114,20 @@ export default function ScheduleCard({ jobId, job }) {
     setSaving(true);
     setError('');
     try {
+      // Belt-and-suspenders: normalize durations even if Confirm was
+      // clicked while a field was still mid-edit (e.g. via Enter key
+      // without a blur), so an empty/invalid value never reaches the DB.
+      const cleanDraft = recomputeSequentialDates(
+        draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
+        startDate
+      );
       // Replacing an existing schedule — clear the old phases first so
       // regenerating never leaves stale rows behind.
       if (phases.length > 0) {
         await supabase.from('job_phases').delete().eq('job_id', jobId);
       }
       const { error: insertError } = await supabase.from('job_phases').insert(
-        draft.map(({ orphaned, ...p }) => ({ job_id: jobId, ...p }))
+        cleanDraft.map(({ orphaned, ...p }) => ({ job_id: jobId, ...p }))
       );
       if (insertError) throw insertError;
       await supabase.from('jobs').update({ schedule_stale_at: null }).eq('id', jobId);
@@ -198,7 +222,7 @@ export default function ScheduleCard({ jobId, job }) {
                 <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                <input type="number" min="1" value={p.duration_days} onChange={e => updateDraftDuration(i, e.target.value)} style={{ width: 56 }} />
+                <input type="number" min="1" value={p.duration_days} onChange={e => updateDraftDuration(i, e.target.value)} onBlur={() => finalizeDraftDuration(i)} style={{ width: 56 }} />
                 <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
               </div>
             </div>
