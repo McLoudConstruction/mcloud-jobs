@@ -26,6 +26,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedScope, setSelectedScope] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [invoicingId, setInvoicingId] = useState(null);
   const [invoiceAmount, setInvoiceAmount] = useState('');
 
@@ -74,7 +75,8 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
     e.preventDefault();
     if (!form.description.trim() || !form.amount) return;
     setSaving(true);
-    await supabase.from('work_orders').insert({
+    setSaveError('');
+    const { error } = await supabase.from('work_orders').insert({
       job_id: jobId,
       company_id: form.company_id || null,
       description: form.description,
@@ -83,9 +85,18 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
       included_scope_items: selectedScope.map(i => availableItems[i]).filter(Boolean),
     });
     setSaving(false);
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
     setForm(EMPTY_FORM);
     setSelectedScope([]);
     setShowForm(false);
+    // Don't rely solely on the realtime subscription above to pick this
+    // up — same class of bug as elsewhere in this app where a table
+    // wasn't reliably in the Supabase realtime publication. Refresh
+    // directly so the new draft shows up immediately.
+    await loadWorkOrders();
   }
 
   async function issueWorkOrder(wo) {
@@ -196,6 +207,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
 
           <label style={{ marginTop: 8 }}>Additional details</label>
           <textarea value={form.description} onChange={e => update('description', e.target.value)} rows={2} required />
+          {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
           <div className="section-actions">
             <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save as draft'}</button>
           </div>
