@@ -101,8 +101,9 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
 
   async function issueWorkOrder(wo) {
     if (!confirm('Issue this work order? This will log it as a committed cost on the job, and email the subcontractor.')) return;
-    await supabase.from('work_orders').update({ status: 'issued', issued_at: new Date().toISOString() }).eq('id', wo.id);
-    await supabase.from('job_costs').insert({
+    const { error: woError } = await supabase.from('work_orders').update({ status: 'issued', issued_at: new Date().toISOString() }).eq('id', wo.id);
+    if (woError) { setSaveError(woError.message); return; }
+    const { error: costError } = await supabase.from('job_costs').insert({
       job_id: jobId,
       category: 'subcontractor',
       description: wo.description || 'Work order',
@@ -112,6 +113,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
       work_order_id: wo.id,
       company_id: wo.company_id,
     });
+    if (costError) { setSaveError(costError.message); return; }
 
     const company = subcontractors.find(c => c.id === wo.company_id);
     if (company?.contact_email) {
@@ -130,6 +132,9 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
         // best-effort — the work order is already issued regardless of whether the email went through
       }
     }
+    // Same fix as createWorkOrder above — refresh directly rather than
+    // depending solely on the realtime subscription.
+    await loadWorkOrders();
   }
 
   function startInvoicing(wo) {
@@ -140,25 +145,35 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   async function confirmInvoiced(wo) {
     const amt = parseFloat(invoiceAmount);
     if (!amt) return;
-    await supabase.from('work_orders').update({ status: 'invoiced', invoiced_amount: amt }).eq('id', wo.id);
+    const { error: woError } = await supabase.from('work_orders').update({ status: 'invoiced', invoiced_amount: amt }).eq('id', wo.id);
+    if (woError) { setSaveError(woError.message); return; }
     // Move the linked job_cost from committed to actual, using the real invoiced amount.
-    await supabase.from('job_costs').update({ status: 'actual', amount: amt }).eq('work_order_id', wo.id);
+    const { error: costError } = await supabase.from('job_costs').update({ status: 'actual', amount: amt }).eq('work_order_id', wo.id);
+    if (costError) { setSaveError(costError.message); return; }
     setInvoicingId(null);
     setInvoiceAmount('');
+    await loadWorkOrders();
   }
 
   async function markPaid(wo) {
-    await supabase.from('work_orders').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', wo.id);
+    const { error } = await supabase.from('work_orders').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', wo.id);
+    if (error) { setSaveError(error.message); return; }
+    await loadWorkOrders();
   }
 
   async function reopenWorkOrder(wo) {
-    await supabase.from('work_orders').update({ status: 'draft', declined_at: null, decline_reason: null }).eq('id', wo.id);
+    const { error } = await supabase.from('work_orders').update({ status: 'draft', declined_at: null, decline_reason: null }).eq('id', wo.id);
+    if (error) { setSaveError(error.message); return; }
+    await loadWorkOrders();
   }
 
   async function deleteWorkOrder(wo) {
     if (!confirm('Delete this work order? This also removes its linked job cost entry, if any.')) return;
-    await supabase.from('job_costs').delete().eq('work_order_id', wo.id);
-    await supabase.from('work_orders').delete().eq('id', wo.id);
+    const { error: costError } = await supabase.from('job_costs').delete().eq('work_order_id', wo.id);
+    if (costError) { setSaveError(costError.message); return; }
+    const { error: woError } = await supabase.from('work_orders').delete().eq('id', wo.id);
+    if (woError) { setSaveError(woError.message); return; }
+    await loadWorkOrders();
   }
 
   return (
@@ -214,6 +229,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
         </form>
       )}
 
+      {saveError && <div style={{ fontSize: 12, color: '#a13f3f', margin: '10px 0' }}>{saveError}</div>}
       {workOrders.length === 0 && <div className="empty-state" style={{ marginTop: 12 }}>No work orders yet.</div>}
 
       {workOrders.map(wo => (
