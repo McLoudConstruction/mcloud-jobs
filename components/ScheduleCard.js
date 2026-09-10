@@ -69,6 +69,7 @@ export default function ScheduleCard({ jobId, job }) {
   const [warning, setWarning] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editDuration, setEditDuration] = useState(1);
+  const [editPreferMonday, setEditPreferMonday] = useState(false);
   const [view, setView] = useState('list'); // 'list' | 'timeline'
 
   const loadPhases = useCallback(async () => {
@@ -127,12 +128,12 @@ export default function ScheduleCard({ jobId, job }) {
     const merged = freshPhases.map(p => {
       const manual = manualByKey.get(p.phase_key);
       if (!manual) return p;
-      return { ...p, duration_days: manual.duration_days, source: 'manual', needs_review: true };
+      return { ...p, duration_days: manual.duration_days, source: 'manual', needs_review: true, prefer_monday_start: manual.prefer_monday_start };
     });
 
     const orphaned = existingPhases
       .filter(p => p.source === 'manual' && p.phase_key !== 'custom' && !freshKeys.has(p.phase_key))
-      .map(p => ({ phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days, source: 'manual', needs_review: true, orphaned: true }));
+      .map(p => ({ phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days, source: 'manual', needs_review: true, orphaned: true, prefer_monday_start: p.prefer_monday_start }));
 
     const sequenced = [...merged, ...orphaned].map((p, i) => ({ ...p, sort_order: i }));
     return recomputeSequentialDates(sequenced, anchorDate);
@@ -157,6 +158,11 @@ export default function ScheduleCard({ jobId, job }) {
   function finalizeDraftDuration(index) {
     const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
+    setDraft(recomputeSequentialDates(updated, startDate));
+  }
+
+  function updateDraftPreferMonday(index, checked) {
+    const updated = draft.map((p, i) => i === index ? { ...p, prefer_monday_start: checked } : p);
     setDraft(recomputeSequentialDates(updated, startDate));
   }
 
@@ -197,13 +203,14 @@ export default function ScheduleCard({ jobId, job }) {
   function startEditPhase(p) {
     setEditingId(p.id);
     setEditDuration(p.duration_days);
+    setEditPreferMonday(!!p.prefer_monday_start);
   }
 
   async function savePhaseEdit(phase) {
     const index = phases.findIndex(p => p.id === phase.id);
     // Recompute from this phase's own (unchanged) start date, cascading
     // the new duration through everything scheduled after it.
-    const rebased = phases.slice(index).map((p, i) => i === 0 ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1) } : p);
+    const rebased = phases.slice(index).map((p, i) => i === 0 ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), prefer_monday_start: editPreferMonday } : p);
     const final = recomputeSequentialDates(rebased, phases[index].start_date);
 
     for (const p of final) {
@@ -211,6 +218,7 @@ export default function ScheduleCard({ jobId, job }) {
         duration_days: p.duration_days,
         start_date: p.start_date,
         end_date: p.end_date,
+        prefer_monday_start: p.prefer_monday_start,
         source: p.id === phase.id ? 'manual' : p.source,
         needs_review: p.id === phase.id ? false : p.needs_review,
       }).eq('id', p.id);
@@ -286,6 +294,10 @@ export default function ScheduleCard({ jobId, job }) {
                   <b>{p.label}</b>
                   {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · {p.orphaned ? 'trade no longer in breakdown' : 'duration kept from your edit — review'}</span>}
                   <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 3 }}>
+                    <input type="checkbox" checked={!!p.prefer_monday_start} onChange={e => updateDraftPreferMonday(i, e.target.checked)} />
+                    Start fresh on a Monday
+                  </label>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -320,13 +332,23 @@ export default function ScheduleCard({ jobId, job }) {
           {view === 'list' && phases.map(p => (
             <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
               {editingId === p.id ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <PhaseSwatch phase={p} />
-                  <b style={{ flex: 1 }}>{p.label}</b>
-                  <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
-                  <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
-                  <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
-                  <button className="btn btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PhaseSwatch phase={p} />
+                    <b style={{ flex: 1 }}>{p.label}</b>
+                    <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
+                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                      <input type="checkbox" checked={editPreferMonday} onChange={e => setEditPreferMonday(e.target.checked)} />
+                      Start fresh on a Monday
+                    </label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
+                      <button className="btn btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
@@ -335,6 +357,7 @@ export default function ScheduleCard({ jobId, job }) {
                     <div>
                       <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · edited</span>}
                       {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
+                      {p.prefer_monday_start && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · Monday start</span>}
                       <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} business days)</div>
                     </div>
                   </div>

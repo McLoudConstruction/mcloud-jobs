@@ -1,5 +1,5 @@
 import { buildPhaseSkeleton } from '../../../lib/scheduleTemplate';
-import { addBusinessDays, nextBusinessDay } from '../../../lib/scheduleDates';
+import { recomputeSequentialDates } from '../../../lib/scheduleDates';
 
 function extractJson(text) {
   try {
@@ -105,25 +105,21 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
     // that's a known v1 simplification that would shorten total duration
     // but needs a real scheduler to do safely; sequential dates are a
     // conservative (longer, not shorter) estimate in the meantime.
-    let cursor = startDate;
-    const phases = skeleton.map((stage, i) => {
+    const undated = skeleton.map((stage, i) => {
       const duration = Number.isFinite(durations[stage.key]) && durations[stage.key] > 0
         ? Math.round(durations[stage.key])
         : 1; // fall back rather than drop a phase the AI missed
-      const phaseStart = cursor;
-      const phaseEnd = addBusinessDays(phaseStart, duration);
-      cursor = nextBusinessDay(phaseEnd);
       return {
         phase_key: stage.key,
         label: stage.label,
         trade: stage.trades[0] || null,
-        start_date: phaseStart,
-        end_date: phaseEnd,
         duration_days: duration,
         sort_order: i,
         source: 'ai',
+        prefer_monday_start: Boolean(stage.preferMondayStart),
       };
     });
+    const phases = recomputeSequentialDates(undated, startDate);
 
     const missingKeys = skeleton.filter(s => !Number.isFinite(durations[s.key])).map(s => s.key);
     const warning = missingKeys.length > 0
