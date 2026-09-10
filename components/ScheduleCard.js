@@ -340,59 +340,105 @@ export default function ScheduleCard({ jobId, job }) {
   );
 }
 
-// Proportional-width bar timeline. Each phase's bar is positioned and
-// sized by its share of the overall schedule span (in calendar days,
-// since weekends still occupy visual space between business-day phases).
-// Editing still happens in List view — this is for seeing overlap and
-// pacing at a glance, not for dragging.
+// Fixed pixel width per day column. A real per-day header needs actual
+// columns to hang dates on — percentage-of-container bars (the previous
+// approach) can't do that since there's no fixed unit to divide by.
+// This width is also what a future drag/resize feature would snap to.
+const DAY_WIDTH = 30;
+const LABEL_WIDTH = 128;
+
+const DOW_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function dateLabel(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+// A single repeating-gradient that shades Saturday/Sunday columns,
+// aligned to wherever the schedule's first day actually falls in the
+// week — cheaper than rendering a div per weekend day, and it's reused
+// as the background for every row plus the header.
+function weekendShading(minDate) {
+  const firstWeekendOffset = (6 - minDate.getDay() + 7) % 7; // days until the first Saturday
+  const bandStart = firstWeekendOffset * DAY_WIDTH;
+  const bandEnd = bandStart + 2 * DAY_WIDTH;
+  const period = 7 * DAY_WIDTH;
+  return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, var(--panel) ${bandStart}px, var(--panel) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
+}
+
+// Day-by-day Gantt-style grid. Editing still happens in List view — this
+// is for seeing dates, weekends, and overlap at a glance, not (yet) for
+// dragging. The label column stays pinned via position:sticky while the
+// day grid scrolls horizontally underneath it, same pattern as a frozen
+// spreadsheet column.
 function TimelineView({ phases }) {
   const minDate = new Date(phases[0].start_date + 'T00:00:00');
   const maxDate = new Date(phases[phases.length - 1].end_date + 'T00:00:00');
   const totalSpan = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
+  const gridWidth = totalSpan * DAY_WIDTH;
+  const weekendBg = weekendShading(minDate);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayOffset = Math.round((today - minDate) / 86400000);
-  const showToday = todayOffset >= 0 && todayOffset <= totalSpan;
+  const showToday = todayOffset >= 0 && todayOffset < totalSpan;
+
+  const days = Array.from({ length: totalSpan }, (_, i) => {
+    const d = new Date(minDate);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
 
   return (
     <div style={{ marginBottom: 8 }}>
       <Legend phases={phases} />
-      <div style={{ display: 'flex', fontSize: 10, color: 'var(--ink-soft)', marginBottom: 6 }}>
-        <div style={{ width: 120, flexShrink: 0 }} />
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between' }}>
-          <span>{fmtDate(phases[0].start_date)}</span>
-          <span>{fmtDate(phases[phases.length - 1].end_date)}</span>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
+        <div style={{ width: LABEL_WIDTH + gridWidth }}>
+          <div style={{ display: 'flex' }}>
+            <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 2, borderBottom: '1px solid var(--line)' }} />
+            <div style={{ width: gridWidth, flexShrink: 0, display: 'flex', background: weekendBg, borderBottom: '1px solid var(--line)' }}>
+              {days.map((d, i) => (
+                <div key={i} style={{ width: DAY_WIDTH, flexShrink: 0, textAlign: 'center', padding: '4px 0' }}>
+                  <div style={{ fontSize: 8.5, color: 'var(--ink-soft)' }}>{dateLabel(d)}</div>
+                  <div style={{ fontSize: 10, fontWeight: 600 }}>{DOW_LETTERS[d.getDay()]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {phases.map(p => {
+            const start = new Date(p.start_date + 'T00:00:00');
+            const end = new Date(p.end_date + 'T00:00:00');
+            const offsetDays = Math.round((start - minDate) / 86400000);
+            const spanDays = Math.round((end - start) / 86400000) + 1;
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 0', fontSize: 10.5, lineHeight: 1.25 }}>
+                  {p.label}
+                  <div style={{ fontSize: 9, color: 'var(--ink-soft)' }}>{p.duration_days}d</div>
+                </div>
+                <div style={{ width: gridWidth, flexShrink: 0, position: 'relative', height: 32, background: weekendBg }}>
+                  {showToday && (
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * DAY_WIDTH, width: 2, background: 'var(--accent)' }} />
+                  )}
+                  <div
+                    title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)}`}
+                    style={{
+                      position: 'absolute', top: 5, bottom: 5,
+                      left: offsetDays * DAY_WIDTH + 2, width: spanDays * DAY_WIDTH - 4,
+                      borderRadius: 4,
+                      background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
-      {phases.map(p => {
-        const start = new Date(p.start_date + 'T00:00:00');
-        const end = new Date(p.end_date + 'T00:00:00');
-        const offsetDays = Math.round((start - minDate) / 86400000);
-        const spanDays = Math.round((end - start) / 86400000) + 1;
-        const leftPct = (offsetDays / totalSpan) * 100;
-        const widthPct = Math.max((spanDays / totalSpan) * 100, 2.5); // floor so a 1-day phase stays visible/tappable
-        return (
-          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-            <div style={{ width: 120, flexShrink: 0, fontSize: 11, lineHeight: 1.3 }}>{p.label}</div>
-            <div style={{ flex: 1, position: 'relative', height: 20, background: 'var(--panel)', borderRadius: 4 }}>
-              <div
-                title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)}`}
-                style={{
-                  position: 'absolute', top: 0, bottom: 0,
-                  left: `${leftPct}%`, width: `${widthPct}%`,
-                  borderRadius: 4,
-                  background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
-                }}
-              />
-            </div>
-            <div style={{ width: 34, flexShrink: 0, fontSize: 10, color: 'var(--ink-soft)', textAlign: 'right' }}>{p.duration_days}d</div>
-          </div>
-        );
-      })}
       {showToday && (
-        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 4 }}>
+        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 6 }}>
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--accent)', marginRight: 5, verticalAlign: 'middle' }} />
-          Today falls within this schedule
+          Today
         </div>
       )}
     </div>
