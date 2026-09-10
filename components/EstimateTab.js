@@ -58,7 +58,8 @@ export default function EstimateTab({ job, jobId, children }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to suggest materials.');
-      await supabase.from('job_estimate_items').insert(data.materials.map(m => ({
+      if (!data.materials || data.materials.length === 0) throw new Error('The AI returned no materials to add.');
+      const { error: insertError } = await supabase.from('job_estimate_items').insert(data.materials.map(m => ({
         job_id: jobId,
         category: 'material',
         description: m.description,
@@ -68,6 +69,12 @@ export default function EstimateTab({ job, jobId, children }) {
         source: 'suggested',
         buffer_note: m.buffer_note,
       })));
+      if (insertError) throw insertError;
+      // Don't rely solely on the realtime subscription to pick this up —
+      // same class of bug as elsewhere in this app where a table wasn't
+      // reliably in the Supabase realtime publication. Refresh directly
+      // so the new rows show up immediately regardless.
+      await loadItems();
     } catch (err) {
       setSuggestError(err.message);
     } finally {
