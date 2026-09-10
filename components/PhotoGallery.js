@@ -107,7 +107,22 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   async function removePhoto(photo) {
     if (!confirm('Delete this photo?')) return;
     await supabase.storage.from('job-photos').remove([photo.storage_path]);
-    await supabase.from('job_photos').delete().eq('id', photo.id);
+    const { error } = await supabase.from('job_photos').delete().eq('id', photo.id);
+    if (error) {
+      alert('Failed to delete photo: ' + error.message);
+      return;
+    }
+    // Update local state directly instead of waiting on the realtime
+    // subscription above — job_photos isn't reliably in the Supabase
+    // realtime publication (same root cause as past "needs a page
+    // refresh" bugs elsewhere), so don't depend on it for feedback the
+    // person doing the deleting needs immediately.
+    setPhotos(prev => prev.filter(p => p.id !== photo.id));
+    setUrls(prev => {
+      const next = { ...prev };
+      delete next[photo.id];
+      return next;
+    });
   }
 
   async function openPicker() {
