@@ -144,7 +144,8 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
         {estimateItems.length === 0 && <div className="empty-state">Nothing priced out yet — add materials and subcontractor cost on the Estimate tab.</div>}
 
         {estimateItems.length > 0 && (
-          <>
+          <div className="budget-table-scroll">
+          <div className="budget-table-inner">
             <div className="budget-line-row budget-line-header">
               <span>Description</span>
               <b>Estimated Cost</b>
@@ -209,7 +210,8 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
               <b>{fmtMoney(committedTotal)}</b>
               <b>{fmtMoney(actualTotal)}</b>
             </div>
-          </>
+          </div>
+          </div>
         )}
       </div>
 

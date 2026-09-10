@@ -1037,6 +1037,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 
 /* ─── Budget drill-down (Financials → Budget) ───────────────────────── */
 .budget-line-group-label{ font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+.budget-table-scroll{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.budget-table-inner{ min-width: 480px; }
 .budget-line-row{ display: grid; grid-template-columns: 1fr 100px 100px 100px; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .budget-line-row span{ color: var(--ink); }
 .budget-line-row b{ text-align: right; }
