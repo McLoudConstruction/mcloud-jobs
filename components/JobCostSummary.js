@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { JOB_COST_CATEGORIES, JOB_COST_CATEGORY_LABELS } from '../lib/constants';
+import { acceptedChangeOrdersTotal } from '../lib/jobFinancials';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -10,7 +11,7 @@ function fmtMoney(v) {
 
 const EMPTY_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
 
-export default function JobCostSummary({ jobId, contractPrice, projectedCost }) {
+export default function JobCostSummary({ jobId, contractPrice, projectedCost, changeOrders }) {
   const [costs, setCosts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -55,8 +56,10 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost }) 
   const totalCommitted = costs.filter(c => c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalActual = costs.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalCosts = totalCommitted + totalActual;
-  const margin = contractPrice != null && contractPrice !== '' ? Number(contractPrice) - totalCosts : null;
-  const marginPercent = margin != null && contractPrice ? (margin / Number(contractPrice)) * 100 : null;
+  const approvedCOTotal = acceptedChangeOrdersTotal(changeOrders);
+  const adjustedContractValue = contractPrice != null && contractPrice !== '' ? Number(contractPrice) + approvedCOTotal : null;
+  const margin = adjustedContractValue != null ? adjustedContractValue - totalCosts : null;
+  const marginPercent = margin != null && adjustedContractValue ? (margin / adjustedContractValue) * 100 : null;
   const isOverBudget = projectedCost != null && projectedCost > 0 && totalCosts > Number(projectedCost);
 
   return (
@@ -75,6 +78,10 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost }) 
           <div className="portal-info-value">{fmtMoney(contractPrice)}</div>
         </div>
         <div>
+          <div className="portal-info-label">Approved Change Orders</div>
+          <div className="portal-info-value">{approvedCOTotal > 0 ? fmtMoney(approvedCOTotal) : '—'}</div>
+        </div>
+        <div>
           <div className="portal-info-label">Budget (from Estimate tab)</div>
           <div className="portal-info-value" style={{ color: isOverBudget ? '#a13f3f' : undefined }}>{fmtMoney(projectedCost)}</div>
         </div>
@@ -87,7 +94,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost }) 
           <div className="portal-info-value">{fmtMoney(totalActual)}</div>
         </div>
         <div>
-          <div className="portal-info-label">Est. Margin $</div>
+          <div className="portal-info-label">Est. Margin $ {approvedCOTotal > 0 ? '(incl. COs)' : ''}</div>
           <div className="portal-info-value" style={{ color: margin != null && margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(margin)}</div>
         </div>
         <div>

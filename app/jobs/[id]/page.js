@@ -45,6 +45,7 @@ import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
 import UpdatesCard from '../../../components/UpdatesCard';
 import InvoiceCard from '../../../components/InvoiceCard';
 import ReadyToInvoiceCard from '../../../components/ReadyToInvoiceCard';
+import BudgetCard from '../../../components/BudgetCard';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
 // at very different altitudes (a customer contact form next to internal
@@ -81,6 +82,7 @@ const TABS = [
     hideWhen: (job) => isOpportunity(job),
     sections: [
       { key: 'overview', label: 'Overview' },
+      { key: 'budget', label: 'Budget' },
       { key: 'change_orders', label: 'Change Orders' },
       { key: 'work_orders', label: 'Work Orders' },
       { key: 'invoicing', label: 'Invoicing' },
@@ -563,7 +565,11 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Financials' && section === 'overview' && (
-          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} />
+          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} />
+        )}
+
+        {tab === 'Financials' && section === 'budget' && (
+          <BudgetCard jobId={id} job={job} changeOrders={changeOrders} />
         )}
 
         {tab === 'Financials' && section === 'change_orders' && (

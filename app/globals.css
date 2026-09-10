@@ -1033,6 +1033,22 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   background: rgba(58,107,69,0.08); border-color: rgba(58,107,69,0.35); color: #3a6b45;
 }
 
+/* ─── Budget drill-down (Financials → Budget) ───────────────────────── */
+.budget-legend{ display: flex; gap: 16px; font-size: 11px; color: var(--ink-soft); margin-bottom: 12px; }
+.budget-legend-swatch{ display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.budget-cat-row{ margin-bottom: 12px; }
+.budget-cat-row-head{ display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+.budget-cat-row-head b{ color: var(--heading); }
+.budget-cat-bar{ display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel); border: 1px solid var(--panel-line); }
+.budget-cat-bar-actual{ background: var(--accent); }
+.budget-cat-bar-committed{ background: var(--gold); opacity: 0.55; }
+
+.budget-burn-wrap{ margin-bottom: 22px; }
+.budget-burn-track{ height: 14px; border-radius: 7px; background: var(--panel); border: 1px solid var(--panel-line); overflow: hidden; }
+.budget-burn-fill{ height: 100%; background: var(--accent); transition: width 0.2s ease; }
+.budget-burn-fill.over{ background: #c0524f; }
+.budget-burn-label{ display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+
 /* ─── Offline field log / Internal Updates (job detail page) ──────────── */
 .sync-badge {
   padding: 10px 14px;
