@@ -1036,6 +1036,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 
 /* ─── Budget drill-down (Financials → Budget) ───────────────────────── */
+.budget-line-group-label{ font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+.budget-line-row{ display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.budget-line-row span{ color: var(--ink); padding-right: 12px; }
+.budget-line-subtotal{ border-bottom: none; padding-top: 4px; color: var(--ink-soft); }
+.budget-line-subtotal span{ color: var(--ink-soft); font-style: italic; }
+.budget-line-grand-total{ border-top: 2px solid var(--panel-line); border-bottom: none; padding-top: 10px; font-size: 14.5px; }
+.budget-line-grand-total span{ font-weight: 700; color: var(--heading); }
 .budget-legend{ display: flex; gap: 16px; font-size: 11px; color: var(--ink-soft); margin-bottom: 12px; }
 .budget-legend-swatch{ display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .budget-cat-row{ margin-bottom: 12px; }

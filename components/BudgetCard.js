@@ -9,6 +9,8 @@ function fmtMoney(v) {
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function lineTotal(it) { return (Number(it.quantity) || 0) * (Number(it.unit_price) || 0); }
+
 // Deeper companion to the Overview tab's Job Cost Summary — that card
 // answers "are we under budget"; this one answers "where is the money
 // going" and "are we ahead or behind on cash", which need their own
@@ -16,15 +18,18 @@ function fmtMoney(v) {
 export default function BudgetCard({ jobId, job, changeOrders }) {
   const [costs, setCosts] = useState([]);
   const [draws, setDraws] = useState([]);
+  const [estimateItems, setEstimateItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: c }, { data: d }] = await Promise.all([
+    const [{ data: c }, { data: d }, { data: e }] = await Promise.all([
       supabase.from('job_costs').select('*').eq('job_id', jobId),
       supabase.from('invoices').select('*').eq('job_id', jobId),
+      supabase.from('job_estimate_items').select('*').eq('job_id', jobId).order('created_at'),
     ]);
     if (c) setCosts(c);
     if (d) setDraws(d);
+    if (e) setEstimateItems(e);
     setLoaded(true);
   }, [jobId]);
 
@@ -33,6 +38,7 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
     const channel = supabase.channel(`budget-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_costs', filter: `job_id=eq.${jobId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${jobId}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_estimate_items', filter: `job_id=eq.${jobId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
@@ -47,6 +53,15 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
   const totalCommitted = costs.filter(c => c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalActual = costs.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalCosts = totalCommitted + totalActual;
+
+  // ── Priced line items (Estimate → Pricing) ──────────────────────────
+  // What was actually keyed in when the job was priced out — the
+  // baseline everything else on this page gets measured against.
+  const pricedMaterials = estimateItems.filter(it => it.category === 'material').map(it => ({ ...it, total: lineTotal(it) }));
+  const pricedLabor = estimateItems.filter(it => it.category === 'labor').map(it => ({ ...it, total: lineTotal(it) }));
+  const pricedMaterialsTotal = pricedMaterials.reduce((s, it) => s + it.total, 0);
+  const pricedLaborTotal = pricedLabor.reduce((s, it) => s + it.total, 0);
+  const pricedGrandTotal = pricedMaterialsTotal + pricedLaborTotal;
 
   // ── Cost breakdown by category ──────────────────────────────────────
   const byCategory = {};
@@ -89,6 +104,57 @@ export default function BudgetCard({ jobId, job, changeOrders }) {
       <h3>Budget</h3>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
         Where the money's going and how cash is tracking — for the budget-vs-actual totals, see the Overview tab.
+      </div>
+
+      {/* Priced line items, straight from Estimate → Pricing */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
+          Priced Line Items
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 10 }}>
+          Every line from the Estimate tab's Pricing page, as keyed in — this is the plan; actuals are tracked further down.
+        </div>
+
+        {estimateItems.length === 0 && <div className="empty-state">Nothing priced out yet — add materials and subcontractor cost on the Estimate tab.</div>}
+
+        {pricedMaterials.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="budget-line-group-label">Materials</div>
+            {pricedMaterials.map(it => (
+              <div className="budget-line-row" key={it.id}>
+                <span>{it.description}</span>
+                <b>{fmtMoney(it.total)}</b>
+              </div>
+            ))}
+            <div className="budget-line-row budget-line-subtotal">
+              <span>Materials subtotal</span>
+              <b>{fmtMoney(pricedMaterialsTotal)}</b>
+            </div>
+          </div>
+        )}
+
+        {pricedLabor.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="budget-line-group-label">Subcontractor Cost</div>
+            {pricedLabor.map(it => (
+              <div className="budget-line-row" key={it.id}>
+                <span>{it.unit_label || it.description}</span>
+                <b>{fmtMoney(it.total)}</b>
+              </div>
+            ))}
+            <div className="budget-line-row budget-line-subtotal">
+              <span>Subcontractor Cost subtotal</span>
+              <b>{fmtMoney(pricedLaborTotal)}</b>
+            </div>
+          </div>
+        )}
+
+        {estimateItems.length > 0 && (
+          <div className="budget-line-row budget-line-grand-total">
+            <span>Total Priced</span>
+            <b>{fmtMoney(pricedGrandTotal)}</b>
+          </div>
+        )}
       </div>
 
       {/* Cost breakdown by category */}
