@@ -9,6 +9,11 @@ function fmtDate(v) {
 // mean what they meant before. This is just a lightweight signal a PM
 // can raise for the office without needing Financials access or having
 // to move the job's stage themselves.
+//
+// Rendered as a slim banner rather than its own card: it's a one-line
+// status flag, not a feature with its own section, and a full card here
+// just stacked awkwardly on top of the Invoicing and Invoice cards
+// right below it.
 export default function ReadyToInvoiceCard({ job, session, onSave }) {
   const flagged = !!job.ready_to_invoice;
 
@@ -21,22 +26,16 @@ export default function ReadyToInvoiceCard({ job, session, onSave }) {
   }
 
   return (
-    <div className="card">
-      <div className="section-actions" style={{ marginTop: 0, marginBottom: flagged ? 6 : 0 }}>
-        <h3 style={{ margin: 0 }}>Ready to Invoice</h3>
-        <button className={`btn btn-sm ${flagged ? '' : 'btn-primary'}`} onClick={toggle} type="button">
-          {flagged ? 'Unflag' : 'Mark Ready to Invoice'}
-        </button>
-      </div>
-      {flagged ? (
-        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-          Flagged {fmtDate(job.ready_to_invoice_at)} — this shows up on the Invoices dashboard.
-        </div>
-      ) : (
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-          Flags this job for billing on the Invoices dashboard without changing its stage.
-        </div>
-      )}
+    <div className={`flag-banner ${flagged ? 'flag-banner-active' : ''}`}>
+      <span>
+        {flagged
+          ? `✓ Flagged ready to invoice ${fmtDate(job.ready_to_invoice_at)} — shows on the Invoices dashboard.`
+          : 'Not flagged for billing yet — this stays separate from the job stage.'}
+      </span>
+      <button className={`btn btn-sm ${flagged ? '' : 'btn-primary'}`} onClick={toggle} type="button">
+        {flagged ? 'Unflag' : 'Mark Ready to Invoice'}
+      </button>
     </div>
   );
 }
+

@@ -1014,6 +1014,17 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .send-doc-overlay{ display: none !important; }
 }
 
+/* ─── Slim inline status banners (Ready to Invoice, etc.) ──────────────── */
+.flag-banner{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--ink-soft); font-size: 12.5px; margin-bottom: 16px;
+}
+.flag-banner-active{
+  background: rgba(58,107,69,0.08); border-color: rgba(58,107,69,0.35); color: #3a6b45;
+}
+
 /* ─── Offline field log / Internal Updates (job detail page) ──────────── */
 .sync-badge {
   padding: 10px 14px;
