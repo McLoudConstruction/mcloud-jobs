@@ -66,6 +66,7 @@ export default function JobCalendarPage() {
   const router = useRouter();
   const [monthDate, setMonthDate] = useState(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
   const [jobs, setJobs] = useState([]);
+  const [busyEvents, setBusyEvents] = useState([]);
 
   useEffect(() => {
     if (!session) return;
@@ -78,6 +79,28 @@ export default function JobCalendarPage() {
   }, [session]);
 
   const weeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
+
+  // Personal calendar events (Google/Microsoft) synced in via
+  // Settings → Integrations, cached in external_busy_events and
+  // overlaid here so the office can see when someone's got something
+  // personal going on, without seeing full calendar details.
+  useEffect(() => {
+    if (!session || weeks.length === 0) return;
+    const rangeStart = weeks[0][0].date;
+    const rangeEnd = addDays(weeks[weeks.length - 1][4].date, 1);
+    supabase
+      .from('external_busy_events')
+      .select('title, start_at, end_at')
+      .lt('start_at', rangeEnd.toISOString())
+      .gt('end_at', rangeStart.toISOString())
+      .then(({ data }) => setBusyEvents(data || []));
+  }, [session, weeks]);
+
+  function busyForDay(date) {
+    const dayStart = toDateOnly(date);
+    const dayEnd = addDays(dayStart, 1);
+    return busyEvents.filter(e => new Date(e.start_at) < dayEnd && new Date(e.end_at) > dayStart);
+  }
 
   const jobBars = useMemo(() => jobs.map(j => {
     const start = parseDateOnly(j.scheduled_start_date);
@@ -136,9 +159,17 @@ export default function JobCalendarPage() {
                 <div
                   key={di}
                   className={`calendar-day-cell ${day.inMonth ? '' : 'calendar-day-outside'} ${sameDay(day.date, today) ? 'calendar-day-today' : ''}`}
-                  style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}` }}
+                  style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
                 >
                   <span className="calendar-day-number">{day.date.getDate()}</span>
+                  {busyForDay(day.date).length > 0 && (
+                    <span
+                      title={busyForDay(day.date).map(b => b.title).join(', ')}
+                      style={{ position: 'absolute', top: 4, right: 6, fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                    >
+                      {busyForDay(day.date).length} personal
+                    </span>
+                  )}
                 </div>
               ))}
               {placed.map(job => (

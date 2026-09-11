@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
@@ -21,10 +22,19 @@ const AUTOMATIONS = [
   { key: 'reminders', name: 'Schedule Reminders', description: 'Emails the customer 1 week and 1 day before a job\u2019s Scheduled Start Date.' },
 ];
 
-const INTEGRATIONS = [
-  { key: 'quickbooks', name: 'QuickBooks', description: 'Sync invoices and payments to your books.' },
-  { key: 'stripe', name: 'Payment processor (Stripe)', description: 'Accept card payments on invoices.' },
-  { key: 'email', name: 'Transactional email (your SMTP server)', description: 'Auto-send estimates, contracts, and updates by email.' },
+// Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
+// provider's login screen. Google & Microsoft power two-way calendar
+// sync; QuickBooks powers invoice sync.
+const OAUTH_INTEGRATIONS = [
+  { key: 'google', name: 'Google Calendar', description: 'Two-way sync: job schedules push to your Google Calendar, and your personal events show as busy time on the job calendar.' },
+  { key: 'microsoft', name: 'Microsoft Calendar', description: 'Two-way sync: job schedules push to your Outlook/Microsoft 365 calendar, and your personal events show as busy time on the job calendar.' },
+  { key: 'quickbooks', name: 'QuickBooks Online', description: 'Log in to your QBO account to sync invoices and payments to your books.' },
+];
+
+// Resend/Weather: no login — just an API key pasted in below.
+const KEY_INTEGRATIONS = [
+  { key: 'resend', name: 'Resend (email)', description: 'Auto-send estimates, contracts, and updates by email through your Resend account. Falls back to your SMTP server if not set up.', fields: [] },
+  { key: 'weather', name: 'Weather', description: 'Powers weather lookups in the app, via OpenWeatherMap.', fields: [{ key: 'zip', label: 'Default zip code', placeholder: '64111' }] },
 ];
 
 const FONT_OPTIONS = [
@@ -49,8 +59,18 @@ const DASHBOARD_WIDGETS = [
 
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
+
+function SettingsPageInner() {
   const { session, loading } = useRequireAuth();
   const { settings, refresh } = useSettings();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [form, setForm] = useState(settings);
   const [tab, setTab] = useState('Cosmetic');
@@ -59,7 +79,129 @@ export default function SettingsPage() {
   const [flash, setFlash] = useState('');
   const [error, setError] = useState('');
 
+  const [integrationStatus, setIntegrationStatus] = useState(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [connecting, setConnecting] = useState(null); // provider key currently redirecting
+  const [keyInputs, setKeyInputs] = useState({ resend: '', weather: '' });
+  const [zipInput, setZipInput] = useState('');
+  const [savingCred, setSavingCred] = useState(null);
+  const [syncingNow, setSyncingNow] = useState(false);
+
   useEffect(() => { setForm(settings); }, [settings]);
+
+  async function authHeader() {
+    const { data } = await supabase.auth.getSession();
+    return { Authorization: `Bearer ${data?.session?.access_token}` };
+  }
+
+  async function loadIntegrationStatus() {
+    setIntegrationsLoading(true);
+    try {
+      const res = await fetch('/api/integrations/status', { headers: await authHeader() });
+      const data = await res.json();
+      if (res.ok) setIntegrationStatus(data);
+      else setError(data.error || 'Failed to load integration status.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  }
+
+  // Land here from an OAuth callback redirect (?connected=google or
+  // ?error=google:...) — surface it once, then clean the URL.
+  useEffect(() => {
+    if (tab !== 'Integrations') return;
+    loadIntegrationStatus();
+    const connected = searchParams.get('connected');
+    const err = searchParams.get('error');
+    if (connected) showFlash(`Connected to ${connected}.`);
+    if (err) setError(err);
+    if (connected || err) router.replace('/settings?tab=Integrations');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  async function connectProvider(provider) {
+    setConnecting(provider);
+    setError('');
+    try {
+      const res = await fetch(`/api/integrations/${provider}/connect`, { method: 'POST', headers: await authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start connection.');
+      window.location.href = data.url; // full-page redirect to the provider's login
+    } catch (err) {
+      setError(err.message);
+      setConnecting(null);
+    }
+  }
+
+  async function disconnectProvider(provider) {
+    if (!confirm(`Disconnect ${provider}?`)) return;
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/disconnect', { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to disconnect.');
+      showFlash(`${provider} disconnected`);
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function saveCredential(provider) {
+    const apiKey = keyInputs[provider];
+    if (!apiKey || !apiKey.trim()) { setError('Enter an API key first.'); return; }
+    setSavingCred(provider);
+    setError('');
+    try {
+      const config = provider === 'weather' && zipInput ? { zip: zipInput } : {};
+      const res = await fetch('/api/integrations/credentials', {
+        method: 'POST',
+        headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey, config }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save key.');
+      showFlash(`${provider} key saved`);
+      setKeyInputs(prev => ({ ...prev, [provider]: '' }));
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingCred(null);
+    }
+  }
+
+  async function removeCredential(provider) {
+    if (!confirm(`Remove the saved ${provider} key?`)) return;
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/credentials', { method: 'DELETE', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove key.');
+      showFlash(`${provider} key removed`);
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function syncCalendarNow() {
+    setSyncingNow(true);
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/calendar-sync-now', { method: 'POST', headers: await authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      const total = (data.results || []).reduce((sum, r) => sum + (r.pushed || 0) + (r.pulled || 0), 0);
+      showFlash(`Synced — ${total} events updated`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSyncingNow(false);
+    }
+  }
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
@@ -296,21 +438,87 @@ export default function SettingsPage() {
         </div>
 
         {tab === 'Integrations' && (
+        <>
         <div className="card">
-          <h3>Integrations</h3>
-          {INTEGRATIONS.map(i => (
-            <div key={i.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{i.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{i.description}</div>
-              </div>
-              <button className="btn btn-sm" disabled title="Coming in a later phase">Not connected</button>
-            </div>
-          ))}
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 14 }}>
-            These need their own accounts/credentials set up before I can wire them in.
+          <h3>Log in &amp; connect</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 4 }}>
+            Each of these needs a one-time developer app registration before "Connect" will work — see INTEGRATIONS_SETUP.md in the repo for exact steps and the env vars to add in Vercel.
           </div>
+          {OAUTH_INTEGRATIONS.map(i => {
+            const status = integrationStatus?.[i.key];
+            return (
+              <div key={i.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{i.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{i.description}</div>
+                  {status?.connected && (
+                    <div style={{ fontSize: 11.5, color: 'var(--accent, #2e7d32)', marginTop: 4 }}>Connected{status.label ? ` — ${status.label}` : ''}</div>
+                  )}
+                </div>
+                {status?.connected ? (
+                  <button className="btn btn-sm" onClick={() => disconnectProvider(i.key)}>Disconnect</button>
+                ) : (
+                  <button className="btn btn-sm btn-primary" disabled={connecting === i.key} onClick={() => connectProvider(i.key)}>
+                    {connecting === i.key ? 'Redirecting…' : 'Connect'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {(integrationStatus?.google?.connected || integrationStatus?.microsoft?.connected) && (
+            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button className="btn btn-sm" onClick={syncCalendarNow} disabled={syncingNow}>{syncingNow ? 'Syncing…' : 'Sync calendar now'}</button>
+              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Also runs automatically every 2 hours.</span>
+            </div>
+          )}
+          {integrationsLoading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 }}>Loading…</div>}
         </div>
+
+        <div className="card">
+          <h3>API keys</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 4 }}>
+            These don't need a login — just an API key from the provider's dashboard.
+          </div>
+          {KEY_INTEGRATIONS.map(i => {
+            const status = integrationStatus?.[i.key];
+            return (
+              <div key={i.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{i.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{i.description}</div>
+                    {status?.connected && <div style={{ fontSize: 11.5, color: 'var(--accent, #2e7d32)', marginTop: 4 }}>Key saved</div>}
+                  </div>
+                  {status?.connected && (
+                    <button className="btn btn-sm" onClick={() => removeCredential(i.key)}>Remove</button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <input
+                    type="password"
+                    placeholder={status?.connected ? 'Enter a new key to replace it' : 'API key'}
+                    style={{ maxWidth: 260 }}
+                    value={keyInputs[i.key] || ''}
+                    onChange={e => setKeyInputs(prev => ({ ...prev, [i.key]: e.target.value }))}
+                  />
+                  {i.fields.map(f => (
+                    <input
+                      key={f.key}
+                      placeholder={f.placeholder}
+                      style={{ maxWidth: 140 }}
+                      value={zipInput}
+                      onChange={e => setZipInput(e.target.value)}
+                    />
+                  ))}
+                  <button className="btn btn-sm" disabled={savingCred === i.key} onClick={() => saveCredential(i.key)}>
+                    {savingCred === i.key ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </>
         )}
 
         {tab === 'AI Features' && (

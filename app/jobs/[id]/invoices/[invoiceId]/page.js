@@ -30,6 +30,7 @@ export default function DrawInvoiceDocumentPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [downloading, setDownloading] = useState(false);
+  const [syncingQBO, setSyncingQBO] = useState(false);
 
   const load = useCallback(async () => {
     const [{ data: jobData }, { data: drawData }] = await Promise.all([
@@ -49,6 +50,24 @@ export default function DrawInvoiceDocumentPage() {
       load();
     }
     setJustSent(true);
+  }
+
+  async function syncToQBO() {
+    setSyncingQBO(true);
+    try {
+      const res = await fetch('/api/integrations/quickbooks/sync-invoice', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      load();
+    } catch (err) {
+      alert('QuickBooks sync failed: ' + err.message);
+    } finally {
+      setSyncingQBO(false);
+    }
   }
 
   async function downloadDocument() {
@@ -78,6 +97,11 @@ export default function DrawInvoiceDocumentPage() {
           </button>
           {session?.user?.app_metadata?.role === 'admin' && (
             <button className="btn btn-sm" onClick={() => setModalOpen(true)}>{justSent ? '✓ Sent' : 'Send to Customer'}</button>
+          )}
+          {session?.user?.app_metadata?.role === 'admin' && (
+            <button className="btn btn-sm" onClick={syncToQBO} disabled={syncingQBO}>
+              {syncingQBO ? 'Syncing…' : draw.qbo_invoice_id ? '↻ Re-sync QuickBooks' : 'Sync to QuickBooks'}
+            </button>
           )}
         </div>
       </div>
