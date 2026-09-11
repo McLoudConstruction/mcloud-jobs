@@ -84,7 +84,7 @@ export default function CustomerPortalShell({ children }) {
         </div>
         <div className="shell-logo">
           {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 64, width: 'auto' }} />
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 96, width: 'auto' }} />
             : <span className="brand">McLoud <span>Portal</span></span>}
         </div>
       </div>

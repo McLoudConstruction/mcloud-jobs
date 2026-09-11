@@ -284,8 +284,8 @@ function SettingsPageInner() {
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 150,
-      portal_logo_size_desktop: 64,
-      portal_logo_size_mobile: 48,
+      portal_logo_size_desktop: 96,
+      portal_logo_size_mobile: 64,
       signout_bg: 'transparent',
       signout_text: '#49402a',
       signout_hover_bg: '#302a1a',
@@ -369,14 +369,14 @@ function SettingsPageInner() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <input
                   type="range" min="24" max="120" step="1"
-                  value={form.portal_logo_size_desktop ?? 64}
+                  value={form.portal_logo_size_desktop ?? 96}
                   onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value))}
                   style={{ flex: 1 }}
                 />
                 <input
                   type="number" min="24" max="120"
-                  value={form.portal_logo_size_desktop ?? 64}
-                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value) || 64)}
+                  value={form.portal_logo_size_desktop ?? 96}
+                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value) || 96)}
                   style={{ width: 70, flexShrink: 0 }}
                 />
               </div>
@@ -386,14 +386,14 @@ function SettingsPageInner() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <input
                   type="range" min="24" max="120" step="1"
-                  value={form.portal_logo_size_mobile ?? 48}
+                  value={form.portal_logo_size_mobile ?? 64}
                   onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value))}
                   style={{ flex: 1 }}
                 />
                 <input
                   type="number" min="24" max="120"
-                  value={form.portal_logo_size_mobile ?? 48}
-                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value) || 48)}
+                  value={form.portal_logo_size_mobile ?? 64}
+                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value) || 64)}
                   style={{ width: 70, flexShrink: 0 }}
                 />
               </div>
