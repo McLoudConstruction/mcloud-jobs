@@ -7,6 +7,7 @@ import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import StaffUsersPanel from '../../components/StaffUsersPanel';
 import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
+import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 
@@ -603,10 +604,13 @@ function SettingsPageInner() {
         )}
 
         {tab === 'Communications Log' && (
-          <div className="card">
-            <h3>Communications Log</h3>
-            <CommunicationsLogPanel />
-          </div>
+          <>
+            <BackfillPortalInvitesPanel />
+            <div className="card">
+              <h3>Communications Log</h3>
+              <CommunicationsLogPanel />
+            </div>
+          </>
         )}
 
         {tab === 'Users' && <StaffUsersPanel session={session} />}
