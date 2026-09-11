@@ -11,15 +11,19 @@ export async function POST(request) {
   if (!['resend', 'weather'].includes(provider)) return NextResponse.json({ error: 'Unknown provider.' }, { status: 400 });
   if (!apiKey || !apiKey.trim()) return NextResponse.json({ error: 'An API key is required.' }, { status: 400 });
 
-  const admin = getAdminClient();
-  const { error } = await admin.from('integration_credentials').upsert({
-    provider,
-    api_key_enc: encrypt(apiKey.trim()),
-    config: config || {},
-    updated_at: new Date().toISOString(),
-  });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  try {
+    const admin = getAdminClient();
+    const { error } = await admin.from('integration_credentials').upsert({
+      provider,
+      api_key_enc: encrypt(apiKey.trim()),
+      config: config || {},
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }
 
 export async function DELETE(request) {
