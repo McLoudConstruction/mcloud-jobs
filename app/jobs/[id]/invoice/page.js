@@ -106,7 +106,10 @@ export default function InvoiceDocumentPage() {
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={logoUrl} alt="McLoud Construction" className="doc-logo" />
-            <div className="doc-header-tagline">Built right. Told straight.</div>
+            <div className="doc-header-tagline">
+            <span className="doc-tagline-l1">Built Right.</span>
+            <span className="doc-tagline-l2">Told Straight.</span>
+          </div>
             <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.job_number}</span></div>
           </div>
 
@@ -171,7 +174,10 @@ export default function InvoiceDocumentPage() {
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
         .doc-header { background: #fff; padding: 28px 48px 22px; display: flex; align-items: center; gap: 16px; border-bottom: 4px solid #1C1B19; }
         .doc-logo { width: 180px; height: auto; display: block; }
-        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 800; font-size: 17px; line-height: 1.1; color: #1C1B19; }
+        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 800; line-height: 0.92; text-transform: uppercase; letter-spacing: -0.01em; }
+        .doc-tagline-l1, .doc-tagline-l2 { display: block; font-size: 19px; }
+        .doc-tagline-l1 { color: #1C1B19; }
+        .doc-tagline-l2 { color: #9B773D; }
         .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9B773D; text-align: right; }
         .doc-num { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: 0.05em; color: #6b6350; text-transform: none; margin-top: 3px; }
         .doc-body { padding: 38px 48px 56px; }
