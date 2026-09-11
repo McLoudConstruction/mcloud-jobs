@@ -264,18 +264,13 @@ export default function ScheduleCard({ jobId, job }) {
 
   return (
     <div className="card">
-      <h3>Schedule</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-        Generated from the trade breakdown on the Scope tab — demo, rough-in, drywall, and finishes are sequenced automatically; you adjust durations, not order.
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <h3 style={{ margin: 0 }}>Schedule</h3>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          <input type="checkbox" checked={allowWeekends} onChange={e => toggleAllowWeekends(e.target.checked)} />
+          Weekend work
+        </label>
       </div>
-
-      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 14 }}>
-        <input type="checkbox" checked={allowWeekends} onChange={e => toggleAllowWeekends(e.target.checked)} />
-        Weekend work
-        <span style={{ fontSize: 10.5, color: 'var(--ink-soft)', fontWeight: 400 }}>
-          — {allowWeekends ? 'weekends count as workable days' : 'schedules automatically skip weekends'}, applies to schedules generated or edited from now on
-        </span>
-      </label>
 
       {job?.schedule_stale_at && phases.length > 0 && !draft && (
         <div style={{ background: 'var(--bg-warning, #fff8e6)', border: '1px solid var(--border-warning, #e8c766)', borderRadius: 6, padding: 12, marginBottom: 14, fontSize: 12.5 }}>
