@@ -356,7 +356,7 @@ function SettingsPageInner() {
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-            This updates the logo shown in the app. Estimate, contract, and update documents still use the original letterhead logo for now — let me know if you want those switched over too.
+            This updates the logo shown in the app and on every generated document — estimates, contracts, invoices, change orders, work orders, and updates all pull from this same logo.
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
+import { useSettings } from '../../../../../lib/useSettings';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -21,6 +22,8 @@ function fmtMoney(v) {
 }
 
 export default function WorkOrderDocumentPage() {
+  const { settings } = useSettings();
+  const logoUrl = settings.logo_url || LOGO_SRC;
   const { session, loading } = useDocumentAuth();
   const { id, workOrderId } = useParams();
   const [job, setJob] = useState(null);
@@ -70,7 +73,7 @@ export default function WorkOrderDocumentPage() {
     try {
       const attachmentBase64 = await generatePdfBase64('doc-preview', `Work-Order-${job.job_number}-${wo.id.slice(0, 8)}.pdf`);
       const subject = `Work Order — McLoud Construction, Job #${job.job_number}`;
-      const html = `<div style="font-family: -apple-system, sans-serif; font-size: 14px; color: #221f16; line-height: 1.6;">
+      const html = `<div style="font-family: -apple-system, sans-serif; font-size: 14px; color: #1C1B19; line-height: 1.6;">
         <p>Hi${company?.contact_name ? ' ' + company.contact_name.split(' ')[0] : ''},</p>
         <p>Attached is a work order from McLoud Construction for job #${job.job_number} (${job.project_address || ''}).</p>
         <p>Please reach out with any questions.</p>
@@ -132,7 +135,8 @@ export default function WorkOrderDocumentPage() {
       <div className="doc-outer">
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
-            <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
+            <img src={logoUrl} alt="McLoud Construction" className="doc-logo" />
+            <div className="doc-header-tagline">Built Right. Told Straight.</div>
             <div className="doc-brand-tag">Work Order</div>
           </div>
           <div className="doc-body">
@@ -174,28 +178,31 @@ export default function WorkOrderDocumentPage() {
       </div>
 
       <style jsx global>{`
-        body { background: #dbd8bf; margin: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@700;800&display=swap');
+        body { background: #EDE7DA; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #fff; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
+        .doc-header { background: #1C1B19; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #9B773D; }
         .doc-logo { width: 180px; height: auto; display: block; }
-        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9b773d; }
+        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; color: #EDE7DA; }
+        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9B773D; }
         .doc-body { padding: 38px 48px 56px; }
-        .doc-title { font-weight: 700; font-size: 24px; color: #9b773d; margin: 0 0 18px; }
+        .doc-title { font-weight: 700; font-size: 24px; color: #9B773D; margin: 0 0 18px; }
         .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: 12.5px; color: #6b6350; padding-bottom: 18px; margin-bottom: 30px; border-bottom: 1px solid #ded7c0; }
         .section { margin-bottom: 22px; break-inside: avoid; }
-        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #dbd8bf; break-after: avoid; }
-        .section p { font-size: 13.5px; line-height: 1.6; color: #221f16; margin: 0; white-space: pre-wrap; }
+        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9B773D; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #9B773D; break-after: avoid; }
+        .section p { font-size: 13.5px; line-height: 1.6; color: #1C1B19; margin: 0; white-space: pre-wrap; }
         .doc-list { list-style: none; margin: 0; padding: 0; }
-        .doc-list li { font-size: 13.5px; line-height: 1.6; color: #221f16; padding-left: 20px; position: relative; margin-bottom: 7px; break-inside: avoid; }
-        .doc-list li::before { content: '—'; position: absolute; left: 0; color: #9b773d; }
+        .doc-list li { font-size: 13.5px; line-height: 1.6; color: #1C1B19; padding-left: 20px; position: relative; margin-bottom: 7px; break-inside: avoid; }
+        .doc-list li::before { content: '—'; position: absolute; left: 0; color: #9B773D; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
-        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
-        .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
+        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9B773D; }
+        .price-amount { font-weight: 700; font-size: 19px; color: #1C1B19; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
         @media (max-width: 700px) {
           .doc-outer { padding: 12px; }
           .doc-header { padding: 18px 20px; flex-wrap: wrap; }
+          .doc-header-tagline { font-size: 13px; }
           .doc-body { padding: 20px 20px 40px; }
           .doc-logo { width: 130px; }
         }

@@ -7,6 +7,7 @@ import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
 import SignaturePad from '../../../../../components/SignaturePad';
+import { useSettings } from '../../../../../lib/useSettings';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -23,6 +24,8 @@ function fmtMoney(v) {
 }
 
 export default function ChangeOrderDocumentPage() {
+  const { settings } = useSettings();
+  const logoUrl = settings.logo_url || LOGO_SRC;
   const { session, loading } = useDocumentAuth();
   const { id, changeOrderId } = useParams();
   const [job, setJob] = useState(null);
@@ -108,7 +111,8 @@ export default function ChangeOrderDocumentPage() {
       <div className="doc-outer">
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
-            <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
+            <img src={logoUrl} alt="McLoud Construction" className="doc-logo" />
+            <div className="doc-header-tagline">Built Right. Told Straight.</div>
             <div className="doc-brand-tag">Change Order</div>
           </div>
           <div className="doc-body">
@@ -192,26 +196,29 @@ export default function ChangeOrderDocumentPage() {
       />
 
       <style jsx global>{`
-        body { background: #dbd8bf; margin: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@700;800&display=swap');
+        body { background: #EDE7DA; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #fff; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
+        .doc-header { background: #1C1B19; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #9B773D; }
         .doc-logo { width: 180px; height: auto; display: block; }
-        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9b773d; }
+        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; color: #EDE7DA; }
+        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9B773D; }
         .doc-body { padding: 38px 48px 56px; }
-        .doc-title { font-weight: 700; font-size: 24px; color: #9b773d; margin: 0 0 18px; }
+        .doc-title { font-weight: 700; font-size: 24px; color: #9B773D; margin: 0 0 18px; }
         .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: 12.5px; color: #6b6350; padding-bottom: 18px; margin-bottom: 30px; border-bottom: 1px solid #ded7c0; }
         .section { margin-bottom: 22px; break-inside: avoid; }
-        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
-        .section p { font-size: 13.5px; line-height: 1.6; color: #221f16; margin: 0; white-space: pre-wrap; }
+        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9B773D; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #9B773D; }
+        .section p { font-size: 13.5px; line-height: 1.6; color: #1C1B19; margin: 0; white-space: pre-wrap; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
-        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
-        .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
+        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9B773D; }
+        .price-amount { font-weight: 700; font-size: 19px; color: #1C1B19; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
         .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
         @media (max-width: 700px) {
           .doc-outer { padding: 12px; }
           .doc-header { padding: 18px 20px; flex-wrap: wrap; }
+          .doc-header-tagline { font-size: 13px; }
           .doc-body { padding: 20px 20px 40px; }
           .sig-block { grid-template-columns: 1fr; gap: 20px; }
           .doc-logo { width: 130px; }

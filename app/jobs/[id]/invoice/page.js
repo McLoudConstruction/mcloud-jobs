@@ -8,6 +8,7 @@ import SendDocModal from '../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 import PaymentFlow from '../../../../components/PaymentFlow';
 import { flattenJobFinancialsOne } from '../../../../lib/jobFinancials';
+import { useSettings } from '../../../../lib/useSettings';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -24,6 +25,8 @@ function fmtMoney(v) {
 }
 
 export default function InvoiceDocumentPage() {
+  const { settings } = useSettings();
+  const logoUrl = settings.logo_url || LOGO_SRC;
   const { session, loading } = useDocumentAuth();
   const { id } = useParams();
   const [job, setJob] = useState(null);
@@ -102,7 +105,8 @@ export default function InvoiceDocumentPage() {
       <div className="doc-outer">
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
-            <img src={LOGO_SRC} alt="McLoud Construction" className="doc-logo" />
+            <img src={logoUrl} alt="McLoud Construction" className="doc-logo" />
+            <div className="doc-header-tagline">Built Right. Told Straight.</div>
             <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.job_number}</span></div>
           </div>
 
@@ -161,25 +165,27 @@ export default function InvoiceDocumentPage() {
       />
 
       <style jsx global>{`
-        body { background: #dbd8bf; margin: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@700;800&display=swap');
+        body { background: #EDE7DA; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #fff; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #dbd8bf; }
+        .doc-header { background: #1C1B19; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #9B773D; }
         .doc-logo { width: 180px; height: auto; display: block; }
-        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9b773d; text-align: right; }
-        .doc-num { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: 0.05em; color: #6b6350; text-transform: none; margin-top: 3px; }
+        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; color: #EDE7DA; }
+        .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9B773D; text-align: right; }
+        .doc-num { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: 0.05em; color: rgba(237,231,218,0.65); text-transform: none; margin-top: 3px; }
         .doc-body { padding: 38px 48px 56px; }
-        .doc-title { font-weight: 700; font-size: 24px; color: #9b773d; margin: 0 0 18px; }
+        .doc-title { font-weight: 700; font-size: 24px; color: #9B773D; margin: 0 0 18px; }
         .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: 12.5px; color: #6b6350; padding-bottom: 18px; margin-bottom: 30px; border-bottom: 1px solid #ded7c0; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }
-        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9b773d; }
-        .price-amount { font-weight: 700; font-size: 19px; color: #221f16; }
+        .price-label { font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9B773D; }
+        .price-amount { font-weight: 700; font-size: 19px; color: #1C1B19; }
         .section { margin-bottom: 22px; break-inside: avoid; }
-        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b773d; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #dbd8bf; }
-        .section p { font-size: 13px; line-height: 1.6; color: #221f16; margin: 0; }
+        .section h3 { font-weight: 700; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #9B773D; margin: 0 0 8px; padding-left: 11px; border-left: 3px solid #9B773D; }
+        .section p { font-size: 13px; line-height: 1.6; color: #1C1B19; margin: 0; }
         .milestone-table { width: 100%; border-collapse: collapse; font-size: 12px; break-inside: avoid; }
         .milestone-table th { text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6350; font-weight: 600; padding: 0 0 6px; border-bottom: 1px solid #ded7c0; }
-        .milestone-table td { padding: 7px 0; border-bottom: 1px solid #f0ece0; color: #221f16; }
+        .milestone-table td { padding: 7px 0; border-bottom: 1px solid #f0ece0; color: #1C1B19; }
         .milestone-table td.amt { text-align: right; white-space: nowrap; padding-left: 12px; }
         .doc-footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid #ded7c0; font-size: 12px; color: #6b6350; display: flex; justify-content: space-between; }
         .continued-note { display: none; font-size: 11px; font-style: italic; color: #6b6350; text-align: center; padding-top: 14px; margin-bottom: 10px; border-top: 1px dashed #ded7c0; }
