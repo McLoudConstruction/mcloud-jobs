@@ -9,6 +9,21 @@ function fmtDate(v) {
   return new Date(v + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const START_DAY_OPTIONS = [
+  { value: '', label: 'No preference' },
+  { value: 'sunday', label: 'Sunday' },
+  { value: 'monday', label: 'Monday' },
+  { value: 'tuesday', label: 'Tuesday' },
+  { value: 'wednesday', label: 'Wednesday' },
+  { value: 'thursday', label: 'Thursday' },
+  { value: 'friday', label: 'Friday' },
+  { value: 'saturday', label: 'Saturday' },
+];
+
+function dayLabel(value) {
+  return START_DAY_OPTIONS.find(o => o.value === value)?.label || '';
+}
+
 // Small color swatch used in both List and Timeline rows — needs_review
 // always wins over the trade color(s), since that flag is meant to be
 // unambiguous regardless of what trade the phase belongs to.
@@ -69,9 +84,9 @@ export default function ScheduleCard({ jobId, job }) {
   const [warning, setWarning] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editDuration, setEditDuration] = useState(1);
-  const [editPreferMonday, setEditPreferMonday] = useState(false);
+  const [editPreferredStartDay, setEditPreferredStartDay] = useState('');
+  const [editAllowWeekend, setEditAllowWeekend] = useState(false);
   const [view, setView] = useState('list'); // 'list' | 'timeline'
-  const [allowWeekends, setAllowWeekends] = useState(Boolean(job?.schedule_weekend_work));
 
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -103,7 +118,7 @@ export default function ScheduleCard({ jobId, job }) {
       const res = await fetch('/api/generate-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type, allowWeekends }),
+        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate schedule.');
@@ -114,16 +129,6 @@ export default function ScheduleCard({ jobId, job }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  // Persists the weekend-work setting immediately (it's a job-level
-  // setting, not tied to a draft/confirm cycle) but deliberately doesn't
-  // touch any already-confirmed phase — only future generate/regenerate
-  // calls and cascading edits pick it up. Silently rewriting dates the
-  // moment this checkbox changes would be surprising.
-  async function toggleAllowWeekends(checked) {
-    setAllowWeekends(checked);
-    await supabase.from('jobs').update({ schedule_weekend_work: checked }).eq('id', jobId);
   }
 
   // Regenerating shouldn't silently overwrite a duration you already
@@ -139,15 +144,22 @@ export default function ScheduleCard({ jobId, job }) {
     const merged = freshPhases.map(p => {
       const manual = manualByKey.get(p.phase_key);
       if (!manual) return p;
-      return { ...p, duration_days: manual.duration_days, source: 'manual', needs_review: true, prefer_monday_start: manual.prefer_monday_start };
+      return {
+        ...p, duration_days: manual.duration_days, source: 'manual', needs_review: true,
+        preferred_start_day: manual.preferred_start_day, allow_weekend_work: manual.allow_weekend_work,
+      };
     });
 
     const orphaned = existingPhases
       .filter(p => p.source === 'manual' && p.phase_key !== 'custom' && !freshKeys.has(p.phase_key))
-      .map(p => ({ phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days, source: 'manual', needs_review: true, orphaned: true, prefer_monday_start: p.prefer_monday_start }));
+      .map(p => ({
+        phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days,
+        source: 'manual', needs_review: true, orphaned: true,
+        preferred_start_day: p.preferred_start_day, allow_weekend_work: p.allow_weekend_work,
+      }));
 
     const sequenced = [...merged, ...orphaned].map((p, i) => ({ ...p, sort_order: i }));
-    return recomputeSequentialDates(sequenced, anchorDate, allowWeekends);
+    return recomputeSequentialDates(sequenced, anchorDate);
   }
 
   // Keeps whatever's actually typed in the box (including empty, mid-edit)
@@ -160,7 +172,7 @@ export default function ScheduleCard({ jobId, job }) {
   function updateDraftDuration(index, rawValue) {
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: rawValue } : p);
     const forDates = updated.map(p => ({ ...p, duration_days: Number(p.duration_days) > 0 ? Number(p.duration_days) : 1 }));
-    const recomputed = recomputeSequentialDates(forDates, startDate, allowWeekends);
+    const recomputed = recomputeSequentialDates(forDates, startDate);
     setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
   }
 
@@ -169,12 +181,17 @@ export default function ScheduleCard({ jobId, job }) {
   function finalizeDraftDuration(index) {
     const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
-    setDraft(recomputeSequentialDates(updated, startDate, allowWeekends));
+    setDraft(recomputeSequentialDates(updated, startDate));
   }
 
-  function updateDraftPreferMonday(index, checked) {
-    const updated = draft.map((p, i) => i === index ? { ...p, prefer_monday_start: checked } : p);
-    setDraft(recomputeSequentialDates(updated, startDate, allowWeekends));
+  function updateDraftPreferredStartDay(index, value) {
+    const updated = draft.map((p, i) => i === index ? { ...p, preferred_start_day: value || null } : p);
+    setDraft(recomputeSequentialDates(updated, startDate));
+  }
+
+  function updateDraftAllowWeekend(index, allow) {
+    const updated = draft.map((p, i) => i === index ? { ...p, allow_weekend_work: allow } : p);
+    setDraft(recomputeSequentialDates(updated, startDate));
   }
 
   async function confirmDraft() {
@@ -186,8 +203,7 @@ export default function ScheduleCard({ jobId, job }) {
       // without a blur), so an empty/invalid value never reaches the DB.
       const cleanDraft = recomputeSequentialDates(
         draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
-        startDate,
-        allowWeekends
+        startDate
       );
       // Replacing an existing schedule — clear the old phases first so
       // regenerating never leaves stale rows behind.
@@ -215,22 +231,26 @@ export default function ScheduleCard({ jobId, job }) {
   function startEditPhase(p) {
     setEditingId(p.id);
     setEditDuration(p.duration_days);
-    setEditPreferMonday(!!p.prefer_monday_start);
+    setEditPreferredStartDay(p.preferred_start_day || '');
+    setEditAllowWeekend(!!p.allow_weekend_work);
   }
 
   async function savePhaseEdit(phase) {
     const index = phases.findIndex(p => p.id === phase.id);
     // Recompute from this phase's own (unchanged) start date, cascading
     // the new duration through everything scheduled after it.
-    const rebased = phases.slice(index).map((p, i) => i === 0 ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), prefer_monday_start: editPreferMonday } : p);
-    const final = recomputeSequentialDates(rebased, phases[index].start_date, allowWeekends);
+    const rebased = phases.slice(index).map((p, i) => i === 0
+      ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), preferred_start_day: editPreferredStartDay || null, allow_weekend_work: editAllowWeekend }
+      : p);
+    const final = recomputeSequentialDates(rebased, phases[index].start_date);
 
     for (const p of final) {
       await supabase.from('job_phases').update({
         duration_days: p.duration_days,
         start_date: p.start_date,
         end_date: p.end_date,
-        prefer_monday_start: p.prefer_monday_start,
+        preferred_start_day: p.preferred_start_day,
+        allow_weekend_work: p.allow_weekend_work,
         source: p.id === phase.id ? 'manual' : p.source,
         needs_review: p.id === phase.id ? false : p.needs_review,
       }).eq('id', p.id);
@@ -243,6 +263,10 @@ export default function ScheduleCard({ jobId, job }) {
     if (!confirm('Remove the entire schedule? This can\'t be undone.')) return;
     await supabase.from('job_phases').delete().eq('job_id', jobId);
     await supabase.from('jobs').update({ schedule_stale_at: null }).eq('id', jobId);
+    // The realtime subscription should pick this up on its own, but
+    // don't rely on it alone — explicitly reload so the list clears
+    // immediately instead of waiting on a refresh.
+    await loadPhases();
   }
 
   // Persists a drag (move) or edge-resize (duration change) from the
@@ -264,13 +288,7 @@ export default function ScheduleCard({ jobId, job }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ margin: 0 }}>Schedule</h3>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={allowWeekends} onChange={e => toggleAllowWeekends(e.target.checked)} />
-          Weekend work
-        </label>
-      </div>
+      <h3 style={{ margin: 0, marginBottom: 14 }}>Schedule</h3>
 
       {job?.schedule_stale_at && phases.length > 0 && !draft && (
         <div style={{ background: 'var(--bg-warning, #fff8e6)', border: '1px solid var(--border-warning, #e8c766)', borderRadius: 6, padding: 12, marginBottom: 14, fontSize: 12.5 }}>
@@ -302,17 +320,28 @@ export default function ScheduleCard({ jobId, job }) {
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Review before confirming</div>
           <Legend phases={draft} />
           {draft.map((p, i) => (
-            <div key={p.phase_key + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, gap: 10, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
+            <div key={p.phase_key + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, gap: 10, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
                 <div>
                   <b>{p.label}</b>
                   {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · {p.orphaned ? 'trade no longer in breakdown' : 'duration kept from your edit — review'}</span>}
                   <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 3 }}>
-                    <input type="checkbox" checked={!!p.prefer_monday_start} onChange={e => updateDraftPreferMonday(i, e.target.checked)} />
-                    Start fresh on a Monday
-                  </label>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 5 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)' }}>
+                      Preferred start day
+                      <select value={p.preferred_start_day || ''} onChange={e => updateDraftPreferredStartDay(i, e.target.value)} style={{ fontSize: 10.5, padding: '2px 4px' }}>
+                        {START_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)' }}>
+                      Weekend work
+                      <select value={p.allow_weekend_work ? 'yes' : 'no'} onChange={e => updateDraftAllowWeekend(i, e.target.value === 'yes')} style={{ fontSize: 10.5, padding: '2px 4px' }}>
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -354,11 +383,22 @@ export default function ScheduleCard({ jobId, job }) {
                     <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
                     <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
-                      <input type="checkbox" checked={editPreferMonday} onChange={e => setEditPreferMonday(e.target.checked)} />
-                      Start fresh on a Monday
-                    </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                        Preferred start day
+                        <select value={editPreferredStartDay} onChange={e => setEditPreferredStartDay(e.target.value)} style={{ fontSize: 11, padding: '2px 4px' }}>
+                          {START_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                        Weekend work
+                        <select value={editAllowWeekend ? 'yes' : 'no'} onChange={e => setEditAllowWeekend(e.target.value === 'yes')} style={{ fontSize: 11, padding: '2px 4px' }}>
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </label>
+                    </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
                       <button className="btn btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
@@ -372,8 +412,9 @@ export default function ScheduleCard({ jobId, job }) {
                     <div>
                       <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · edited</span>}
                       {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
-                      {p.prefer_monday_start && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · Monday start</span>}
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} business days)</div>
+                      {p.preferred_start_day && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · starts {dayLabel(p.preferred_start_day)}</span>}
+                      {p.allow_weekend_work && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · weekend OK</span>}
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} days)</div>
                     </div>
                   </div>
                   <button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button>

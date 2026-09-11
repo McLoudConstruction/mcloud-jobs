@@ -19,7 +19,7 @@ function extractJson(text) {
 
 export async function POST(request) {
   try {
-    const { tradeActions, startDate, projectType, allowWeekends } = await request.json();
+    const { tradeActions, startDate, projectType } = await request.json();
 
     if (!Array.isArray(tradeActions) || tradeActions.length === 0) {
       return Response.json({ error: 'Add at least one trade-tagged action to the trade breakdown first.' }, { status: 400 });
@@ -116,10 +116,11 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
         duration_days: duration,
         sort_order: i,
         source: 'ai',
-        prefer_monday_start: Boolean(stage.preferMondayStart),
+        allow_weekend_work: false, // always off by default — a person opts individual phases in afterward
+        preferred_start_day: stage.preferredStartDay || null,
       };
     });
-    const phases = recomputeSequentialDates(undated, startDate, Boolean(allowWeekends));
+    const phases = recomputeSequentialDates(undated, startDate);
 
     const missingKeys = skeleton.filter(s => !Number.isFinite(durations[s.key])).map(s => s.key);
     const warning = missingKeys.length > 0
