@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { recomputeSequentialDates } from '../lib/scheduleDates';
+import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 
 function fmtDate(v) {
@@ -506,9 +506,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
     function handleUp() {
       const result = previewRef.current;
       if (result) {
-        const start = new Date(result.start_date + 'T00:00:00');
-        const end = new Date(result.end_date + 'T00:00:00');
-        const duration_days = Math.round((end - start) / 86400000) + 1;
+        const duration_days = countWorkableDays(result.start_date, result.end_date, dragState.allowWeekend);
         onPhaseUpdate(result.phaseId, { start_date: result.start_date, end_date: result.end_date, duration_days });
       }
       previewRef.current = null;
@@ -526,7 +524,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
 
   function startDrag(phase, mode, e) {
     e.preventDefault();
-    setDragState({ phaseId: phase.id, mode, startX: e.clientX, origStart: phase.start_date, origEnd: phase.end_date });
+    setDragState({ phaseId: phase.id, mode, startX: e.clientX, origStart: phase.start_date, origEnd: phase.end_date, allowWeekend: !!phase.allow_weekend_work });
   }
 
   // Substitute live drag/resize positions so the grid (and its bounds)
@@ -552,7 +550,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
     <div style={{ marginBottom: 8 }}>
       <Legend phases={phases} />
       <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
-        Drag a bar to move it, or its edges to resize — phases can overlap here, and moving one doesn't shift the others.
+        Drag a bar to move it, or its edges to resize — phases can overlap here, and moving one doesn't shift the others. A phase without weekend work shows a gap over any weekend it spans, rather than a solid bar.
       </div>
       <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
         <div style={{ width: LABEL_WIDTH + gridWidth }}>
@@ -574,6 +572,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
             const offsetDays = Math.round((start - minDate) / 86400000);
             const spanDays = Math.round((end - start) / 86400000) + 1;
             const isDragging = dragState?.phaseId === p.id;
+            const segments = splitAtWeekends(p.start_date, p.end_date, p.allow_weekend_work);
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
                 <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 0', fontSize: 10.5, lineHeight: 1.25 }}>
@@ -584,20 +583,39 @@ function TimelineView({ phases, onPhaseUpdate }) {
                   {showToday && (
                     <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * DAY_WIDTH, width: 2, background: 'var(--accent)' }} />
                   )}
+                  {/* Transparent hit area spans the full range for move/resize
+                      dragging — the visible color lives in the segments below,
+                      not here, so a weekend gap between segments is never
+                      covered by an invisible-but-still-there colored block. */}
                   <div
-                    title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)} · drag to move, edges to resize`}
+                    title={`${fmtDate(p.start_date)} – ${fmtDate(p.end_date)} · drag to move, edges to resize${segments.length > 1 ? ' · weekend skipped, not worked' : ''}`}
                     onPointerDown={e => startDrag(p, 'move', e)}
                     style={{
                       position: 'absolute', top: 5, bottom: 5,
                       left: offsetDays * DAY_WIDTH + 2, width: Math.max(spanDays * DAY_WIDTH - 4, DAY_WIDTH - 4),
-                      borderRadius: 4,
-                      background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
                       opacity: isDragging ? 0.75 : 1,
-                      boxShadow: isDragging ? '0 0 0 2px var(--accent)' : 'none',
                       cursor: isDragging && dragState.mode === 'move' ? 'grabbing' : 'grab',
                       touchAction: 'none',
                     }}
                   >
+                    {segments.map((seg, si) => {
+                      const segStart = new Date(seg.start + 'T00:00:00');
+                      const segEnd = new Date(seg.end + 'T00:00:00');
+                      const segOffset = Math.round((segStart - start) / 86400000);
+                      const segSpan = Math.round((segEnd - segStart) / 86400000) + 1;
+                      return (
+                        <div
+                          key={si}
+                          style={{
+                            position: 'absolute', top: 0, bottom: 0,
+                            left: segOffset * DAY_WIDTH, width: segSpan * DAY_WIDTH - 2,
+                            borderRadius: 4,
+                            background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
+                            boxShadow: isDragging ? '0 0 0 2px var(--accent)' : 'none',
+                          }}
+                        />
+                      );
+                    })}
                     <div
                       onPointerDown={e => { e.stopPropagation(); startDrag(p, 'resize-left', e); }}
                       style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 7, cursor: 'ew-resize', touchAction: 'none' }}
