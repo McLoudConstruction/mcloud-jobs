@@ -23,7 +23,7 @@ export async function GET(request) {
     for (const c of credentials || []) {
       byProvider[c.provider] = { connected: true, updatedAt: c.updated_at };
     }
-    for (const p of ['resend', 'weather']) {
+    for (const p of ['resend', 'weather', 'unsplash']) {
       if (!byProvider[p]) byProvider[p] = { connected: false };
     }
 

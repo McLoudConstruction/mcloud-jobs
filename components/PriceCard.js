@@ -1,6 +1,17 @@
 'use client';
 import { useState } from 'react';
 
+// Strips non-numeric characters and caps input to 2 decimal places as
+// the user types — e.g. "185000.999" becomes "185000.99".
+function sanitizeMoney(raw) {
+  let v = raw.replace(/[^0-9.]/g, '');
+  const firstDot = v.indexOf('.');
+  if (firstDot !== -1) {
+    v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
+  }
+  return v;
+}
+
 export default function PriceCard({ job, onSave }) {
   const [price, setPrice] = useState(job.contract_price ?? '');
   const [projectedCost, setProjectedCost] = useState(job.projected_cost ?? '');
@@ -12,7 +23,7 @@ export default function PriceCard({ job, onSave }) {
   function remove(i) { setMilestones(prev => prev.filter((_, idx) => idx !== i)); }
   function save() {
     onSave({
-      contract_price: price ? parseFloat(String(price).replace(/[^0-9.]/g, '')) : null,
+      contract_price: price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
       projected_cost: projectedCost ? parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) : null,
       approved_at: approvedDate ? new Date(approvedDate + 'T12:00:00').toISOString() : null,
       milestones,
@@ -23,7 +34,7 @@ export default function PriceCard({ job, onSave }) {
     <div className="card">
       <h3>Contract price &amp; payment schedule</h3>
       <label>Total contract price ($)</label>
-      <input value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 185,000" />
+      <input value={price} onChange={e => setPrice(sanitizeMoney(e.target.value))} placeholder="e.g. 185000.00" />
       <label style={{ marginTop: 12 }}>Projected cost ($)</label>
       <input value={projectedCost} onChange={e => setProjectedCost(e.target.value)} placeholder="What you expect this job to cost, all-in" />
       <label style={{ marginTop: 12 }}>Approved date</label>

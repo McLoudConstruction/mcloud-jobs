@@ -35,6 +35,7 @@ const OAUTH_INTEGRATIONS = [
 const KEY_INTEGRATIONS = [
   { key: 'resend', name: 'Resend (email)', description: 'Auto-send estimates, contracts, and updates by email through your Resend account. Falls back to your SMTP server if not set up.', fields: [] },
   { key: 'weather', name: 'Weather', description: 'Powers weather lookups in the app, via OpenWeatherMap.', fields: [{ key: 'zip', label: 'Default zip code', placeholder: '64111' }] },
+  { key: 'unsplash', name: 'Image search (materials)', description: 'Powers the "search for a photo" option in the Estimate material picture chooser, via Unsplash.', fields: [] },
 ];
 
 const FONT_OPTIONS = [

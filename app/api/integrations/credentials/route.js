@@ -8,7 +8,7 @@ export async function POST(request) {
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { provider, apiKey, config } = await request.json();
-  if (!['resend', 'weather'].includes(provider)) return NextResponse.json({ error: 'Unknown provider.' }, { status: 400 });
+  if (!['resend', 'weather', 'unsplash'].includes(provider)) return NextResponse.json({ error: 'Unknown provider.' }, { status: 400 });
   if (!apiKey || !apiKey.trim()) return NextResponse.json({ error: 'An API key is required.' }, { status: 400 });
 
   try {

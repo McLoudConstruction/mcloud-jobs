@@ -18,6 +18,7 @@ export default function IndividualProposalDocumentPage() {
   const { id, proposalId } = useParams();
   const [job, setJob] = useState(null);
   const [proposal, setProposal] = useState(null);
+  const [materials, setMaterials] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [justSent, setJustSent] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -33,7 +34,21 @@ export default function IndividualProposalDocumentPage() {
     else if (!proposalErr || proposalErr.code !== 'PGRST116') setNotFound(true);
   }, [id, proposalId]);
 
-  useEffect(() => { if (session) load(); }, [session, load]);
+  // Material photos for the customer-facing doc — materials live on the
+  // job, not the individual proposal snapshot, so this is the same list
+  // regardless of which saved proposal is being viewed.
+  const loadMaterials = useCallback(async () => {
+    const { data } = await supabase.rpc('get_job_material_photos', { target_job_id: id });
+    if (!data) return;
+    const resolved = await Promise.all(data.map(async m => {
+      if (m.image_url) return { description: m.description, url: m.image_url };
+      const { data: signed } = await supabase.storage.from('job-photos').createSignedUrl(m.image_storage_path, 3600);
+      return signed?.signedUrl ? { description: m.description, url: signed.signedUrl } : null;
+    }));
+    setMaterials(resolved.filter(Boolean));
+  }, [id]);
+
+  useEffect(() => { if (session) { load(); loadMaterials(); } }, [session, load, loadMaterials]);
 
   // Marks this specific proposal (not any other saved version) as viewed,
   // only for the customer session — never when an admin previews it.
@@ -88,6 +103,7 @@ export default function IndividualProposalDocumentPage() {
         price={proposal.contract_price}
         scope={proposal.scope_items || []}
         terms={(proposal.additional_terms || []).filter(t => t.text && t.text.trim())}
+        materials={materials}
       />
 
       <SendDocModal

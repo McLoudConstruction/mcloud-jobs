@@ -22,6 +22,7 @@ export default function ProposalDocumentPage() {
   const { session, loading } = useDocumentAuth();
   const { id } = useParams();
   const [job, setJob] = useState(null);
+  const [materials, setMaterials] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [downloading, setDownloading] = useState(false);
@@ -34,7 +35,20 @@ export default function ProposalDocumentPage() {
     if (data) setJob({ ...data, ...financials });
   }, [id]);
 
-  useEffect(() => { if (session) loadJob(); }, [session, loadJob]);
+  // Material photos for the customer-facing doc — deliberately no prices,
+  // just description + photo, so nothing about cost/margin leaks here.
+  const loadMaterials = useCallback(async () => {
+    const { data } = await supabase.rpc('get_job_material_photos', { target_job_id: id });
+    if (!data) return;
+    const resolved = await Promise.all(data.map(async m => {
+      if (m.image_url) return { description: m.description, url: m.image_url };
+      const { data: signed } = await supabase.storage.from('job-photos').createSignedUrl(m.image_storage_path, 3600);
+      return signed?.signedUrl ? { description: m.description, url: signed.signedUrl } : null;
+    }));
+    setMaterials(resolved.filter(Boolean));
+  }, [id]);
+
+  useEffect(() => { if (session) { loadJob(); loadMaterials(); } }, [session, loadJob, loadMaterials]);
 
   // Marks this specific estimate as viewed (not just the portal home page) —
   // only for the customer session, never when an admin previews the doc.
@@ -90,6 +104,7 @@ export default function ProposalDocumentPage() {
         price={job.contract_price}
         scope={scope}
         terms={allTerms}
+        materials={materials}
       />
 
       <SendDocModal

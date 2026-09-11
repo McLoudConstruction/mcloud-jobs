@@ -19,7 +19,7 @@ const LOGO_SRC = '/mcloud-logo.png';
 // individual saved proposal). Both wrap this in their own toolbar,
 // SendDocModal, and sent/viewed tracking — only the markup and print
 // styling live here, so the two documents can never visually drift.
-export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms }) {
+export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms, materials }) {
   return (
     <div className="doc-outer">
       <div className="doc-page" id="doc-preview">
@@ -64,6 +64,20 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
             )}
           </div>
 
+          {materials && materials.length > 0 && (
+            <div className="section">
+              <h3>Materials</h3>
+              <div className="materials-grid">
+                {materials.map((m, i) => (
+                  <div className="material-tile" key={i}>
+                    <img src={m.url} alt={m.description || 'Material'} />
+                    <span>{m.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="section">
             <h3>Assumptions &amp; exclusions</h3>
             <ul className="doc-list">{(terms || []).map((t, i) => <li key={i}>{t.text}</li>)}</ul>
@@ -98,6 +112,10 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
         .doc-list { margin: 0; padding-left: 0; list-style: none; }
         .doc-list li { font-size: 13.5px; line-height: 1.6; color: #221f16; padding-left: 20px; position: relative; margin-bottom: 7px; break-inside: avoid; }
         .doc-list li::before { content: "—"; position: absolute; left: 0; color: #dbd8bf; }
+        .materials-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; break-inside: avoid; }
+        .material-tile { display: flex; flex-direction: column; gap: 5px; break-inside: avoid; }
+        .material-tile img { width: 100%; height: 90px; object-fit: cover; border-radius: 5px; border: 1px solid #ded7c0; }
+        .material-tile span { font-size: 10.5px; color: #6b6350; line-height: 1.35; }
         .doc-list li.empty { color: #a8a29a; font-style: italic; }
         .doc-list li.empty::before { content: ""; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }

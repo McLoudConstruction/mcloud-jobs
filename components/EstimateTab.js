@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
+import MaterialImageChooser from './MaterialImageChooser';
 import { SERVICES_OFFERED } from '../lib/constants';
 
 function fmtMoney(v) {
@@ -126,6 +127,8 @@ export default function EstimateTab({ job, jobId, children }) {
   }
 
   const [rowStatus, setRowStatus] = useState({}); // { [itemId]: 'saved' | 'error' }
+  const [chooserItemId, setChooserItemId] = useState(null);
+  const [signedThumbs, setSignedThumbs] = useState({}); // { [itemId]: signed url for uploaded photos }
 
   function flashRowStatus(itemId, status, duration) {
     setRowStatus(prev => ({ ...prev, [itemId]: status }));
@@ -158,6 +161,40 @@ export default function EstimateTab({ job, jobId, children }) {
       setItems(prev => [...prev, removed]);
       flashRowStatus(itemId, 'error', 4000);
     }
+  }
+
+  // job-photos is a private bucket — uploaded material photos need a
+  // signed URL to display, same as MaterialSelectionWizard. Search-picked
+  // photos (image_url) are already public, no signing needed.
+  useEffect(() => {
+    const needsSigning = items.filter(it => it.image_storage_path && !signedThumbs[it.id]);
+    if (needsSigning.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(needsSigning.map(async it => {
+        const { data } = await supabase.storage.from('job-photos').createSignedUrl(it.image_storage_path, 3600);
+        return [it.id, data?.signedUrl];
+      }));
+      const valid = Object.fromEntries(entries.filter(([, url]) => url));
+      if (Object.keys(valid).length) setSignedThumbs(prev => ({ ...prev, ...valid }));
+    })();
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveItemImage(itemId, patch) {
+    updateLocalItem(itemId, 'image_url', patch.image_url);
+    updateLocalItem(itemId, 'image_storage_path', patch.image_storage_path);
+    updateLocalItem(itemId, 'image_source', patch.image_source);
+    if (!patch.image_storage_path) setSignedThumbs(prev => { const next = { ...prev }; delete next[itemId]; return next; });
+    const { error } = await supabase.from('job_estimate_items').update({
+      image_url: patch.image_url,
+      image_storage_path: patch.image_storage_path,
+      image_source: patch.image_source,
+    }).eq('id', itemId);
+    flashRowStatus(itemId, error ? 'error' : 'saved', error ? 4000 : 1400);
+    setChooserItemId(null);
+  }
+
+  function removeItemImage(itemId) {
+    saveItemImage(itemId, { image_url: null, image_storage_path: null, image_source: null });
   }
 
   async function savePriceBook(item) {
@@ -295,6 +332,17 @@ export default function EstimateTab({ job, jobId, children }) {
                     {it.source === 'suggested' && <span className="estimate-tag">Suggested</span>}
                     {it.buffer_note && <div className="estimate-buffer-note">{it.buffer_note}</div>}
                     {rowStatus[it.id] === 'error' && <div style={{ fontSize: 11, color: '#a13f3f', marginTop: 3 }}>Couldn't save — try again</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      {(it.image_url || signedThumbs[it.id]) ? (
+                        <>
+                          <img src={it.image_url || signedThumbs[it.id]} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--line)' }} />
+                          <button type="button" className="btn btn-sm" onClick={() => setChooserItemId(it.id)}>Change photo</button>
+                          <button type="button" className="btn btn-sm" onClick={() => removeItemImage(it.id)}>Remove</button>
+                        </>
+                      ) : (
+                        <button type="button" className="btn btn-sm" onClick={() => setChooserItemId(it.id)}>+ Add photo</button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <input
@@ -321,6 +369,15 @@ export default function EstimateTab({ job, jobId, children }) {
               ))}
               {materialItems.length === 0 && <div className="empty-state" style={{ padding: '14px 0' }}>No materials yet.</div>}
             </div>
+
+            {chooserItemId && (
+              <MaterialImageChooser
+                jobId={jobId}
+                itemId={chooserItemId}
+                onClose={() => setChooserItemId(null)}
+                onSelected={patch => saveItemImage(chooserItemId, patch)}
+              />
+            )}
 
             <form onSubmit={addManualItem} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16, position: 'relative' }}>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 8 }}>+ Add material</div>
