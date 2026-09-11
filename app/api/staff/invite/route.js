@@ -58,7 +58,7 @@ export async function POST(request) {
         user_metadata: { full_name: fullName },
       });
       if (createError) {
-        if (/already registered|already exists/i.test(createError.message || '')) {
+        if (/already\s+(?:been\s+)?registered|already exists/i.test(createError.message || '')) {
           return Response.json({ error: 'A user with that email already exists.' }, { status: 409 });
         }
         return Response.json({ error: createError.message }, { status: 500 });
@@ -75,7 +75,7 @@ export async function POST(request) {
         options: { redirectTo, data: { full_name: fullName } },
       });
       if (linkError) {
-        if (/already registered|already exists/i.test(linkError.message || '')) {
+        if (/already\s+(?:been\s+)?registered|already exists/i.test(linkError.message || '')) {
           return Response.json({ error: 'A user with that email already exists.' }, { status: 409 });
         }
         return Response.json({ error: linkError.message }, { status: 500 });

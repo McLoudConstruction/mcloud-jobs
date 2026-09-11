@@ -76,7 +76,7 @@ export async function POST(request) {
     });
     if (created?.user) {
       userId = created.user.id;
-    } else if (createError && /already registered|already exists/i.test(createError.message || '')) {
+    } else if (createError && /already\s+(?:been\s+)?registered|already exists/i.test(createError.message || '')) {
       // generateLink with type 'recovery' works against an existing,
       // already-confirmed user and hands back their id without sending
       // anything or requiring the returned link — same trick already used
