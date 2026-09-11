@@ -19,7 +19,7 @@ function extractJson(text) {
 
 export async function POST(request) {
   try {
-    const { tradeActions, startDate, projectType } = await request.json();
+    const { tradeActions, startDate, projectType, allowWeekends } = await request.json();
 
     if (!Array.isArray(tradeActions) || tradeActions.length === 0) {
       return Response.json({ error: 'Add at least one trade-tagged action to the trade breakdown first.' }, { status: 400 });
@@ -68,9 +68,9 @@ ${actionsSection}
 
 For each phase key listed above, estimate a realistic duration in business days, based on the volume and complexity of the actions that would fall into that phase. A single-fixture bathroom job's demo phase might be 1 day; a full kitchen gut's demo phase might be 3-4 days. Use your judgment as an experienced estimator — don't default to the same number for every phase.
 
-Note: "Electrical" and "Plumbing" actions can belong to either the rough-in phase or the finish phase depending on what the action actually describes (e.g. "run wiring to new outlets" is rough-in; "install outlet covers and switch plates" is finish) — split your duration estimate for each phase accordingly rather than assuming all electrical/plumbing time belongs to just one of them.
+Note: "Electrical" actions can belong to either the electrical_rough_in phase or the electrical_finish phase depending on what the action actually describes (e.g. "run wiring to new outlets" is electrical_rough_in; "install outlet covers and switch plates" is electrical_finish) — split your duration estimate between the two rather than assuming all electrical time belongs to just one of them. The same applies to "Plumbing" actions between plumbing_rough_in and plumbing_finish.
 
-Note: "Tile" actions can belong to either the interior_finishes phase or the finish_trades phase — floor tile and shower/tub-surround tile go in interior_finishes (before countertops), but backsplash tile and any tile that sits against or borders a countertop always goes in finish_trades (after countertops, since it has to be cut and fitted to the actual countertop edge). Split your duration estimate accordingly rather than putting all tile time in one phase.
+Note: "Tile" actions can belong to either the tile phase or the tile_finish phase — floor tile and shower/tub-surround tile go in tile (before cabinetry), but backsplash tile and any tile that sits against or borders a countertop always goes in tile_finish (after countertops, since it has to be cut and fitted to the actual countertop edge). Split your duration estimate accordingly rather than putting all tile time in one phase.
 
 Respond with a single JSON object mapping each phase key to a whole number of business days, shaped exactly like this, with no other text:
 {"durations": {"${skeleton[0].key}": 2, "${skeleton[1]?.key || 'phase_key'}": 3}}`;
@@ -119,7 +119,7 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
         prefer_monday_start: Boolean(stage.preferMondayStart),
       };
     });
-    const phases = recomputeSequentialDates(undated, startDate);
+    const phases = recomputeSequentialDates(undated, startDate, Boolean(allowWeekends));
 
     const missingKeys = skeleton.filter(s => !Number.isFinite(durations[s.key])).map(s => s.key);
     const warning = missingKeys.length > 0

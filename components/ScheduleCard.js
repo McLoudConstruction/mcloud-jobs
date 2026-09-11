@@ -71,6 +71,7 @@ export default function ScheduleCard({ jobId, job }) {
   const [editDuration, setEditDuration] = useState(1);
   const [editPreferMonday, setEditPreferMonday] = useState(false);
   const [view, setView] = useState('list'); // 'list' | 'timeline'
+  const [allowWeekends, setAllowWeekends] = useState(Boolean(job?.schedule_weekend_work));
 
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -102,7 +103,7 @@ export default function ScheduleCard({ jobId, job }) {
       const res = await fetch('/api/generate-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type }),
+        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type, allowWeekends }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate schedule.');
@@ -113,6 +114,16 @@ export default function ScheduleCard({ jobId, job }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Persists the weekend-work setting immediately (it's a job-level
+  // setting, not tied to a draft/confirm cycle) but deliberately doesn't
+  // touch any already-confirmed phase — only future generate/regenerate
+  // calls and cascading edits pick it up. Silently rewriting dates the
+  // moment this checkbox changes would be surprising.
+  async function toggleAllowWeekends(checked) {
+    setAllowWeekends(checked);
+    await supabase.from('jobs').update({ schedule_weekend_work: checked }).eq('id', jobId);
   }
 
   // Regenerating shouldn't silently overwrite a duration you already
@@ -136,7 +147,7 @@ export default function ScheduleCard({ jobId, job }) {
       .map(p => ({ phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days, source: 'manual', needs_review: true, orphaned: true, prefer_monday_start: p.prefer_monday_start }));
 
     const sequenced = [...merged, ...orphaned].map((p, i) => ({ ...p, sort_order: i }));
-    return recomputeSequentialDates(sequenced, anchorDate);
+    return recomputeSequentialDates(sequenced, anchorDate, allowWeekends);
   }
 
   // Keeps whatever's actually typed in the box (including empty, mid-edit)
@@ -149,7 +160,7 @@ export default function ScheduleCard({ jobId, job }) {
   function updateDraftDuration(index, rawValue) {
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: rawValue } : p);
     const forDates = updated.map(p => ({ ...p, duration_days: Number(p.duration_days) > 0 ? Number(p.duration_days) : 1 }));
-    const recomputed = recomputeSequentialDates(forDates, startDate);
+    const recomputed = recomputeSequentialDates(forDates, startDate, allowWeekends);
     setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
   }
 
@@ -158,12 +169,12 @@ export default function ScheduleCard({ jobId, job }) {
   function finalizeDraftDuration(index) {
     const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
-    setDraft(recomputeSequentialDates(updated, startDate));
+    setDraft(recomputeSequentialDates(updated, startDate, allowWeekends));
   }
 
   function updateDraftPreferMonday(index, checked) {
     const updated = draft.map((p, i) => i === index ? { ...p, prefer_monday_start: checked } : p);
-    setDraft(recomputeSequentialDates(updated, startDate));
+    setDraft(recomputeSequentialDates(updated, startDate, allowWeekends));
   }
 
   async function confirmDraft() {
@@ -175,7 +186,8 @@ export default function ScheduleCard({ jobId, job }) {
       // without a blur), so an empty/invalid value never reaches the DB.
       const cleanDraft = recomputeSequentialDates(
         draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
-        startDate
+        startDate,
+        allowWeekends
       );
       // Replacing an existing schedule — clear the old phases first so
       // regenerating never leaves stale rows behind.
@@ -211,7 +223,7 @@ export default function ScheduleCard({ jobId, job }) {
     // Recompute from this phase's own (unchanged) start date, cascading
     // the new duration through everything scheduled after it.
     const rebased = phases.slice(index).map((p, i) => i === 0 ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), prefer_monday_start: editPreferMonday } : p);
-    const final = recomputeSequentialDates(rebased, phases[index].start_date);
+    const final = recomputeSequentialDates(rebased, phases[index].start_date, allowWeekends);
 
     for (const p of final) {
       await supabase.from('job_phases').update({
@@ -256,6 +268,14 @@ export default function ScheduleCard({ jobId, job }) {
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
         Generated from the trade breakdown on the Scope tab — demo, rough-in, drywall, and finishes are sequenced automatically; you adjust durations, not order.
       </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 14 }}>
+        <input type="checkbox" checked={allowWeekends} onChange={e => toggleAllowWeekends(e.target.checked)} />
+        Weekend work
+        <span style={{ fontSize: 10.5, color: 'var(--ink-soft)', fontWeight: 400 }}>
+          — {allowWeekends ? 'weekends count as workable days' : 'schedules automatically skip weekends'}, applies to schedules generated or edited from now on
+        </span>
+      </label>
 
       {job?.schedule_stale_at && phases.length > 0 && !draft && (
         <div style={{ background: 'var(--bg-warning, #fff8e6)', border: '1px solid var(--border-warning, #e8c766)', borderRadius: 6, padding: 12, marginBottom: 14, fontSize: 12.5 }}>
