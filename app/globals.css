@@ -123,16 +123,24 @@ html, body{
    background-attachment: fixed sizes/positions the image against the
    viewport rather than .shell's own box. That matters here because
    .shell only has a min-height (it grows to fit page content, which is
-   often taller than one screen) — sizing "cover" against that instead
-   would zoom and crop the pattern into an unrecognizable sliver on any
-   page longer than a single viewport. Fixed attachment degrades
-   gracefully on the rare browser that doesn't support it (falls back to
-   scrolling with the page) rather than breaking outright. */
+   often taller than one screen) — sizing against that instead would
+   crop the pattern unpredictably depending on how long the page is.
+   Fixed attachment degrades gracefully on the rare browser that doesn't
+   support it (falls back to scrolling with the page) rather than
+   breaking outright.
+
+   background-size is deliberately oversized (220%, not "cover") so the
+   pattern is zoomed in — individual contour shapes read as bigger,
+   sparser mottling instead of a small busy repeat. "cover" alone won't
+   do this: since the source image and viewport share the same aspect
+   ratio, cover always scales the image to exactly fill the viewport
+   regardless of the file's native resolution, silently canceling out
+   any enlargement baked into the image itself. */
 .shell, .portal-textured{
   background-image: url("/textures/topo-lines.png");
   background-repeat: no-repeat;
-  background-position: center top;
-  background-size: cover;
+  background-position: center center;
+  background-size: 220%;
   background-attachment: fixed;
   background-color: var(--bg);
   transition: background-color 0.15s ease;
