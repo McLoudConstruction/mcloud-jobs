@@ -15,6 +15,11 @@ export default function ProjectInfoCard({ job, onSave }) {
 
   function save() {
     const patch = { ...form };
+    // Postgres date columns reject '' outright ("invalid input syntax for
+    // type date"); an empty/cleared date input must go through as null.
+    for (const field of ['expected_close_date', 'scheduled_start_date', 'scheduled_end_date']) {
+      if (patch[field] === '') patch[field] = null;
+    }
     // Setting a scheduled start date while a job is Approved moves it to Scheduled automatically.
     if (job.stage === 'approved' && !job.scheduled_start_date && form.scheduled_start_date) {
       patch.stage = 'scheduled';
