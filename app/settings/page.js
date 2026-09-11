@@ -258,6 +258,8 @@ function SettingsPageInner() {
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
+          portal_logo_size_desktop: form.portal_logo_size_desktop,
+          portal_logo_size_mobile: form.portal_logo_size_mobile,
           signout_bg: form.signout_bg,
           signout_text: form.signout_text,
           signout_hover_bg: form.signout_hover_bg,
@@ -282,6 +284,8 @@ function SettingsPageInner() {
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 150,
+      portal_logo_size_desktop: 64,
+      portal_logo_size_mobile: 48,
       signout_bg: 'transparent',
       signout_text: '#49402a',
       signout_hover_bg: '#302a1a',
@@ -356,7 +360,52 @@ function SettingsPageInner() {
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-            This updates the logo shown in the app and on every generated document — estimates, contracts, invoices, change orders, work orders, and updates all pull from this same logo.
+            This size applies to the main app (staff sidebar/topbar) only. The customer and subcontractor portals have their own size below, since their header has a lot more room than the staff sidebar does.
+          </div>
+
+          <div className="two-col" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+            <div>
+              <label>Portal logo height on desktop (px)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="24" max="120" step="1"
+                  value={form.portal_logo_size_desktop ?? 64}
+                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="24" max="120"
+                  value={form.portal_logo_size_desktop ?? 64}
+                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value) || 64)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
+              </div>
+            </div>
+            <div>
+              <label>Portal logo height on mobile (px)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="24" max="120" step="1"
+                  value={form.portal_logo_size_mobile ?? 48}
+                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="24" max="120"
+                  value={form.portal_logo_size_mobile ?? 48}
+                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value) || 48)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+            Controls the logo size on the customer portal (jobs.mcloudconstruction.com/customerportal) and subcontractor portal (/sub-portal) headers.
+          </div>
+
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+            The logo image itself is also used on every generated document — estimates, contracts, invoices, change orders, work orders, and updates all pull from this same uploaded logo.
           </div>
         </div>
 

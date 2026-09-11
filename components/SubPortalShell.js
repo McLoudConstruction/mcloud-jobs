@@ -48,7 +48,7 @@ export default function SubPortalShell({ company, role, children }) {
   const [mounted, setMounted] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(47);
   const topbarRef = useRef(null);
-  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
+  const logoSize = isMobile ? settings.portal_logo_size_mobile : settings.portal_logo_size_desktop;
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -88,7 +88,7 @@ export default function SubPortalShell({ company, role, children }) {
         </div>
         <div className="shell-logo">
           {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 64, width: 'auto' }} />
             : <span className="brand">McLoud <span>Subcontractor</span></span>}
         </div>
       </div>

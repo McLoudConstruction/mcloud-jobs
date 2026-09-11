@@ -72,7 +72,7 @@ export default function CustomerPortalShell({ children }) {
   function closeOnMobile() { if (isMobile) setNavOpen(false); }
 
   const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
-  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
+  const logoSize = isMobile ? settings.portal_logo_size_mobile : settings.portal_logo_size_desktop;
 
   return (
     <div className="shell">
@@ -84,7 +84,7 @@ export default function CustomerPortalShell({ children }) {
         </div>
         <div className="shell-logo">
           {settings.logo_url
-            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
+            ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 64, width: 'auto' }} />
             : <span className="brand">McLoud <span>Portal</span></span>}
         </div>
       </div>
