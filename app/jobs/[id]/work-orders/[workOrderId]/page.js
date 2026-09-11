@@ -136,7 +136,7 @@ export default function WorkOrderDocumentPage() {
         <div className="doc-page" id="doc-preview">
           <div className="doc-header">
             <img src={logoUrl} alt="McLoud Construction" className="doc-logo" />
-            <div className="doc-header-tagline">Built Right. Told Straight.</div>
+            <div className="doc-header-tagline">Built right. Told straight.</div>
             <div className="doc-brand-tag">Work Order</div>
           </div>
           <div className="doc-body">
@@ -182,9 +182,9 @@ export default function WorkOrderDocumentPage() {
         body { background: #EDE7DA; margin: 0; }
         .doc-outer { padding: 40px; display: flex; justify-content: center; }
         .doc-page { background: #fff; width: 100%; max-width: 800px; min-height: 700px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .doc-header { background: #1C1B19; padding: 28px 48px 36px; display: flex; align-items: center; gap: 16px; border-bottom: 5px solid #9B773D; }
+        .doc-header { background: #fff; padding: 28px 48px 22px; display: flex; align-items: center; gap: 16px; border-bottom: 4px solid #1C1B19; }
         .doc-logo { width: 180px; height: auto; display: block; }
-        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; color: #EDE7DA; }
+        .doc-header-tagline { font-family: 'Big Shoulders', sans-serif; font-weight: 800; font-size: 17px; line-height: 1.1; color: #1C1B19; }
         .doc-brand-tag { margin-left: auto; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #9B773D; }
         .doc-body { padding: 38px 48px 56px; }
         .doc-title { font-weight: 700; font-size: 24px; color: #9B773D; margin: 0 0 18px; }
