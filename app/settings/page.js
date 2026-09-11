@@ -260,8 +260,6 @@ function SettingsPageInner() {
           font_choice: form.font_choice,
           logo_size_desktop: form.logo_size_desktop,
           logo_size_mobile: form.logo_size_mobile,
-          portal_logo_size_desktop: form.portal_logo_size_desktop,
-          portal_logo_size_mobile: form.portal_logo_size_mobile,
           signout_bg: form.signout_bg,
           signout_text: form.signout_text,
           signout_hover_bg: form.signout_hover_bg,
@@ -286,8 +284,6 @@ function SettingsPageInner() {
       font_choice: 'system',
       logo_size_desktop: 180,
       logo_size_mobile: 150,
-      portal_logo_size_desktop: 96,
-      portal_logo_size_mobile: 64,
       signout_bg: 'transparent',
       signout_text: '#49402a',
       signout_hover_bg: '#302a1a',
@@ -362,48 +358,9 @@ function SettingsPageInner() {
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-            This size applies to the main app (staff sidebar/topbar) only. The customer and subcontractor portals have their own size below, since their header has a lot more room than the staff sidebar does.
-          </div>
-
-          <div className="two-col" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-            <div>
-              <label>Portal logo height on desktop (px)</label>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="range" min="24" max="120" step="1"
-                  value={form.portal_logo_size_desktop ?? 96}
-                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <input
-                  type="number" min="24" max="120"
-                  value={form.portal_logo_size_desktop ?? 96}
-                  onChange={e => update('portal_logo_size_desktop', parseInt(e.target.value) || 96)}
-                  style={{ width: 70, flexShrink: 0 }}
-                />
-              </div>
-            </div>
-            <div>
-              <label>Portal logo height on mobile (px)</label>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="range" min="24" max="120" step="1"
-                  value={form.portal_logo_size_mobile ?? 64}
-                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <input
-                  type="number" min="24" max="120"
-                  value={form.portal_logo_size_mobile ?? 64}
-                  onChange={e => update('portal_logo_size_mobile', parseInt(e.target.value) || 64)}
-                  style={{ width: 70, flexShrink: 0 }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
-            Controls the logo size on the customer portal (jobs.mcloudconstruction.com/customerportal) and subcontractor portal (/sub-portal) headers.
+            This size is used everywhere the logo appears — the main app (staff sidebar/topbar), and the
+            customer and subcontractor portal headers now match it automatically, rather than having their
+            own separate size.
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
@@ -486,7 +443,7 @@ function SettingsPageInner() {
 
         <div className="section-actions" style={{ marginBottom: 20 }}>
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
-          <button className="btn" onClick={resetToDefault}>Reset colors to default</button>
+          {tab === 'Cosmetic' && <button className="btn" onClick={resetToDefault}>Reset colors to default</button>}
         </div>
 
         {tab === 'Integrations' && (

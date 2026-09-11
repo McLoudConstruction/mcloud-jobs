@@ -48,7 +48,7 @@ export default function SubPortalShell({ company, role, children }) {
   const [mounted, setMounted] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(47);
   const topbarRef = useRef(null);
-  const logoSize = isMobile ? settings.portal_logo_size_mobile : settings.portal_logo_size_desktop;
+  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }

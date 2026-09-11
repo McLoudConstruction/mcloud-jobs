@@ -454,6 +454,18 @@ function weekendShading(minDate) {
   return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, var(--panel) ${bandStart}px, var(--panel) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
 }
 
+// A thin vertical line at the start of every day column, so a bar's edges
+// can be read against exactly which day they fall on instead of only
+// against the header's date labels above.
+const GRIDLINES = `repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent ${DAY_WIDTH}px)`;
+
+// Combines the day gridlines (drawn on top) with the weekend shading
+// (underneath) into one background value — both are pure gradients with
+// transparent everywhere they don't apply, so they layer cleanly.
+function gridBackground(minDate) {
+  return `${GRIDLINES}, ${weekendShading(minDate)}`;
+}
+
 function toISO(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -537,7 +549,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
   const maxDate = new Date(Math.max(...effectivePhases.map(p => new Date(p.end_date + 'T00:00:00'))));
   const totalSpan = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
   const gridWidth = totalSpan * DAY_WIDTH;
-  const weekendBg = weekendShading(minDate);
+  const weekendBg = gridBackground(minDate);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

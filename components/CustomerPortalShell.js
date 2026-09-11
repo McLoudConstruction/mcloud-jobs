@@ -72,7 +72,7 @@ export default function CustomerPortalShell({ children }) {
   function closeOnMobile() { if (isMobile) setNavOpen(false); }
 
   const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
-  const logoSize = isMobile ? settings.portal_logo_size_mobile : settings.portal_logo_size_desktop;
+  const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   return (
     <div className="shell">
