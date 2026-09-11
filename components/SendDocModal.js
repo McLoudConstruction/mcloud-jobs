@@ -48,13 +48,37 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
     if (error) throw new Error(`Couldn't grant portal access before sending: ${error.message}`);
   }
 
+  // If this is the first time this person is hearing about the portal,
+  // send them the real activation invite (create-account flow) rather than
+  // leaving them to discover the plain sign-in page on their own from the
+  // "View My Project" link in the document email. Idempotent — a no-op if
+  // this email already has an activated account, so this never re-sends
+  // an activation email to a returning customer.
+  async function ensureActivationInvite(toEmail, accessToken) {
+    if (!toEmail) return;
+    try {
+      await fetch('/api/portal/create-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken, email: toEmail, customerName, jobId }),
+      });
+    } catch {
+      // Best-effort — the document send itself is what matters; a failed
+      // invite here just means they'll rely on the plain portal link
+      // instead, same as before this existed.
+    }
+  }
+
   async function send(withAttachment) {
     if (sent || sending) return; // already sent this visit, or a send is already in flight — block accidental double-send
     setSending(true);
     setResult(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+
       setResult({ ok: true, message: 'Granting portal access…' });
       await ensurePortalAccess(email);
+      await ensureActivationInvite(email, session?.access_token);
 
       let attachmentBase64 = null;
       if (withAttachment) {
@@ -65,7 +89,6 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       setResult({ ok: true, message: 'Sending…' });
       const { subject, html, text } = buildDocEmail({ customerName, docType });
       const recipients = [email, ...notifyList].filter(Boolean).join(', ');
-      const { data: { session } } = await supabase.auth.getSession();
 
       const res = await fetch('/api/send-email', {
         method: 'POST',

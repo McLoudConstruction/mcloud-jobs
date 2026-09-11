@@ -97,6 +97,15 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
         { onConflict: 'job_id,email' }
       ).catch(() => {});
       const { data: { session } } = await supabase.auth.getSession();
+      // First-time recipients get a real activation invite instead of
+      // discovering the plain sign-in page on their own — see the same
+      // pattern (and reasoning) in SendDocModal. Idempotent: a no-op for
+      // anyone who already has an activated account.
+      fetch('/api/portal/create-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: session?.access_token, email: recipient, customerName: job?.customer_name, jobId }),
+      }).catch(() => {});
       const { subject, html, text } = buildDocEmail({ customerName: job?.customer_name, docType: 'material selection' });
       await fetch('/api/send-email', {
         method: 'POST',

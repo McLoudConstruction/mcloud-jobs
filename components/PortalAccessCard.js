@@ -2,12 +2,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+function normalizeEmail(email) {
+  return (email || '').trim().toLowerCase();
+}
+
 export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
   const [propertySearch, setPropertySearch] = useState('');
   const [propertyResults, setPropertyResults] = useState([]);
   const [property, setProperty] = useState(null);
   const [propertyContacts, setPropertyContacts] = useState([]);
   const [access, setAccess] = useState([]);
+  const [activationByEmail, setActivationByEmail] = useState({});
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -18,11 +23,25 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
     if (data) setAccess(data);
   }, [jobId]);
 
+  // Activation is tracked per-person (per-email), independent of this job
+  // — a customer with two jobs only ever activates once. Loaded whenever
+  // the access list changes so the "Activated" badge stays current.
+  const loadActivation = useCallback(async (emails) => {
+    const normalized = Array.from(new Set(emails.map(normalizeEmail).filter(Boolean)));
+    if (normalized.length === 0) { setActivationByEmail({}); return; }
+    const { data } = await supabase.from('portal_accounts').select('*').in('email', normalized);
+    if (data) setActivationByEmail(Object.fromEntries(data.map(a => [a.email, a])));
+  }, []);
+
   useEffect(() => {
     loadAccess();
     const channel = supabase.channel(`portal-access-${jobId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'job_portal_access', filter: `job_id=eq.${jobId}` }, loadAccess).subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, loadAccess]);
+
+  useEffect(() => {
+    loadActivation(access.map(a => a.email));
+  }, [access, loadActivation]);
 
   useEffect(() => {
     if (!job.property_id) { setProperty(null); setPropertyContacts([]); return; }
@@ -96,27 +115,26 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
   async function sendInvites() {
     setSaving(true);
     setResult('');
-    const toInvite = access.filter(a => a.portal_access && !a.invited_at);
+    // "Needs an invite" now means "not yet activated" rather than
+    // "job_portal_access.invited_at is empty" — an expired, unclicked
+    // invite should be resendable too, and activation is what actually
+    // matters, not whether an email went out at some point.
+    const toInvite = access.filter(a => a.portal_access && !activationByEmail[normalizeEmail(a.email)]?.activated_at);
     if (toInvite.length === 0) {
-      setResult('Everyone with portal access has already been invited.');
+      setResult('Everyone with portal access has already activated their account.');
       setSaving(false);
       return;
     }
-    // Sends via the same working SMTP as every other email in the app —
-    // not supabase.auth.signInWithOtp(), whose built-in email service is
-    // separate infrastructure, heavily rate-limited, and can silently drop
-    // sends without ever reporting an error.
     const { data: { session: adminSession } } = await supabase.auth.getSession();
     let sentCount = 0;
     for (const a of toInvite) {
-      const res = await fetch('/api/portal/send-invite', {
+      const res = await fetch('/api/portal/create-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accessToken: adminSession?.access_token,
           email: a.email,
           customerName: a.name || job.customer_name,
-          redirectTo: `${window.location.origin}/customerportal/projects`,
           jobId,
         }),
       });
@@ -133,8 +151,9 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
       }
     }
     setResult(sentCount === toInvite.length
-      ? `Invited ${sentCount} contact${sentCount === 1 ? '' : 's'}.`
-      : `Invited ${sentCount} of ${toInvite.length} — check SMTP configuration for the rest.`);
+      ? `Sent ${sentCount} activation invite${sentCount === 1 ? '' : 's'}.`
+      : `Sent ${sentCount} of ${toInvite.length} — check SMTP configuration for the rest.`);
+    await loadActivation(access.map(a => a.email));
     setSaving(false);
   }
 
@@ -147,6 +166,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
       <h3>Portal Access &amp; Notifications</h3>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
         Grant multiple contacts on this job their own portal login, and control who's on the notification email list — independently of each other.
+        Sending an invite here walks them through creating a real account with a password, not just a one-off email link.
       </div>
 
       <div style={{ fontSize: 12.5, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
@@ -183,7 +203,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 4 }}>Contacts tied to this property</div>
           {propertyContactRows.map(({ contact, accessRow }) => (
-            <AccessRow key={contact.id} name={contact.name} email={contact.contact_email} accessRow={accessRow} onToggle={(field, value) => toggleField(contact, field, value)} />
+            <AccessRow key={contact.id} name={contact.name} email={contact.contact_email} accessRow={accessRow} activation={activationByEmail[normalizeEmail(contact.contact_email)]} onToggle={(field, value) => toggleField(contact, field, value)} />
           ))}
         </div>
       )}
@@ -197,6 +217,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
               name={a.name}
               email={a.email}
               accessRow={a}
+              activation={activationByEmail[normalizeEmail(a.email)]}
               onToggle={async (field, value) => {
                 const { error } = await supabase.from('job_portal_access').update({ [field]: value }).eq('id', a.id);
                 if (error) setResult(`Couldn't save: ${error.message}`);
@@ -230,14 +251,17 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
   );
 }
 
-function AccessRow({ name, email, accessRow, onToggle, onRemove }) {
+function AccessRow({ name, email, accessRow, activation, onToggle, onRemove }) {
   const portalAccess = accessRow?.portal_access ?? false;
   const notify = accessRow?.notify ?? false;
+  const activated = !!activation?.activated_at;
+  const invitePending = !activated && (!!accessRow?.invited_at || !!activation?.invited_at);
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
       <div>
         <b>{name}</b> <span style={{ color: 'var(--ink-soft)' }}>{email || 'no email'}</span>
-        {accessRow?.invited_at && <span style={{ fontSize: 11, color: '#3a6b45', marginLeft: 8 }}>Invited</span>}
+        {activated && <span style={{ fontSize: 11, color: '#3a6b45', marginLeft: 8 }}>✓ Activated</span>}
+        {invitePending && <span style={{ fontSize: 11, color: '#8a6d1d', marginLeft: 8 }}>Invited — not yet activated</span>}
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 400, cursor: 'pointer' }}>
