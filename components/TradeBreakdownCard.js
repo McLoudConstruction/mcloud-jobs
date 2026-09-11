@@ -33,6 +33,13 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     setShowForm(true);
   }
 
+  function cancelForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(EMPTY_ROW);
+    setError('');
+  }
+
   function startEdit(a) {
     setForm({ description: a.description, trade: a.trade || SERVICES_OFFERED[0], unit_label: a.unit_label || '', quantity: a.quantity ?? 1, area: a.area || '' });
     setEditingId(a.id);
@@ -96,7 +103,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
         <button className={`btn btn-sm ${view === 'trade' ? 'btn-primary' : ''}`} onClick={() => setView('trade')}>By Trade</button>
         {usesAreas && <button className={`btn btn-sm ${view === 'area' ? 'btn-primary' : ''}`} onClick={() => setView('area')}>By Area</button>}
         <button className={`btn btn-sm ${view === 'flat' ? 'btn-primary' : ''}`} onClick={() => setView('flat')}>Flat List</button>
-        {!readOnly && <button className="btn btn-sm" onClick={startAdd}>{showForm && !editingId ? 'Cancel' : '+ Add action'}</button>}
+        {!readOnly && !showForm && <button className="btn btn-sm" onClick={startAdd}>+ Add action</button>}
       </div>
 
       {!readOnly && showForm && (
@@ -120,6 +127,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
           {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{error}</div>}
           <div className="section-actions">
             <button className="btn btn-primary btn-sm" type="submit">{editingId ? 'Save changes' : 'Add action'}</button>
+            <button className="btn btn-sm" type="button" onClick={cancelForm}>Cancel</button>
           </div>
         </form>
       )}
