@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { GOOGLE_REVIEW_URL } from '../lib/constants';
 import { buildReviewRequestEmail } from '../lib/emailTemplates';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ReviewRequestCard({ job, onSave }) {
   const [sending, setSending] = useState(false);
@@ -21,10 +22,11 @@ export default function ReviewRequestCard({ job, onSave }) {
     setResult('');
     try {
       const { subject, html, text } = buildReviewRequestEmail({ customerName: job.customer_name, reviewUrl: GOOGLE_REVIEW_URL });
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, html, text }),
+        body: JSON.stringify({ to, subject, html, text, category: 'review_request', jobId: job.id, sentBy: session?.user?.email || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send.');

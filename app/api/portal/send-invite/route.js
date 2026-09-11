@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import { buildPortalInviteEmail } from '../../../../lib/emailTemplates';
+import { logCommunication } from '../../../../lib/logCommunication';
 
 // Portal invites used to go through supabase.auth.signInWithOtp(), which
 // sends via Supabase's own built-in Auth email service — completely
@@ -31,7 +32,7 @@ export async function POST(request) {
       return Response.json({ error: 'SMTP is not configured yet — add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM in Vercel.' }, { status: 500 });
     }
 
-    const { accessToken, email, customerName, redirectTo } = await request.json();
+    const { accessToken, email, customerName, redirectTo, jobId } = await request.json();
     if (!accessToken || !email || !redirectTo) {
       return Response.json({ error: 'Missing required fields.' }, { status: 400 });
     }
@@ -66,13 +67,19 @@ export async function POST(request) {
       secure: port === 465,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
     });
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: email,
-      subject,
-      html,
-      text,
-    });
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject,
+        html,
+        text,
+      });
+      await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider: 'smtp' });
+    } catch (sendErr) {
+      await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'smtp' });
+      throw sendErr;
+    }
 
     return Response.json({ success: true });
   } catch (err) {

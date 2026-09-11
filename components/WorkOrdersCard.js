@@ -123,10 +123,11 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
           description: wo.description,
           projectAddress,
         });
+        const { data: { session } } = await supabase.auth.getSession();
         await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: company.contact_email, subject, html, text }),
+          body: JSON.stringify({ to: company.contact_email, subject, html, text, category: 'subcontractor_work_order', jobId, sentBy: session?.user?.email || null }),
         });
       } catch {
         // best-effort — the work order is already issued regardless of whether the email went through

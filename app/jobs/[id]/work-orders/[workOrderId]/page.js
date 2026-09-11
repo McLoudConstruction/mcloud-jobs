@@ -87,6 +87,7 @@ export default function WorkOrderDocumentPage() {
         body: JSON.stringify({
           to: sendEmail, subject, html, text,
           attachmentBase64, attachmentFilename: `Work-Order-${job.job_number}.pdf`,
+          category: 'work_order', jobId: id, sentBy: session?.user?.email || null,
         }),
       });
       const data = await res.json();

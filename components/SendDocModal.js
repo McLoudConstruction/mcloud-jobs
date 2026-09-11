@@ -34,11 +34,28 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
 
   if (!open || !mounted) return null;
 
+  // Sending a document notification is the moment a customer first learns
+  // the portal exists — if they aren't already granted access (e.g. staff
+  // typed an email that was never added via the Portal Access card), they
+  // hit a dead-end "No active project" screen when they sign in. Granting
+  // access is made a mandatory, automatic part of sending rather than a
+  // separate step someone has to remember, so that can't happen.
+  async function ensurePortalAccess(toEmail) {
+    if (!jobId || !toEmail) return;
+    const { error } = await supabase
+      .from('job_portal_access')
+      .upsert({ job_id: jobId, email: toEmail, portal_access: true, notify: true }, { onConflict: 'job_id,email' });
+    if (error) throw new Error(`Couldn't grant portal access before sending: ${error.message}`);
+  }
+
   async function send(withAttachment) {
     if (sent || sending) return; // already sent this visit, or a send is already in flight — block accidental double-send
     setSending(true);
     setResult(null);
     try {
+      setResult({ ok: true, message: 'Granting portal access…' });
+      await ensurePortalAccess(email);
+
       let attachmentBase64 = null;
       if (withAttachment) {
         setResult({ ok: true, message: 'Generating PDF…' });
@@ -48,12 +65,14 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
       setResult({ ok: true, message: 'Sending…' });
       const { subject, html, text } = buildDocEmail({ customerName, docType });
       const recipients = [email, ...notifyList].filter(Boolean).join(', ');
+      const { data: { session } } = await supabase.auth.getSession();
 
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: recipients, subject, html, text,
+          category: docType || 'document', jobId, sentBy: session?.user?.email || null,
           ...(withAttachment ? { attachmentBase64, attachmentFilename: pdfFilename } : {}),
         }),
       });

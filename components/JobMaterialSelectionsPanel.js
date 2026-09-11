@@ -88,11 +88,20 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
 
     const recipient = job?.billing_email || job?.customer_email || '';
     if (recipient) {
+      // Same guarantee as SendDocModal: whoever a document notification
+      // goes to is granted portal access as part of sending it, not as a
+      // separate step someone has to remember — otherwise they can land
+      // on a "No active project" screen with no way in.
+      await supabase.from('job_portal_access').upsert(
+        { job_id: jobId, email: recipient, portal_access: true, notify: true },
+        { onConflict: 'job_id,email' }
+      ).catch(() => {});
+      const { data: { session } } = await supabase.auth.getSession();
       const { subject, html, text } = buildDocEmail({ customerName: job?.customer_name, docType: 'material selection' });
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: recipient, subject, html, text }),
+        body: JSON.stringify({ to: recipient, subject, html, text, category: 'material_selection', jobId, sentBy: session?.user?.email || null }),
       }).catch(() => {}); // status is already updated regardless of email delivery — don't block on it
     }
 

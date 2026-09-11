@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { buildFollowupEmail, buildScheduleReminderEmail } from '../../../../lib/emailTemplates';
 import nodemailer from 'nodemailer';
+import { logCommunication } from '../../../../lib/logCommunication';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -19,8 +20,14 @@ function getTransporter() {
   });
 }
 
-async function sendMail(transporter, { to, subject, html, text }) {
-  await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html, text });
+async function sendMail(transporter, { to, subject, html, text, category, jobId }) {
+  try {
+    await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html, text });
+    await logCommunication({ category, toEmail: to, subject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider: 'smtp' });
+  } catch (err) {
+    await logCommunication({ category, toEmail: to, subject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'smtp' });
+    throw err;
+  }
 }
 
 function daysBetween(dateStr, today) {
@@ -79,7 +86,7 @@ export async function GET(request) {
 
       try {
         const { subject, html, text } = buildFollowupEmail({ contactName: opp.contact_name, project: opp.project });
-        await sendMail(transporter, { to: opp.contact_email, subject, html, text });
+        await sendMail(transporter, { to: opp.contact_email, subject, html, text, category: 'opportunity_followup' });
         const patch = {};
         due.forEach(field => { patch[field] = new Date().toISOString(); });
         await supabase.from('opportunities').update(patch).eq('id', opp.id);
@@ -119,7 +126,7 @@ export async function GET(request) {
           scheduledStartDate: job.scheduled_start_date,
           daysOut,
         });
-        await sendMail(transporter, { to: job.customer_email, subject, html, text });
+        await sendMail(transporter, { to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id });
         await supabase.from('jobs').update({ schedule_reminders_sent: [...alreadySent, daysOut] }).eq('id', job.id);
         results.reminders_sent++;
       } catch (err) {

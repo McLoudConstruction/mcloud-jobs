@@ -261,7 +261,7 @@ export default function SubcontractorsPage() {
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: applyEmail.trim(), subject, html, text }),
+        body: JSON.stringify({ to: applyEmail.trim(), subject, html, text, category: 'subcontractor_invite', sentBy: session?.user?.email || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send invite email.');
@@ -322,7 +322,7 @@ export default function SubcontractorsPage() {
         const { subject, html, text } = buildSubApplicationApprovedEmail({ companyName: app.company_name });
         fetch('/api/send-email', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: toEmail, subject, html, text }),
+          body: JSON.stringify({ to: toEmail, subject, html, text, category: 'subcontractor_application_approved', sentBy: session?.user?.email || null }),
         }).catch(() => {});
       }
 
@@ -349,7 +349,7 @@ export default function SubcontractorsPage() {
         const { subject, html, text } = buildSubApplicationDeclinedEmail({ companyName: app.company_name, reason });
         fetch('/api/send-email', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: toEmail, subject, html, text }),
+          body: JSON.stringify({ to: toEmail, subject, html, text, category: 'subcontractor_application_declined', sentBy: session?.user?.email || null }),
         }).catch(() => {});
       }
 

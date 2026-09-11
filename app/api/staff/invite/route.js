@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import { buildStaffInviteEmail } from '../../../../lib/emailTemplates';
 import { ROLES, ROLE_LABELS } from '../../../../lib/permissions';
+import { logCommunication } from '../../../../lib/logCommunication';
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -98,13 +99,19 @@ export async function POST(request) {
         secure: port === 465,
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
       });
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: email,
-        subject,
-        html,
-        text,
-      });
+      try {
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          to: email,
+          subject,
+          html,
+          text,
+        });
+        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'sent', provider: 'smtp' });
+      } catch (sendErr) {
+        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'smtp' });
+        throw sendErr;
+      }
     }
 
     const { error: insertError } = await service.from('staff_users').insert({

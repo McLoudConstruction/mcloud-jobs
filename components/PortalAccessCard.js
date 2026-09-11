@@ -117,6 +117,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
           email: a.email,
           customerName: a.name || job.customer_name,
           redirectTo: `${window.location.origin}/customerportal/projects`,
+          jobId,
         }),
       });
       if (res.ok) {

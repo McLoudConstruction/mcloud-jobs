@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getAdminClient } from '../../../lib/supabaseAdmin';
 import { decrypt } from '../../../lib/integrations/crypto';
+import { logCommunication } from '../../../lib/logCommunication';
 
 // Resend is preferred when an owner has saved an API key in Settings →
 // Integrations; falls back to the existing SMTP env vars otherwise, so
@@ -46,23 +47,30 @@ async function sendViaSmtp({ to, subject, html, text, attachmentBase64, attachme
 }
 
 export async function POST(request) {
+  let body = {};
   try {
-    const body = await request.json();
-    const { to } = body;
+    body = await request.json();
+    const { to, subject, category, jobId, sentBy } = body;
+    const logMeta = { category: category || 'general', toEmail: to, subject: subject || null, jobId: jobId || null, sentBy: sentBy || null };
 
     if (!to || !to.trim()) {
+      await logCommunication({ ...logMeta, toEmail: to || '(none)', status: 'failed', errorMessage: 'No recipient email is on file.' });
       return Response.json({ error: 'No recipient email is on file for this job yet.' }, { status: 400 });
     }
 
     const resend = await getResendKey();
+    const provider = resend ? 'resend' : 'smtp';
     if (resend) {
       await sendViaResend(resend, body);
     } else {
       await sendViaSmtp(body);
     }
 
+    await logCommunication({ ...logMeta, status: 'sent', provider });
     return Response.json({ success: true });
   } catch (err) {
+    const { to, subject, category, jobId, sentBy } = body || {};
+    await logCommunication({ category: category || 'general', toEmail: to || '(none)', subject: subject || null, jobId: jobId || null, sentBy: sentBy || null, status: 'failed', errorMessage: err.message });
     return Response.json({ error: err.message || 'Failed to send email.' }, { status: 500 });
   }
 }
