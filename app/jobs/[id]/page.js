@@ -328,31 +328,29 @@ export default function JobDetailPage() {
     if (!recipientEmail) { setInviteResult('Add a contact email before inviting the customer.'); return; }
     setInviting(true);
     setInviteResult('');
-    // Sends via the same working SMTP as every other email in the app —
-    // not supabase.auth.signInWithOtp(), whose built-in email service is
-    // separate infrastructure, heavily rate-limited, and can silently drop
-    // sends without ever reporting an error. See migration/route notes.
+    // Sends a real activation invite — "create your account" with a
+    // password, not a plain magic-link sign-in — the same flow used for
+    // newly created jobs. Idempotent: a no-op (and no duplicate email) if
+    // this customer already activated an account on another job.
     const { data: { session: adminSession } } = await supabase.auth.getSession();
-    const res = await fetch('/api/portal/send-invite', {
+    const res = await fetch('/api/portal/create-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         accessToken: adminSession?.access_token,
         email: recipientEmail,
         customerName: job.customer_name,
-        // Sends new customers into /customerportal (where PortalFeed, the
-        // no-active-project screen, etc. actually live), not the older
-        // standalone /portal/dashboard implementation — see README for the
-        // Closed Lost portal-access feature for why this matters.
-        redirectTo: `${window.location.origin}/customerportal/projects`,
+        jobId: id,
       }),
     });
     const data = await res.json();
     setInviting(false);
     if (!res.ok) {
       setInviteResult(data.error || 'Failed to send invite.');
+    } else if (data.alreadyActivated) {
+      setInviteResult(`${recipientEmail} already has an active portal account — nothing to send.`);
     } else {
-      setInviteResult(`Invite sent to ${recipientEmail}.`);
+      setInviteResult(`Activation invite sent to ${recipientEmail}.`);
       await saveJob({ portal_invited_at: new Date().toISOString() });
     }
   }
