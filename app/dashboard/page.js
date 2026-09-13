@@ -8,6 +8,7 @@ import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import FitText from '../../components/FitText';
 import { useCompanyForecast, WeatherTodayWidget, WeatherHourlyWidget, WeatherWeekWidget } from '../../components/dashboard/WeatherWidgets';
+import ScrollerWithArrows from '../../components/dashboard/ScrollerWithArrows';
 import { resolveWidgetOrder } from '../../lib/dashboardWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials } from '../../lib/jobFinancials';
@@ -148,19 +149,24 @@ export default function DashboardPage() {
         );
       case 'job_counts_by_stage':
         return (
-          <div key={key} className="card">
+          <div key={key} className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
             <h3>Job counts by stage</h3>
-            <div className="dash-stage-strip">
-              {STAGE_ORDER.map(s => (
-                <div key={s} className="dash-stage-item">
-                  <div className="dash-stage-count">{stats.byStage[s] || 0}</div>
-                  <div className="dash-stage-label">{STAGE_LABELS[s]}</div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ScrollerWithArrows ariaLabel="stages">
+                {STAGE_ORDER.map(s => (
+                  <div
+                    key={s}
+                    style={{ flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px', borderRight: '1px solid var(--line)', scrollSnapAlign: 'start' }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                    <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                  </div>
+                ))}
+                <div style={{ flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px', scrollSnapAlign: 'start' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
                 </div>
-              ))}
-              <div className="dash-stage-item dash-stage-total">
-                <div className="dash-stage-count">{jobs.length}</div>
-                <div className="dash-stage-label">Total jobs</div>
-              </div>
+              </ScrollerWithArrows>
             </div>
           </div>
         );

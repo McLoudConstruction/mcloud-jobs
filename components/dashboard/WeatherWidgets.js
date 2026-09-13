@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ScrollerWithArrows from './ScrollerWithArrows';
 
 // Shared by all three widgets so the dashboard makes one forecast
 // request, not three — the underlying API call is already cached
@@ -54,11 +55,11 @@ export function WeatherTodayWidget({ forecast, loading, error }) {
       <h3>Today&apos;s Weather</h3>
       {!c ? <WeatherEmptyState loading={loading} error={error} /> : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ConditionIcon icon={c.icon} alt={c.description} size={48} />
+          <ConditionIcon icon={c.icon} alt={c.description} size={40} />
           <div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>{c.description}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Feels like {c.feelsLikeF}°F · Wind {c.windMph} mph</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>{c.description}</div>
+            <div style={{ fontSize: 9.5, color: 'var(--ink-soft)' }}>Feels {c.feelsLikeF}°F · Wind {c.windMph} mph</div>
           </div>
         </div>
       )}
@@ -66,59 +67,35 @@ export function WeatherTodayWidget({ forecast, loading, error }) {
   );
 }
 
-// Spans two grid columns (the dashboard grid is auto-fill, so this just
-// works) and scrolls by roughly one "page" of cards per arrow click,
-// rather than one card at a time.
+// Spans two grid columns and one row — a wide, short strip rather than a
+// tall one, since a card that just needs to show a row of hours doesn't
+// need much vertical room.
 export function WeatherHourlyWidget({ forecast, loading, error }) {
   const hours = (forecast?.hourly || []).slice(0, 24);
-  const scrollerRef = useRef(null);
-
-  function scrollByPage(direction) {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: 'smooth' });
-  }
-
   return (
-    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1' }}>
+    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
       <h3>Today&apos;s Weather — Hourly</h3>
       {hours.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            type="button"
-            aria-label="Scroll earlier"
-            onClick={() => scrollByPage(-1)}
-            className="btn btn-sm"
-            style={{ flexShrink: 0, padding: '10px 6px' }}
-          >‹</button>
-
-          <div ref={scrollerRef} className="hide-scrollbar" style={{ display: 'flex', gap: 0, overflowX: 'auto', scrollSnapType: 'x mandatory', flex: 1 }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <ScrollerWithArrows ariaLabel="hours">
             {hours.map((h, i) => (
               <div
                 key={i}
                 style={{
-                  flexShrink: 0, width: 84, textAlign: 'center', padding: '10px 4px',
+                  flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px',
                   borderRight: i < hours.length - 1 ? '1px solid var(--line)' : 'none',
                   scrollSnapAlign: 'start',
                 }}
               >
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>{hourLabel(h.at)}</div>
-                <ConditionIcon icon={h.icon} alt={h.condition} size={40} />
-                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--heading)', marginTop: 4 }}>{h.tempF}°</div>
-                <div style={{ fontSize: 10.5, color: '#4a90c4', marginTop: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 4 }}>{hourLabel(h.at)}</div>
+                <ConditionIcon icon={h.icon} alt={h.condition} size={30} />
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--heading)', marginTop: 2 }}>{h.tempF}°</div>
+                <div style={{ fontSize: 9.5, color: '#4a90c4', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
                   💧 {h.pop}%
                 </div>
               </div>
             ))}
-          </div>
-
-          <button
-            type="button"
-            aria-label="Scroll later"
-            onClick={() => scrollByPage(1)}
-            className="btn btn-sm"
-            style={{ flexShrink: 0, padding: '10px 6px' }}
-          >›</button>
+          </ScrollerWithArrows>
         </div>
       )}
     </div>
@@ -129,10 +106,10 @@ export function WeatherHourlyWidget({ forecast, loading, error }) {
 // (no server-side timezone data needed — this renders client-side, and
 // staff and jobs are assumed to be in the same time zone).
 const DAY_PARTS = [
-  { label: 'Overnight', startHour: 0, endHour: 5 },
-  { label: 'Morning', startHour: 6, endHour: 11 },
-  { label: 'Afternoon', startHour: 12, endHour: 17 },
-  { label: 'Evening', startHour: 18, endHour: 23 },
+  { abbr: 'Ovn', label: 'Overnight', startHour: 0, endHour: 5 },
+  { abbr: 'AM', label: 'Morning', startHour: 6, endHour: 11 },
+  { abbr: 'PM', label: 'Afternoon', startHour: 12, endHour: 17 },
+  { abbr: 'Eve', label: 'Evening', startHour: 18, endHour: 23 },
 ];
 const RAIN_THRESHOLD_PCT = 30;
 
@@ -145,58 +122,63 @@ function isSameLocalDay(ms, otherMs) {
 // limit, not something this app controls), so this can only say *when*
 // rain is coming for today and tomorrow — returns null for days beyond
 // that, which the caller falls back to the plain daily percentage for.
-function rainTimingForDay(dayAt, hourly) {
+// Returns just the EARLIEST at-risk block rather than every flagged
+// block — "rain starts this afternoon" is what actually matters for
+// deciding whether a crew is safe outdoors in the morning, and a
+// narrow day-column doesn't have room to list every block anyway.
+function earliestRainWindow(dayAt, hourly) {
   const hoursForDay = hourly.filter(h => isSameLocalDay(h.at, dayAt));
   if (hoursForDay.length === 0) return null;
 
-  const blocks = DAY_PARTS
-    .map(part => ({
-      ...part,
-      maxPop: hoursForDay.reduce((max, h) => {
-        const hour = new Date(h.at).getHours();
-        return (hour >= part.startHour && hour <= part.endHour) ? Math.max(max, h.pop) : max;
-      }, 0),
-    }))
-    .filter(b => b.maxPop >= RAIN_THRESHOLD_PCT);
-
-  if (blocks.length === 0) return { hasRain: false };
-  return { hasRain: true, text: blocks.map(b => `${b.label} ${b.maxPop}%`).join(', ') };
+  for (const part of DAY_PARTS) {
+    const maxPop = hoursForDay.reduce((max, h) => {
+      const hour = new Date(h.at).getHours();
+      return (hour >= part.startHour && hour <= part.endHour) ? Math.max(max, h.pop) : max;
+    }, 0);
+    if (maxPop >= RAIN_THRESHOLD_PCT) return { hasRain: true, abbr: part.abbr, pop: maxPop };
+  }
+  return { hasRain: false };
 }
 
+// Rebuilt horizontal (matching the Hourly widget's pattern) instead of
+// stacked vertical day rows — same footprint as Hourly (2 wide, 1 tall)
+// rather than needing an extra row of height.
 export function WeatherWeekWidget({ forecast, loading, error }) {
   const days = forecast?.daily || [];
   const hourly = forecast?.hourly || [];
 
   return (
-    <div className="card" style={{ gridColumn: 'span 1', gridRow: 'span 2' }}>
+    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
       <h3>This Week&apos;s Weather</h3>
       {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div>
-          {days.map((d, i) => {
-            const timing = rainTimingForDay(d.at, hourly);
-            return (
-              <div
-                key={i}
-                style={{ padding: '7px 0', borderBottom: i < days.length - 1 ? '1px solid var(--line)' : 'none' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 46, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>{dayLabel(d.at, i)}</div>
-                  <div style={{ flexShrink: 0 }}><ConditionIcon icon={d.icon} alt={d.condition} size={24} /></div>
-                  <div style={{ fontSize: 12.5 }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <ScrollerWithArrows ariaLabel="days">
+            {days.map((d, i) => {
+              const rain = earliestRainWindow(d.at, hourly);
+              return (
+                <div
+                  key={i}
+                  style={{
+                    flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px',
+                    borderRight: i < days.length - 1 ? '1px solid var(--line)' : 'none',
+                    scrollSnapAlign: 'start',
+                  }}
+                >
+                  <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 4 }}>{dayLabel(d.at, i)}</div>
+                  <ConditionIcon icon={d.icon} alt={d.condition} size={30} />
+                  <div style={{ fontSize: 12.5, marginTop: 2 }}>
                     <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
                   </div>
-                </div>
-                {(timing?.hasRain || (!timing && d.pop > 0)) && (
-                  <div style={{ fontSize: 10.5, color: '#4a90c4', marginTop: 3, paddingLeft: 54 }}>
-                    {timing?.hasRain ? `💧 ${timing.text}` : `💧 ${d.pop}% chance (daily estimate)`}
+                  <div style={{ fontSize: 9.5, color: rain?.hasRain ? '#4a90c4' : 'var(--ink-soft)', marginTop: 2 }}>
+                    {rain?.hasRain && `💧${rain.abbr} ${rain.pop}%`}
+                    {!rain && d.pop > 0 && `💧 ${d.pop}%`}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </ScrollerWithArrows>
         </div>
       )}
     </div>
   );
 }
-
