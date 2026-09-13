@@ -23,13 +23,15 @@ export async function GET(request, { params }) {
 
     const rulesByTrade = Object.fromEntries((rules || []).map(r => [r.trade, r]));
     const flags = {};
+    const noRulePhaseIds = [];
     for (const phase of outdoorPhases) {
+      if (!rulesByTrade[phase.trade]) { noRulePhaseIds.push(phase.id); continue; }
       const flag = findPhaseWeatherFlag(phase, forecast.daily, rulesByTrade);
       if (flag) flags[phase.id] = flag;
     }
 
     const checkedThrough = forecast.daily.length > 0 ? new Date(forecast.daily[forecast.daily.length - 1].at).toISOString().slice(0, 10) : null;
-    return NextResponse.json({ flags, checkedThrough });
+    return NextResponse.json({ flags, noRulePhaseIds, checkedThrough });
   } catch (err) {
     if (err instanceof WeatherConfigError) return NextResponse.json({ flags: {}, checkedThrough: null }); // silently skip if weather isn't configured yet
     return NextResponse.json({ error: err.message }, { status: 502 });

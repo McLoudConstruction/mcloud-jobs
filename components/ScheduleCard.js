@@ -96,6 +96,7 @@ export default function ScheduleCard({ jobId, job }) {
   const [view, setView] = useState('list'); // 'list' | 'timeline'
   const [weatherFlags, setWeatherFlags] = useState({}); // phase_id -> { date, reasons }
   const [weatherCheckedThrough, setWeatherCheckedThrough] = useState(null); // last date the forecast covers
+  const [weatherNoRuleIds, setWeatherNoRuleIds] = useState([]); // phase ids whose trade has no threshold row at all
 
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -134,6 +135,7 @@ export default function ScheduleCard({ jobId, job }) {
         if (!mounted) return;
         if (data.flags) setWeatherFlags(data.flags);
         setWeatherCheckedThrough(data.checkedThrough || null);
+        setWeatherNoRuleIds(data.noRulePhaseIds || []);
       })
       .catch(() => {});
     return () => { mounted = false; };
@@ -476,9 +478,19 @@ export default function ScheduleCard({ jobId, job }) {
                           ⚠ Weather risk on {fmtDate(weatherFlags[p.id].date)}: {weatherFlags[p.id].reasons.join(' ')}
                         </div>
                       )}
-                      {!weatherFlags[p.id] && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date > weatherCheckedThrough && (
+                      {!weatherFlags[p.id] && p.work_location === 'outdoor' && weatherNoRuleIds.includes(p.id) && (
+                        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
+                          No weather thresholds defined for {p.trade || 'this trade'} yet — not being checked.
+                        </div>
+                      )}
+                      {!weatherFlags[p.id] && !weatherNoRuleIds.includes(p.id) && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date > weatherCheckedThrough && (
                         <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
                           Weather not checkable yet — forecast only covers through {fmtDate(weatherCheckedThrough)}.
+                        </div>
+                      )}
+                      {!weatherFlags[p.id] && !weatherNoRuleIds.includes(p.id) && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date <= weatherCheckedThrough && (
+                        <div style={{ fontSize: 10, color: '#4a8a5f', marginTop: 3 }}>
+                          ✓ No weather conflicts found for this trade{p.trade ? ` (${p.trade})` : ''}.
                         </div>
                       )}
                     </div>
