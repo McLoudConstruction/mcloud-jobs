@@ -95,6 +95,7 @@ export default function ScheduleCard({ jobId, job }) {
   const [editWorkLocation, setEditWorkLocation] = useState('indoor');
   const [view, setView] = useState('list'); // 'list' | 'timeline'
   const [weatherFlags, setWeatherFlags] = useState({}); // phase_id -> { date, reasons }
+  const [weatherCheckedThrough, setWeatherCheckedThrough] = useState(null); // last date the forecast covers
 
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -118,15 +119,22 @@ export default function ScheduleCard({ jobId, job }) {
 
   // Re-checked whenever the phase list changes (edits, regeneration, drag)
   // so a flag clears itself once a phase is moved out of a bad weather
-  // window. One Call 3.0 only covers ~8 days out, so phases further in
-  // the future simply won't appear in `flags` yet — that's "not yet
-  // knowable," not "clear."
+  // window. One Call 4.0's timeline only covers ~8 days out, so phases
+  // further in the future simply won't appear in `flags` yet — that's
+  // "not yet knowable," not "clear," which is why weatherCheckedThrough
+  // is tracked separately and shown on any phase past it (see the phase
+  // row below) rather than just staying silent the same way a genuinely
+  // clear phase would.
   useEffect(() => {
-    if (phases.length === 0) { setWeatherFlags({}); return; }
+    if (phases.length === 0) { setWeatherFlags({}); setWeatherCheckedThrough(null); return; }
     let mounted = true;
     fetch(`/api/jobs/${jobId}/weather-flags`)
       .then(res => res.json())
-      .then(data => { if (mounted && data.flags) setWeatherFlags(data.flags); })
+      .then(data => {
+        if (!mounted) return;
+        if (data.flags) setWeatherFlags(data.flags);
+        setWeatherCheckedThrough(data.checkedThrough || null);
+      })
       .catch(() => {});
     return () => { mounted = false; };
   }, [jobId, phases]);
@@ -466,6 +474,11 @@ export default function ScheduleCard({ jobId, job }) {
                       {weatherFlags[p.id] && (
                         <div style={{ fontSize: 10.5, color: '#a13f3f', marginTop: 3, maxWidth: 420 }}>
                           ⚠ Weather risk on {fmtDate(weatherFlags[p.id].date)}: {weatherFlags[p.id].reasons.join(' ')}
+                        </div>
+                      )}
+                      {!weatherFlags[p.id] && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date > weatherCheckedThrough && (
+                        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
+                          Weather not checkable yet — forecast only covers through {fmtDate(weatherCheckedThrough)}.
                         </div>
                       )}
                     </div>
