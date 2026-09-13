@@ -6,7 +6,6 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
-import FitText from '../../components/FitText';
 import { useCompanyForecast, WeatherTodayWidget, WeatherHourlyWidget, WeatherWeekWidget } from '../../components/dashboard/WeatherWidgets';
 import ScrollerWithArrows from '../../components/dashboard/ScrollerWithArrows';
 import { resolveWidgetOrder } from '../../lib/dashboardWidgets';
@@ -223,122 +222,76 @@ export default function DashboardPage() {
         return <WeatherHourlyWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
       case 'weather_this_week':
         return <WeatherWeekWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
-      case 'sold_job_count':
-        return (
-          <div key={key} className="card">
-            <h3>Sold jobs</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{stats.soldCount}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
-          </div>
-        );
-      case 'total_ar':
-        return (
-          <div key={key} className="card">
-            <h3>Total AR (billed, unpaid)</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</FitText>
-          </div>
-        );
-      case 'total_ap':
-        return (
-          <Link key={key} href="/financials/payable" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-            <h3>Total AP (open payables)</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(totalAP)}</FitText>
-          </Link>
-        );
-      case 'net_cash_position': {
+      case 'key_metrics': {
         const net = stats.totalAR - totalAP;
+        const sections = [
+          {
+            label: 'Cash',
+            items: [
+              { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
+              { label: 'Total AR', value: fmtMoney(stats.totalAR) },
+              { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
+              { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid) },
+            ],
+          },
+          {
+            label: 'Pipeline & Backlog',
+            items: [
+              { label: 'Backlog value', value: fmtMoney(stats.backlogValue) },
+              { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue) },
+              { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%` },
+              { label: 'Sold jobs', value: stats.soldCount },
+            ],
+          },
+          {
+            label: 'Profitability',
+            items: [
+              { label: 'Income YTD', value: fmtMoney(stats.revenueYTD) },
+              { label: 'Income MTD', value: fmtMoney(stats.revenueMTD) },
+              { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%` },
+              { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0 },
+            ],
+          },
+          {
+            label: 'Schedule',
+            items: [
+              { label: 'Starting this week', value: stats.jobsStartingThisWeek.length },
+              { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0 },
+            ],
+          },
+        ];
         return (
-          <div key={key} className="card">
-            <h3>Net cash position</h3>
-            <FitText style={{ color: net >= 0 ? 'var(--heading)' : '#a13f3f' }}>{net < 0 ? '-' : ''}{fmtMoney(Math.abs(net))}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>AR minus open AP</div>
+          <div key={key} className="card" style={{ gridColumn: '1 / -1', gridRow: 'span 2' }}>
+            <h3>Key metrics</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 32px' }}>
+              {sections.map(section => (
+                <div key={section.label}>
+                  <div style={{ fontSize: 9.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{section.label}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 20px' }}>
+                    {section.items.map(item => {
+                      const body = (
+                        <div style={{ minWidth: 84 }}>
+                          <div style={{ fontSize: 17, fontWeight: 700, color: item.warn ? '#a13f3f' : 'var(--heading)' }}>{item.value}</div>
+                          <div style={{ fontSize: 9.5, color: 'var(--ink-soft)', marginTop: 2 }}>{item.label}</div>
+                        </div>
+                      );
+                      return item.href
+                        ? <Link key={item.label} href={item.href} style={{ textDecoration: 'none', color: 'inherit' }}>{body}</Link>
+                        : <div key={item.label}>{body}</div>;
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         );
       }
-      case 'backlog_value':
-        return (
-          <div key={key} className="card">
-            <h3>Backlog value</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.backlogValue)}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Signed, not yet complete</div>
-          </div>
-        );
-      case 'pipeline_value':
-        return (
-          <div key={key} className="card">
-            <h3>Pipeline value</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.pipelineValue)}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Open estimates, not yet signed</div>
-          </div>
-        );
-      case 'win_rate':
-        return (
-          <div key={key} className="card">
-            <h3>Win rate</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Won vs. lost, all-time</div>
-          </div>
-        );
-      case 'total_paid':
-        return (
-          <div key={key} className="card">
-            <h3>Total paid (all-time)</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</FitText>
-          </div>
-        );
-      case 'revenue_ytd':
-        return (
-          <div key={key} className="card">
-            <h3>Income YTD</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Cash actually collected</div>
-          </div>
-        );
-      case 'revenue_mtd':
-        return (
-          <div key={key} className="card">
-            <h3>Income MTD</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</FitText>
-          </div>
-        );
       case 'total_profit':
         return (
           <Link key={key} href="/financials" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
             <h3>Profit &amp; margin</h3>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Full breakdown on the Financial Dashboard →</div>
           </Link>
-        );
-      case 'avg_margin_percent':
-        return (
-          <div key={key} className="card">
-            <h3>Avg. gross margin</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Across sold jobs</div>
-          </div>
-        );
-      case 'jobs_below_target_margin':
-        return (
-          <div key={key} className="card">
-            <h3>Below {TARGET_MARGIN_PERCENT}% margin</h3>
-            <FitText style={{ color: stats.jobsBelowTargetMarginCount > 0 ? '#a13f3f' : 'var(--heading)' }}>{stats.jobsBelowTargetMarginCount}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Sold jobs under target</div>
-          </div>
-        );
-      case 'jobs_starting_this_week':
-        return (
-          <div key={key} className="card">
-            <h3>Starting this week</h3>
-            <FitText style={{ color: 'var(--heading)' }}>{stats.jobsStartingThisWeek.length}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>By scheduled start date</div>
-          </div>
-        );
-      case 'weather_risk_this_week':
-        return (
-          <div key={key} className="card">
-            <h3>Weather-flagged phases</h3>
-            <FitText style={{ color: weatherRisk.flaggedCount > 0 ? '#a13f3f' : 'var(--heading)' }}>{weatherRisk.flaggedCount}</FitText>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Outdoor phases at risk this week</div>
-          </div>
         );
       case 'sales_route_ai':
         return (
