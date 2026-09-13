@@ -73,10 +73,10 @@ export function WeatherTodayWidget({ forecast, loading, error }) {
 export function WeatherHourlyWidget({ forecast, loading, error }) {
   const hours = (forecast?.hourly || []).slice(0, 24);
   return (
-    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
+    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 2', display: 'flex', flexDirection: 'column' }}>
       <h3>Today&apos;s Weather — Hourly</h3>
       {hours.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center' }}>
           <ScrollerWithArrows ariaLabel="hours">
             {hours.map((h, i) => (
               <div
@@ -148,10 +148,10 @@ export function WeatherWeekWidget({ forecast, loading, error }) {
   const hourly = forecast?.hourly || [];
 
   return (
-    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
+    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 2', display: 'flex', flexDirection: 'column' }}>
       <h3>This Week&apos;s Weather</h3>
       {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center' }}>
           <ScrollerWithArrows ariaLabel="days">
             {days.map((d, i) => {
               const rain = earliestRainWindow(d.at, hourly);

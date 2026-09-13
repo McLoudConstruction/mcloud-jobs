@@ -302,7 +302,7 @@ export default function DashboardPage() {
         );
       case 'job_counts_by_stage':
         return (
-          <div key={key} className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
+          <div key={key} className="card" style={{ gridColumn: '1 / -1', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
             <h3>Job counts by stage</h3>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ScrollerWithArrows ariaLabel="stages">
@@ -325,7 +325,7 @@ export default function DashboardPage() {
         );
       case 'overdue_opportunities':
         return (
-          <div key={key} className="card">
+          <div key={key} className="card" style={{ gridColumn: 'span 1', gridRow: 'span 2' }}>
             <h3>Overdue opportunities</h3>
             {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
             {stats.overdue.map(job => (
