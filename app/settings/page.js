@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
@@ -10,6 +10,7 @@ import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
+import { DASHBOARD_WIDGET_LABELS, resolveWidgetOrder } from '../../lib/dashboardWidgets';
 
 const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'AI Features', 'Automatic Communications', 'Communications Log', 'Users'];
 
@@ -47,20 +48,11 @@ const FONT_OPTIONS = [
   { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
-const DASHBOARD_WIDGETS = [
-  { key: 'sold_job_count', label: 'Sold Job Count Total' },
-  { key: 'job_counts_by_stage', label: 'Job Counts by Stage' },
-  { key: 'overdue_opportunities', label: 'Overdue Opportunities' },
-  { key: 'total_ar', label: 'Total AR Dollars' },
-  { key: 'total_paid', label: 'Total Paid Dollars' },
-  { key: 'revenue_ytd', label: 'Total Revenue YTD' },
-  { key: 'revenue_mtd', label: 'Total Revenue MTD' },
-  { key: 'total_profit', label: 'Total Profit Dollars' },
-  { key: 'sales_route_ai', label: 'Create My Sales Route' },
+// Not a positioned card — the "New Opportunity" button lives in the
+// page header, so it's a plain toggle here rather than part of the
+// draggable widget order below.
+const OTHER_DASHBOARD_TOGGLES = [
   { key: 'new_opportunity_button', label: 'New Opportunity Button' },
-  { key: 'weather_today', label: "Today's Weather" },
-  { key: 'weather_today_hourly', label: "Today's Weather (Hourly)" },
-  { key: 'weather_this_week', label: "This Week's Weather" },
 ];
 
 
@@ -220,6 +212,25 @@ function SettingsPageInner() {
     });
   }
 
+  // Native HTML5 drag-and-drop — no extra dependency needed for a
+  // single reorderable list. dragFromIndex is a ref (not state) since it
+  // only needs to survive from dragstart to drop, and doesn't need to
+  // trigger a render on its own.
+  const dragFromIndex = useRef(null);
+
+  function reorderWidget(toIndex) {
+    const fromIndex = dragFromIndex.current;
+    dragFromIndex.current = null;
+    if (fromIndex === null || fromIndex === toIndex) return;
+    setForm(prev => {
+      const current = resolveWidgetOrder(prev.dashboard_widget_order);
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return { ...prev, dashboard_widget_order: next };
+    });
+  }
+
   function showFlash(msg) {
     setFlash(msg);
     setTimeout(() => setFlash(''), 2000);
@@ -267,6 +278,7 @@ function SettingsPageInner() {
           signout_text: form.signout_text,
           signout_hover_bg: form.signout_hover_bg,
           dashboard_widgets: form.dashboard_widgets,
+          dashboard_widget_order: form.dashboard_widget_order,
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -428,9 +440,35 @@ function SettingsPageInner() {
         <div className="card">
           <h3>Main Dashboard widgets</h3>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-            Choose what shows up on your Dashboard page.
+            Choose what shows up on your Dashboard page, and drag to set the order.
           </div>
-          {DASHBOARD_WIDGETS.map(w => (
+          {resolveWidgetOrder(form.dashboard_widget_order).map((key, index) => (
+            <div
+              key={key}
+              draggable
+              onDragStart={() => { dragFromIndex.current = index; }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => reorderWidget(index)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}
+            >
+              <span
+                title="Drag to reorder"
+                style={{ cursor: 'grab', color: 'var(--ink-soft)', fontSize: 15, lineHeight: 1, userSelect: 'none', flexShrink: 0 }}
+              >⠿</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={(form.dashboard_widgets || {})[key] !== false}
+                  onChange={() => toggleWidget(key)}
+                />
+                {DASHBOARD_WIDGET_LABELS[key]}
+              </label>
+            </div>
+          ))}
+
+          <h3 style={{ marginTop: 20 }}>Other</h3>
+          {OTHER_DASHBOARD_TOGGLES.map(w => (
             <label key={w.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5, cursor: 'pointer' }}>
               <input
                 type="checkbox"

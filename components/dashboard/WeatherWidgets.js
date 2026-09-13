@@ -168,7 +168,7 @@ export function WeatherWeekWidget({ forecast, loading, error }) {
   const hourly = forecast?.hourly || [];
 
   return (
-    <div className="card" style={{ gridColumn: 'span 2' }}>
+    <div className="card">
       <h3>This Week&apos;s Weather</h3>
       {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
         <div>
@@ -177,21 +177,20 @@ export function WeatherWeekWidget({ forecast, loading, error }) {
             return (
               <div
                 key={i}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
-                  borderBottom: i < days.length - 1 ? '1px solid var(--line)' : 'none',
-                }}
+                style={{ padding: '7px 0', borderBottom: i < days.length - 1 ? '1px solid var(--line)' : 'none' }}
               >
-                <div style={{ width: 62, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>{dayLabel(d.at, i)}</div>
-                <div style={{ flexShrink: 0 }}><ConditionIcon icon={d.icon} alt={d.condition} size={28} /></div>
-                <div style={{ width: 64, flexShrink: 0, fontSize: 12.5 }}>
-                  <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 46, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>{dayLabel(d.at, i)}</div>
+                  <div style={{ flexShrink: 0 }}><ConditionIcon icon={d.icon} alt={d.condition} size={24} /></div>
+                  <div style={{ fontSize: 12.5 }}>
+                    <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+                  </div>
                 </div>
-                <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: timing?.hasRain ? '#4a90c4' : 'var(--ink-soft)' }}>
-                  {timing?.hasRain && `💧 ${timing.text}`}
-                  {timing && !timing.hasRain && 'No rain expected'}
-                  {!timing && d.pop > 0 && `💧 ${d.pop}% chance (daily estimate)`}
-                </div>
+                {(timing?.hasRain || (!timing && d.pop > 0)) && (
+                  <div style={{ fontSize: 10.5, color: '#4a90c4', marginTop: 3, paddingLeft: 54 }}>
+                    {timing?.hasRain ? `💧 ${timing.text}` : `💧 ${d.pop}% chance (daily estimate)`}
+                  </div>
+                )}
               </div>
             );
           })}

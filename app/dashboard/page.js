@@ -8,6 +8,7 @@ import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import FitText from '../../components/FitText';
 import { useCompanyForecast, WeatherTodayWidget, WeatherHourlyWidget, WeatherWeekWidget } from '../../components/dashboard/WeatherWidgets';
+import { resolveWidgetOrder } from '../../lib/dashboardWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials } from '../../lib/jobFinancials';
 
@@ -71,79 +72,77 @@ export default function DashboardPage() {
 
   const show = key => widgetEnabled(settings, key);
 
-  return (
-    <AppShell>
-      <div className="container">
-        <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Dashboard</h2>
-          {show('new_opportunity_button') && (
-            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
-          )}
-        </div>
-
-        {(show('weather_today') || show('weather_today_hourly') || show('weather_this_week')) && (
-          <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
-            {show('weather_today') && <WeatherTodayWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
-            {show('weather_today_hourly') && <WeatherHourlyWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
-            {show('weather_this_week') && <WeatherWeekWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
+  // One render function per positioned widget, looked up by key so the
+  // grid below can iterate in whatever order Settings → Dashboard has
+  // saved (see lib/dashboardWidgets.js) instead of a fixed layout order.
+  function renderWidget(key) {
+    switch (key) {
+      case 'weather_today':
+        return <WeatherTodayWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
+      case 'weather_today_hourly':
+        return <WeatherHourlyWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
+      case 'weather_this_week':
+        return <WeatherWeekWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
+      case 'sold_job_count':
+        return (
+          <div key={key} className="card">
+            <h3>Sold jobs</h3>
+            <FitText style={{ color: 'var(--heading)' }}>{stats.soldCount}</FitText>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
           </div>
-        )}
-
-        <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
-          {show('sold_job_count') && (
-            <div className="card">
-              <h3>Sold jobs</h3>
-              <FitText style={{ color: 'var(--heading)' }}>{stats.soldCount}</FitText>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Contract signed or further along</div>
-            </div>
-          )}
-          {show('total_ar') && (
-            <div className="card">
-              <h3>Total AR (billed, unpaid)</h3>
-              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</FitText>
-            </div>
-          )}
-          {show('total_paid') && (
-            <div className="card">
-              <h3>Total paid (all-time)</h3>
-              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</FitText>
-            </div>
-          )}
-          {show('revenue_ytd') && (
-            <div className="card">
-              <h3>Income YTD</h3>
-              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</FitText>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Cash actually collected</div>
-            </div>
-          )}
-          {show('revenue_mtd') && (
-            <div className="card">
-              <h3>Income MTD</h3>
-              <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</FitText>
-            </div>
-          )}
-          {show('total_profit') && (
-            <Link href="/financials" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-              <h3>Profit &amp; margin</h3>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Full breakdown on the Financial Dashboard →</div>
-            </Link>
-          )}
-          {show('sales_route_ai') && (
-            <div className="card sales-route-card" onClick={() => setRouteModalOpen(true)}>
-              <h3>Sales route</h3>
-              <div className="empty-state" style={{ padding: '8px 0' }}>Click to build a route based on your area, stop count, and property types.</div>
-            </div>
-          )}
-        </div>
-
-        {show('job_counts_by_stage') && (
-          <div className="card" style={{ marginBottom: 20 }}>
+        );
+      case 'total_ar':
+        return (
+          <div key={key} className="card">
+            <h3>Total AR (billed, unpaid)</h3>
+            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalAR)}</FitText>
+          </div>
+        );
+      case 'total_paid':
+        return (
+          <div key={key} className="card">
+            <h3>Total paid (all-time)</h3>
+            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.totalPaid)}</FitText>
+          </div>
+        );
+      case 'revenue_ytd':
+        return (
+          <div key={key} className="card">
+            <h3>Income YTD</h3>
+            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueYTD)}</FitText>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Cash actually collected</div>
+          </div>
+        );
+      case 'revenue_mtd':
+        return (
+          <div key={key} className="card">
+            <h3>Income MTD</h3>
+            <FitText style={{ color: 'var(--heading)' }}>{fmtMoney(stats.revenueMTD)}</FitText>
+          </div>
+        );
+      case 'total_profit':
+        return (
+          <Link key={key} href="/financials" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+            <h3>Profit &amp; margin</h3>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Full breakdown on the Financial Dashboard →</div>
+          </Link>
+        );
+      case 'sales_route_ai':
+        return (
+          <div key={key} className="card sales-route-card" onClick={() => setRouteModalOpen(true)}>
+            <h3>Sales route</h3>
+            <div className="empty-state" style={{ padding: '8px 0' }}>Click to build a route based on your area, stop count, and property types.</div>
+          </div>
+        );
+      case 'job_counts_by_stage':
+        return (
+          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
             <h3>Job counts by stage</h3>
             <div className="dash-stage-strip">
-              {STAGE_ORDER.map(key => (
-                <div key={key} className="dash-stage-item">
-                  <div className="dash-stage-count">{stats.byStage[key] || 0}</div>
-                  <div className="dash-stage-label">{STAGE_LABELS[key]}</div>
+              {STAGE_ORDER.map(s => (
+                <div key={s} className="dash-stage-item">
+                  <div className="dash-stage-count">{stats.byStage[s] || 0}</div>
+                  <div className="dash-stage-label">{STAGE_LABELS[s]}</div>
                 </div>
               ))}
               <div className="dash-stage-item dash-stage-total">
@@ -152,10 +151,10 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        )}
-
-        {show('overdue_opportunities') && (
-          <div className="card">
+        );
+      case 'overdue_opportunities':
+        return (
+          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
             <h3>Overdue opportunities</h3>
             {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
             {stats.overdue.map(job => (
@@ -169,7 +168,27 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
-        )}
+        );
+      default:
+        return null;
+    }
+  }
+
+  const orderedKeys = resolveWidgetOrder(settings.dashboard_widget_order).filter(show);
+
+  return (
+    <AppShell>
+      <div className="container">
+        <div className="top-actions">
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Dashboard</h2>
+          {show('new_opportunity_button') && (
+            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          )}
+        </div>
+
+        <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
+          {orderedKeys.map(renderWidget)}
+        </div>
       </div>
 
       <RouteBuilderModal open={routeModalOpen} onClose={() => setRouteModalOpen(false)} />
