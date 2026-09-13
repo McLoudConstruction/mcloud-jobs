@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, cloneElement } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
@@ -23,6 +23,18 @@ export default function DashboardPage() {
   const [jobs, setJobs] = useState([]);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
   const { forecast: companyForecast, loading: weatherLoading, error: weatherError } = useCompanyForecast();
+
+  // Widget order is company-wide (one shared app_settings row, same as
+  // every other dashboard setting) — dragging here changes it for
+  // everyone, the same as reordering it in Settings → Dashboard would.
+  // localOrder is an optimistic override so a drop feels instant instead
+  // of waiting on the round trip; the realtime subscription inside
+  // useSettings brings `settings` in sync shortly after, at which point
+  // this resets to null and defers back to it.
+  const [localOrder, setLocalOrder] = useState(null);
+  const [dragState, setDragState] = useState({ draggingIndex: null, dragOverIndex: null });
+
+  useEffect(() => { setLocalOrder(null); }, [settings.dashboard_widget_order]);
 
   useEffect(() => {
     if (!session) return;
@@ -136,7 +148,7 @@ export default function DashboardPage() {
         );
       case 'job_counts_by_stage':
         return (
-          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
+          <div key={key} className="card">
             <h3>Job counts by stage</h3>
             <div className="dash-stage-strip">
               {STAGE_ORDER.map(s => (
@@ -154,7 +166,7 @@ export default function DashboardPage() {
         );
       case 'overdue_opportunities':
         return (
-          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
+          <div key={key} className="card">
             <h3>Overdue opportunities</h3>
             {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
             {stats.overdue.map(job => (
@@ -174,7 +186,38 @@ export default function DashboardPage() {
     }
   }
 
-  const orderedKeys = resolveWidgetOrder(settings.dashboard_widget_order).filter(show);
+  const orderedKeys = (localOrder || resolveWidgetOrder(settings.dashboard_widget_order)).filter(show);
+
+  function handleDragStart(index) {
+    setDragState({ draggingIndex: index, dragOverIndex: null });
+  }
+  function handleDragOver(index) {
+    setDragState(s => (s.draggingIndex === null || s.dragOverIndex === index) ? s : { ...s, dragOverIndex: index });
+  }
+  async function handleDrop(index) {
+    const { draggingIndex } = dragState;
+    setDragState({ draggingIndex: null, dragOverIndex: null });
+    if (draggingIndex === null || draggingIndex === index) return;
+
+    // Reorder within the visible list the person can actually see and
+    // drag, then weave that back into the full (including hidden)
+    // order — so a widget that's currently toggled off keeps its
+    // relative spot instead of getting shuffled to the end the next
+    // time it's turned back on.
+    const fullOrder = resolveWidgetOrder(settings.dashboard_widget_order);
+    const nextVisible = [...orderedKeys];
+    const [moved] = nextVisible.splice(draggingIndex, 1);
+    nextVisible.splice(index, 0, moved);
+
+    let vi = 0;
+    const nextFull = fullOrder.map(k => orderedKeys.includes(k) ? nextVisible[vi++] : k);
+
+    setLocalOrder(nextFull);
+    await supabase.from('app_settings').update({ dashboard_widget_order: nextFull }).eq('id', 1);
+  }
+  function handleDragEnd() {
+    setDragState({ draggingIndex: null, dragOverIndex: null });
+  }
 
   return (
     <AppShell>
@@ -187,7 +230,24 @@ export default function DashboardPage() {
         </div>
 
         <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
-          {orderedKeys.map(renderWidget)}
+          {orderedKeys.map((key, index) => {
+            const el = renderWidget(key);
+            if (!el) return null;
+            const dragClasses = [
+              dragState.draggingIndex === index ? 'widget-dragging' : '',
+              dragState.dragOverIndex === index ? 'widget-drag-over' : '',
+            ].filter(Boolean).join(' ');
+            return cloneElement(el, {
+              key,
+              draggable: true,
+              onDragStart: () => handleDragStart(index),
+              onDragOver: e => { e.preventDefault(); handleDragOver(index); },
+              onDrop: e => { e.preventDefault(); handleDrop(index); },
+              onDragEnd: handleDragEnd,
+              className: [el.props.className, dragClasses].filter(Boolean).join(' '),
+              style: { ...el.props.style, cursor: 'grab' },
+            });
+          })}
         </div>
       </div>
 

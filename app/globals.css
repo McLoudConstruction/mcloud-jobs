@@ -143,7 +143,20 @@ a { color: inherit; text-decoration: none; }
 .dash-kpi-grid{
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-auto-rows: 210px;
   gap: 16px;
+}
+.dash-kpi-grid .card{
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.dash-kpi-grid .card.widget-dragging{
+  opacity: 0.4;
+}
+.dash-kpi-grid .card.widget-drag-over{
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
 }
 @media (max-width: 640px){
   .dash-kpi-grid{ grid-template-columns: 1fr 1fr; gap: 10px; }

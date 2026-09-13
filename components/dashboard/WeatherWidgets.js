@@ -80,7 +80,7 @@ export function WeatherHourlyWidget({ forecast, loading, error }) {
   }
 
   return (
-    <div className="card" style={{ gridColumn: 'span 2' }}>
+    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 1' }}>
       <h3>Today&apos;s Weather — Hourly</h3>
       {hours.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -168,7 +168,7 @@ export function WeatherWeekWidget({ forecast, loading, error }) {
   const hourly = forecast?.hourly || [];
 
   return (
-    <div className="card">
+    <div className="card" style={{ gridColumn: 'span 1', gridRow: 'span 2' }}>
       <h3>This Week&apos;s Weather</h3>
       {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
         <div>
