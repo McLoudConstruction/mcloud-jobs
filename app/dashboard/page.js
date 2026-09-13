@@ -6,8 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
-import { useCompanyForecast, WeatherTodayWidget, WeatherHourlyWidget, WeatherWeekWidget } from '../../components/dashboard/WeatherWidgets';
-import ScrollerWithArrows from '../../components/dashboard/ScrollerWithArrows';
+import { useCompanyForecast, WeatherCard } from '../../components/dashboard/WeatherWidgets';
 import { resolveWidgetOrder } from '../../lib/dashboardWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
@@ -216,12 +215,8 @@ export default function DashboardPage() {
   // saved (see lib/dashboardWidgets.js) instead of a fixed layout order.
   function renderWidget(key) {
     switch (key) {
-      case 'weather_today':
-        return <WeatherTodayWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
-      case 'weather_today_hourly':
-        return <WeatherHourlyWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
-      case 'weather_this_week':
-        return <WeatherWeekWidget key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
+      case 'weather':
+        return <WeatherCard key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
       case 'key_metrics': {
         const net = stats.totalAR - totalAP;
         const sections = [
@@ -261,7 +256,7 @@ export default function DashboardPage() {
           },
         ];
         return (
-          <div key={key} className="card" style={{ gridColumn: '1 / -1', gridRow: 'span 2' }}>
+          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
             <h3>Key metrics</h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 32px' }}>
               {sections.map(section => (
@@ -302,42 +297,39 @@ export default function DashboardPage() {
         );
       case 'job_counts_by_stage':
         return (
-          <div key={key} className="card" style={{ gridColumn: '1 / -1', gridRow: 'span 1', display: 'flex', flexDirection: 'column' }}>
+          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
             <h3>Job counts by stage</h3>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ScrollerWithArrows ariaLabel="stages">
-                {STAGE_ORDER.map(s => (
-                  <div
-                    key={s}
-                    style={{ flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px', borderRight: '1px solid var(--line)', scrollSnapAlign: 'start' }}
-                  >
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                    <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
-                  </div>
-                ))}
-                <div style={{ flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px', scrollSnapAlign: 'start' }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
+              {STAGE_ORDER.map(s => (
+                <div key={s} style={{ minWidth: 74, textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
                 </div>
-              </ScrollerWithArrows>
+              ))}
+              <div style={{ minWidth: 74, textAlign: 'center', borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+              </div>
             </div>
           </div>
         );
       case 'overdue_opportunities':
         return (
-          <div key={key} className="card" style={{ gridColumn: 'span 1', gridRow: 'span 2' }}>
+          <div key={key} className="card">
             <h3>Overdue opportunities</h3>
-            {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
-            {stats.overdue.map(job => (
-              <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
-                <div className="job-main">
-                  <span className="job-number">{formattedProjectNumber(job)}</span>
-                  <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
-                  <span className="job-address">Expected close: {job.expected_close_date}</span>
-                </div>
-                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              </Link>
-            ))}
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
+              {stats.overdue.map(job => (
+                <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
+                  <div className="job-main">
+                    <span className="job-number">{formattedProjectNumber(job)}</span>
+                    <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
+                    <span className="job-address">Expected close: {job.expected_close_date}</span>
+                  </div>
+                  <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         );
       default:
@@ -388,7 +380,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
+        <div className="dash-cards" style={{ marginBottom: 20 }}>
           {orderedKeys.map((key, index) => {
             const el = renderWidget(key);
             if (!el) return null;

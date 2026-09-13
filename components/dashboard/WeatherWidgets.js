@@ -2,10 +2,7 @@
 import { useEffect, useState } from 'react';
 import ScrollerWithArrows from './ScrollerWithArrows';
 
-// Shared by all three widgets so the dashboard makes one forecast
-// request, not three — the underlying API call is already cached
-// server-side (weatherClient.js), but there's no reason to make three
-// round trips from the browser for data that's identical across widgets.
+// Shared forecast fetch, used by the one Weather card below.
 export function useCompanyForecast() {
   const [forecast, setForecast] = useState(null);
   const [error, setError] = useState('');
@@ -48,57 +45,44 @@ function WeatherEmptyState({ loading, error }) {
   return null;
 }
 
-export function WeatherTodayWidget({ forecast, loading, error }) {
+function TodayView({ forecast, loading, error }) {
   const c = forecast?.current;
+  if (!c) return <WeatherEmptyState loading={loading} error={error} />;
   return (
-    <div className="card">
-      <h3>Today&apos;s Weather</h3>
-      {!c ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ConditionIcon icon={c.icon} alt={c.description} size={40} />
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>{c.description}</div>
-            <div style={{ fontSize: 9.5, color: 'var(--ink-soft)' }}>Feels {c.feelsLikeF}°F · Wind {c.windMph} mph</div>
-          </div>
-        </div>
-      )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 4px' }}>
+      <ConditionIcon icon={c.icon} alt={c.description} size={64} />
+      <div>
+        <div style={{ fontSize: 34, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
+        <div style={{ fontSize: 13, color: 'var(--ink-soft)', textTransform: 'capitalize', marginTop: 4 }}>{c.description}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Feels like {c.feelsLikeF}°F · Wind {c.windMph} mph</div>
+      </div>
     </div>
   );
 }
 
-// Spans two grid columns and one row — a wide, short strip rather than a
-// tall one, since a card that just needs to show a row of hours doesn't
-// need much vertical room.
-export function WeatherHourlyWidget({ forecast, loading, error }) {
+function HourlyView({ forecast, loading, error }) {
   const hours = (forecast?.hourly || []).slice(0, 24);
+  if (hours.length === 0) return <WeatherEmptyState loading={loading} error={error} />;
   return (
-    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 2', display: 'flex', flexDirection: 'column' }}>
-      <h3>Today&apos;s Weather — Hourly</h3>
-      {hours.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center' }}>
-          <ScrollerWithArrows ariaLabel="hours">
-            {hours.map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px',
-                  borderRight: i < hours.length - 1 ? '1px solid var(--line)' : 'none',
-                  scrollSnapAlign: 'start',
-                }}
-              >
-                <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 4 }}>{hourLabel(h.at)}</div>
-                <ConditionIcon icon={h.icon} alt={h.condition} size={30} />
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--heading)', marginTop: 2 }}>{h.tempF}°</div>
-                <div style={{ fontSize: 9.5, color: '#4a90c4', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                  💧 {h.pop}%
-                </div>
-              </div>
-            ))}
-          </ScrollerWithArrows>
+    <ScrollerWithArrows ariaLabel="hours">
+      {hours.map((h, i) => (
+        <div
+          key={i}
+          style={{
+            flexShrink: 0, width: 78, textAlign: 'center', padding: '6px 4px',
+            borderRight: i < hours.length - 1 ? '1px solid var(--line)' : 'none',
+            scrollSnapAlign: 'start',
+          }}
+        >
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>{hourLabel(h.at)}</div>
+          <ConditionIcon icon={h.icon} alt={h.condition} size={36} />
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginTop: 4 }}>{h.tempF}°</div>
+          <div style={{ fontSize: 10.5, color: '#4a90c4', marginTop: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            💧 {h.pop}%
+          </div>
         </div>
-      )}
-    </div>
+      ))}
+    </ScrollerWithArrows>
   );
 }
 
@@ -106,10 +90,10 @@ export function WeatherHourlyWidget({ forecast, loading, error }) {
 // (no server-side timezone data needed — this renders client-side, and
 // staff and jobs are assumed to be in the same time zone).
 const DAY_PARTS = [
-  { abbr: 'Ovn', label: 'Overnight', startHour: 0, endHour: 5 },
-  { abbr: 'AM', label: 'Morning', startHour: 6, endHour: 11 },
-  { abbr: 'PM', label: 'Afternoon', startHour: 12, endHour: 17 },
-  { abbr: 'Eve', label: 'Evening', startHour: 18, endHour: 23 },
+  { abbr: 'Ovn', startHour: 0, endHour: 5 },
+  { abbr: 'AM', startHour: 6, endHour: 11 },
+  { abbr: 'PM', startHour: 12, endHour: 17 },
+  { abbr: 'Eve', startHour: 18, endHour: 23 },
 ];
 const RAIN_THRESHOLD_PCT = 30;
 
@@ -122,10 +106,9 @@ function isSameLocalDay(ms, otherMs) {
 // limit, not something this app controls), so this can only say *when*
 // rain is coming for today and tomorrow — returns null for days beyond
 // that, which the caller falls back to the plain daily percentage for.
-// Returns just the EARLIEST at-risk block rather than every flagged
-// block — "rain starts this afternoon" is what actually matters for
-// deciding whether a crew is safe outdoors in the morning, and a
-// narrow day-column doesn't have room to list every block anyway.
+// Returns just the EARLIEST at-risk block — "rain starts this afternoon"
+// is what actually matters for deciding whether a crew is safe outdoors
+// in the morning.
 function earliestRainWindow(dayAt, hourly) {
   const hoursForDay = hourly.filter(h => isSameLocalDay(h.at, dayAt));
   if (hoursForDay.length === 0) return null;
@@ -140,45 +123,75 @@ function earliestRainWindow(dayAt, hourly) {
   return { hasRain: false };
 }
 
-// Rebuilt horizontal (matching the Hourly widget's pattern) instead of
-// stacked vertical day rows — same footprint as Hourly (2 wide, 1 tall)
-// rather than needing an extra row of height.
-export function WeatherWeekWidget({ forecast, loading, error }) {
+function WeekView({ forecast, loading, error }) {
   const days = forecast?.daily || [];
   const hourly = forecast?.hourly || [];
+  if (days.length === 0) return <WeatherEmptyState loading={loading} error={error} />;
+  return (
+    <ScrollerWithArrows ariaLabel="days">
+      {days.map((d, i) => {
+        const rain = earliestRainWindow(d.at, hourly);
+        return (
+          <div
+            key={i}
+            style={{
+              flexShrink: 0, width: 78, textAlign: 'center', padding: '6px 4px',
+              borderRight: i < days.length - 1 ? '1px solid var(--line)' : 'none',
+              scrollSnapAlign: 'start',
+            }}
+          >
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>{dayLabel(d.at, i)}</div>
+            <ConditionIcon icon={d.icon} alt={d.condition} size={36} />
+            <div style={{ fontSize: 14, marginTop: 4 }}>
+              <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+            </div>
+            <div style={{ fontSize: 10.5, color: rain?.hasRain ? '#4a90c4' : 'var(--ink-soft)', marginTop: 3, minHeight: 14 }}>
+              {rain?.hasRain && `💧${rain.abbr} ${rain.pop}%`}
+              {!rain && d.pop > 0 && `💧 ${d.pop}%`}
+            </div>
+          </div>
+        );
+      })}
+    </ScrollerWithArrows>
+  );
+}
+
+const VIEWS = [
+  { key: 'today', label: 'Today' },
+  { key: 'hourly', label: 'Hourly' },
+  { key: 'week', label: 'Week' },
+];
+
+// One card, three views, flipped between with a bordered segmented
+// control (this app's established pattern for "a mode within one card" —
+// see .tab-section-btn) rather than three separate cards competing for
+// grid space.
+export function WeatherCard({ forecast, loading, error }) {
+  const [view, setView] = useState('today');
 
   return (
-    <div className="card" style={{ gridColumn: 'span 2', gridRow: 'span 2', display: 'flex', flexDirection: 'column' }}>
-      <h3>This Week&apos;s Weather</h3>
-      {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center' }}>
-          <ScrollerWithArrows ariaLabel="days">
-            {days.map((d, i) => {
-              const rain = earliestRainWindow(d.at, hourly);
-              return (
-                <div
-                  key={i}
-                  style={{
-                    flexShrink: 0, width: 74, textAlign: 'center', padding: '4px 4px',
-                    borderRight: i < days.length - 1 ? '1px solid var(--line)' : 'none',
-                    scrollSnapAlign: 'start',
-                  }}
-                >
-                  <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 4 }}>{dayLabel(d.at, i)}</div>
-                  <ConditionIcon icon={d.icon} alt={d.condition} size={30} />
-                  <div style={{ fontSize: 12.5, marginTop: 2 }}>
-                    <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
-                  </div>
-                  <div style={{ fontSize: 9.5, color: rain?.hasRain ? '#4a90c4' : 'var(--ink-soft)', marginTop: 2 }}>
-                    {rain?.hasRain && `💧${rain.abbr} ${rain.pop}%`}
-                    {!rain && d.pop > 0 && `💧 ${d.pop}%`}
-                  </div>
-                </div>
-              );
-            })}
-          </ScrollerWithArrows>
+    <div className="card" style={{ gridColumn: 'span 2' }}>
+      <div className="tab-sections" style={{ margin: '-4px 0 12px' }}>
+        <h3 style={{ margin: 0 }}>Weather</h3>
+        <div className="tab-sections-pills">
+          {VIEWS.map(v => (
+            <button
+              key={v.key}
+              type="button"
+              className={`tab-section-btn ${view === v.key ? 'active' : ''}`}
+              onClick={() => setView(v.key)}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+
+      <div style={{ minHeight: 110 }}>
+        {view === 'today' && <TodayView forecast={forecast} loading={loading} error={error} />}
+        {view === 'hourly' && <HourlyView forecast={forecast} loading={loading} error={error} />}
+        {view === 'week' && <WeekView forecast={forecast} loading={loading} error={error} />}
+      </div>
     </div>
   );
 }
