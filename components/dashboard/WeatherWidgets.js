@@ -92,7 +92,7 @@ export function WeatherHourlyWidget({ forecast, loading, error }) {
             style={{ flexShrink: 0, padding: '10px 6px' }}
           >‹</button>
 
-          <div ref={scrollerRef} style={{ display: 'flex', gap: 0, overflowX: 'auto', scrollSnapType: 'x mandatory', flex: 1 }}>
+          <div ref={scrollerRef} className="hide-scrollbar" style={{ display: 'flex', gap: 0, overflowX: 'auto', scrollSnapType: 'x mandatory', flex: 1 }}>
             {hours.map((h, i) => (
               <div
                 key={i}
@@ -125,23 +125,76 @@ export function WeatherHourlyWidget({ forecast, loading, error }) {
   );
 }
 
+// Rough day-part buckets, checked against the browser's local time zone
+// (no server-side timezone data needed — this renders client-side, and
+// staff and jobs are assumed to be in the same time zone).
+const DAY_PARTS = [
+  { label: 'Overnight', startHour: 0, endHour: 5 },
+  { label: 'Morning', startHour: 6, endHour: 11 },
+  { label: 'Afternoon', startHour: 12, endHour: 17 },
+  { label: 'Evening', startHour: 18, endHour: 23 },
+];
+const RAIN_THRESHOLD_PCT = 30;
+
+function isSameLocalDay(ms, otherMs) {
+  const a = new Date(ms), b = new Date(otherMs);
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// The hourly timeline only covers ~48 hours out (an OpenWeatherMap
+// limit, not something this app controls), so this can only say *when*
+// rain is coming for today and tomorrow — returns null for days beyond
+// that, which the caller falls back to the plain daily percentage for.
+function rainTimingForDay(dayAt, hourly) {
+  const hoursForDay = hourly.filter(h => isSameLocalDay(h.at, dayAt));
+  if (hoursForDay.length === 0) return null;
+
+  const blocks = DAY_PARTS
+    .map(part => ({
+      ...part,
+      maxPop: hoursForDay.reduce((max, h) => {
+        const hour = new Date(h.at).getHours();
+        return (hour >= part.startHour && hour <= part.endHour) ? Math.max(max, h.pop) : max;
+      }, 0),
+    }))
+    .filter(b => b.maxPop >= RAIN_THRESHOLD_PCT);
+
+  if (blocks.length === 0) return { hasRain: false };
+  return { hasRain: true, text: blocks.map(b => `${b.label} ${b.maxPop}%`).join(', ') };
+}
+
 export function WeatherWeekWidget({ forecast, loading, error }) {
   const days = forecast?.daily || [];
+  const hourly = forecast?.hourly || [];
+
   return (
-    <div className="card">
+    <div className="card" style={{ gridColumn: 'span 2' }}>
       <h3>This Week&apos;s Weather</h3>
       {days.length === 0 ? <WeatherEmptyState loading={loading} error={error} /> : (
-        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
-          {days.map((d, i) => (
-            <div key={i} style={{ flexShrink: 0, textAlign: 'center', minWidth: 56 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-soft)' }}>{dayLabel(d.at, i)}</div>
-              <ConditionIcon icon={d.icon} alt={d.condition} />
-              <div style={{ fontSize: 12 }}>
-                <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+        <div>
+          {days.map((d, i) => {
+            const timing = rainTimingForDay(d.at, hourly);
+            return (
+              <div
+                key={i}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
+                  borderBottom: i < days.length - 1 ? '1px solid var(--line)' : 'none',
+                }}
+              >
+                <div style={{ width: 62, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>{dayLabel(d.at, i)}</div>
+                <div style={{ flexShrink: 0 }}><ConditionIcon icon={d.icon} alt={d.condition} size={28} /></div>
+                <div style={{ width: 64, flexShrink: 0, fontSize: 12.5 }}>
+                  <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+                </div>
+                <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: timing?.hasRain ? '#4a90c4' : 'var(--ink-soft)' }}>
+                  {timing?.hasRain && `💧 ${timing.text}`}
+                  {timing && !timing.hasRain && 'No rain expected'}
+                  {!timing && d.pop > 0 && `💧 ${d.pop}% chance (daily estimate)`}
+                </div>
               </div>
-              {d.pop > 0 && <div style={{ fontSize: 9.5, color: 'var(--accent)' }}>{d.pop}% rain</div>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

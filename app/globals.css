@@ -149,6 +149,15 @@ a { color: inherit; text-decoration: none; }
   .dash-kpi-grid{ grid-template-columns: 1fr 1fr; gap: 10px; }
   .dash-kpi-grid .card{ padding: 14px 12px; }
 }
+/* Used where a scroller has its own arrow buttons (e.g. the hourly
+   weather widget) so the native scrollbar isn't shown twice-over. */
+.hide-scrollbar{
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar{
+  display: none;
+}
 .dash-stage-strip{
   display: flex;
   flex-wrap: wrap;

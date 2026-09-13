@@ -8,6 +8,7 @@ import { getForecastForCompany, getForecastForJob, WeatherConfigError } from '..
 export async function GET(request) {
   const url = new URL(request.url);
   const jobId = url.searchParams.get('jobId');
+  const force = url.searchParams.get('force') === '1';
 
   try {
     if (jobId) {
@@ -19,12 +20,12 @@ export async function GET(request) {
         .single();
       if (error || !job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
 
-      const forecast = await getForecastForJob(job);
+      const forecast = await getForecastForJob(job, force);
       if (!forecast) return NextResponse.json({ error: 'This job has no site address to look up weather for yet.' }, { status: 400 });
       return NextResponse.json(forecast);
     }
 
-    const forecast = await getForecastForCompany();
+    const forecast = await getForecastForCompany(force);
     return NextResponse.json(forecast);
   } catch (err) {
     if (err instanceof WeatherConfigError) return NextResponse.json({ error: err.message }, { status: 400 });
