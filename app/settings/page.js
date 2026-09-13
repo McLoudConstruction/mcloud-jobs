@@ -36,7 +36,7 @@ const OAUTH_INTEGRATIONS = [
 // Resend/Weather: no login — just an API key pasted in below.
 const KEY_INTEGRATIONS = [
   { key: 'resend', name: 'Resend (email)', description: 'Auto-send estimates, contracts, and updates by email through your Resend account. Falls back to your SMTP server if not set up.', fields: [] },
-  { key: 'weather', name: 'Weather', description: 'Powers weather lookups in the app, via OpenWeatherMap.', fields: [{ key: 'zip', label: 'Default zip code', placeholder: '64111' }] },
+  { key: 'weather', name: 'Weather', description: 'Powers the dashboard weather widgets and outdoor-phase forecast flagging, via OpenWeatherMap One Call 3.0. Needs a "One Call by Call" subscription active on your OpenWeatherMap account (free at normal volume, requires a card on file with them).', fields: [{ key: 'zip', label: 'Default zip code (used for the dashboard widgets)', placeholder: '64111' }] },
   { key: 'unsplash', name: 'Image search (materials)', description: 'Powers the "search for a photo" option in the Estimate material picture chooser, via Unsplash.', fields: [] },
 ];
 
@@ -58,6 +58,9 @@ const DASHBOARD_WIDGETS = [
   { key: 'total_profit', label: 'Total Profit Dollars' },
   { key: 'sales_route_ai', label: 'Create My Sales Route' },
   { key: 'new_opportunity_button', label: 'New Opportunity Button' },
+  { key: 'weather_today', label: "Today's Weather" },
+  { key: 'weather_today_hourly', label: "Today's Weather (Hourly)" },
+  { key: 'weather_this_week', label: "This Week's Weather" },
 ];
 
 

@@ -10,6 +10,7 @@ const EMPTY_FORM = {
   estimate_number: '',
   expected_close_date: '',
   project_type: '', // 'residential' | 'commercial'
+  work_location: '', // 'indoor' | 'outdoor' — primary/expected; individual schedule phases can differ
   company: '',
   first_name: '',
   last_name: '',
@@ -160,6 +161,7 @@ function NewOpportunityPageInner() {
       estimate_number: form.estimate_number,
       job_number: null,
       stage: 'new',
+      work_location: form.work_location || null,
       // customer_name is the single "who this is" field used everywhere
       // downstream (documents, portal, messages) — company for
       // commercial, the person's name for residential. customer_contact
@@ -275,6 +277,18 @@ function NewOpportunityPageInner() {
               <option value="residential">Residential</option>
               <option value="commercial">Commercial</option>
             </select>
+
+            <div style={{ marginTop: 12 }}>
+              <label>Work location</label>
+              <select value={form.work_location} onChange={e => update('work_location', e.target.value)}>
+                <option value="">Not sure yet</option>
+                <option value="indoor">Indoor</option>
+                <option value="outdoor">Outdoor</option>
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+                Primary expected setting — most jobs mix both, and each schedule phase can be set individually once it's built.
+              </div>
+            </div>
 
             {isCommercial && (
               <div style={{ marginTop: 12 }}>

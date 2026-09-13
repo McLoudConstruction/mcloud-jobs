@@ -3,6 +3,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
+import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
+
+const WORK_LOCATION_OPTIONS = [
+  { value: 'indoor', label: 'Indoor' },
+  { value: 'outdoor', label: 'Outdoor' },
+];
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -86,7 +92,9 @@ export default function ScheduleCard({ jobId, job }) {
   const [editDuration, setEditDuration] = useState(1);
   const [editPreferredStartDay, setEditPreferredStartDay] = useState('');
   const [editAllowWeekend, setEditAllowWeekend] = useState(false);
+  const [editWorkLocation, setEditWorkLocation] = useState('indoor');
   const [view, setView] = useState('list'); // 'list' | 'timeline'
+  const [weatherFlags, setWeatherFlags] = useState({}); // phase_id -> { date, reasons }
 
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
@@ -108,6 +116,21 @@ export default function ScheduleCard({ jobId, job }) {
     return () => supabase.removeChannel(channel);
   }, [jobId, loadPhases, loadScopeActions]);
 
+  // Re-checked whenever the phase list changes (edits, regeneration, drag)
+  // so a flag clears itself once a phase is moved out of a bad weather
+  // window. One Call 3.0 only covers ~8 days out, so phases further in
+  // the future simply won't appear in `flags` yet — that's "not yet
+  // knowable," not "clear."
+  useEffect(() => {
+    if (phases.length === 0) { setWeatherFlags({}); return; }
+    let mounted = true;
+    fetch(`/api/jobs/${jobId}/weather-flags`)
+      .then(res => res.json())
+      .then(data => { if (mounted && data.flags) setWeatherFlags(data.flags); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [jobId, phases]);
+
   async function generate() {
     if (!startDate) { setError('Pick a start date first.'); return; }
     if (scopeActions.length === 0) { setError('Add trade breakdown actions on the Scope tab first — the schedule is built from those.'); return; }
@@ -122,7 +145,11 @@ export default function ScheduleCard({ jobId, job }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate schedule.');
-      setDraft(phases.length > 0 ? mergeWithExisting(data.phases, phases, startDate) : data.phases);
+      // Prefill each phase's Work Location from a per-trade default (see
+      // lib/tradeWeather.js) so Stachys only has to correct exceptions,
+      // not set all of them by hand.
+      const withDefaults = data.phases.map(p => ({ ...p, work_location: defaultWorkLocationForPhase(p, job?.work_location) }));
+      setDraft(phases.length > 0 ? mergeWithExisting(withDefaults, phases, startDate) : withDefaults);
       if (data.warning) setWarning(data.warning);
     } catch (err) {
       setError(err.message);
@@ -147,6 +174,7 @@ export default function ScheduleCard({ jobId, job }) {
       return {
         ...p, duration_days: manual.duration_days, source: 'manual', needs_review: true,
         preferred_start_day: manual.preferred_start_day, allow_weekend_work: manual.allow_weekend_work,
+        work_location: manual.work_location || p.work_location,
       };
     });
 
@@ -156,6 +184,7 @@ export default function ScheduleCard({ jobId, job }) {
         phase_key: p.phase_key, label: p.label, trade: p.trade, duration_days: p.duration_days,
         source: 'manual', needs_review: true, orphaned: true,
         preferred_start_day: p.preferred_start_day, allow_weekend_work: p.allow_weekend_work,
+        work_location: p.work_location,
       }));
 
     const sequenced = [...merged, ...orphaned].map((p, i) => ({ ...p, sort_order: i }));
@@ -192,6 +221,10 @@ export default function ScheduleCard({ jobId, job }) {
   function updateDraftAllowWeekend(index, allow) {
     const updated = draft.map((p, i) => i === index ? { ...p, allow_weekend_work: allow } : p);
     setDraft(recomputeSequentialDates(updated, startDate));
+  }
+
+  function updateDraftWorkLocation(index, value) {
+    setDraft(draft.map((p, i) => i === index ? { ...p, work_location: value } : p));
   }
 
   async function confirmDraft() {
@@ -233,6 +266,7 @@ export default function ScheduleCard({ jobId, job }) {
     setEditDuration(p.duration_days);
     setEditPreferredStartDay(p.preferred_start_day || '');
     setEditAllowWeekend(!!p.allow_weekend_work);
+    setEditWorkLocation(p.work_location || 'indoor');
   }
 
   async function savePhaseEdit(phase) {
@@ -240,7 +274,7 @@ export default function ScheduleCard({ jobId, job }) {
     // Recompute from this phase's own (unchanged) start date, cascading
     // the new duration through everything scheduled after it.
     const rebased = phases.slice(index).map((p, i) => i === 0
-      ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), preferred_start_day: editPreferredStartDay || null, allow_weekend_work: editAllowWeekend }
+      ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), preferred_start_day: editPreferredStartDay || null, allow_weekend_work: editAllowWeekend, work_location: editWorkLocation }
       : p);
     const final = recomputeSequentialDates(rebased, phases[index].start_date);
 
@@ -251,6 +285,7 @@ export default function ScheduleCard({ jobId, job }) {
         end_date: p.end_date,
         preferred_start_day: p.preferred_start_day,
         allow_weekend_work: p.allow_weekend_work,
+        work_location: p.work_location,
         source: p.id === phase.id ? 'manual' : p.source,
         needs_review: p.id === phase.id ? false : p.needs_review,
       }).eq('id', p.id);
@@ -341,6 +376,12 @@ export default function ScheduleCard({ jobId, job }) {
                         <option value="yes">Yes</option>
                       </select>
                     </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)' }}>
+                      Work location
+                      <select value={p.work_location || 'indoor'} onChange={e => updateDraftWorkLocation(i, e.target.value)} style={{ fontSize: 10.5, padding: '2px 4px' }}>
+                        {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -398,6 +439,12 @@ export default function ScheduleCard({ jobId, job }) {
                           <option value="yes">Yes</option>
                         </select>
                       </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                        Work location
+                        <select value={editWorkLocation} onChange={e => setEditWorkLocation(e.target.value)} style={{ fontSize: 11, padding: '2px 4px' }}>
+                          {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </label>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
@@ -414,7 +461,13 @@ export default function ScheduleCard({ jobId, job }) {
                       {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
                       {p.preferred_start_day && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · starts {dayLabel(p.preferred_start_day)}</span>}
                       {p.allow_weekend_work && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · weekend OK</span>}
+                      {p.work_location && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>}
                       <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} days)</div>
+                      {weatherFlags[p.id] && (
+                        <div style={{ fontSize: 10.5, color: '#a13f3f', marginTop: 3, maxWidth: 420 }}>
+                          ⚠ Weather risk on {fmtDate(weatherFlags[p.id].date)}: {weatherFlags[p.id].reasons.join(' ')}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button>

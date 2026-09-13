@@ -7,6 +7,7 @@ import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import FitText from '../../components/FitText';
+import { useCompanyForecast, WeatherTodayWidget, WeatherHourlyWidget, WeatherWeekWidget } from '../../components/dashboard/WeatherWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials } from '../../lib/jobFinancials';
 
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   const { settings } = useSettings();
   const [jobs, setJobs] = useState([]);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
+  const { forecast: companyForecast, loading: weatherLoading, error: weatherError } = useCompanyForecast();
 
   useEffect(() => {
     if (!session) return;
@@ -78,6 +80,14 @@ export default function DashboardPage() {
             <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
           )}
         </div>
+
+        {(show('weather_today') || show('weather_today_hourly') || show('weather_this_week')) && (
+          <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
+            {show('weather_today') && <WeatherTodayWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
+            {show('weather_today_hourly') && <WeatherHourlyWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
+            {show('weather_this_week') && <WeatherWeekWidget forecast={companyForecast} loading={weatherLoading} error={weatherError} />}
+          </div>
+        )}
 
         <div className="dash-kpi-grid" style={{ marginBottom: 20 }}>
           {show('sold_job_count') && (
