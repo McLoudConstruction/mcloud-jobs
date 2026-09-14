@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { formatPhone } from '../../lib/constants';
 
 const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
@@ -26,6 +27,7 @@ export default function SalesDashboardPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [autofillNote, setAutofillNote] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [manualRouteModalOpen, setManualRouteModalOpen] = useState(false);
   const searchTimer = useRef(null);
 
   const loadOpps = useCallback(async () => {
@@ -169,6 +171,7 @@ export default function SalesDashboardPage() {
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
           <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn" onClick={() => setManualRouteModalOpen(true)}>Create Sales Route</button>
             <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
               {showForm ? 'Cancel' : '+ New Lead'}
             </button>
@@ -302,6 +305,7 @@ export default function SalesDashboardPage() {
           </div>
         ))}
       </div>
+      <ManualRouteBuilderModal open={manualRouteModalOpen} onClose={() => setManualRouteModalOpen(false)} />
     </AppShell>
   );
 }

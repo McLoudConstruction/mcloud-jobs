@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
+import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { useCompanyForecast, WeatherRibbon } from '../../components/dashboard/WeatherWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
@@ -58,6 +59,7 @@ export default function DashboardPage() {
   const { settings } = useSettings();
   const [jobs, setJobs] = useState([]);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
+  const [manualRouteModalOpen, setManualRouteModalOpen] = useState(false);
   const { forecast: companyForecast, loading: weatherLoading, error: weatherError } = useCompanyForecast();
 
   useEffect(() => {
@@ -337,6 +339,11 @@ export default function DashboardPage() {
                 Build my sales route →
               </button>
             )}
+            {show('sales_route_ai') && (
+              <button type="button" className="btn btn-sm" onClick={() => setManualRouteModalOpen(true)}>
+                Create Sales Route →
+              </button>
+            )}
             {show('total_profit') && (
               <Link href="/financials" className="btn btn-sm">
                 Full profit &amp; margin breakdown →
@@ -347,6 +354,7 @@ export default function DashboardPage() {
       </div>
 
       <RouteBuilderModal open={routeModalOpen} onClose={() => setRouteModalOpen(false)} />
+      <ManualRouteBuilderModal open={manualRouteModalOpen} onClose={() => setManualRouteModalOpen(false)} />
     </AppShell>
   );
 }

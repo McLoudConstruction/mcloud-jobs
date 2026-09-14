@@ -157,3 +157,44 @@ What it does each run, per connected staff member:
 Only the account owner can currently connect a calendar, since Settings is
 an owner-only page — extending this to other staff roles would need a
 small "My Account" page outside Settings, separate from this phase.
+
+---
+
+## 8. Google Places (property name/address lookup)
+
+Powers the "start typing a name and pick the real address" autocomplete
+on the Properties form's Property Name field, the address fields
+throughout the app, and the Sales > **Create Sales Route** manual route
+builder. This is the only piece that involves fetching real-world
+listing data from the internet — everything else in the app (including
+the AI "Create My Sales Route") works entirely off properties already
+saved in the app's own database.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) →
+   create a project (or use an existing one — the same one as Google
+   Calendar above is fine).
+2. **APIs & Services → Library** → enable **Maps JavaScript API** and
+   **Places API**.
+3. **APIs & Services → Credentials → Create Credentials → API key.**
+4. Click the new key → **Restrict key**:
+   - **Application restrictions**: HTTP referrers → add
+     `https://jobs.mcloudconstruction.com/*` (and `http://localhost:3000/*`
+     if testing locally).
+   - **API restrictions**: restrict to just Maps JavaScript API + Places
+     API.
+5. Copy the key into Vercel (Project → Settings → Environment
+   Variables):
+
+```
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=...
+```
+
+6. Redeploy. No Settings → Integrations step for this one — it's a
+   build-time env var, not a per-account connection.
+
+**Cost:** Google's Places Autocomplete has a monthly free tier that
+comfortably covers normal day-to-day use (a handful of lookups per
+lead/property/route stop); heavy volume beyond that bills per request
+at Google's published Places API rates. Without a key set, every field
+that would otherwise autocomplete just falls back to a plain text box —
+nothing breaks, you only lose the live lookup.
