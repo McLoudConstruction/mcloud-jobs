@@ -134,12 +134,33 @@ export default function JobDetailPage() {
 
   // Central place to change tabs so section always lands somewhere valid:
   // explicit section if given, else that tab's first section, else none.
+  // Also keeps the URL in sync (?tab=&section=) — this used to only set
+  // local state, so refreshing (or bookmarking/sharing a link) while on
+  // any tab besides Overview always landed back on Overview, since the
+  // URL never actually reflected where you'd navigated to.
   const goToTab = useCallback((tabKey, sectionKey) => {
     const target = TABS.find(t => t.key === tabKey);
     if (!target) return;
+    const resolvedSection = sectionKey || target.sections?.[0]?.key || null;
     setTab(tabKey);
-    setSection(sectionKey || target.sections?.[0]?.key || null);
+    setSection(resolvedSection);
+    syncUrl(tabKey, resolvedSection);
   }, []);
+
+  // Same idea, for switching sections within a tab (e.g. Financials'
+  // Invoicing/Receipts sub-nav) without changing the tab itself.
+  const goToSection = useCallback((sectionKey) => {
+    setSection(sectionKey);
+    syncUrl(tab, sectionKey);
+  }, [tab]);
+
+  function syncUrl(tabKey, sectionKey) {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', tabKey);
+    if (sectionKey) params.set('section', sectionKey); else params.delete('section');
+    router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -507,7 +528,7 @@ export default function JobDetailPage() {
                 <button
                   key={s.key}
                   className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
-                  onClick={() => setSection(s.key)}
+                  onClick={() => goToSection(s.key)}
                 >
                   {s.label}
                 </button>
