@@ -111,6 +111,7 @@ export default function ManualRouteBuilderCore({ onClose }) {
 
       let stops = resolved.map(p => ({
         property_id: p.id, property_name: p.property_name,
+        property_type: p.property_type || null, management_company: p.management_company || null,
         property_street: p.property_street, property_city: p.property_city,
         property_state: p.property_state, property_zip: p.property_zip,
         property_lat: p.property_lat ?? null, property_lng: p.property_lng ?? null,
@@ -181,6 +182,18 @@ export default function ManualRouteBuilderCore({ onClose }) {
     const nowIso = new Date().toISOString();
     if (stop.property_id) await supabase.from('properties').update({ last_visited_at: nowIso }).eq('id', stop.property_id);
     const nextStops = route.stops.map((s, i) => (i === index ? { ...s, visited_at: nowIso } : s));
+    await persistStops(nextStops);
+  }
+
+  // Undo — for an accidental tap (in the car, on the way to the next
+  // stop). Only unmarks this route's own record of the visit; it
+  // deliberately doesn't touch the property's last_visited_at, since
+  // that field is shared app-wide and this route may not be the only
+  // reason it got set.
+  async function unmarkStopVisited(index) {
+    const stop = route.stops[index];
+    if (!stop) return;
+    const nextStops = route.stops.map((s, i) => (i === index ? { ...s, visited_at: null } : s));
     await persistStops(nextStops);
   }
 
@@ -307,7 +320,14 @@ export default function ManualRouteBuilderCore({ onClose }) {
                   <div style={{ fontSize: 13, fontWeight: 600, textDecoration: p.visited_at ? 'line-through' : 'none', opacity: p.visited_at ? 0.6 : 1 }}>{p.property_name}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{formatAddress(p) || 'No address on file'}</div>
                 </div>
-                <button type="button" className="btn btn-sm btn-danger" onClick={() => removeStop(i)} style={{ alignSelf: 'flex-start' }}>Remove</button>
+                <div style={{ display: 'flex', gap: 6, alignSelf: 'flex-start' }}>
+                  {p.visited_at ? (
+                    <button type="button" className="btn btn-sm" onClick={() => unmarkStopVisited(i)}>Undo Visit</button>
+                  ) : (
+                    <button type="button" className="btn btn-sm" onClick={() => markStopVisited(i)}>Mark Visited</button>
+                  )}
+                  <button type="button" className="btn btn-sm btn-danger" onClick={() => removeStop(i)}>Remove</button>
+                </div>
               </div>
             ))}
           </div>
@@ -327,6 +347,7 @@ export default function ManualRouteBuilderCore({ onClose }) {
           stops={route.stops}
           onExit={() => setDriving(false)}
           onMarkVisited={async (index) => { await markStopVisited(index); }}
+          onUndoVisit={async (index) => { await unmarkStopVisited(index); }}
           onFinish={handleFinishRoute}
         />
       )}
