@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
+import { SERVICES_OFFERED } from '../lib/constants';
 
 const WORK_LOCATION_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
@@ -79,6 +80,50 @@ function Legend({ phases }) {
   );
 }
 
+// One computed status per outdoor phase, so exactly one line renders —
+// no risk of two conditions both matching (or, as happened before this
+// was centralized, a phase with no trade at all — possible now that
+// "Add line item" allows one — falling through every check and getting
+// a false "no conflicts found" it was never actually checked for).
+function WeatherStatusLine({ phase, flag, noRule, checkedThrough }) {
+  if (flag) {
+    return (
+      <div style={{ fontSize: 10.5, color: '#a13f3f', marginTop: 3, maxWidth: 420 }}>
+        ⚠ Weather risk on {fmtDate(flag.date)}: {flag.reasons.join(' ')}
+      </div>
+    );
+  }
+  if (!phase.trade) {
+    return (
+      <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
+        No trade selected — not being checked for weather.
+      </div>
+    );
+  }
+  if (noRule) {
+    return (
+      <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
+        No weather thresholds defined for {phase.trade} yet — not being checked.
+      </div>
+    );
+  }
+  if (checkedThrough && phase.start_date > checkedThrough) {
+    return (
+      <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
+        Weather not checkable yet — forecast only covers through {fmtDate(checkedThrough)}.
+      </div>
+    );
+  }
+  if (checkedThrough && phase.start_date <= checkedThrough) {
+    return (
+      <div style={{ fontSize: 10, color: '#4a8a5f', marginTop: 3 }}>
+        ✓ No weather conflicts found for this trade ({phase.trade}).
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function ScheduleCard({ jobId, job }) {
   const [phases, setPhases] = useState([]);
   const [scopeActions, setScopeActions] = useState([]);
@@ -94,6 +139,8 @@ export default function ScheduleCard({ jobId, job }) {
   const [editAllowWeekend, setEditAllowWeekend] = useState(false);
   const [editWorkLocation, setEditWorkLocation] = useState('indoor');
   const [view, setView] = useState('list'); // 'list' | 'timeline'
+  const [addingPhase, setAddingPhase] = useState(false);
+  const [newPhase, setNewPhase] = useState({ label: '', trade: '', start_date: '', duration_days: 1, preferred_start_day: '', allow_weekend_work: false, work_location: 'indoor' });
   const [weatherFlags, setWeatherFlags] = useState({}); // phase_id -> { date, reasons }
   const [weatherCheckedThrough, setWeatherCheckedThrough] = useState(null); // last date the forecast covers
   const [weatherNoRuleIds, setWeatherNoRuleIds] = useState([]); // phase ids whose trade has no threshold row at all
@@ -280,26 +327,34 @@ export default function ScheduleCard({ jobId, job }) {
   }
 
   async function savePhaseEdit(phase) {
-    const index = phases.findIndex(p => p.id === phase.id);
-    // Recompute from this phase's own (unchanged) start date, cascading
-    // the new duration through everything scheduled after it.
-    const rebased = phases.slice(index).map((p, i) => i === 0
-      ? { ...p, duration_days: Math.max(1, Number(editDuration) || 1), preferred_start_day: editPreferredStartDay || null, allow_weekend_work: editAllowWeekend, work_location: editWorkLocation }
-      : p);
-    const final = recomputeSequentialDates(rebased, phases[index].start_date);
+    // Deliberately independent of every other phase — no cascade, same
+    // philosophy as the Timeline view's drag/resize below. Editing one
+    // phase's duration used to rebase every phase scheduled after it,
+    // which meant moving one phase up because a trade became available
+    // early also silently dragged the next several phases along with
+    // it. Only this phase's own start date is used as the anchor for
+    // its own new end date.
+    const recomputed = recomputeSequentialDates(
+      [{
+        ...phase,
+        duration_days: Math.max(1, Number(editDuration) || 1),
+        preferred_start_day: editPreferredStartDay || null,
+        allow_weekend_work: editAllowWeekend,
+      }],
+      phase.start_date
+    )[0];
 
-    for (const p of final) {
-      await supabase.from('job_phases').update({
-        duration_days: p.duration_days,
-        start_date: p.start_date,
-        end_date: p.end_date,
-        preferred_start_day: p.preferred_start_day,
-        allow_weekend_work: p.allow_weekend_work,
-        work_location: p.work_location,
-        source: p.id === phase.id ? 'manual' : p.source,
-        needs_review: p.id === phase.id ? false : p.needs_review,
-      }).eq('id', p.id);
-    }
+    await supabase.from('job_phases').update({
+      duration_days: recomputed.duration_days,
+      start_date: recomputed.start_date,
+      end_date: recomputed.end_date,
+      preferred_start_day: recomputed.preferred_start_day,
+      allow_weekend_work: recomputed.allow_weekend_work,
+      work_location: editWorkLocation,
+      source: 'manual',
+      needs_review: false,
+    }).eq('id', phase.id);
+
     setEditingId(null);
     await loadPhases();
   }
@@ -311,6 +366,46 @@ export default function ScheduleCard({ jobId, job }) {
     // The realtime subscription should pick this up on its own, but
     // don't rely on it alone — explicitly reload so the list clears
     // immediately instead of waiting on a refresh.
+    await loadPhases();
+  }
+
+  // Adds a standalone line item to an already-generated schedule — e.g.
+  // scope that came up after the fact, or a trade the AI breakdown
+  // didn't cover. Uses phase_key: 'custom' so regenerating never treats
+  // it as orphaned (see mergeWithExisting above) and picks its own start
+  // date directly rather than being slotted into the existing sequence,
+  // consistent with every other date edit here being independent of the
+  // rest of the schedule.
+  async function saveNewPhase() {
+    if (!newPhase.label.trim()) { setError('Give the new line item a name.'); return; }
+    if (!newPhase.start_date) { setError('Pick a start date for the new line item.'); return; }
+    setError('');
+
+    const computed = recomputeSequentialDates(
+      [{ ...newPhase, duration_days: Math.max(1, Number(newPhase.duration_days) || 1) }],
+      newPhase.start_date
+    )[0];
+    const maxSortOrder = phases.length > 0 ? Math.max(...phases.map(p => p.sort_order)) : -1;
+
+    const { error: insertError } = await supabase.from('job_phases').insert({
+      job_id: jobId,
+      phase_key: 'custom',
+      label: newPhase.label.trim(),
+      trade: newPhase.trade || null,
+      duration_days: computed.duration_days,
+      start_date: computed.start_date,
+      end_date: computed.end_date,
+      preferred_start_day: computed.preferred_start_day || null,
+      allow_weekend_work: computed.allow_weekend_work,
+      work_location: newPhase.work_location,
+      source: 'manual',
+      needs_review: false,
+      sort_order: maxSortOrder + 1,
+    });
+    if (insertError) { setError(insertError.message); return; }
+
+    setNewPhase({ label: '', trade: '', start_date: '', duration_days: 1, preferred_start_day: '', allow_weekend_work: false, work_location: 'indoor' });
+    setAddingPhase(false);
     await loadPhases();
   }
 
@@ -473,25 +568,13 @@ export default function ScheduleCard({ jobId, job }) {
                       {p.allow_weekend_work && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · weekend OK</span>}
                       {p.work_location && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>}
                       <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} days)</div>
-                      {weatherFlags[p.id] && (
-                        <div style={{ fontSize: 10.5, color: '#a13f3f', marginTop: 3, maxWidth: 420 }}>
-                          ⚠ Weather risk on {fmtDate(weatherFlags[p.id].date)}: {weatherFlags[p.id].reasons.join(' ')}
-                        </div>
-                      )}
-                      {!weatherFlags[p.id] && p.work_location === 'outdoor' && weatherNoRuleIds.includes(p.id) && (
-                        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
-                          No weather thresholds defined for {p.trade || 'this trade'} yet — not being checked.
-                        </div>
-                      )}
-                      {!weatherFlags[p.id] && !weatherNoRuleIds.includes(p.id) && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date > weatherCheckedThrough && (
-                        <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 3, fontStyle: 'italic' }}>
-                          Weather not checkable yet — forecast only covers through {fmtDate(weatherCheckedThrough)}.
-                        </div>
-                      )}
-                      {!weatherFlags[p.id] && !weatherNoRuleIds.includes(p.id) && p.work_location === 'outdoor' && weatherCheckedThrough && p.start_date <= weatherCheckedThrough && (
-                        <div style={{ fontSize: 10, color: '#4a8a5f', marginTop: 3 }}>
-                          ✓ No weather conflicts found for this trade{p.trade ? ` (${p.trade})` : ''}.
-                        </div>
+                      {p.work_location === 'outdoor' && (
+                        <WeatherStatusLine
+                          phase={p}
+                          flag={weatherFlags[p.id]}
+                          noRule={weatherNoRuleIds.includes(p.id)}
+                          checkedThrough={weatherCheckedThrough}
+                        />
                       )}
                     </div>
                   </div>
@@ -500,7 +583,57 @@ export default function ScheduleCard({ jobId, job }) {
               )}
             </div>
           ))}
+
+          {view === 'list' && addingPhase && (
+            <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Name</label>
+                  <input type="text" value={newPhase.label} onChange={e => setNewPhase({ ...newPhase, label: e.target.value })} placeholder="e.g. Fence repair" style={{ width: 180 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Trade</label>
+                  <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })} style={{ width: 150 }}>
+                    <option value="">No specific trade</option>
+                    {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Start date</label>
+                  <input type="date" value={newPhase.start_date} onChange={e => setNewPhase({ ...newPhase, start_date: e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Duration</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" min="1" value={newPhase.duration_days} onChange={e => setNewPhase({ ...newPhase, duration_days: e.target.value })} style={{ width: 56 }} />
+                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Weekend work</label>
+                  <select value={newPhase.allow_weekend_work ? 'yes' : 'no'} onChange={e => setNewPhase({ ...newPhase, allow_weekend_work: e.target.value === 'yes' })}>
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Work location</label>
+                  <select value={newPhase.work_location} onChange={e => setNewPhase({ ...newPhase, work_location: e.target.value })}>
+                    {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                <button className="btn btn-sm btn-primary" onClick={saveNewPhase}>Add to schedule</button>
+                <button className="btn btn-sm" onClick={() => { setAddingPhase(false); setError(''); }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
           <div className="section-actions">
+            {view === 'list' && !addingPhase && (
+              <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add line item</button>
+            )}
             <button className="btn btn-sm" onClick={() => { setStartDate(phases[0].start_date); generate(); }}>Regenerate</button>
             <button className="btn btn-sm btn-danger" onClick={removeAllPhases}>Remove schedule</button>
           </div>
@@ -510,9 +643,19 @@ export default function ScheduleCard({ jobId, job }) {
   );
 }
 
-// Fixed pixel width per day column — what drag/resize below snaps to.
+// Fixed pixel width per day column on mobile, and the desktop fallback
+// before its container has been measured. On desktop, TimelineView
+// computes an actual day width from the card's available space instead
+// — see MAX_FIT_DAYS below.
 const DAY_WIDTH = 30;
 const LABEL_WIDTH = 128;
+// Desktop only: a schedule up to this many days stretches to fill the
+// card's full width, so nothing needs a scrollbar just to see the whole
+// thing at a glance. Beyond this, day width holds steady at whatever a
+// full month would have used, and the rest scrolls — stretching further
+// would make individual days illegibly thin instead of just scrolling.
+const MAX_FIT_DAYS = 31;
+const MOBILE_BREAKPOINT = 767;
 
 const DOW_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -523,25 +666,29 @@ function dateLabel(date) {
 // A single repeating-gradient that shades Saturday/Sunday columns,
 // aligned to wherever the schedule's first day actually falls in the
 // week — cheaper than rendering a div per weekend day, and it's reused
-// as the background for every row plus the header.
-function weekendShading(minDate) {
+// as the background for every row plus the header. dayWidth is now a
+// parameter rather than the fixed DAY_WIDTH constant, since desktop
+// computes its own.
+function weekendShading(minDate, dayWidth) {
   const firstWeekendOffset = (6 - minDate.getDay() + 7) % 7; // days until the first Saturday
-  const bandStart = firstWeekendOffset * DAY_WIDTH;
-  const bandEnd = bandStart + 2 * DAY_WIDTH;
-  const period = 7 * DAY_WIDTH;
+  const bandStart = firstWeekendOffset * dayWidth;
+  const bandEnd = bandStart + 2 * dayWidth;
+  const period = 7 * dayWidth;
   return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, var(--panel) ${bandStart}px, var(--panel) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
 }
 
 // A thin vertical line at the start of every day column, so a bar's edges
 // can be read against exactly which day they fall on instead of only
 // against the header's date labels above.
-const GRIDLINES = `repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent ${DAY_WIDTH}px)`;
+function gridlines(dayWidth) {
+  return `repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent ${dayWidth}px)`;
+}
 
 // Combines the day gridlines (drawn on top) with the weekend shading
 // (underneath) into one background value — both are pure gradients with
 // transparent everywhere they don't apply, so they layer cleanly.
-function gridBackground(minDate) {
-  return `${GRIDLINES}, ${weekendShading(minDate)}`;
+function gridBackground(minDate, dayWidth) {
+  return `${gridlines(dayWidth)}, ${weekendShading(minDate, dayWidth)}`;
 }
 
 function toISO(date) {
@@ -566,13 +713,35 @@ function TimelineView({ phases, onPhaseUpdate }) {
   const [dragState, setDragState] = useState(null); // { phaseId, mode, startX, origStart, origEnd }
   const [previewDates, setPreviewDates] = useState(null); // { phaseId, start_date, end_date } — live feedback while dragging
   const previewRef = useRef(null);
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const dayWidthRef = useRef(DAY_WIDTH);
+
+  useEffect(() => {
+    function checkMobile() { setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT); }
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) setContainerWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!dragState) return;
 
     function handleMove(e) {
       const deltaX = e.clientX - dragState.startX;
-      const dayDelta = Math.round(deltaX / DAY_WIDTH);
+      const dayDelta = Math.round(deltaX / dayWidthRef.current);
       const origStart = new Date(dragState.origStart + 'T00:00:00');
       const origEnd = new Date(dragState.origEnd + 'T00:00:00');
       let newStart = origStart, newEnd = origEnd;
@@ -626,8 +795,17 @@ function TimelineView({ phases, onPhaseUpdate }) {
   const minDate = new Date(Math.min(...effectivePhases.map(p => new Date(p.start_date + 'T00:00:00'))));
   const maxDate = new Date(Math.max(...effectivePhases.map(p => new Date(p.end_date + 'T00:00:00'))));
   const totalSpan = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
-  const gridWidth = totalSpan * DAY_WIDTH;
-  const weekendBg = gridBackground(minDate);
+
+  let dayWidth = DAY_WIDTH;
+  if (!isMobile && containerWidth > 0) {
+    const availableWidth = containerWidth - LABEL_WIDTH;
+    const fitSpan = Math.min(totalSpan, MAX_FIT_DAYS);
+    dayWidth = Math.max(20, availableWidth / fitSpan);
+  }
+  dayWidthRef.current = dayWidth;
+
+  const gridWidth = totalSpan * dayWidth;
+  const weekendBg = gridBackground(minDate, dayWidth);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -642,13 +820,13 @@ function TimelineView({ phases, onPhaseUpdate }) {
       <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
         Drag a bar to move it, or its edges to resize — phases can overlap here, and moving one doesn't shift the others. A phase without weekend work shows a gap over any weekend it spans, rather than a solid bar.
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
+      <div ref={containerRef} style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
         <div style={{ width: LABEL_WIDTH + gridWidth }}>
           <div style={{ display: 'flex' }}>
             <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 2, borderBottom: '1px solid var(--line)' }} />
             <div style={{ width: gridWidth, flexShrink: 0, display: 'flex', background: weekendBg, borderBottom: '1px solid var(--line)' }}>
               {days.map((d, i) => (
-                <div key={i} style={{ width: DAY_WIDTH, flexShrink: 0, textAlign: 'center', padding: '4px 0' }}>
+                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0' }}>
                   <div style={{ fontSize: 8.5, color: 'var(--ink-soft)' }}>{dateLabel(d)}</div>
                   <div style={{ fontSize: 10, fontWeight: 600 }}>{DOW_LETTERS[d.getDay()]}</div>
                 </div>
@@ -665,13 +843,13 @@ function TimelineView({ phases, onPhaseUpdate }) {
             const segments = splitAtWeekends(p.start_date, p.end_date, p.allow_weekend_work);
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 0', fontSize: 10.5, lineHeight: 1.25 }}>
+                <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 10px', fontSize: 10.5, lineHeight: 1.25 }}>
                   {p.label}
                   <div style={{ fontSize: 9, color: 'var(--ink-soft)' }}>{p.duration_days}d</div>
                 </div>
                 <div style={{ width: gridWidth, flexShrink: 0, position: 'relative', height: 32, background: weekendBg }}>
                   {showToday && (
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * DAY_WIDTH, width: 2, background: 'var(--accent)' }} />
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * dayWidth, width: 2, background: 'var(--accent)' }} />
                   )}
                   {/* Transparent hit area spans the full range for move/resize
                       dragging — the visible color lives in the segments below,
@@ -682,7 +860,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
                     onPointerDown={e => startDrag(p, 'move', e)}
                     style={{
                       position: 'absolute', top: 5, bottom: 5,
-                      left: offsetDays * DAY_WIDTH + 2, width: Math.max(spanDays * DAY_WIDTH - 4, DAY_WIDTH - 4),
+                      left: offsetDays * dayWidth + 2, width: Math.max(spanDays * dayWidth - 4, dayWidth - 4),
                       opacity: isDragging ? 0.75 : 1,
                       cursor: isDragging && dragState.mode === 'move' ? 'grabbing' : 'grab',
                       touchAction: 'none',
@@ -698,7 +876,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
                           key={si}
                           style={{
                             position: 'absolute', top: 0, bottom: 0,
-                            left: segOffset * DAY_WIDTH, width: segSpan * DAY_WIDTH - 2,
+                            left: segOffset * dayWidth, width: segSpan * dayWidth - 2,
                             borderRadius: 4,
                             background: p.needs_review ? 'var(--gold)' : phaseBackground(p),
                             boxShadow: isDragging ? '0 0 0 2px var(--accent)' : 'none',
