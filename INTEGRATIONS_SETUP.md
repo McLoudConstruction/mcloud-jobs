@@ -179,7 +179,14 @@ manage from Settings, no redeploy required to add or change it.
    create a project (or use an existing one — the same one as Google
    Calendar above is fine).
 2. **APIs & Services → Library** → enable **Maps JavaScript API** and
-   **Places API**.
+   **Places API (New)**. Note the "(New)" — the plain, non-"(New)"
+   **Places API** is the legacy one; its old autocomplete widget stopped
+   working for any Google Cloud project new to Places since March 1,
+   2025 ("not available to new customers," straight from Google's own
+   console warning), so this app talks to Places API (New) instead. If
+   you happen to have the legacy **Places API** enabled too from an
+   older setup, it doesn't hurt anything to leave it on — this app just
+   doesn't use it anymore.
 3. **APIs & Services → Credentials → Create Credentials → API key.**
 4. Click the new key → **Restrict key**:
    - **Application restrictions**: HTTP referrers → add
@@ -189,11 +196,19 @@ manage from Settings, no redeploy required to add or change it.
      to your own domain means it's useless to anyone who copies it out
      of the page source.
    - **API restrictions**: restrict to just Maps JavaScript API + Places
-     API.
+     API (New).
 5. In Settings → Integrations → **API keys**, paste it into the Google
    Maps field and **Save**. Any signed-in staff member (not just the
    owner) can then use address autocomplete — only saving/removing the
    key itself is owner-only, same as the other API keys on this page.
+
+**If autocomplete still doesn't show suggestions after this:** open the
+browser console while typing in a property/address field. A
+`RefererNotAllowedMapError` means the HTTP referrer restriction above
+doesn't match the domain you're actually on; `ApiNotActivatedMapError`
+means Places API (New) isn't enabled on the project the key belongs to;
+an `InvalidKey` warning alongside either of those is usually a symptom
+of one of those two, not a separate problem with the key string itself.
 
 **Cost:** Google's Places Autocomplete has a monthly free tier that
 comfortably covers normal day-to-day use (a handful of lookups per

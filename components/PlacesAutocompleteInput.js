@@ -2,17 +2,51 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadGoogleMapsPlaces } from '../lib/googleMapsLoader';
 
-function componentValue(components, type, useShort) {
-  const c = (components || []).find(comp => comp.types.includes(type));
-  return c ? (useShort ? c.short_name : c.long_name) : '';
+// Google discontinued the old google.maps.places.Autocomplete widget for
+// any account new to Places API since March 1, 2025 — it no longer runs
+// at all (see lib/googleMapsLoader.js). Google's own suggested
+// replacement, PlaceAutocompleteElement, is a closed-shadow-DOM custom
+// element with its own built-in input — it can't be dropped into this
+// app's existing styled <input> the way the old widget could, and
+// wrapping it in a way that matched this app's look everywhere would be
+// a bigger, riskier change than fixing the actual gap here (address
+// lookup not working at all).
+//
+// So this uses the other non-deprecated half of the new Places API
+// instead: AutocompleteSuggestion.fetchAutocompleteSuggestions(), the
+// plain data call the widget itself is built on. That means this stays
+// a genuine plain <input> — same styling as every other field in the
+// app — with a small self-built dropdown underneath it, same pattern
+// this app already uses for the Contact Name suggestions on the Sales
+// page (app/sales/page.js).
+const DEBOUNCE_MS = 250;
+
+let placesLib = null; // { AutocompleteSuggestion, AutocompleteSessionToken } — resolved once, reused everywhere
+
+async function getPlacesLib() {
+  if (placesLib) return placesLib;
+  placesLib = await window.google.maps.importLibrary('places');
+  return placesLib;
 }
 
-function parsePlace(place) {
-  const components = place.address_components || [];
+function textOf(field) {
+  if (!field) return '';
+  return typeof field === 'string' ? field : (field.text || '');
+}
+
+function componentValue(components, type, useShort) {
+  const c = (components || []).find(comp => (comp.types || []).includes(type));
+  if (!c) return '';
+  return useShort ? (c.shortText || c.longText || '') : (c.longText || c.shortText || '');
+}
+
+async function parsePlace(place) {
+  await place.fetchFields({ fields: ['addressComponents', 'displayName'] }); // Basic Data only — stays in Google's free Essentials tier
+  const components = place.addressComponents || [];
   const streetNumber = componentValue(components, 'street_number');
   const route = componentValue(components, 'route');
   return {
-    name: place.name || '',
+    name: textOf(place.displayName),
     street: [streetNumber, route].filter(Boolean).join(' '),
     city: componentValue(components, 'locality') || componentValue(components, 'sublocality') || componentValue(components, 'administrative_area_level_2'),
     state: componentValue(components, 'administrative_area_level_1', true),
@@ -26,38 +60,99 @@ function parsePlace(place) {
 //                             parsed = { name, street, city, state, zip }
 // Every other prop passes straight through to the underlying <input>.
 export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelected, ...rest }) {
-  const inputRef = useRef(null);
-  const autocompleteRef = useRef(null);
   const [ready, setReady] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const sessionTokenRef = useRef(null);
+  const debounceRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     loadGoogleMapsPlaces().then(loaded => {
-      if (cancelled || !loaded || !inputRef.current || autocompleteRef.current) return;
-      setReady(true);
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
-        fields: ['address_components', 'name'], // keep this narrow — stays in Google's free Essentials tier
-        componentRestrictions: { country: 'us' },
-      });
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current.getPlace();
-        if (!place || !place.address_components) return;
-        const parsed = parsePlace(place);
-        onChange(parsed.name || inputRef.current.value);
-        if (onPlaceSelected) onPlaceSelected(parsed);
-      });
+      if (!cancelled) setReady(loaded);
     });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; clearTimeout(debounceRef.current); };
   }, []);
 
+  async function fetchSuggestions(text) {
+    const requestId = ++requestIdRef.current;
+    try {
+      const { AutocompleteSuggestion, AutocompleteSessionToken } = await getPlacesLib();
+      if (!sessionTokenRef.current) sessionTokenRef.current = new AutocompleteSessionToken();
+      const { suggestions: results } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: text,
+        includedRegionCodes: ['us'],
+        sessionToken: sessionTokenRef.current,
+      });
+      if (requestId !== requestIdRef.current) return; // a newer keystroke already superseded this request
+      const withPlaces = (results || []).filter(s => s.placePrediction);
+      setSuggestions(withPlaces);
+      setShowSuggestions(withPlaces.length > 0);
+    } catch {
+      if (requestId !== requestIdRef.current) return;
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function handleChange(e) {
+    const text = e.target.value;
+    onChange(text);
+    if (!ready) return;
+    clearTimeout(debounceRef.current);
+    if (!text.trim()) {
+      requestIdRef.current++; // cancel any in-flight request — an empty field has nothing to suggest
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => fetchSuggestions(text), DEBOUNCE_MS);
+  }
+
+  async function selectSuggestion(suggestion) {
+    setShowSuggestions(false);
+    setSuggestions([]);
+    try {
+      const place = suggestion.placePrediction.toPlace();
+      const parsed = await parsePlace(place);
+      onChange(parsed.name || value);
+      if (onPlaceSelected) onPlaceSelected(parsed);
+    } finally {
+      sessionTokenRef.current = null; // a session ends once a place is selected — the next search starts fresh
+    }
+  }
+
   return (
-    <input
-      ref={inputRef}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      title={ready ? 'Start typing a name or address — pick a match to auto-fill the rest' : undefined}
-      {...rest}
-    />
+    <div style={{ position: 'relative' }}>
+      <input
+        value={value}
+        onChange={handleChange}
+        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+        autoComplete="off"
+        title={ready ? 'Start typing a name or address — pick a match to auto-fill the rest' : undefined}
+        {...rest}
+      />
+      {showSuggestions && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, marginTop: 2, maxHeight: 240, overflowY: 'auto' }}>
+          {suggestions.map((s, i) => {
+            const pred = s.placePrediction;
+            const main = textOf(pred.mainText) || textOf(pred.text);
+            const secondary = textOf(pred.secondaryText);
+            return (
+              <div
+                key={pred.placeId || i}
+                onMouseDown={() => selectSuggestion(s)}
+                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}
+              >
+                <div style={{ fontWeight: 600 }}>{main}</div>
+                {secondary && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{secondary}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
