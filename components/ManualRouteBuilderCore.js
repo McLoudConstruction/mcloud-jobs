@@ -61,7 +61,7 @@ function findDuplicateNames(filled) {
 // screen going off mid-drive (resumes automatically next time this
 // opens), and offers a full-screen "drive mode" for working through
 // stops one at a time on a phone.
-export default function ManualRouteBuilderCore({ onClose }) {
+export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
   const [staffId, setStaffId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [rows, setRows] = useState(() => Array.from({ length: INITIAL_ROW_COUNT }, newRow));
@@ -184,6 +184,7 @@ export default function ManualRouteBuilderCore({ onClose }) {
         : { id: null, stops }; // not signed in somehow — still show the built route, just can't save/resume it
 
       setRoute(saved);
+      if (onRouteChanged) onRouteChanged();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -322,11 +323,13 @@ export default function ManualRouteBuilderCore({ onClose }) {
     if (route?.id) await finishRoute(route.id);
     setDriving(false);
     reset();
+    if (onRouteChanged) onRouteChanged();
   }
 
   async function discardActiveRoute() {
     if (route?.id) await cancelRoute(route.id);
     reset();
+    if (onRouteChanged) onRouteChanged();
   }
 
   function reset() {
