@@ -140,34 +140,34 @@ a { color: inherit; text-decoration: none; }
   max-width: 1400px;
 }
 
-/* Cards are sized for their own content now, not forced into a uniform
-   square grid cell — grid-auto-rows: min-content means a row is only as
-   tall as whatever's actually in it, so a card never needs internal
-   scrolling just because a neighboring card happened to be shorter.
-   gridColumn/gridRow on individual cards (set inline, per card) is still
-   how a card claims extra width when its content genuinely needs it —
-   the difference is nothing is forced into a size it doesn't need. */
-.dash-cards{
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  grid-auto-rows: min-content;
-  align-items: start;
-  gap: 16px;
+/* The dashboard as a flowing page, not a grid of boxed cards — each
+   .dash-section is a plain content block separated by a hairline rather
+   than its own bordered/padded box, so scanning down the page reads as
+   one continuous flow instead of hopping between distinct tiles. */
+.dash-section{
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
 }
-.dash-cards .card{
-  box-sizing: border-box;
+.dash-section:first-child{
+  padding-top: 0;
 }
-/* A clickable stat inside a StatCard — underline only on hover, so the
-   card doesn't look like a wall of links at rest. */
+.dash-section:last-child{
+  border-bottom: none;
+}
+.dash-section h3{
+  margin: 0 0 14px;
+}
+.weather-ribbon{
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+/* A clickable stat in the Snapshot section — underline only on hover,
+   so it doesn't read as a wall of links at rest. */
 .stat-tile-link:hover > div > div:first-child{
   text-decoration: underline;
 }
-@media (max-width: 640px){
-  .dash-cards{ grid-template-columns: 1fr 1fr; gap: 10px; }
-  .dash-cards .card{ padding: 14px 12px; }
-}
 /* Used where a scroller has its own arrow buttons (e.g. the hourly
-   weather widget) so the native scrollbar isn't shown twice-over. */
+   weather ribbon) so the native scrollbar isn't shown twice-over. */
 .hide-scrollbar{
   scrollbar-width: none;
   -ms-overflow-style: none;
