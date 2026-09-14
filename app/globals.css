@@ -157,12 +157,10 @@ a { color: inherit; text-decoration: none; }
 .dash-cards .card{
   box-sizing: border-box;
 }
-.dash-cards .card.widget-dragging{
-  opacity: 0.4;
-}
-.dash-cards .card.widget-drag-over{
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
+/* A clickable stat inside a StatCard — underline only on hover, so the
+   card doesn't look like a wall of links at rest. */
+.stat-tile-link:hover > div > div:first-child{
+  text-decoration: underline;
 }
 @media (max-width: 640px){
   .dash-cards{ grid-template-columns: 1fr 1fr; gap: 10px; }

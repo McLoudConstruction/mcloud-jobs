@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState, cloneElement } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
@@ -7,7 +7,7 @@ import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import { useCompanyForecast, WeatherCard } from '../../components/dashboard/WeatherWidgets';
-import { resolveWidgetOrder } from '../../lib/dashboardWidgets';
+import { DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
 
@@ -20,24 +20,46 @@ function fmtMoney(n) {
 // until it's clear what value actually fits how margin gets tracked here.
 const TARGET_MARGIN_PERCENT = 20;
 
+// One clickable metric — value, label, and (usually) somewhere it links
+// to for the detail behind the number. Sized generously on purpose: the
+// old all-in-one Key Metrics card packed 14 of these into ~17px numbers,
+// which read as cramped rather than dense.
+function StatTile({ value, label, href, warn }) {
+  const body = (
+    <div>
+      <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>{label}</div>
+    </div>
+  );
+  if (!href) return body;
+  return (
+    <Link href={href} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }} className="stat-tile-link">
+      {body}
+    </Link>
+  );
+}
+
+// A purpose-built card for a group of related stats — Cash, Pipeline &
+// Backlog, Profitability, Schedule Health. Deliberately not a generic
+// "widget" — each one exists because that specific grouping of numbers
+// belongs together, not because it's a slot in a reorderable grid.
+function StatCard({ title, tiles }) {
+  return (
+    <div className="card">
+      <h3>{title}</h3>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 28px', marginTop: 4 }}>
+        {tiles.map(t => <StatTile key={t.label} {...t} />)}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
   const { settings } = useSettings();
   const [jobs, setJobs] = useState([]);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
   const { forecast: companyForecast, loading: weatherLoading, error: weatherError } = useCompanyForecast();
-
-  // Widget order is company-wide (one shared app_settings row, same as
-  // every other dashboard setting) — dragging here changes it for
-  // everyone, the same as reordering it in Settings → Dashboard would.
-  // localOrder is an optimistic override so a drop feels instant instead
-  // of waiting on the round trip; the realtime subscription inside
-  // useSettings brings `settings` in sync shortly after, at which point
-  // this resets to null and defers back to it.
-  const [localOrder, setLocalOrder] = useState(null);
-  const [dragState, setDragState] = useState({ draggingIndex: null, dragOverIndex: null });
-
-  useEffect(() => { setLocalOrder(null); }, [settings.dashboard_widget_order]);
 
   useEffect(() => {
     if (!session) return;
@@ -74,7 +96,7 @@ export default function DashboardPage() {
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [session]);
 
-  // Per-job cost + accepted-change-order totals, for the margin widgets —
+  // Per-job cost + accepted-change-order totals, for the margin stats —
   // same formula JobCostSummary.js uses on a job's own Financials tab,
   // just aggregated across every job instead of one at a time.
   const [costsByJob, setCostsByJob] = useState({});
@@ -209,78 +231,68 @@ export default function DashboardPage() {
   if (loading || !session) return null;
 
   const show = key => widgetEnabled(settings, key);
+  const net = stats.totalAR - totalAP;
 
-  // One render function per positioned widget, looked up by key so the
-  // grid below can iterate in whatever order Settings → Dashboard has
-  // saved (see lib/dashboardWidgets.js) instead of a fixed layout order.
-  function renderWidget(key) {
+  // One render function per card, looked up by key — order is fixed
+  // (DASHBOARD_ORDER, in lib/dashboardWidgets.js) rather than
+  // user-draggable. With purpose-built cards instead of a grid of
+  // generic widgets, a settled default layout reads as more finished
+  // than a customizable one that can always end up looking scrambled;
+  // Settings → Dashboard still controls which cards show at all.
+  function renderCard(key) {
     switch (key) {
       case 'weather':
         return <WeatherCard key={key} forecast={companyForecast} loading={weatherLoading} error={weatherError} />;
-      case 'key_metrics': {
-        const net = stats.totalAR - totalAP;
-        const sections = [
-          {
-            label: 'Cash',
-            items: [
-              { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
-              { label: 'Total AR', value: fmtMoney(stats.totalAR) },
-              { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
-              { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid) },
-            ],
-          },
-          {
-            label: 'Pipeline & Backlog',
-            items: [
-              { label: 'Backlog value', value: fmtMoney(stats.backlogValue) },
-              { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue) },
-              { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%` },
-              { label: 'Sold jobs', value: stats.soldCount },
-            ],
-          },
-          {
-            label: 'Profitability',
-            items: [
-              { label: 'Income YTD', value: fmtMoney(stats.revenueYTD) },
-              { label: 'Income MTD', value: fmtMoney(stats.revenueMTD) },
-              { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%` },
-              { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0 },
-            ],
-          },
-          {
-            label: 'Schedule',
-            items: [
-              { label: 'Starting this week', value: stats.jobsStartingThisWeek.length },
-              { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0 },
-            ],
-          },
-        ];
+      case 'cash':
         return (
-          <div key={key} className="card" style={{ gridColumn: '1 / -1' }}>
-            <h3>Key metrics</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 32px' }}>
-              {sections.map(section => (
-                <div key={section.label}>
-                  <div style={{ fontSize: 9.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{section.label}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 20px' }}>
-                    {section.items.map(item => {
-                      const body = (
-                        <div style={{ minWidth: 84 }}>
-                          <div style={{ fontSize: 17, fontWeight: 700, color: item.warn ? '#a13f3f' : 'var(--heading)' }}>{item.value}</div>
-                          <div style={{ fontSize: 9.5, color: 'var(--ink-soft)', marginTop: 2 }}>{item.label}</div>
-                        </div>
-                      );
-                      return item.href
-                        ? <Link key={item.label} href={item.href} style={{ textDecoration: 'none', color: 'inherit' }}>{body}</Link>
-                        : <div key={item.label}>{body}</div>;
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <StatCard
+            key={key}
+            title="Cash"
+            tiles={[
+              { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
+              { label: 'Total AR', value: fmtMoney(stats.totalAR), href: '/financials/receivable' },
+              { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
+              { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid), href: '/financials' },
+            ]}
+          />
         );
-      }
+      case 'pipeline_backlog':
+        return (
+          <StatCard
+            key={key}
+            title="Pipeline & Backlog"
+            tiles={[
+              { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
+              { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue), href: '/jobs' },
+              { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`, href: '/jobs' },
+              { label: 'Sold jobs', value: stats.soldCount, href: '/jobs' },
+            ]}
+          />
+        );
+      case 'profitability':
+        return (
+          <StatCard
+            key={key}
+            title="Profitability"
+            tiles={[
+              { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
+              { label: 'Income MTD', value: fmtMoney(stats.revenueMTD), href: '/financials' },
+              { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`, href: '/financials' },
+              { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0, href: '/financials' },
+            ]}
+          />
+        );
+      case 'schedule_health':
+        return (
+          <StatCard
+            key={key}
+            title="Schedule Health"
+            tiles={[
+              { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
+              { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
+            ]}
+          />
+        );
       case 'total_profit':
         return (
           <Link key={key} href="/financials" className="card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
@@ -337,39 +349,6 @@ export default function DashboardPage() {
     }
   }
 
-  const orderedKeys = (localOrder || resolveWidgetOrder(settings.dashboard_widget_order)).filter(show);
-
-  function handleDragStart(index) {
-    setDragState({ draggingIndex: index, dragOverIndex: null });
-  }
-  function handleDragOver(index) {
-    setDragState(s => (s.draggingIndex === null || s.dragOverIndex === index) ? s : { ...s, dragOverIndex: index });
-  }
-  async function handleDrop(index) {
-    const { draggingIndex } = dragState;
-    setDragState({ draggingIndex: null, dragOverIndex: null });
-    if (draggingIndex === null || draggingIndex === index) return;
-
-    // Reorder within the visible list the person can actually see and
-    // drag, then weave that back into the full (including hidden)
-    // order — so a widget that's currently toggled off keeps its
-    // relative spot instead of getting shuffled to the end the next
-    // time it's turned back on.
-    const fullOrder = resolveWidgetOrder(settings.dashboard_widget_order);
-    const nextVisible = [...orderedKeys];
-    const [moved] = nextVisible.splice(draggingIndex, 1);
-    nextVisible.splice(index, 0, moved);
-
-    let vi = 0;
-    const nextFull = fullOrder.map(k => orderedKeys.includes(k) ? nextVisible[vi++] : k);
-
-    setLocalOrder(nextFull);
-    await supabase.from('app_settings').update({ dashboard_widget_order: nextFull }).eq('id', 1);
-  }
-  function handleDragEnd() {
-    setDragState({ draggingIndex: null, dragOverIndex: null });
-  }
-
   return (
     <AppShell>
       <div className="container">
@@ -381,24 +360,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="dash-cards" style={{ marginBottom: 20 }}>
-          {orderedKeys.map((key, index) => {
-            const el = renderWidget(key);
-            if (!el) return null;
-            const dragClasses = [
-              dragState.draggingIndex === index ? 'widget-dragging' : '',
-              dragState.dragOverIndex === index ? 'widget-drag-over' : '',
-            ].filter(Boolean).join(' ');
-            return cloneElement(el, {
-              key,
-              draggable: true,
-              onDragStart: () => handleDragStart(index),
-              onDragOver: e => { e.preventDefault(); handleDragOver(index); },
-              onDrop: e => { e.preventDefault(); handleDrop(index); },
-              onDragEnd: handleDragEnd,
-              className: [el.props.className, dragClasses].filter(Boolean).join(' '),
-              style: { ...el.props.style, cursor: 'grab' },
-            });
-          })}
+          {DASHBOARD_ORDER.filter(show).map(renderCard)}
         </div>
       </div>
 

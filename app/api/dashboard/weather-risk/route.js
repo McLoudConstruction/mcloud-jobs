@@ -16,7 +16,7 @@ export async function GET() {
       admin.from('trade_weather_rules').select('*'),
       admin
         .from('job_phases')
-        .select('id, trade, work_location, start_date, end_date, job_id, jobs(id, job_number, customer_name, stage, project_street, project_city, project_state, project_zip, site_lat, site_lng)')
+        .select('id, label, trade, work_location, start_date, end_date, job_id, jobs(id, job_number, customer_name, stage, project_street, project_city, project_state, project_zip, site_lat, site_lng)')
         .eq('work_location', 'outdoor')
         .not('trade', 'is', null)
         .lte('start_date', weekOut)
@@ -49,13 +49,18 @@ export async function GET() {
           jobId: phase.jobs.id,
           jobNumber: phase.jobs.job_number,
           customerName: phase.jobs.customer_name,
+          phaseId: phase.id,
+          phaseLabel: phase.label,
           trade: phase.trade,
+          startDate: phase.start_date,
+          endDate: phase.end_date,
           date: flag.date,
           reasons: flag.reasons,
         });
       }
     }
 
+    flagged.sort((a, b) => a.date.localeCompare(b.date));
     return NextResponse.json({ flaggedCount: flagged.length, flagged });
   } catch (err) {
     if (err instanceof WeatherConfigError) return NextResponse.json({ flaggedCount: 0, flagged: [] });
