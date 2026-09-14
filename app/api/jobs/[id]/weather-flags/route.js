@@ -42,7 +42,22 @@ export async function GET(request, { params }) {
     }
 
     const forecast = await getForecastForJob(job);
-    if (!forecast) return NextResponse.json({ flags: {}, checkedThrough: null, note: 'No site address on file to check weather against yet.' });
+    if (!forecast) {
+      return NextResponse.json({
+        flags: {},
+        checkedThrough: null,
+        note: 'No site address on file to check weather against yet.',
+        // Temporary — shows exactly what address data (if any) this job
+        // had to work with, so "no address entered" and "address present
+        // but geocoding failed" don't look identical from the outside.
+        debug: {
+          project_street: job.project_street,
+          project_city: job.project_city,
+          project_state: job.project_state,
+          project_zip: job.project_zip,
+        },
+      });
+    }
 
     const rulesByTrade = Object.fromEntries(rules.map(r => [r.trade, r]));
     const flags = {};
