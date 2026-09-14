@@ -27,6 +27,34 @@ function moveItem(list, index, direction) {
   return next;
 }
 
+// Signature used to catch "the same property, typed twice" — prefer the
+// matched address (so "Oakwood Apts" and "123 Main St" that both resolved
+// to the same place still collide), fall back to the raw typed name for
+// rows that were never matched to a place.
+function stopSignature(row) {
+  if (row.place) {
+    const addr = [row.place.street, row.place.city, row.place.zip].filter(Boolean).join('|').toLowerCase();
+    if (addr) return addr;
+  }
+  return (row.name || '').trim().toLowerCase();
+}
+
+function findDuplicateNames(filled) {
+  const seen = new Map();
+  const dupNames = new Set();
+  filled.forEach(row => {
+    const sig = stopSignature(row);
+    if (!sig) return;
+    if (seen.has(sig)) {
+      dupNames.add(seen.get(sig));
+      dupNames.add(row.name.trim());
+    } else {
+      seen.set(sig, row.name.trim());
+    }
+  });
+  return Array.from(dupNames);
+}
+
 // The manual counterpart to RouteBuilderCore's AI route — you pick the
 // stops yourself instead of having them filtered/sorted for you. Also
 // saves to the sales_routes table so a route survives your phone's
@@ -46,6 +74,19 @@ export default function ManualRouteBuilderCore({ onClose }) {
   const [dupNote, setDupNote] = useState('');
   const [marking, setMarking] = useState(false);
   const [driving, setDriving] = useState(false);
+  const [dupConfirm, setDupConfirm] = useState(null); // { names, resolve }
+  const [optimizing, setOptimizing] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editPlace, setEditPlace] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // A promise-based confirm so both "build a new route" and "edit one
+  // stop" can pause on the same popup instead of silently allowing (or
+  // silently blocking) the same property twice.
+  function confirmDuplicates(names) {
+    return new Promise(resolve => setDupConfirm({ names, resolve }));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +123,11 @@ export default function ManualRouteBuilderCore({ onClose }) {
     if (filled.length === 0) {
       setError('Enter at least one property name.');
       return;
+    }
+    const dupNames = findDuplicateNames(filled);
+    if (dupNames.length > 0) {
+      const proceed = await confirmDuplicates(dupNames);
+      if (!proceed) return;
     }
     setLoading(true);
     setError('');
@@ -159,6 +205,81 @@ export default function ManualRouteBuilderCore({ onClose }) {
     persistStops(route.stops.filter((_, i) => i !== index));
   }
 
+  // Re-runs the same straight-line nearest-neighbor ordering used when the
+  // route was first built, from wherever you're standing right now.
+  // Already-visited stops are left alone (no point reshuffling where
+  // you've already been) — only what's left gets reordered.
+  async function optimizeRoute() {
+    if (!route?.stops?.length) return;
+    setOptimizing(true);
+    setError('');
+    try {
+      const start = await getCurrentLocation();
+      if (!start) {
+        setError('Could not get your current location — enable location access and try again.');
+        return;
+      }
+      const visited = route.stops.filter(s => s.visited_at);
+      const unvisited = route.stops.filter(s => !s.visited_at);
+      if (unvisited.length === 0) return;
+      const reordered = orderStopsForEfficiency(unvisited, start);
+      await persistStops([...visited, ...reordered]);
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  function startEditStop(index) {
+    setEditingIndex(index);
+    setEditName(route.stops[index].property_name || '');
+    setEditPlace(null);
+  }
+  function cancelEditStop() {
+    setEditingIndex(null);
+    setEditName('');
+    setEditPlace(null);
+  }
+
+  // Full replacement of a stop — resolves whatever new property was
+  // searched for (creating it if it's not in the database yet, same as
+  // the entry form) and swaps it in wholesale, including a fresh
+  // (unvisited) status since it's effectively a different stop now.
+  async function saveEditStop(index) {
+    if (!editName.trim()) return;
+    setEditSaving(true);
+    setError('');
+    try {
+      const place = editPlace || {};
+      const { property } = await findOrCreatePropertyForRouteStop({
+        name: editName, street: place.street, city: place.city, state: place.state, zip: place.zip,
+        lat: place.lat, lng: place.lng,
+      });
+      if (!property) {
+        setError('Could not resolve that property.');
+        return;
+      }
+      const dupIndex = route.stops.findIndex((s, i) => i !== index && s.property_id === property.id);
+      if (dupIndex !== -1) {
+        const proceed = await confirmDuplicates([property.property_name]);
+        if (!proceed) return;
+      }
+      const nextStops = route.stops.map((s, i) => (i === index ? {
+        property_id: property.id, property_name: property.property_name,
+        property_type: property.property_type || null, management_company: property.management_company || null,
+        property_street: property.property_street, property_city: property.property_city,
+        property_state: property.property_state, property_zip: property.property_zip,
+        property_lat: property.property_lat ?? null, property_lng: property.property_lng ?? null,
+        visited_at: null,
+      } : s));
+      await persistStops(nextStops);
+      cancelEditStop();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   function openInMaps() {
     const addresses = route.stops.map(p => formatAddress(p)).filter(Boolean);
     if (addresses.length === 0) return;
@@ -215,6 +336,9 @@ export default function ManualRouteBuilderCore({ onClose }) {
     setRoute(null);
     setError('');
     setDupNote('');
+    setEditingIndex(null);
+    setEditName('');
+    setEditPlace(null);
   }
 
   if (checkingActive) {
@@ -317,27 +441,67 @@ export default function ManualRouteBuilderCore({ onClose }) {
                 </div>
                 <div style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, flexShrink: 0, width: 18 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, textDecoration: p.visited_at ? 'line-through' : 'none', opacity: p.visited_at ? 0.6 : 1 }}>{p.property_name}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{formatAddress(p) || 'No address on file'}</div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignSelf: 'flex-start' }}>
-                  {p.visited_at ? (
-                    <button type="button" className="btn btn-sm" onClick={() => unmarkStopVisited(i)}>Undo Visit</button>
+                  {editingIndex === i ? (
+                    <div>
+                      <PlacesAutocompleteInput
+                        value={editName}
+                        onChange={setEditName}
+                        onPlaceSelected={place => setEditPlace(place)}
+                        placeholder="Replace with a different property"
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={editSaving} onClick={() => saveEditStop(i)}>
+                          {editSaving ? 'Saving…' : 'Save'}
+                        </button>
+                        <button type="button" className="btn btn-sm" onClick={cancelEditStop}>Cancel</button>
+                      </div>
+                    </div>
                   ) : (
-                    <button type="button" className="btn btn-sm" onClick={() => markStopVisited(i)}>Mark Visited</button>
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 600, textDecoration: p.visited_at ? 'line-through' : 'none', opacity: p.visited_at ? 0.6 : 1 }}>{p.property_name}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{formatAddress(p) || 'No address on file'}</div>
+                    </>
                   )}
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => removeStop(i)}>Remove</button>
                 </div>
+                {editingIndex !== i && (
+                  <div style={{ display: 'flex', gap: 6, alignSelf: 'flex-start', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {p.visited_at ? (
+                      <button type="button" className="btn btn-sm" onClick={() => unmarkStopVisited(i)}>Undo Visit</button>
+                    ) : (
+                      <button type="button" className="btn btn-sm" onClick={() => markStopVisited(i)}>Mark Visited</button>
+                    )}
+                    <button type="button" className="btn btn-sm" onClick={() => startEditStop(i)}>Edit</button>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => removeStop(i)}>Remove</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
             <button className="btn btn-primary btn-sm" onClick={() => setDriving(true)}>Start Driving →</button>
+            <button className="btn btn-sm" onClick={optimizeRoute} disabled={optimizing}>{optimizing ? 'Optimizing…' : 'Optimize Route'}</button>
             <button className="btn btn-sm" onClick={openInMaps}>Open Full Route in Google Maps</button>
             <button className="btn btn-sm" onClick={markAllVisited} disabled={marking}>{marking ? 'Marking…' : 'Mark All Visited'}</button>
             <button className="btn btn-sm" onClick={handleFinishRoute}>Finish &amp; Start Over</button>
             {onClose && <button className="btn btn-sm" onClick={onClose}>Close (keeps this route saved)</button>}
+          </div>
+        </div>
+      )}
+
+      {dupConfirm && (
+        <div style={dupBackdropStyle}>
+          <div style={dupBoxStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>
+              Duplicate propert{dupConfirm.names.length === 1 ? 'y' : 'ies'}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 18 }}>
+              {dupConfirm.names.join(', ')} {dupConfirm.names.length === 1 ? 'is' : 'are'} already on this route. Add {dupConfirm.names.length === 1 ? 'it' : 'them'} again anyway?
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-sm" onClick={() => { dupConfirm.resolve(false); setDupConfirm(null); }}>Cancel</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => { dupConfirm.resolve(true); setDupConfirm(null); }}>Add Anyway</button>
+            </div>
           </div>
         </div>
       )}
@@ -354,3 +518,14 @@ export default function ManualRouteBuilderCore({ onClose }) {
     </div>
   );
 }
+
+const dupBackdropStyle = {
+  position: 'fixed', inset: 0, zIndex: 2100,
+  background: 'rgba(0,0,0,0.45)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 20,
+};
+const dupBoxStyle = {
+  background: 'var(--card-bg, #fff)', borderRadius: 10, padding: 20,
+  maxWidth: 380, width: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+};
