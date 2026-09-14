@@ -8,7 +8,8 @@ import { getForecastForCompany, getForecastForJob, WeatherConfigError } from '..
 export async function GET(request) {
   const url = new URL(request.url);
   const jobId = url.searchParams.get('jobId');
-  const force = url.searchParams.get('force') === '1';
+  const debug = url.searchParams.get('debug') === '1';
+  const force = url.searchParams.get('force') === '1' || debug; // debug always bypasses cache — a cached payload has no debug log attached
 
   try {
     if (jobId) {
@@ -20,12 +21,12 @@ export async function GET(request) {
         .single();
       if (error || !job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
 
-      const forecast = await getForecastForJob(job, force);
+      const forecast = await getForecastForJob(job, force, debug);
       if (!forecast) return NextResponse.json({ error: 'This job has no site address to look up weather for yet.' }, { status: 400 });
       return NextResponse.json(forecast);
     }
 
-    const forecast = await getForecastForCompany(force);
+    const forecast = await getForecastForCompany(force, debug);
     return NextResponse.json(forecast);
   } catch (err) {
     if (err instanceof WeatherConfigError) return NextResponse.json({ error: err.message }, { status: 400 });
