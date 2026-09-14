@@ -80,7 +80,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
       job_id: jobId,
       company_id: form.company_id || null,
       description: form.description,
-      amount: parseFloat(form.amount),
+      amount: Math.round(parseFloat(form.amount) * 100) / 100,
       status: 'draft',
       included_scope_items: selectedScope.map(i => availableItems[i]).filter(Boolean),
     });
@@ -144,7 +144,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   }
 
   async function confirmInvoiced(wo) {
-    const amt = parseFloat(invoiceAmount);
+    const amt = Math.round(parseFloat(invoiceAmount) * 100) / 100;
     if (!amt) return;
     const { error: woError } = await supabase.from('work_orders').update({ status: 'invoiced', invoiced_amount: amt }).eq('id', wo.id);
     if (woError) { setSaveError(woError.message); return; }

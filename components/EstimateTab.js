@@ -276,7 +276,13 @@ export default function EstimateTab({ job, jobId, children }) {
   const salesTaxDollars = materialSubtotal * (taxNum / 100);
   const subtotal = materialSubtotal + salesTaxDollars + laborSubtotal;
   const marginNum = parseFloat(margin) || 0;
-  const salePrice = marginNum > 0 && marginNum < 100 ? subtotal / (1 - marginNum / 100) : subtotal;
+  // Rounded to the cent — the raw division (subtotal / (1 - margin/100))
+  // almost always produces a repeating decimal (e.g. dividing by 0.65
+  // for a 35% margin), and that raw value was getting saved straight to
+  // contract_price, which is what showed up as things like
+  // "36917.25866666667" anywhere contract_price got used as a starting
+  // value for an editable dollar field later (e.g. the Invoicing tab).
+  const salePrice = Math.round((marginNum > 0 && marginNum < 100 ? subtotal / (1 - marginNum / 100) : subtotal) * 100) / 100;
   const marginDollars = salePrice - subtotal;
 
   async function pushToContractPrice() {

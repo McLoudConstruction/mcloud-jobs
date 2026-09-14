@@ -39,7 +39,7 @@ export default function DrawsCard({ jobId }) {
     const { error: insertError } = await supabase.from('invoices').insert({
       job_id: jobId,
       description: form.description || `Draw ${draws.length + 1}`,
-      amount: parseFloat(form.amount),
+      amount: Math.round(parseFloat(form.amount) * 100) / 100,
       status: 'not_sent',
     });
     setSaving(false);

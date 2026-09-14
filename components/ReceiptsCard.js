@@ -108,7 +108,7 @@ export default function ReceiptsCard({ jobId }) {
     const { data: receipt, error } = await supabase.from('receipts').insert({
       job_id: jobId,
       vendor_name: form.vendor_name || null,
-      amount: parseFloat(form.amount),
+      amount: Math.round(parseFloat(form.amount) * 100) / 100,
       receipt_date: form.receipt_date,
       category: form.category,
       payment_status: form.payment_status,
@@ -126,7 +126,7 @@ export default function ReceiptsCard({ jobId }) {
       job_id: jobId,
       category: form.category,
       description: form.vendor_name ? `Receipt — ${form.vendor_name}` : 'Receipt',
-      amount: parseFloat(form.amount),
+      amount: Math.round(parseFloat(form.amount) * 100) / 100,
       cost_date: form.receipt_date,
       status: 'actual',
       source_type: 'receipt',

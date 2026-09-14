@@ -160,7 +160,7 @@ export default function ProposalsCard({ job, jobId, onSave }) {
 
 function ProposalEditorModal({ proposal, projectType, onClose, onSave }) {
   const [name, setName] = useState(proposal.name);
-  const [price, setPrice] = useState(proposal.contract_price ?? '');
+  const [price, setPrice] = useState(proposal.contract_price != null ? String(Math.round(Number(proposal.contract_price) * 100) / 100) : '');
   const [scope, setScope] = useState((proposal.scope_items || []).map(i => i.text || ''));
   const [terms, setTerms] = useState((proposal.additional_terms || []).map(i => i.text || ''));
   const [saving, setSaving] = useState(false);
@@ -184,7 +184,7 @@ function ProposalEditorModal({ proposal, projectType, onClose, onSave }) {
     setSaving(true);
     await onSave({
       name: name.trim() || proposal.name,
-      contract_price: price ? parseFloat(String(price).replace(/[^0-9.]/g, '')) : null,
+      contract_price: price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
       scope_items: scope.filter(t => t.trim()).map(text => ({ text })),
       additional_terms: terms.filter(t => t.trim()).map(text => ({ text })),
     });

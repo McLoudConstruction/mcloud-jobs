@@ -335,10 +335,17 @@ export default function JobDetailPage() {
     if (next === 'approved' && job.contract_price) {
       const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
       if (!existing || existing.length === 0) {
-        const half = Math.round((parseFloat(job.contract_price) / 2) * 100) / 100;
+        // Rounded to the cent on both sides — contract_price itself is
+        // rounded at the source now (see EstimateTab.js), but floating-
+        // point subtraction can still reintroduce a fraction-of-a-cent
+        // artifact here (e.g. 100.10 - 50.05 = 50.04999999999999 in JS),
+        // and this also protects against any already-saved contract
+        // price from before that fix.
+        const total = Math.round(parseFloat(job.contract_price) * 100) / 100;
+        const half = Math.round((total / 2) * 100) / 100;
         await supabase.from('invoices').insert([
           { job_id: id, description: 'Draw 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Draw 2 — Final Payment', amount: parseFloat(job.contract_price) - half, status: 'not_sent' },
+          { job_id: id, description: 'Draw 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
         ]);
       }
     }

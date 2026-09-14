@@ -46,7 +46,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
       job_id: jobId,
       category: form.category,
       description: form.description || null,
-      amount: parseFloat(form.amount),
+      amount: Math.round(parseFloat(form.amount) * 100) / 100,
       cost_date: form.cost_date,
       status: form.status,
       source_type: 'manual',

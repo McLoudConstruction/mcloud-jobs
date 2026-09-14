@@ -2,9 +2,20 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+// Rounds to the cent and drops trailing zeros in a way that's safe to
+// put back into a text input (unlike toLocaleString, which would add
+// thousands separators the field can't parse back out). Guards against
+// both new floating-point division artifacts and any already-saved
+// value from before that was rounded at the source.
+function roundMoney(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Math.round(Number(v) * 100) / 100;
+  return Number.isFinite(n) ? n : '';
+}
+
 export default function InvoiceCard({ job, onSave, jobId }) {
   const router = useRouter();
-  const [amount, setAmount] = useState(job.invoice_amount ?? job.contract_price ?? '');
+  const [amount, setAmount] = useState(roundMoney(job.invoice_amount ?? job.contract_price ?? ''));
   const [status, setStatus] = useState(job.invoice_status || 'not_sent');
   const [invoicedAt, setInvoicedAt] = useState(job.invoiced_at ? job.invoiced_at.slice(0, 10) : '');
 
@@ -20,7 +31,7 @@ export default function InvoiceCard({ job, onSave, jobId }) {
 
   function saveOnly() {
     onSave({
-      invoice_amount: amount ? parseFloat(String(amount).replace(/[^0-9.]/g, '')) : null,
+      invoice_amount: amount ? roundMoney(String(amount).replace(/[^0-9.]/g, '')) : null,
       invoice_status: status,
       invoiced_at: invoicedAt || null,
     });

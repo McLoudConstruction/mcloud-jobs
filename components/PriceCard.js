@@ -13,8 +13,8 @@ function sanitizeMoney(raw) {
 }
 
 export default function PriceCard({ job, onSave }) {
-  const [price, setPrice] = useState(job.contract_price ?? '');
-  const [projectedCost, setProjectedCost] = useState(job.projected_cost ?? '');
+  const [price, setPrice] = useState(sanitizeMoney(String(job.contract_price ?? '')));
+  const [projectedCost, setProjectedCost] = useState(sanitizeMoney(String(job.projected_cost ?? '')));
   const [approvedDate, setApprovedDate] = useState(job.approved_at ? job.approved_at.slice(0, 10) : '');
   const [milestones, setMilestones] = useState(job.milestones || []);
 
@@ -24,7 +24,7 @@ export default function PriceCard({ job, onSave }) {
   function save() {
     onSave({
       contract_price: price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
-      projected_cost: projectedCost ? parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) : null,
+      projected_cost: projectedCost ? Math.round(parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
       approved_at: approvedDate ? new Date(approvedDate + 'T12:00:00').toISOString() : null,
       milestones,
     });
@@ -36,7 +36,7 @@ export default function PriceCard({ job, onSave }) {
       <label>Total contract price ($)</label>
       <input value={price} onChange={e => setPrice(sanitizeMoney(e.target.value))} placeholder="e.g. 185000.00" />
       <label style={{ marginTop: 12 }}>Projected cost ($)</label>
-      <input value={projectedCost} onChange={e => setProjectedCost(e.target.value)} placeholder="What you expect this job to cost, all-in" />
+      <input value={projectedCost} onChange={e => setProjectedCost(sanitizeMoney(e.target.value))} placeholder="What you expect this job to cost, all-in" />
       <label style={{ marginTop: 12 }}>Approved date</label>
       <input type="date" value={approvedDate} onChange={e => setApprovedDate(e.target.value)} />
       <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
