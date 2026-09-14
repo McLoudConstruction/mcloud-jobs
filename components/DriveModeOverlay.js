@@ -49,19 +49,6 @@ export default function DriveModeOverlay({ stops, onExit, onMarkVisited, onFinis
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@700;800&display=swap');`}</style>
       <button onClick={onExit} style={exitBtnStyle} aria-label="Exit drive mode">×</button>
 
-      <div style={providerRowStyle}>
-        {PROVIDERS.map(p => (
-          <button
-            key={p.key}
-            type="button"
-            onClick={() => changeProvider(p.key)}
-            style={{ ...providerBtnStyle, ...(provider === p.key ? providerBtnActiveStyle : {}) }}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
       {current ? (
         <div style={contentStyle}>
           <div style={progressStyle}>Stop {currentIndex + 1} of {stops.length}</div>
@@ -90,6 +77,18 @@ export default function DriveModeOverlay({ stops, onExit, onMarkVisited, onFinis
           </div>
         </div>
       )}
+
+      <div style={providerRowStyle}>
+        <label htmlFor="drive-mode-maps-provider" style={providerLabelStyle}>Open stops in</label>
+        <select
+          id="drive-mode-maps-provider"
+          value={provider}
+          onChange={e => changeProvider(e.target.value)}
+          style={providerSelectStyle}
+        >
+          {PROVIDERS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
+      </div>
     </div>,
     document.body
   );
@@ -109,16 +108,23 @@ const exitBtnStyle = {
   background: 'rgba(255,255,255,0.08)', border: 'none', color: '#f3ede0',
   width: 40, height: 40, borderRadius: '50%', fontSize: 22, lineHeight: 1, cursor: 'pointer',
 };
-const providerRowStyle = { display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' };
-const providerBtnStyle = {
-  background: 'transparent', border: '1px solid rgba(255,255,255,0.28)', color: 'rgba(255,255,255,0.7)',
-  borderRadius: 20, padding: '6px 14px', fontSize: 12, cursor: 'pointer',
-};
-const providerBtnActiveStyle = { background: '#f3ede0', color: '#14120f', borderColor: '#f3ede0', fontWeight: 600 };
 const contentStyle = { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px' };
 const progressStyle = { fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 18 };
-const headlineStyle = { fontFamily: "'Big Shoulders', sans-serif", fontWeight: 800, fontSize: 'clamp(42px, 13vw, 76px)', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1, color: '#c9a15a' };
+const headlineStyle = { fontFamily: "'Big Shoulders', sans-serif", fontWeight: 800, fontSize: 'clamp(42px, 13vw, 76px)', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1, color: '#9b773d' };
 const nameStyle = { fontSize: 'clamp(20px, 6vw, 32px)', fontWeight: 600, marginTop: 16, maxWidth: 600 };
 const addressStyle = { display: 'inline-block', marginTop: 16, fontSize: 16, color: '#f3ede0', textDecoration: 'underline', textUnderlineOffset: 4 };
 const actionsStyle = { marginTop: 44, width: '100%', maxWidth: 360 };
-const bigButtonStyle = { width: '100%', padding: '18px 0', fontSize: 16, borderRadius: 10 };
+const bigButtonStyle = { width: '100%', padding: '18px 0', fontSize: 16, borderRadius: 10, justifyContent: 'center', textAlign: 'center' };
+
+// Bottom-anchored, out of the way of the main content — a dropdown
+// rather than a row of buttons since this is a set-it-once preference,
+// not something switched mid-drive.
+const providerRowStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+  paddingTop: 16, marginTop: 'auto',
+};
+const providerLabelStyle = { fontSize: 12, color: 'rgba(255,255,255,0.55)' };
+const providerSelectStyle = {
+  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.28)', color: '#f3ede0',
+  borderRadius: 6, padding: '6px 10px', fontSize: 13, fontFamily: 'inherit',
+};
