@@ -41,10 +41,10 @@ function ConditionIcon({ icon, alt, size = 36 }) {
 
 // Rough day-part buckets, checked against the browser's local time zone.
 const DAY_PARTS = [
-  { abbr: 'Ovn', startHour: 0, endHour: 5 },
-  { abbr: 'AM', startHour: 6, endHour: 11 },
-  { abbr: 'PM', startHour: 12, endHour: 17 },
-  { abbr: 'Eve', startHour: 18, endHour: 23 },
+  { label: 'Overnight', startHour: 0, endHour: 5 },
+  { label: 'Morning', startHour: 6, endHour: 11 },
+  { label: 'Afternoon', startHour: 12, endHour: 17 },
+  { label: 'Evening', startHour: 18, endHour: 23 },
 ];
 const RAIN_THRESHOLD_PCT = 30;
 
@@ -66,7 +66,7 @@ function earliestRainWindow(dayAt, hourly) {
       const hour = new Date(h.at).getHours();
       return (hour >= part.startHour && hour <= part.endHour) ? Math.max(max, h.pop) : max;
     }, 0);
-    if (maxPop >= RAIN_THRESHOLD_PCT) return { hasRain: true, abbr: part.abbr, pop: maxPop };
+    if (maxPop >= RAIN_THRESHOLD_PCT) return { hasRain: true, label: part.label, pop: maxPop };
   }
   return { hasRain: false };
 }
@@ -96,20 +96,26 @@ export function WeatherRibbon({ forecast, loading, error }) {
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
             <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>{c.description} · Wind {c.windMph} mph</div>
+            {forecast?.locationName && (
+              <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 1 }}>📍 {forecast.locationName}</div>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px 4px', flex: 1 }}>
           {days.map((d, i) => {
             const rain = earliestRainWindow(d.at, hourly);
             return (
-              <div key={i} style={{ textAlign: 'center', minWidth: 40 }}>
-                <div style={{ fontSize: 9.5, color: 'var(--ink-soft)' }}>{dayLetter(d.at, i)}</div>
-                <ConditionIcon icon={d.icon} alt={d.condition} size={22} />
-                <div style={{ fontSize: 11 }}>
-                  <b>{d.maxF}°</b> <span style={{ color: 'var(--ink-soft)' }}>{d.minF}°</span>
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>{dayLetter(d.at, i)}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
+                  <ConditionIcon icon={d.icon} alt={d.condition} size={34} />
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.25 }}>{d.maxF}°</div>
+                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.25 }}>{d.minF}°</div>
+                  </div>
                 </div>
-                {rain?.hasRain && <div style={{ fontSize: 8.5, color: '#4a90c4' }}>💧{rain.abbr}</div>}
+                {rain?.hasRain && <div style={{ fontSize: 9.5, color: '#4a90c4', marginTop: 2 }}>💧 {rain.label} {rain.pop}%</div>}
               </div>
             );
           })}
