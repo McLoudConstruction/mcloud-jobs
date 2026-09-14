@@ -34,9 +34,18 @@ function hourLabel(ms) {
   return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric' }).replace(' ', '').toUpperCase();
 }
 
+// OpenWeatherMap's icons (clouds especially) are drawn mostly white,
+// which disappears against a light page background in light mode — a
+// neutral gray circle behind the icon gives it contrast against either
+// theme, rather than needing to detect and branch on which one is
+// active.
 function ConditionIcon({ icon, alt, size = 36 }) {
   if (!icon) return null;
-  return <img src={`https://openweathermap.org/img/wn/${icon}@2x.png`} alt={alt || ''} width={size} height={size} style={{ display: 'block', margin: '0 auto' }} />;
+  return (
+    <span style={{ display: 'inline-block', borderRadius: '50%', background: 'rgba(128,128,128,0.16)' }}>
+      <img src={`https://openweathermap.org/img/wn/${icon}@2x.png`} alt={alt || ''} width={size} height={size} style={{ display: 'block', margin: '0 auto' }} />
+    </span>
+  );
 }
 
 // Rough day-part buckets, checked against the browser's local time zone.
