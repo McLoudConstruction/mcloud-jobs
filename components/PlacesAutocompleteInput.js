@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { loadGoogleMapsPlaces } from '../lib/googleMapsLoader';
 
 // Google discontinued the old google.maps.places.Autocomplete widget for
@@ -68,9 +69,12 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   const [ready, setReady] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState(null);
   const sessionTokenRef = useRef(null);
   const debounceRef = useRef(null);
   const requestIdRef = useRef(0);
+  const inputRef = useRef(null);
+  const wrapRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +83,30 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
     });
     return () => { cancelled = true; clearTimeout(debounceRef.current); };
   }, []);
+
+  // The dropdown is portaled to <body> and positioned by fixed coordinates
+  // rather than being an absolutely-positioned child, because several
+  // places this field is used (the built-route stop list, in particular)
+  // sit inside a scrollable, overflow-clipped container — an absolutely
+  // positioned child gets cut off at that container's edge instead of
+  // floating over the rest of the page.
+  function updateDropdownRect() {
+    if (!wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    setDropdownRect({ top: r.bottom + 2, left: r.left, width: r.width });
+  }
+
+  useEffect(() => {
+    if (!showSuggestions) return;
+    updateDropdownRect();
+    const handler = () => updateDropdownRect();
+    window.addEventListener('scroll', handler, true);
+    window.addEventListener('resize', handler);
+    return () => {
+      window.removeEventListener('scroll', handler, true);
+      window.removeEventListener('resize', handler);
+    };
+  }, [showSuggestions]);
 
   async function fetchSuggestions(text) {
     const requestId = ++requestIdRef.current;
@@ -129,8 +157,9 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <input
+        ref={inputRef}
         value={value}
         onChange={handleChange}
         onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
@@ -139,8 +168,14 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
         title={ready ? 'Start typing a name or address — pick a match to auto-fill the rest' : undefined}
         {...rest}
       />
-      {showSuggestions && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, marginTop: 2, maxHeight: 240, overflowY: 'auto' }}>
+      {showSuggestions && dropdownRect && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed', top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width,
+            zIndex: 4000, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5,
+            maxHeight: 240, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          }}
+        >
           {suggestions.map((s, i) => {
             const pred = s.placePrediction;
             const main = textOf(pred.mainText) || textOf(pred.text);
@@ -156,7 +191,8 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
