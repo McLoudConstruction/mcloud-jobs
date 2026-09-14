@@ -160,7 +160,7 @@ small "My Account" page outside Settings, separate from this phase.
 
 ---
 
-## 8. Google Places (property name/address lookup)
+## 8. Google Maps (property name/address lookup)
 
 Powers the "start typing a name and pick the real address" autocomplete
 on the Properties form's Property Name field, the address fields
@@ -169,6 +169,11 @@ builder. This is the only piece that involves fetching real-world
 listing data from the internet — everything else in the app (including
 the AI "Create My Sales Route") works entirely off properties already
 saved in the app's own database.
+
+Run **migration 098** first
+(`supabase-migration-098-google-maps-key.sql`, Supabase SQL Editor) —
+it adds Google Maps alongside Resend/Weather/Unsplash as a key you
+manage from Settings, no redeploy required to add or change it.
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) →
    create a project (or use an existing one — the same one as Google
@@ -179,22 +184,24 @@ saved in the app's own database.
 4. Click the new key → **Restrict key**:
    - **Application restrictions**: HTTP referrers → add
      `https://jobs.mcloudconstruction.com/*` (and `http://localhost:3000/*`
-     if testing locally).
+     if testing locally). This is the real security boundary for this
+     key, since it necessarily gets sent to the browser — restricting it
+     to your own domain means it's useless to anyone who copies it out
+     of the page source.
    - **API restrictions**: restrict to just Maps JavaScript API + Places
      API.
-5. Copy the key into Vercel (Project → Settings → Environment
-   Variables):
-
-```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=...
-```
-
-6. Redeploy. No Settings → Integrations step for this one — it's a
-   build-time env var, not a per-account connection.
+5. In Settings → Integrations → **API keys**, paste it into the Google
+   Maps field and **Save**. Any signed-in staff member (not just the
+   owner) can then use address autocomplete — only saving/removing the
+   key itself is owner-only, same as the other API keys on this page.
 
 **Cost:** Google's Places Autocomplete has a monthly free tier that
 comfortably covers normal day-to-day use (a handful of lookups per
 lead/property/route stop); heavy volume beyond that bills per request
-at Google's published Places API rates. Without a key set, every field
-that would otherwise autocomplete just falls back to a plain text box —
-nothing breaks, you only lose the live lookup.
+at Google's published Places API rates. Google requires a billing
+account (a card on file) to turn the key on at all, even to stay within
+the free tier — so it's worth setting a budget alert in Google Cloud
+Console (Billing → Budgets & alerts) as cheap insurance against
+runaway usage. Without a key set, every field that would otherwise
+autocomplete just falls back to a plain text box — nothing breaks, you
+only lose the live lookup.
