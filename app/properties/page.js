@@ -17,7 +17,7 @@ import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contac
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
-  property_street: '', property_unit: '', property_city: '', property_state: '', property_zip: '',
+  property_street: '', property_unit: '', property_city: '', property_state: '', property_zip: '', property_lat: null, property_lng: null,
   management_company: '', contact_name: '', contact_phone: '', contact_email: '',
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
 };
@@ -314,6 +314,8 @@ export default function PropertiesPage() {
                     update('property_city', place.city);
                     update('property_state', place.state);
                     update('property_zip', place.zip);
+                    update('property_lat', place.lat ?? null);
+                    update('property_lng', place.lng ?? null);
                   }}
                   required
                 />

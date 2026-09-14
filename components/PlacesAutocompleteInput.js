@@ -41,7 +41,10 @@ function componentValue(components, type, useShort) {
 }
 
 async function parsePlace(place) {
-  await place.fetchFields({ fields: ['addressComponents', 'displayName'] }); // Basic Data only — stays in Google's free Essentials tier
+  // location is still Basic Data (same free tier as the rest) — lets
+  // saved stops carry coordinates for the Sales Route builder's
+  // straight-line ordering estimate without a separate geocoding call.
+  await place.fetchFields({ fields: ['addressComponents', 'displayName', 'location'] });
   const components = place.addressComponents || [];
   const streetNumber = componentValue(components, 'street_number');
   const route = componentValue(components, 'route');
@@ -51,6 +54,8 @@ async function parsePlace(place) {
     city: componentValue(components, 'locality') || componentValue(components, 'sublocality') || componentValue(components, 'administrative_area_level_2'),
     state: componentValue(components, 'administrative_area_level_1', true),
     zip: componentValue(components, 'postal_code'),
+    lat: typeof place.location?.lat === 'function' ? place.location.lat() : (place.location?.lat ?? null),
+    lng: typeof place.location?.lng === 'function' ? place.location.lng() : (place.location?.lng ?? null),
   };
 }
 
