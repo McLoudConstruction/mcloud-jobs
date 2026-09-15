@@ -23,7 +23,7 @@ function formatAddress(p) {
 // iOS Safari doesn't support requestFullscreen() on a plain element (only
 // on <video>), and this app is used installed as a PWA, so a fixed,
 // inset:0 layer is the one approach that actually works everywhere.
-export default function DriveModeOverlay({ stops, onExit, onMarkVisited, onUndoVisit, onFinish }) {
+export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisited, onUndoVisit, onSkip, onFinish }) {
   const [mounted, setMounted] = useState(false);
   const [provider, setProvider] = useState('apple');
 
@@ -38,6 +38,11 @@ export default function DriveModeOverlay({ stops, onExit, onMarkVisited, onUndoV
   const current = currentIndex === -1 ? null : stops[currentIndex];
   const remainingCount = stops.filter(s => !s.visited_at).length;
   const address = current ? formatAddress(current) : '';
+  // All stops visited, but there's a saved end location — that becomes
+  // the final "next stop" rather than jumping straight to a completion
+  // screen. It's never part of `stops` itself (not shown in the list
+  // view), it only surfaces here once the real stops are done.
+  const showEndAsNext = !current && !!endLabel;
 
   // The stop just before wherever we are now is the most recently marked
   // visited one (Drive Mode always advances one stop at a time in order),
@@ -78,6 +83,29 @@ export default function DriveModeOverlay({ stops, onExit, onMarkVisited, onUndoV
             <button className="btn btn-primary" style={bigButtonStyle} onClick={() => onMarkVisited(currentIndex)}>
               {remainingCount === 1 ? 'Mark Visited & Finish' : 'Mark Visited & Next →'}
             </button>
+            {onSkip && remainingCount > 1 && (
+              <button type="button" style={skipButtonStyle} onClick={() => onSkip(currentIndex)}>
+                Skip Stop — Come Back Later
+              </button>
+            )}
+            {canUndo && (
+              <button type="button" style={undoLinkStyle} onClick={() => onUndoVisit(lastVisitedIndex)}>
+                ↺ Undo visit to {stops[lastVisitedIndex].property_name}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : showEndAsNext ? (
+        <div style={contentStyle}>
+          <div style={progressStyle}>Final Stop</div>
+          <div style={headlineStyle}>Next Stop</div>
+          <div style={nameStyle}>{endLabel}</div>
+          <a href={mapsUrlFor(provider, endLabel)} target="_blank" rel="noreferrer" style={addressStyle}>
+            {endLabel}
+          </a>
+
+          <div style={actionsStyle}>
+            <button className="btn btn-primary" style={bigButtonStyle} onClick={onFinish}>Arrived — Finish Route</button>
             {canUndo && (
               <button type="button" style={undoLinkStyle} onClick={() => onUndoVisit(lastVisitedIndex)}>
                 ↺ Undo visit to {stops[lastVisitedIndex].property_name}
@@ -138,6 +166,11 @@ const metaStyle = { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 6 }
 const addressStyle = { display: 'inline-block', marginTop: 16, fontSize: 16, color: '#f3ede0', textDecoration: 'underline', textUnderlineOffset: 4 };
 const actionsStyle = { marginTop: 44, width: '100%', maxWidth: 360 };
 const bigButtonStyle = { width: '100%', padding: '18px 0', fontSize: 16, borderRadius: 10, justifyContent: 'center', textAlign: 'center' };
+const skipButtonStyle = {
+  display: 'block', width: '100%', marginTop: 12, padding: '12px 0',
+  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
+  color: '#f3ede0', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+};
 const undoLinkStyle = {
   display: 'block', width: '100%', marginTop: 14, padding: '10px 0',
   background: 'none', border: 'none', color: 'rgba(255,255,255,0.55)',

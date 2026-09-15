@@ -209,13 +209,9 @@ function NewOpportunityPageInner() {
     }
 
     if (data && form.customer_email.trim()) {
-      // Best-effort — a failed invite here shouldn't block getting to the
-      // job page. Portal Access still shows the real invited/not-invited
-      // state, and it can always be sent again manually from there.
-      // Uses /api/portal/create-invite — a real activation link that lands
-      // on "create your account", not a plain magic-link sign-in — and is
-      // idempotent, so it's a no-op (no duplicate email) if this customer
-      // already activated an account on an earlier job.
+      // Best-effort — a failed insert/invite here shouldn't block getting to
+      // the job page. Portal Access still shows the real invited/not-invited
+      // state, and it can always be sent (or sent again) manually from there.
       try {
         await supabase.from('job_portal_access').insert({
           job_id: data.id,
@@ -224,28 +220,39 @@ function NewOpportunityPageInner() {
           portal_access: true,
           notify: true,
         });
-        const { data: { session: adminSession } } = await supabase.auth.getSession();
-        const res = await fetch('/api/portal/create-invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accessToken: adminSession?.access_token,
-            email: form.customer_email.trim(),
-            customerName: fullName,
-            jobId: data.id,
-          }),
-        });
-        if (res.ok) {
-          const invitedAt = new Date().toISOString();
-          await Promise.all([
-            supabase.from('job_portal_access').update({ invited_at: invitedAt }).eq('job_id', data.id).eq('email', form.customer_email.trim()),
-            // The Portal Access & Notifications banner reads jobs.portal_invited_at
-            // specifically (separate from the per-contact job_portal_access.invited_at
-            // above) — this was only ever being set by the manual "Resend portal
-            // invite" button, so an auto-invite here could succeed end-to-end and the
-            // banner would still say "Not invited to the portal yet."
-            supabase.from('jobs').update({ portal_invited_at: invitedAt }).eq('id', data.id),
-          ]);
+
+        // Commercial opportunities default to NOT auto-inviting — portal
+        // access is still granted above (so it's ready to go), but someone
+        // has to send the invite themselves from the job's Portal Access
+        // tab. Residential keeps auto-inviting immediately, same as before.
+        if (!isCommercial) {
+          // Uses /api/portal/create-invite — a real activation link that lands
+          // on "create your account", not a plain magic-link sign-in — and is
+          // idempotent, so it's a no-op (no duplicate email) if this customer
+          // already activated an account on an earlier job.
+          const { data: { session: adminSession } } = await supabase.auth.getSession();
+          const res = await fetch('/api/portal/create-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accessToken: adminSession?.access_token,
+              email: form.customer_email.trim(),
+              customerName: fullName,
+              jobId: data.id,
+            }),
+          });
+          if (res.ok) {
+            const invitedAt = new Date().toISOString();
+            await Promise.all([
+              supabase.from('job_portal_access').update({ invited_at: invitedAt }).eq('job_id', data.id).eq('email', form.customer_email.trim()),
+              // The Portal Access & Notifications banner reads jobs.portal_invited_at
+              // specifically (separate from the per-contact job_portal_access.invited_at
+              // above) — this was only ever being set by the manual "Resend portal
+              // invite" button, so an auto-invite here could succeed end-to-end and the
+              // banner would still say "Not invited to the portal yet."
+              supabase.from('jobs').update({ portal_invited_at: invitedAt }).eq('id', data.id),
+            ]);
+          }
         }
       } catch {
         // silently skip — Portal Access on the job page shows the real state either way

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import PlacesAutocompleteInput from './PlacesAutocompleteInput';
 import DriveModeOverlay from './DriveModeOverlay';
 import { findOrCreatePropertyForRouteStop } from '../lib/contactSync';
+import { useDragReorder } from '../lib/useDragReorder';
 import {
   getActiveRoute, startRoute, updateRouteStops, finishRoute, cancelRoute,
   getCurrentLocation, orderStopsForEfficiency,
@@ -17,14 +18,6 @@ function newRow() {
 
 function formatAddress(p) {
   return [p.property_street, p.property_city, p.property_state, p.property_zip].filter(Boolean).join(', ');
-}
-
-function moveItem(list, index, direction) {
-  const target = index + direction;
-  if (target < 0 || target >= list.length) return list;
-  const next = list.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
 }
 
 // Signature used to catch "the same property, typed twice" — prefer the
@@ -61,7 +54,7 @@ function findDuplicateNames(filled) {
 // screen going off mid-drive (resumes automatically next time this
 // opens), and offers a full-screen "drive mode" for working through
 // stops one at a time on a phone.
-export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
+export default function ManualRouteBuilderCore({ onClose, onRouteChanged, hideChrome }) {
   const [staffId, setStaffId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [rows, setRows] = useState(() => Array.from({ length: INITIAL_ROW_COUNT }, newRow));
@@ -115,7 +108,7 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
   }
   function addRow() { setRows(prev => [...prev, newRow()]); }
   function removeRow(key) { setRows(prev => (prev.length > 1 ? prev.filter(r => r.key !== key) : prev)); }
-  function moveRow(index, direction) { setRows(prev => moveItem(prev, index, direction)); }
+  const rowsDrag = useDragReorder(rows, setRows);
 
   async function buildRoute(e) {
     e.preventDefault();
@@ -199,9 +192,7 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
     }
   }
 
-  function moveStop(index, direction) {
-    persistStops(moveItem(route.stops, index, direction));
-  }
+  const stopsDrag = useDragReorder(route?.stops || [], persistStops);
   function removeStop(index) {
     persistStops(route.stops.filter((_, i) => i !== index));
   }
@@ -319,6 +310,16 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
     await persistStops(nextStops);
   }
 
+  // Drive Mode's "Skip Stop" — moves the stop to the back of the line
+  // instead of marking it visited, so the next unvisited stop becomes
+  // current. It stays on the route, just deferred to the end.
+  async function skipStop(index) {
+    if (!route?.stops || route.stops.length < 2) return;
+    const stop = route.stops[index];
+    const rest = route.stops.filter((_, i) => i !== index);
+    await persistStops([...rest, stop]);
+  }
+
   async function handleFinishRoute() {
     if (route?.id) await finishRoute(route.id);
     setDriving(false);
@@ -345,16 +346,15 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
   }
 
   if (checkingActive) {
-    return <div className="card"><h3>Create Sales Route</h3><div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Loading…</div></div>;
+    const loadingBody = <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Loading…</div>;
+    return hideChrome ? loadingBody : <div className="card"><h3>Create Sales Route</h3>{loadingBody}</div>;
   }
 
   const resumed = route && route.status === 'active' && route.id && rows.every(r => !r.name.trim());
   const remainingCount = route ? route.stops.filter(s => !s.visited_at).length : 0;
 
-  return (
-    <div className="card">
-      <h3>Create Sales Route</h3>
-
+  const body = (
+    <>
       {!route ? (
         <form onSubmit={buildRoute}>
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px' }}>
@@ -362,11 +362,24 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
           </p>
 
           {rows.map((row, i) => (
-            <div key={row.key} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 10 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 22 }}>
-                <button type="button" className="btn btn-sm" disabled={i === 0} onClick={() => moveRow(i, -1)} aria-label="Move up" style={{ padding: '2px 8px' }}>↑</button>
-                <button type="button" className="btn btn-sm" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="Move down" style={{ padding: '2px 8px' }}>↓</button>
-              </div>
+            <div
+              key={row.key}
+              data-drag-row={i}
+              style={{
+                display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 10,
+                opacity: rowsDrag.dragIndex === i ? 0.4 : 1,
+                outline: rowsDrag.overIndex === i && rowsDrag.dragIndex !== null && rowsDrag.dragIndex !== i ? '2px solid var(--gold)' : 'none',
+                outlineOffset: 3,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Drag to reorder"
+                onPointerDown={e => rowsDrag.handlePointerDown(e, i)}
+                onPointerMove={rowsDrag.handlePointerMove}
+                onPointerUp={rowsDrag.handlePointerUp}
+                style={dragHandleStyle}
+              >⠿</button>
               <div style={{ flex: 1 }}>
                 <label>Property {i + 1}</label>
                 <PlacesAutocompleteInput
@@ -437,11 +450,24 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
 
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {route.stops.map((p, i) => (
-              <div key={p.property_id || i} style={{ display: 'flex', gap: 8, padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <button type="button" className="btn btn-sm" disabled={i === 0} onClick={() => moveStop(i, -1)} aria-label="Move up" style={{ padding: '1px 6px', fontSize: 11 }}>↑</button>
-                  <button type="button" className="btn btn-sm" disabled={i === route.stops.length - 1} onClick={() => moveStop(i, 1)} aria-label="Move down" style={{ padding: '1px 6px', fontSize: 11 }}>↓</button>
-                </div>
+              <div
+                key={p.property_id || i}
+                data-drag-row={i}
+                style={{
+                  display: 'flex', gap: 8, padding: '9px 0', borderBottom: '1px solid var(--line)',
+                  opacity: stopsDrag.dragIndex === i ? 0.4 : 1,
+                  outline: stopsDrag.overIndex === i && stopsDrag.dragIndex !== null && stopsDrag.dragIndex !== i ? '2px solid var(--gold)' : 'none',
+                  outlineOffset: 3,
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Drag to reorder"
+                  onPointerDown={e => stopsDrag.handlePointerDown(e, i)}
+                  onPointerMove={stopsDrag.handlePointerMove}
+                  onPointerUp={stopsDrag.handlePointerUp}
+                  style={{ ...dragHandleStyle, alignSelf: 'flex-start', marginTop: 1 }}
+                >⠿</button>
                 <div style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, flexShrink: 0, width: 18 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
                   {editingIndex === i ? (
@@ -512,16 +538,30 @@ export default function ManualRouteBuilderCore({ onClose, onRouteChanged }) {
       {driving && route && (
         <DriveModeOverlay
           stops={route.stops}
+          endLabel={route.end_label || null}
           onExit={() => setDriving(false)}
           onMarkVisited={async (index) => { await markStopVisited(index); }}
           onUndoVisit={async (index) => { await unmarkStopVisited(index); }}
+          onSkip={skipStop}
           onFinish={handleFinishRoute}
         />
       )}
+    </>
+  );
+
+  return hideChrome ? body : (
+    <div className="card">
+      <h3>Create Sales Route</h3>
+      {body}
     </div>
   );
 }
 
+const dragHandleStyle = {
+  padding: '4px 10px', marginTop: 22, fontSize: 16, lineHeight: 1,
+  background: 'none', border: '1px solid var(--line)', borderRadius: 6,
+  color: 'var(--ink-soft)', cursor: 'grab', touchAction: 'none', flexShrink: 0,
+};
 const dupBackdropStyle = {
   position: 'fixed', inset: 0, zIndex: 2100,
   background: 'rgba(0,0,0,0.45)',

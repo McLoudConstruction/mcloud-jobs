@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
-import RouteBuilderCore from '../../../components/RouteBuilderCore';
-import ManualRouteBuilderCore from '../../../components/ManualRouteBuilderCore';
+import CombinedRouteBuilderCard from '../../../components/CombinedRouteBuilderCard';
 import { listRouteHistory, repeatRoute, deleteRoute } from '../../../lib/salesRoutes';
 
 const STATUS_LABELS = { active: 'In progress', completed: 'Completed', canceled: 'Canceled' };
@@ -154,8 +153,7 @@ export default function RouteBuilderPage() {
   return (
     <AppShell>
       <div className="container">
-        <ManualRouteBuilderCore key={`manual-${refreshKey}`} onRouteChanged={bumpRefresh} />
-        <RouteBuilderCore />
+        <CombinedRouteBuilderCard key={`combined-${refreshKey}`} onRouteChanged={bumpRefresh} />
         <RouteHistory key={`history-${refreshKey}`} staffId={staffId} onChanged={bumpRefresh} />
       </div>
     </AppShell>

@@ -17,7 +17,7 @@ function daysAgo(dateStr) {
 // The actual route-building form + results, with no modal/portal/overlay
 // chrome of its own — just content, so it can be dropped into either a
 // popup (RouteBuilderModal) or a real page (Sales > Route Builder).
-export default function RouteBuilderCore({ onClose }) {
+export default function RouteBuilderCore({ onClose, hideChrome }) {
   const [area, setArea] = useState('');
   const [stops, setStops] = useState('10');
   const [avoidDays, setAvoidDays] = useState(String(DEFAULT_AVOID_DAYS));
@@ -103,10 +103,8 @@ export default function RouteBuilderCore({ onClose }) {
     setError('');
   }
 
-  return (
-    <div className="card">
-      <h3>Create My Sales Route</h3>
-
+  const body = (
+    <>
       {!route ? (
         <form onSubmit={buildRoute}>
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px' }}>
@@ -172,6 +170,13 @@ export default function RouteBuilderCore({ onClose }) {
           </div>
         </div>
       )}
+    </>
+  );
+
+  return hideChrome ? body : (
+    <div className="card">
+      <h3>Create My Sales Route</h3>
+      {body}
     </div>
   );
 }
