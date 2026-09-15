@@ -975,7 +975,19 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table tbody tr:nth-child(even){ background: var(--panel); }
 .data-table tbody tr:hover{ background: var(--line); }
 .data-table tbody tr:last-child td{ border-bottom: none; }
-.data-table-wrap{ overflow-x: auto; }
+.data-table-wrap{
+  overflow: auto;
+  /* Capped instead of growing with row count — a 200+ row table used to
+     mean scrolling the whole page down past every row just to reach the
+     horizontal scrollbar (it sits at the table's own bottom edge). Capping
+     the height turns the table into its own scroll box, so both
+     scrollbars stay reachable near the top of the page no matter how
+     long the list is. */
+  max-height: 70vh;
+  border-radius: 6px;
+}
+.data-table{ border-radius: 0; }
+.data-table thead{ position: sticky; top: 0; z-index: 4; }
 
 /* Pins a column (meant for a trailing actions column) to the right edge
    of the table so it's still reachable without scrolling all the way
