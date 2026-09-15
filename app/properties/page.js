@@ -73,9 +73,6 @@ export default function PropertiesPage() {
   const [propertyContacts, setPropertyContacts] = useState([]);
   const { customColumns, addColumn } = useCustomColumns('properties');
 
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
     if (data) setProperties(data);
@@ -172,80 +169,6 @@ export default function PropertiesPage() {
     if (!confirm('Delete this property?')) return;
     const { error } = await supabase.from('properties').delete().eq('id', id);
     if (error) { setSaveError(error.message); return; }
-    await loadProperties();
-  }
-
-  function toggleSelected(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAllVisible() {
-    setSelectedIds(prev => {
-      const visibleIds = filtered.map(p => p.id);
-      const allSelected = visibleIds.length > 0 && visibleIds.every(id => prev.has(id));
-      if (allSelected) {
-        const next = new Set(prev);
-        visibleIds.forEach(id => next.delete(id));
-        return next;
-      }
-      return new Set([...prev, ...visibleIds]);
-    });
-  }
-
-  function clearSelection() {
-    setSelectedIds(new Set());
-  }
-
-  // Same "matched address, fall back to name" signature used to catch
-  // duplicate stops in the sales route builder — prefer the full street
-  // address when there is one (so "Oakwood Apts" and "123 Main St" that
-  // both resolved to the same place still collide), fall back to the
-  // property name otherwise.
-  function duplicateSignature(p) {
-    const addr = [p.property_street, p.property_city, p.property_zip].filter(Boolean).join('|').toLowerCase().trim();
-    if (addr) return addr;
-    return (p.property_name || '').toLowerCase().trim();
-  }
-
-  // Groups properties by signature and pre-selects every member of each
-  // duplicate group except the oldest one (the one most likely to be
-  // linked elsewhere — jobs, contacts, route history) so the review-then-
-  // delete flow defaults to keeping the original and clearing the copies.
-  function selectDuplicates() {
-    const groups = new Map();
-    for (const p of properties) {
-      const sig = duplicateSignature(p);
-      if (!sig) continue;
-      if (!groups.has(sig)) groups.set(sig, []);
-      groups.get(sig).push(p);
-    }
-    const toSelect = new Set();
-    for (const group of groups.values()) {
-      if (group.length < 2) continue;
-      const sorted = group.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-      sorted.slice(1).forEach(p => toSelect.add(p.id));
-    }
-    if (toSelect.size === 0) {
-      setImportResult('No likely duplicates found — matched by street address, or by name when there\'s no address on file.');
-      setTimeout(() => setImportResult(''), 5000);
-      return;
-    }
-    setSelectedIds(toSelect);
-  }
-
-  async function removeSelected() {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} propert${ids.length === 1 ? 'y' : 'ies'}? This can't be undone.`)) return;
-    setBulkDeleting(true);
-    const { error } = await supabase.from('properties').delete().in('id', ids);
-    setBulkDeleting(false);
-    if (error) { setSaveError(error.message); return; }
-    clearSelection();
     await loadProperties();
   }
 
@@ -359,20 +282,11 @@ export default function PropertiesPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Property Database</h2>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10 }}>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
             <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
               {importing ? 'Importing…' : '↑ Import from Excel'}
             </button>
-            <button className="btn" onClick={selectDuplicates}>Select Duplicates</button>
-            {selectedIds.size > 0 && (
-              <>
-                <button className="btn btn-danger" onClick={removeSelected} disabled={bulkDeleting}>
-                  {bulkDeleting ? 'Deleting…' : `Delete Selected (${selectedIds.size})`}
-                </button>
-                <button className="btn" onClick={clearSelection}>Clear Selection</button>
-              </>
-            )}
             <AddColumnButton addColumn={addColumn} />
             <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
               {showForm ? 'Cancel' : '+ Add property'}
@@ -518,28 +432,6 @@ export default function PropertiesPage() {
             onRowClick={startEdit}
             rows={filtered}
             columns={[
-              {
-                key: 'select', label: (
-                  <input
-                    type="checkbox"
-                    style={{ width: 'auto' }}
-                    checked={filtered.length > 0 && filtered.every(p => selectedIds.has(p.id))}
-                    onChange={toggleSelectAllVisible}
-                    onClick={e => e.stopPropagation()}
-                    aria-label="Select all visible properties"
-                  />
-                ),
-                defaultWidth: 40, filterable: false, sortable: false, stopClickPropagation: true,
-                render: p => (
-                  <input
-                    type="checkbox"
-                    style={{ width: 'auto' }}
-                    checked={selectedIds.has(p.id)}
-                    onChange={() => toggleSelected(p.id)}
-                    aria-label={`Select ${p.property_name}`}
-                  />
-                ),
-              },
               { key: 'property_name', label: 'Property Name', defaultWidth: 220, render: p => <>{p.property_name}{!p.active && ' (inactive)'}</> },
               { key: 'property_type', label: 'Property Type', defaultWidth: 170, render: p => p.property_type || '—' },
               { key: 'property_city', label: 'City', defaultWidth: 130, render: p => p.property_city || '—' },
