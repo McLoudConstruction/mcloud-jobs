@@ -422,7 +422,7 @@ export default function CustomersPage() {
                 ),
               })),
               {
-                key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true,
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true, sticky: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>,
               },
             ]}

@@ -268,7 +268,7 @@ export default function CompaniesPage() {
                 ),
               })),
               {
-                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
+                key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true, sticky: true,
                 render: c => <button className="btn btn-sm btn-danger" onClick={() => removeCompany(c.id)}>Delete</button>,
               },
             ]}

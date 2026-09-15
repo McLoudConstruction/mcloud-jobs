@@ -976,6 +976,21 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table tbody tr:hover{ background: var(--line); }
 .data-table tbody tr:last-child td{ border-bottom: none; }
 .data-table-wrap{ overflow-x: auto; }
+
+/* Pins a column (meant for a trailing actions column) to the right edge
+   of the table so it's still reachable without scrolling all the way
+   right on a wide table — a real problem on the CRM list pages, which
+   can run to a dozen+ columns. Needs an explicit background per row
+   state since `position: sticky` cells sit on top of the columns
+   scrolling behind them, and a background wouldn't otherwise be
+   inherited from the row. */
+.data-table-sticky-col{ position: sticky; right: 0; z-index: 1; box-shadow: -6px 0 6px -6px rgba(0,0,0,0.35); }
+.data-table th.data-table-sticky-col{ background: var(--panel); z-index: 3; }
+.data-table-filter-row th.data-table-sticky-col{ background: var(--card-bg); z-index: 3; }
+.data-table tbody tr td.data-table-sticky-col{ background: var(--card-bg); }
+.data-table tbody tr:nth-child(even) td.data-table-sticky-col{ background: var(--panel); }
+.data-table tbody tr:hover td.data-table-sticky-col{ background: var(--line); }
+
 .route-modal-card-wrap .card{ margin-bottom: 0; }
 
 /* Shared two-column layout — used by the Estimate, Scope, and Financials

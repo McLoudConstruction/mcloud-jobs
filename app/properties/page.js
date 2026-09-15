@@ -462,7 +462,7 @@ export default function PropertiesPage() {
                 ),
               })),
               {
-                key: 'actions', label: '', defaultWidth: 160, filterable: false, sortable: false, stopClickPropagation: true,
+                key: 'actions', label: '', defaultWidth: 160, filterable: false, sortable: false, stopClickPropagation: true, sticky: true,
                 render: p => (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <LogVisitPopover onLog={iso => markVisited(p.id, iso)} />

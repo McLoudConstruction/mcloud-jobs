@@ -1,7 +1,10 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
-// columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), sortValue?(row), filterable?, sortable?, stopClickPropagation? }]
+// columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), sortValue?(row), filterable?, sortable?, stopClickPropagation?, sticky? }]
+// sticky: true pins the column to the right edge of the table (header, filter
+// row, and body cells) so it stays visible when the table scrolls horizontally
+// — meant for a trailing actions column on wide tables.
 export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName }) {
   const [widths, setWidths] = useState(() => {
     // On a narrow viewport, start columns noticeably tighter so more of
@@ -132,7 +135,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
             {columns.map(c => (
               <th
                 key={c.key}
-                className={c.sortable === false ? '' : 'data-table-sortable-th'}
+                className={`${c.sortable === false ? '' : 'data-table-sortable-th'} ${c.sticky ? 'data-table-sticky-col' : ''}`}
                 onClick={() => toggleSort(c)}
               >
                 {c.label}
@@ -147,7 +150,7 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
           </tr>
           <tr className="data-table-filter-row">
             {columns.map(c => (
-              <th key={c.key}>
+              <th key={c.key} className={c.sticky ? 'data-table-sticky-col' : ''}>
                 {c.filterable !== false && (
                   <input
                     className="data-table-filter-input"
@@ -165,7 +168,11 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
           {sortedRows.map(row => (
             <tr key={getRowKey(row)} onClick={() => onRowClick && onRowClick(row)} className={rowClassName ? rowClassName(row) : ''}>
               {columns.map(c => (
-                <td key={c.key} onClick={c.stopClickPropagation ? (e => e.stopPropagation()) : undefined}>
+                <td
+                  key={c.key}
+                  className={c.sticky ? 'data-table-sticky-col' : ''}
+                  onClick={c.stopClickPropagation ? (e => e.stopPropagation()) : undefined}
+                >
                   {c.render ? c.render(row) : row[c.key]}
                 </td>
               ))}
