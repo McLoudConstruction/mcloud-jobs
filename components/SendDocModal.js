@@ -5,7 +5,7 @@ import { generatePdfBase64 } from '../lib/generatePdf';
 import { buildDocEmail } from '../lib/emailTemplates';
 import { supabase } from '../lib/supabaseClient';
 
-export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, jobId, onPrint, onSendSuccess }) {
+export default function SendDocModal({ open, onClose, docLabel, docType, customerName, docElementId, pdfFilename, defaultEmail, jobId, projectType, onPrint, onSendSuccess }) {
   const [email, setEmail] = useState(defaultEmail || '');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false); // locks both buttons after a successful send, for the life of this page visit
@@ -78,7 +78,14 @@ export default function SendDocModal({ open, onClose, docLabel, docType, custome
 
       setResult({ ok: true, message: 'Granting portal access…' });
       await ensurePortalAccess(email);
-      await ensureActivationInvite(email, session?.access_token);
+      // Commercial jobs default to NOT auto-inviting — that stays a
+      // manual step from the Portal Access card (often there's a
+      // property manager or multiple stakeholders to sort out first).
+      // Residential still gets the invite automatically here, same as
+      // before.
+      if (projectType !== 'commercial') {
+        await ensureActivationInvite(email, session?.access_token);
+      }
 
       let attachmentBase64 = null;
       if (withAttachment) {

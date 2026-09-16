@@ -12,7 +12,7 @@ import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'Communications Log', 'Users'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Communications Log', 'Users'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -242,6 +242,8 @@ function SettingsPageInner() {
           signout_text: form.signout_text,
           signout_hover_bg: form.signout_hover_bg,
           dashboard_widgets: form.dashboard_widgets,
+          proposal_followup_count: form.proposal_followup_count,
+          proposal_followup_interval_days: form.proposal_followup_interval_days,
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -403,6 +405,36 @@ function SettingsPageInner() {
               {DASHBOARD_WIDGET_LABELS[key]}
             </label>
           ))}
+        </div>
+        )}
+
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Proposal follow-ups</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Once a proposal/estimate has been sent and the job is still waiting on a decision (not yet won or lost),
+            the daily automation sends a gentle follow-up email at this interval, up to this many times, then stops.
+            This is separate from the early-stage lead follow-ups (2 and 4 days after a lead comes in), which aren't
+            configurable here.
+          </div>
+          <div className="two-col">
+            <div>
+              <label>Number of follow-ups</label>
+              <input
+                type="number" min="0" max="10"
+                value={form.proposal_followup_count ?? 3}
+                onChange={e => update('proposal_followup_count', parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div>
+              <label>Days between each follow-up</label>
+              <input
+                type="number" min="1" max="30"
+                value={form.proposal_followup_interval_days ?? 4}
+                onChange={e => update('proposal_followup_interval_days', parseInt(e.target.value) || 1)}
+              />
+            </div>
+          </div>
         </div>
         )}
 

@@ -310,6 +310,7 @@ export default function MaterialSelectionPage() {
           docElementId="doc-preview"
           pdfFilename={`${selection.title}.pdf`}
           jobId={id}
+          projectType={job?.project_type}
           onSendSuccess={sendToCustomer}
         />
       )}

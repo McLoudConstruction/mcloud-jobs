@@ -140,6 +140,21 @@ export default function SalesDashboardPage() {
     window.location.href = `/jobs/new?opp=${id}`;
   }
 
+  const [bidWalkDrafts, setBidWalkDrafts] = useState({});
+
+  // Scheduling a bid walk/inspection is treated as the qualifying moment
+  // for a lead — as soon as a date is set, this walks straight into the
+  // same "Convert to Opportunity" flow the manual button uses, instead
+  // of leaving conversion as a separate step someone has to remember
+  // to do later.
+  async function scheduleBidWalk(id) {
+    const value = bidWalkDrafts[id];
+    if (!value) return;
+    const { error } = await supabase.from('opportunities').update({ bid_walk_scheduled_at: new Date(value).toISOString() }).eq('id', id);
+    if (error) { setSaveError(error.message); return; }
+    convertToJob(id);
+  }
+
   async function confirmLoss() {
     const { error } = await supabase.from('opportunities').update({ stage: 'lost', loss_reason: lossReasonText }).eq('id', lossReasonPromptId);
     if (error) { setSaveError(error.message); return; }
@@ -282,6 +297,9 @@ export default function SalesDashboardPage() {
               <span className="job-customer">{o.company || o.contact_name || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
               <span className="job-address">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
               {o.stage === 'lost' && o.loss_reason && <span className="job-address" style={{ color: '#a13f3f' }}>Loss reason: {o.loss_reason}</span>}
+              {o.bid_walk_scheduled_at && (
+                <span className="job-address">Bid walk scheduled: {new Date(o.bid_walk_scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {o.stage === 'converted' ? (
@@ -296,6 +314,19 @@ export default function SalesDashboardPage() {
                   </select>
                   {ACTIVE_STAGES.includes(o.stage) && (
                     <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
+                  )}
+                  {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
+                    <>
+                      <input
+                        type="datetime-local"
+                        style={{ width: 'auto' }}
+                        value={bidWalkDrafts[o.id] || ''}
+                        onChange={e => setBidWalkDrafts(prev => ({ ...prev, [o.id]: e.target.value }))}
+                      />
+                      <button className="btn btn-sm" disabled={!bidWalkDrafts[o.id]} onClick={() => scheduleBidWalk(o.id)}>
+                        Schedule Bid Walk
+                      </button>
+                    </>
                   )}
                 </>
               )}

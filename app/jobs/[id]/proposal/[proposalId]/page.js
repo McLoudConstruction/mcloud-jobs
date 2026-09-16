@@ -114,6 +114,7 @@ export default function IndividualProposalDocumentPage() {
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
+        projectType={job.project_type}
         pdfFilename={`Estimate-${projectNumber(job)}-${proposal.name}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {

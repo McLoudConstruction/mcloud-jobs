@@ -147,6 +147,7 @@ export default function UpdateDocumentPage() {
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
+        projectType={job.project_type}
         pdfFilename={`Project-Update-${job.job_number}-${update.update_date}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {

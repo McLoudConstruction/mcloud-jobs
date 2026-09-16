@@ -7,6 +7,7 @@ import { useOfflineSync } from '../lib/useOfflineSync';
 import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
 import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 import CameraCapture from './CameraCapture';
+import PolishTextButton from './PolishTextButton';
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -211,12 +212,16 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             {INTERNAL_UPDATE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <textarea placeholder="What's happening on site?" value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} />
+          <div style={{ marginBottom: 8 }}><PolishTextButton value={noteText} onPolished={setNoteText} /></div>
           <label>Work completed</label>
           <textarea value={workCompleted} onChange={e => setWorkCompleted(e.target.value)} rows={2} />
+          <div style={{ marginBottom: 8 }}><PolishTextButton value={workCompleted} onPolished={setWorkCompleted} /></div>
           <label>Upcoming work</label>
           <textarea value={upcomingWork} onChange={e => setUpcomingWork(e.target.value)} rows={2} />
+          <div style={{ marginBottom: 8 }}><PolishTextButton value={upcomingWork} onPolished={setUpcomingWork} /></div>
           <label>Next steps</label>
           <textarea value={nextSteps} onChange={e => setNextSteps(e.target.value)} rows={2} />
+          <div style={{ marginBottom: 8 }}><PolishTextButton value={nextSteps} onPolished={setNextSteps} /></div>
 
           {stagedPhotos.length > 0 && (
             <div className="staged-photo-strip">

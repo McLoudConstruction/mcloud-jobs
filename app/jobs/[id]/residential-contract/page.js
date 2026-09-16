@@ -338,6 +338,7 @@ export default function ContractDocumentPage() {
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
+        projectType={job.project_type}
         pdfFilename={`Residential-Contract-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {

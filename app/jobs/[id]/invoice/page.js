@@ -162,6 +162,7 @@ export default function InvoiceDocumentPage() {
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"
         jobId={id}
+        projectType={job.project_type}
         pdfFilename={`Invoice-${job.job_number}.pdf`}
         defaultEmail={recipientEmail}
         onSendSuccess={markInvoiceSent}

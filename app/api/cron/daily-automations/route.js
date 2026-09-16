@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { buildFollowupEmail, buildScheduleReminderEmail } from '../../../../lib/emailTemplates';
+import { buildFollowupEmail, buildScheduleReminderEmail, buildProposalFollowupEmail } from '../../../../lib/emailTemplates';
 import nodemailer from 'nodemailer';
 import { logCommunication } from '../../../../lib/logCommunication';
+import { phaseForStage } from '../../../../lib/constants';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -54,7 +55,7 @@ export async function GET(request) {
   const supabase = getAdminClient();
   const transporter = getTransporter();
   const today = new Date();
-  const results = { followups_sent: 0, reminders_sent: 0, skipped_opted_out: 0, errors: [] };
+  const results = { followups_sent: 0, reminders_sent: 0, proposal_followups_sent: 0, skipped_opted_out: 0, errors: [] };
 
   async function isOptedOut(email) {
     if (!email) return false;
@@ -135,6 +136,54 @@ export async function GET(request) {
     }
   } catch (err) {
     results.errors.push(`Reminder query failed: ${err.message}`);
+  }
+
+  // ── Proposal follow-ups: fires while a job's proposal has been sent
+  // but the job hasn't been won (converted) or lost yet, up to a
+  // configurable count at a configurable interval (Settings page). This
+  // is separate from the opportunity 2d/4d follow-up above — that one
+  // covers early-stage leads before a proposal ever goes out.
+  try {
+    const { data: appSettings } = await supabase.from('app_settings').select('proposal_followup_count, proposal_followup_interval_days').eq('id', 1).single();
+    const followupCount = appSettings?.proposal_followup_count ?? 3;
+    const intervalDays = appSettings?.proposal_followup_interval_days ?? 4;
+
+    const { data: jobs } = await supabase
+      .from('jobs')
+      .select('id, stage, job_type, customer_email, billing_email, customer_name, proposal_sent_at, proposal_followups_sent_count, proposal_followup_last_sent_at')
+      .not('proposal_sent_at', 'is', null)
+      .lt('proposal_followups_sent_count', followupCount);
+
+    for (const job of jobs || []) {
+      if (phaseForStage(job.stage) !== 'opportunity' || job.stage === 'lost') continue; // won (converted past opportunity) or lost — no more follow-ups either way
+
+      const lastAt = job.proposal_followup_last_sent_at || job.proposal_sent_at;
+      const daysSinceLast = daysBetween(lastAt, today);
+      if (daysSinceLast < intervalDays) continue;
+
+      const recipient = job.billing_email || job.customer_email;
+      if (!recipient) continue;
+
+      if (await isOptedOut(recipient)) {
+        results.skipped_opted_out++;
+        continue;
+      }
+
+      try {
+        const nextCount = (job.proposal_followups_sent_count || 0) + 1;
+        const { subject, html, text } = buildProposalFollowupEmail({ customerName: job.customer_name, jobType: job.job_type, followupNumber: nextCount });
+        await sendMail(transporter, { to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id });
+        await supabase.from('jobs').update({
+          proposal_followups_sent_count: nextCount,
+          proposal_followup_last_sent_at: new Date().toISOString(),
+        }).eq('id', job.id);
+        results.proposal_followups_sent++;
+      } catch (err) {
+        results.errors.push(`Job ${job.id}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    results.errors.push(`Proposal follow-up query failed: ${err.message}`);
   }
 
   return Response.json(results);

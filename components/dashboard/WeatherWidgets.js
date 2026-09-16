@@ -108,7 +108,9 @@ export function WeatherRibbon({ forecast, loading, error }) {
           <ConditionIcon icon={c.icon} alt={c.description} size={40} />
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>{c.description} · Wind {c.windMph} mph</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'capitalize' }}>
+              {c.description} · Wind {c.windMph} mph{c.humidity != null ? ` · Humidity ${c.humidity}%` : ''}
+            </div>
             {forecast?.locationName && (
               <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 1 }}>📍 {forecast.locationName}</div>
             )}
