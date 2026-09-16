@@ -63,7 +63,12 @@ export default function InvoicesDashboardPage() {
       else { status = 'Paid'; urgency = 0; }
     }
 
-    const flaggedReady = j.ready_to_invoice && !j.invoice_amount && !usesDraws;
+    // A job using draws can still be meaningfully flagged "ready to
+    // invoice" — it means the next draw needs to go out, not that the
+    // whole job needs a first invoice. Previously this only ever showed
+    // for single-invoice jobs, so flagging a draws-based job silently
+    // did nothing on this dashboard.
+    const flaggedReady = j.ready_to_invoice && (usesDraws ? true : !j.invoice_amount);
     if (flaggedReady) urgency = Math.max(urgency, 3);
 
     return { ...j, usesDraws, status, urgency, outstanding, flaggedReady };

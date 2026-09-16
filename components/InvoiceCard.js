@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../lib/supabaseClient';
 
 // Rounds to the cent and drops trailing zeros in a way that's safe to
 // put back into a text input (unlike toLocaleString, which would add
@@ -19,6 +20,25 @@ export default function InvoiceCard({ job, onSave, jobId }) {
   const [description, setDescription] = useState(job.invoice_description || '');
   const [status, setStatus] = useState(job.invoice_status || 'not_sent');
   const [invoicedAt, setInvoicedAt] = useState(job.invoiced_at ? job.invoiced_at.slice(0, 10) : '');
+
+  // This "billed" total is meant to answer "how much of the contract has
+  // actually gone out to the customer" — which, on a job that used draws
+  // along the way, has to include those, not just this final invoice.
+  // Without this, a job billed via draws before this final invoice
+  // existed always showed $0 billed here, ignoring every draw already
+  // sent or paid.
+  const [drawsBilled, setDrawsBilled] = useState(0);
+  useEffect(() => {
+    if (!jobId) return;
+    let mounted = true;
+    const load = () => supabase.from('invoices').select('amount, status').eq('job_id', jobId).neq('status', 'not_sent')
+      .then(({ data }) => { if (mounted && data) setDrawsBilled(data.reduce((sum, d) => sum + Number(d.amount || 0), 0)); });
+    load();
+    const channel = supabase.channel(`invoice-card-draws-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `job_id=eq.${jobId}` }, load)
+      .subscribe();
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [jobId]);
 
   function onStatusChange(newStatus) {
     setStatus(newStatus);
@@ -49,7 +69,7 @@ export default function InvoiceCard({ job, onSave, jobId }) {
   // actually been invoiced (see useState above) — so it can't be used
   // directly here, or this reads as fully billed on a brand-new,
   // never-sent invoice. Nothing is actually billed until it's gone out.
-  const billedAmount = status === 'not_sent' ? 0 : (amount ? Number(amount) : 0);
+  const billedAmount = (status === 'not_sent' ? 0 : (amount ? Number(amount) : 0)) + drawsBilled;
 
   return (
     <div className="card">
