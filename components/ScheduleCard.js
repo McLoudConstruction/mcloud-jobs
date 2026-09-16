@@ -506,7 +506,7 @@ export default function ScheduleCard({ jobId, job }) {
       {!draft && phases.length > 0 && (
         <div>
           {totalDays && (
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 10 }}>
               {fmtDate(phases[0].start_date)} – {fmtDate(phases[phases.length - 1].end_date)} · {totalDays} calendar days
             </div>
           )}
@@ -519,70 +519,85 @@ export default function ScheduleCard({ jobId, job }) {
           {view === 'timeline' && <TimelineView phases={phases} onPhaseUpdate={updatePhaseDates} />}
 
           {view === 'list' && <Legend phases={phases} />}
-          {view === 'list' && phases.map(p => (
-            <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
-              {editingId === p.id ? (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <PhaseSwatch phase={p} />
-                    <b style={{ flex: 1 }}>{p.label}</b>
-                    <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
-                        Preferred start day
-                        <select value={editPreferredStartDay} onChange={e => setEditPreferredStartDay(e.target.value)} style={{ fontSize: 11, padding: '2px 4px' }}>
-                          {START_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
-                        Weekend work
-                        <select value={editAllowWeekend ? 'yes' : 'no'} onChange={e => setEditAllowWeekend(e.target.value === 'yes')} style={{ fontSize: 11, padding: '2px 4px' }}>
-                          <option value="no">No</option>
-                          <option value="yes">Yes</option>
-                        </select>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
-                        Work location
-                        <select value={editWorkLocation} onChange={e => setEditWorkLocation(e.target.value)} style={{ fontSize: 11, padding: '2px 4px' }}>
-                          {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                      </label>
+          {view === 'list' && (
+            <div className="schedule-table">
+              <div className="schedule-header-row">
+                <div>Phase</div>
+                <div>Start Date</div>
+                <div>End Date</div>
+                <div>Weather</div>
+                <div></div>
+              </div>
+              {phases.map(p => (
+                editingId === p.id ? (
+                  <div key={p.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 14, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <PhaseSwatch phase={p} />
+                      <b style={{ flex: 1 }}>{p.label}</b>
+                      <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} style={{ width: 56 }} />
+                      <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>days</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
-                      <button className="btn btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}>
+                          Preferred start day
+                          <select value={editPreferredStartDay} onChange={e => setEditPreferredStartDay(e.target.value)} style={{ fontSize: 12, padding: '2px 4px' }}>
+                            {START_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}>
+                          Weekend work
+                          <select value={editAllowWeekend ? 'yes' : 'no'} onChange={e => setEditAllowWeekend(e.target.value === 'yes')} style={{ fontSize: 12, padding: '2px 4px' }}>
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
+                          </select>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}>
+                          Work location
+                          <select value={editWorkLocation} onChange={e => setEditWorkLocation(e.target.value)} style={{ fontSize: 12, padding: '2px 4px' }}>
+                            {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
+                        <button className="btn btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
+                ) : (
+                  <div key={p.id} className="schedule-row" style={{ background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
+                      <div>
+                        <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · edited</span>}
+                        {p.needs_review && <span style={{ fontSize: 11, color: '#8a6d1d' }}> · please review</span>}
+                        {p.preferred_start_day && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · starts {dayLabel(p.preferred_start_day)}</span>}
+                        {p.allow_weekend_work && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · weekend OK</span>}
+                        {p.work_location && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>}
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{p.duration_days} days</div>
+                      </div>
+                    </div>
+                    <div>{fmtDate(p.start_date)}</div>
+                    <div>{fmtDate(p.end_date)}</div>
                     <div>
-                      <b>{p.label}</b>{p.source === 'manual' && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · edited</span>}
-                      {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · please review</span>}
-                      {p.preferred_start_day && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · starts {dayLabel(p.preferred_start_day)}</span>}
-                      {p.allow_weekend_work && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · weekend OK</span>}
-                      {p.work_location && <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>}
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)} ({p.duration_days} days)</div>
-                      {p.work_location === 'outdoor' && (
+                      {p.work_location === 'outdoor' ? (
                         <WeatherStatusLine
                           phase={p}
                           flag={weatherFlags[p.id]}
                           noRule={weatherNoRuleIds.includes(p.id)}
                           checkedThrough={weatherCheckedThrough}
                         />
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'italic' }}>Indoor — not checked</span>
                       )}
                     </div>
+                    <div><button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button></div>
                   </div>
-                  <button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button>
-                </div>
-              )}
+                )
+              ))}
             </div>
-          ))}
+          )}
 
           {view === 'list' && addingPhase && (
             <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
@@ -674,7 +689,7 @@ function weekendShading(minDate, dayWidth) {
   const bandStart = firstWeekendOffset * dayWidth;
   const bandEnd = bandStart + 2 * dayWidth;
   const period = 7 * dayWidth;
-  return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, var(--panel) ${bandStart}px, var(--panel) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
+  return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, color-mix(in srgb, var(--panel) 55%, var(--ink-soft) 20%) ${bandStart}px, color-mix(in srgb, var(--panel) 55%, var(--ink-soft) 20%) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
 }
 
 // A thin vertical line at the start of every day column, so a bar's edges
@@ -817,16 +832,13 @@ function TimelineView({ phases, onPhaseUpdate }) {
   return (
     <div style={{ marginBottom: 8 }}>
       <Legend phases={phases} />
-      <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
-        Drag a bar to move it, or its edges to resize — phases can overlap here, and moving one doesn't shift the others. A phase without weekend work shows a gap over any weekend it spans, rather than a solid bar.
-      </div>
       <div ref={containerRef} style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6 }}>
         <div style={{ width: LABEL_WIDTH + gridWidth }}>
           <div style={{ display: 'flex' }}>
             <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 2, borderBottom: '1px solid var(--line)' }} />
             <div style={{ width: gridWidth, flexShrink: 0, display: 'flex', background: weekendBg, borderBottom: '1px solid var(--line)' }}>
               {days.map((d, i) => (
-                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0' }}>
+                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0', background: showToday && i === todayOffset ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : 'transparent' }}>
                   <div style={{ fontSize: 8.5, color: 'var(--ink-soft)' }}>{dateLabel(d)}</div>
                   <div style={{ fontSize: 10, fontWeight: 600 }}>{DOW_LETTERS[d.getDay()]}</div>
                 </div>
@@ -849,7 +861,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
                 </div>
                 <div style={{ width: gridWidth, flexShrink: 0, position: 'relative', height: 32, background: weekendBg }}>
                   {showToday && (
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * dayWidth, width: 2, background: 'var(--accent)' }} />
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * dayWidth, width: dayWidth, background: 'color-mix(in srgb, var(--accent) 16%, transparent)' }} />
                   )}
                   {/* Transparent hit area spans the full range for move/resize
                       dragging — the visible color lives in the segments below,
