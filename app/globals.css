@@ -1078,6 +1078,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .schedule-header-row { display: none; }
   .schedule-row { grid-template-columns: 1fr; }
 }
+/* Timeline "Today" highlight — stronger by default (light mode) so it
+   reads clearly even when today falls on a weekend, whose shaded
+   background otherwise washes out a low-opacity tint. Dark mode dialed
+   back down since the same tint already had enough contrast there. */
+.schedule-today-col { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.schedule-today-row { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+[data-theme="dark"] .schedule-today-col { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+[data-theme="dark"] .schedule-today-row { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .estimate-line-total { font-size: 13px; font-weight: 700; padding-top: 7px; }
 .estimate-tag { display: inline-block; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: var(--panel); color: var(--gold); padding: 2px 6px; border-radius: 8px; margin-top: 4px; }
 .estimate-buffer-note { font-size: 10.5px; color: #a17c3f; margin-top: 4px; font-style: italic; }

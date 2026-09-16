@@ -51,13 +51,15 @@ export default function ProjectInfoCard({ job, onSave, onTabChange }) {
           <label>Expected close date</label>
           <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
         </div>
-        <div>
-          <label>Governing state</label>
-          <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
-            <option value="Missouri">Missouri</option>
-            <option value="Kansas">Kansas</option>
-          </select>
-        </div>
+        {!approvedOrLater && (
+          <div>
+            <label>Governing state</label>
+            <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
+              <option value="Missouri">Missouri</option>
+              <option value="Kansas">Kansas</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {approvedOrLater && (
@@ -81,6 +83,13 @@ export default function ProjectInfoCard({ job, onSave, onTabChange }) {
           <div>
             <label>Approved date</label>
             <input type="date" value={form.approved_at} onChange={e => update('approved_at', e.target.value)} />
+          </div>
+          <div>
+            <label>Governing state</label>
+            <select value={form.governing_state} onChange={e => update('governing_state', e.target.value)}>
+              <option value="Missouri">Missouri</option>
+              <option value="Kansas">Kansas</option>
+            </select>
           </div>
         </div>
       )}

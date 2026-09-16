@@ -75,6 +75,7 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
@@ -254,6 +255,7 @@ export default function CustomersPage() {
   }
 
   const filtered = contacts.filter(c => {
+    if (typeFilter !== 'all' && c.contact_type !== typeFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (c.name || '').toLowerCase().includes(q) || (c.management_company || '').toLowerCase().includes(q);
@@ -391,6 +393,15 @@ export default function CustomersPage() {
 
         <div className="search-bar">
           <input placeholder="Search by name or company…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        <div className="stage-tabs">
+          <button className={`stage-tab ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All ({contacts.length})</button>
+          {CONTACT_TYPES.map(t => {
+            const count = contacts.filter(c => c.contact_type === t).length;
+            if (!count) return null;
+            return <button key={t} className={`stage-tab ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>{t} ({count})</button>;
+          })}
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No contacts yet.</div>}

@@ -458,16 +458,7 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        <div className="top-actions" style={{ position: 'relative' }}>
-          <button
-            className="btn btn-sm"
-            onClick={() => goToTab('Messages')}
-            title="Messages"
-            aria-label="Messages"
-            style={{ position: 'absolute', top: 0, right: 0, padding: 6 }}
-          >
-            <MessagesIcon width={18} height={18} />
-          </button>
+        <div className="top-actions">
           <div>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
             {job.project_address && (
@@ -489,6 +480,9 @@ export default function JobDetailPage() {
             )}
           </div>
           <div className="section-actions">
+            <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
+              <MessagesIcon width={16} height={16} />
+            </button>
             <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
               <ProjectFeedIcon width={16} height={16} /> Project Updates
             </button>

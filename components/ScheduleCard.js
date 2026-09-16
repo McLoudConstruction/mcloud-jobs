@@ -838,7 +838,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
             <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 2, borderBottom: '1px solid var(--line)' }} />
             <div style={{ width: gridWidth, flexShrink: 0, display: 'flex', background: weekendBg, borderBottom: '1px solid var(--line)' }}>
               {days.map((d, i) => (
-                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0', background: showToday && i === todayOffset ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : 'transparent' }}>
+                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0' }} className={showToday && i === todayOffset ? 'schedule-today-col' : ''}>
                   <div style={{ fontSize: 8.5, color: 'var(--ink-soft)' }}>{dateLabel(d)}</div>
                   <div style={{ fontSize: 10, fontWeight: 600 }}>{DOW_LETTERS[d.getDay()]}</div>
                 </div>
@@ -861,7 +861,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
                 </div>
                 <div style={{ width: gridWidth, flexShrink: 0, position: 'relative', height: 32, background: weekendBg }}>
                   {showToday && (
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * dayWidth, width: dayWidth, background: 'color-mix(in srgb, var(--accent) 16%, transparent)' }} />
+                    <div className="schedule-today-row" style={{ position: 'absolute', top: 0, bottom: 0, left: todayOffset * dayWidth, width: dayWidth }} />
                   )}
                   {/* Transparent hit area spans the full range for move/resize
                       dragging — the visible color lives in the segments below,

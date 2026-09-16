@@ -7,7 +7,6 @@ import AddressFields, { formatAddress } from './AddressFields';
 export default function CustomerInfoCard({ job, onSave }) {
   const isCommercial = job.project_type === 'commercial';
   const [form, setForm] = useState({
-    customer_name: job.customer_name || '',
     company_name: job.company_name || '',
     customer_contact: job.customer_contact || '',
     customer_email: job.customer_email || '',
@@ -114,8 +113,6 @@ export default function CustomerInfoCard({ job, onSave }) {
     <div className="card">
       <h3>Customer</h3>
       <div className="two-col">
-        <div><label>Customer / company name</label><input value={form.customer_name} onChange={e => update('customer_name', e.target.value)} /></div>
-
         {isCommercial && (
           <div style={{ position: 'relative' }}>
             <label>Company name</label>

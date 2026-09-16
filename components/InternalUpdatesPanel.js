@@ -6,6 +6,7 @@ import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/sy
 import { useOfflineSync } from '../lib/useOfflineSync';
 import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
 import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
+import CameraCapture from './CameraCapture';
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -32,9 +33,13 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const { isOnline, pendingCount, failedCount, pending, sync } = useOfflineSync(jobId);
 
   const [noteText, setNoteText] = useState('');
+  const [workCompleted, setWorkCompleted] = useState('');
+  const [upcomingWork, setUpcomingWork] = useState('');
+  const [nextSteps, setNextSteps] = useState('');
   const [category, setCategory] = useState('');
   const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
   const [posting, setPosting] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [checklist, setChecklist] = useState([]);
   const [syncedUpdates, setSyncedUpdates] = useState([]);
@@ -107,6 +112,9 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     return pendingUpdates.map(u => ({
       id: u.id,
       issues_notes: u.payload.issues_notes,
+      work_completed: u.payload.work_completed,
+      upcoming_work: u.payload.upcoming_work,
+      next_steps: u.payload.next_steps,
       category: u.payload.category,
       created_at: u.createdAt,
       _pending: true,
@@ -125,17 +133,33 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     setStagedPhotos(prev => [...prev, ...files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))]);
   }
 
+  // Same camera component the Photos tab uses — staged locally rather
+  // than uploaded immediately, since a photo taken offline still needs
+  // to go through the sync queue like everything else on this panel.
+  function handleCameraPhoto(file) {
+    setStagedPhotos(prev => [...prev, { file, previewUrl: URL.createObjectURL(file) }]);
+  }
+
   function removeStagedPhoto(index) {
     setStagedPhotos(prev => prev.filter((_, i) => i !== index));
   }
 
   async function handlePost(e) {
     e.preventDefault();
-    if (!noteText.trim() && stagedPhotos.length === 0) return;
+    const hasText = noteText.trim() || workCompleted.trim() || upcomingWork.trim() || nextSteps.trim();
+    if (!hasText && stagedPhotos.length === 0) return;
     setPosting(true);
 
     const updateId = crypto.randomUUID();
-    await queueInternalUpdate({ id: updateId, jobId, text: noteText.trim() || null, category: category || null, createdByEmail });
+    await queueInternalUpdate({
+      id: updateId, jobId,
+      text: noteText.trim() || null,
+      workCompleted: workCompleted.trim() || null,
+      upcomingWork: upcomingWork.trim() || null,
+      nextSteps: nextSteps.trim() || null,
+      category: category || null,
+      createdByEmail,
+    });
 
     for (const { file } of stagedPhotos) {
       const compressed = await compressImage(file);
@@ -143,6 +167,9 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     }
 
     setNoteText('');
+    setWorkCompleted('');
+    setUpcomingWork('');
+    setNextSteps('');
     setCategory('');
     setStagedPhotos([]);
     setPosting(false);
@@ -184,6 +211,12 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             {INTERNAL_UPDATE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <textarea placeholder="What's happening on site?" value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} />
+          <label>Work completed</label>
+          <textarea value={workCompleted} onChange={e => setWorkCompleted(e.target.value)} rows={2} />
+          <label>Upcoming work</label>
+          <textarea value={upcomingWork} onChange={e => setUpcomingWork(e.target.value)} rows={2} />
+          <label>Next steps</label>
+          <textarea value={nextSteps} onChange={e => setNextSteps(e.target.value)} rows={2} />
 
           {stagedPhotos.length > 0 && (
             <div className="staged-photo-strip">
@@ -196,15 +229,19 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             </div>
           )}
 
-          <label className="field-photo-button">
-            Add photos
-            <input type="file" accept="image/*" capture="environment" multiple onChange={handleAddPhotos} style={{ display: 'none' }} />
-          </label>
+          <div className="section-actions" style={{ marginTop: 0 }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)}>Take Photos</button>
+            <label className="btn btn-sm field-photo-button" style={{ margin: 0 }}>
+              Upload from library
+              <input type="file" accept="image/*" multiple onChange={handleAddPhotos} style={{ display: 'none' }} />
+            </label>
+          </div>
 
-          <button type="submit" disabled={posting || (!noteText.trim() && stagedPhotos.length === 0)}>
+          <button type="submit" disabled={posting || (!noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && stagedPhotos.length === 0)}>
             {posting ? 'Posting…' : 'Post update'}
           </button>
         </form>
+        <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Internal Update Photos" />
       </section>
 
       <section className="field-log-section">
@@ -220,6 +257,9 @@ export default function InternalUpdatesPanel({ jobId, session }) {
                 {u._pending && <span className="pending-tag"> · syncing…</span>}
               </div>
               {u.issues_notes && <p>{u.issues_notes}</p>}
+              {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
+              {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
+              {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
               {photos.length > 0 && (
                 <div className="update-photo-strip">
                   {photos.map(p => (
