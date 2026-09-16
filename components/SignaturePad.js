@@ -14,6 +14,25 @@ export default function SignaturePad({ label, saved, onSave, saving, defaultName
   const [hasDrawn, setHasDrawn] = useState(false);
   const drawing = useRef(false);
   const last = useRef({ x: 0, y: 0 });
+  const nameEdited = useRef(false);
+  const titleEdited = useRef(false);
+
+  // defaultName/defaultTitle can resolve asynchronously after this component
+  // has already mounted (e.g. the logged-in staff member's name loading from
+  // staff_users right as this page loads). The useState initializer above
+  // only runs once, so without this, a late-arriving name is silently
+  // dropped and whatever was there at mount time — blank, or a stale
+  // fallback — is what gets typed into the signature and saved. Sync in as
+  // long as nothing's been signed yet and the person hasn't typed their own
+  // value over it.
+  useEffect(() => {
+    if (saved) return;
+    if (!nameEdited.current && defaultName) setName(defaultName);
+  }, [defaultName, saved]);
+  useEffect(() => {
+    if (saved) return;
+    if (!titleEdited.current && defaultTitle) setTitle(defaultTitle);
+  }, [defaultTitle, saved]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,9 +92,9 @@ export default function SignaturePad({ label, saved, onSave, saving, defaultName
         </div>
       ) : (
         <div className="sig-editing">
-          <input placeholder="Printed name" value={name} onChange={e => setName(e.target.value)} style={{ marginBottom: 8 }} />
+          <input placeholder="Printed name" value={name} onChange={e => { nameEdited.current = true; setName(e.target.value); }} style={{ marginBottom: 8 }} />
           {showTitle && (
-            <input placeholder={titlePlaceholder || 'Title (e.g. Property Manager)'} value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8 }} />
+            <input placeholder={titlePlaceholder || 'Title (e.g. Property Manager)'} value={title} onChange={e => { titleEdited.current = true; setTitle(e.target.value); }} style={{ marginBottom: 8 }} />
           )}
           <canvas
             ref={canvasRef}

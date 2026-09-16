@@ -33,6 +33,11 @@ export default function CustomerInvoicesPage() {
   if (jobsLoaded && jobs.length === 0) return <CustomerPortalShell><NoActiveProjectNotice /></CustomerPortalShell>;
 
   const hasSingleInvoice = draws.length === 0 && job?.invoice_status !== 'not_sent' && job?.invoice_amount;
+  // Draws the customer is actually allowed to see — a draw only becomes
+  // visible to them once it's been sent; until then it's still admin-side
+  // prep work and shouldn't show up here at all (not even with a "not sent
+  // yet" status, which was leaking internal state onto the portal).
+  const visibleDraws = draws.filter(d => d.status !== 'not_sent');
 
   function handlePaymentSuccess(status) {
     setPaidFlash(status === 'succeeded' ? 'Payment received, thank you!' : "Payment is processing — we'll update this once it clears.");
@@ -48,7 +53,7 @@ export default function CustomerInvoicesPage() {
           <div className="card">
             <h3>Invoices</h3>
 
-            {draws.filter(d => d.status !== 'not_sent').map(d => (
+            {visibleDraws.map(d => (
               <a key={d.id} href={`/jobs/${job.id}/invoices/${d.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ marginBottom: 8, marginRight: 8 }}>
                 View {d.description || 'Draw'} ↗
               </a>
@@ -59,16 +64,16 @@ export default function CustomerInvoicesPage() {
 
             {paidFlash && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 10 }}>{paidFlash}</div>}
 
-            {draws.length > 0 && (
+            {visibleDraws.length > 0 && (
               <div style={{ marginTop: 14 }}>
-                {draws.map(d => (
+                {visibleDraws.map(d => (
                   <div key={d.id} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '14px 16px', marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>{d.description || 'Draw'}</span>
                       <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(d.amount)}</span>
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
-                      Status: {d.status === 'paid' ? 'Paid' : d.status === 'sent' ? 'Unpaid' : 'Not yet sent'}
+                      Status: {d.status === 'paid' ? 'Paid' : 'Awaiting Payment'}
                     </p>
                     {d.status === 'sent' && (
                       <div style={{ marginTop: 10 }}>
@@ -87,7 +92,7 @@ export default function CustomerInvoicesPage() {
                   <span style={{ fontWeight: 700, fontSize: 17 }}>{fmtMoney(job.invoice_amount)}</span>
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 0 }}>
-                  Status: {job.invoice_status === 'paid' ? 'Paid' : 'Unpaid'}
+                  Status: {job.invoice_status === 'paid' ? 'Paid' : 'Awaiting Payment'}
                 </p>
                 {job.invoice_status === 'sent' && (
                   <div style={{ marginTop: 10 }}>
@@ -97,7 +102,7 @@ export default function CustomerInvoicesPage() {
               </div>
             )}
 
-            {draws.length === 0 && !hasSingleInvoice && (
+            {visibleDraws.length === 0 && !hasSingleInvoice && (
               <div className="empty-state">No invoices issued yet.</div>
             )}
           </div>

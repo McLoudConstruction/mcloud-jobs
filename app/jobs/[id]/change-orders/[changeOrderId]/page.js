@@ -154,8 +154,9 @@ export default function ChangeOrderDocumentPage() {
                   saved={(co.co_signatures || {}).contractor}
                   onSave={(payload) => saveSignature('contractor', payload)}
                   saving={signing}
-                  defaultName={staffFullName || 'Stachys'}
+                  defaultName={staffFullName}
                   defaultTitle="Owner, McLoud Construction"
+                  requireName
                 />
                 <SignaturePad
                   label="Owner"

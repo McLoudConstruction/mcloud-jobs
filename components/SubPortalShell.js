@@ -43,7 +43,6 @@ export default function SubPortalShell({ company, role, children }) {
   const router = useRouter();
   const pathname = usePathname();
   const { settings } = useSettings();
-  const [navOpen, setNavOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(47);
@@ -53,7 +52,6 @@ export default function SubPortalShell({ company, role, children }) {
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
     checkSize();
-    setNavOpen(window.innerWidth >= 900);
     setMounted(true);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
@@ -74,18 +72,19 @@ export default function SubPortalShell({ company, role, children }) {
     router.replace('/sub-portal');
   }
 
-  function closeOnMobile() { if (isMobile) setNavOpen(false); }
-
-  const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
+  const sidebarWidth = isMobile ? 0 : 84;
 
   return (
     <div className="shell">
       <div className="shell-topbar" ref={topbarRef}>
-        <div className="shell-header-left">
-          <button className="hamburger-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle navigation">
-            <span /><span /><span />
-          </button>
-        </div>
+        {company && (
+          <div className="shell-header-left">
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--header-text)' }}>{company.company_name}</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+              {role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}
+            </div>
+          </div>
+        )}
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 96, width: 'auto' }} />
@@ -95,56 +94,58 @@ export default function SubPortalShell({ company, role, children }) {
 
       <div className="shell-body">
         <div
-          className={`shell-sidebar ${!isMobile && !navOpen ? 'collapsed' : ''}`}
+          className="shell-sidebar"
           style={mounted ? {
             width: sidebarWidth,
-            transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
             top: headerHeight,
             height: `calc(100dvh - ${headerHeight}px)`,
           } : { width: 0 }}
         >
           <div className="shell-sidebar-inner">
-            <div>
-              {(isMobile || navOpen) && company && (
-                <div style={{ padding: '10px 24px 16px', borderBottom: '1px solid var(--panel-line)', marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--heading)' }}>{company.company_name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}
-                  </div>
-                </div>
-              )}
-              <div className="shell-nav-links">
-                {NAV_ITEMS.map(item => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                    onClick={closeOnMobile}
-                    title={!isMobile && !navOpen ? item.label : undefined}
-                  >
-                    <item.icon className="shell-nav-icon" />
-                    <span className="shell-nav-label">{item.label}</span>
-                  </a>
-                ))}
-              </div>
+            <div className="shell-nav-links">
+              {NAV_ITEMS.map(item => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                >
+                  <item.icon className="shell-nav-icon" />
+                  <span className="shell-nav-label">{item.label}</span>
+                </a>
+              ))}
             </div>
 
-            <div>
-              <button
-                className="shell-nav-link signout-link"
-                onClick={handleSignOut}
-                title={!isMobile && !navOpen ? 'Sign out' : undefined}
-              >
-                <SignOutIcon className="shell-nav-icon" />
-                <span className="shell-nav-label">Sign out</span>
-              </button>
-            </div>
+            <button
+              className="shell-nav-link signout-link"
+              onClick={handleSignOut}
+            >
+              <SignOutIcon className="shell-nav-icon" />
+              <span className="shell-nav-label">Sign out</span>
+            </button>
           </div>
         </div>
 
-        {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
+        {isMobile && (
+          <nav className="shell-bottomnav">
+            {NAV_ITEMS.map(item => (
+              <a
+                key={item.href}
+                href={item.href}
+                className={`shell-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                aria-label={item.label}
+              >
+                <item.icon className="shell-bottomnav-icon" />
+                <span className="shell-bottomnav-label">{item.label}</span>
+              </a>
+            ))}
+            <button className="shell-bottomnav-link" onClick={handleSignOut} aria-label="Sign out">
+              <SignOutIcon className="shell-bottomnav-icon" />
+              <span className="shell-bottomnav-label">Sign out</span>
+            </button>
+          </nav>
+        )}
 
-        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0, transition: 'margin-left 0.2s ease' }}>
+        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
           {children}
         </div>
       </div>

@@ -137,7 +137,7 @@ export default function AppShell({ children }) {
 
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
-  const sidebarWidth = isMobile ? 0 : 72;
+  const sidebarWidth = isMobile ? 0 : 84;
   const currentSection = getCurrentSection(pathname);
   const showSubnav = shouldShowSubnav(currentSection, pathname);
 
