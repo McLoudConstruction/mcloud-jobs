@@ -286,7 +286,7 @@ function NewOpportunityPageInner() {
             </select>
 
             <div style={{ marginTop: 12 }}>
-              <label>Work location</label>
+              <label>Primary work location</label>
               <select value={form.work_location} onChange={e => update('work_location', e.target.value)}>
                 <option value="">Not sure yet</option>
                 <option value="indoor">Indoor</option>
