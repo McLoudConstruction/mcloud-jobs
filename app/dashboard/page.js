@@ -28,7 +28,7 @@ function StatTile({ value, label, href, warn }) {
   const body = (
     <div>
       <div style={{ fontSize: 27, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{label}</div>
     </div>
   );
   if (!href) return body;
@@ -46,7 +46,7 @@ function StatTile({ value, label, href, warn }) {
 function StatGroup({ label, tiles }) {
   return (
     <div>
-      <div style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>{label}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 28px' }}>
         {tiles.map(t => <StatTile key={t.label} {...t} />)}
       </div>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
         {show('job_counts_by_stage') && (
           <div className="dash-section">
             <h3>Job counts by stage</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
               {STAGE_ORDER.map(s => (
                 <div key={s} style={{ minWidth: 60 }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>

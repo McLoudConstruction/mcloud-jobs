@@ -12,18 +12,7 @@ import ColorField from '../../components/ColorField';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'AI Features', 'Automatic Communications', 'Communications Log', 'Users'];
-
-const AI_FEATURES = [
-  { key: 'scope', name: 'Scope of Work Generation', description: 'Turns a rough job description into a customer-facing scope, plus an exhaustive trade-tagged action list on the estimating side.' },
-  { key: 'receipts', name: 'Receipt Reading', description: 'Reads a photographed receipt and pre-fills vendor, amount, date, and category for you to confirm.' },
-  { key: 'materials', name: 'Materials Suggestions', description: 'Drafts a starting materials list on the Estimating tool from a job\u2019s action list \u2014 always a starting point you edit, never a final answer.' },
-];
-
-const AUTOMATIONS = [
-  { key: 'followups', name: 'Opportunity Follow-ups', description: 'Sends a follow-up email 2 days and 4 days after an opportunity is logged, if it\u2019s still Prospecting or Contacted.' },
-  { key: 'reminders', name: 'Schedule Reminders', description: 'Emails the customer 1 week and 1 day before a job\u2019s Scheduled Start Date.' },
-];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Integrations', 'Communications Log', 'Users'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -537,36 +526,6 @@ function SettingsPageInner() {
           })}
         </div>
         </>
-        )}
-
-        {tab === 'AI Features' && (
-        <div className="card">
-          <h3>AI Features</h3>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-            Powered by your Anthropic API key (set in Vercel as ANTHROPIC_API_KEY) — there's nothing to configure here, this is just what's active.
-          </div>
-          {AI_FEATURES.map(f => (
-            <div key={f.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{f.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{f.description}</div>
-            </div>
-          ))}
-        </div>
-        )}
-
-        {tab === 'Automatic Communications' && (
-        <div className="card">
-          <h3>Automatic Communications</h3>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-            Runs once daily on a schedule — there's no on/off switch here, but any individual contact can be excluded from the Automated Notifications section on their contact card.
-          </div>
-          {AUTOMATIONS.map(a => (
-            <div key={a.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{a.description}</div>
-            </div>
-          ))}
-        </div>
         )}
 
         {tab === 'Communications Log' && (
