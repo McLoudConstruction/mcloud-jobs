@@ -278,7 +278,7 @@ function NewOpportunityPageInner() {
 
         <form onSubmit={handleSubmit}>
           <div className="card">
-            <label>Project type *</label>
+            <label>Customer type *</label>
             <select value={form.project_type} onChange={e => update('project_type', e.target.value)} required>
               <option value="">Select…</option>
               <option value="residential">Residential</option>
@@ -292,9 +292,6 @@ function NewOpportunityPageInner() {
                 <option value="indoor">Indoor</option>
                 <option value="outdoor">Outdoor</option>
               </select>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
-                Primary expected setting — most jobs mix both, and each schedule phase can be set individually once it's built.
-              </div>
             </div>
 
             {isCommercial && (
@@ -360,7 +357,7 @@ function NewOpportunityPageInner() {
                 <input type="date" value={form.expected_close_date} onChange={e => update('expected_close_date', e.target.value)} />
               </div>
               <div>
-                <label>Date entered</label>
+                <label>Date Created</label>
                 <input value={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ opacity: 0.7 }} />
               </div>
             </div>
@@ -372,7 +369,7 @@ function NewOpportunityPageInner() {
             <textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Short summary of the job…" rows={3} />
 
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
-              Estimate number: <b>{form.estimate_number || '…'}</b> — assigned automatically. This becomes a real Job number once the opportunity is Approved. Address, pricing, and scope of work are filled in on the job's own tabs after it's created.
+              Estimate number: <b>{form.estimate_number || '…'}</b>
             </div>
           </div>
 
