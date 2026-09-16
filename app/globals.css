@@ -885,9 +885,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 4px 0 8px;
+  padding: 0 0 8px;
   box-sizing: border-box;
-  overflow-y: auto;
 }
 .shell-nav-links{ display: flex; flex-direction: column; }
 .shell-nav-link{
