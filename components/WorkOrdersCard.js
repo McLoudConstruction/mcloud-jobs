@@ -16,7 +16,7 @@ function formatAction(a) {
   return `${qty}${unit} — ${a.description}`;
 }
 
-const EMPTY_FORM = { company_id: '', description: '', amount: '' };
+const EMPTY_FORM = { company_id: '', trade: '', description: '', amount: '' };
 
 export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress }) {
   const [workOrders, setWorkOrders] = useState([]);
@@ -57,6 +57,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
 
   const usingTradeActions = tradeActions.length > 0;
   const availableItems = usingTradeActions ? tradeActions.map(formatAction) : scopeItems;
+  const tradeOptions = [...new Set(tradeActions.map(a => a.trade).filter(Boolean)), 'Other'];
 
   // Selection is tracked by index, not by the item's text — two rows can
   // easily format to identical-looking text (e.g. two generic "1 faucet
@@ -79,6 +80,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
     const { error } = await supabase.from('work_orders').insert({
       job_id: jobId,
       company_id: form.company_id || null,
+      trade: form.trade || null,
       description: form.description,
       amount: Math.round(parseFloat(form.amount) * 100) / 100,
       status: 'draft',
@@ -188,6 +190,13 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
         <form onSubmit={createWorkOrder} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
             <div>
+              <label>Trade</label>
+              <select value={form.trade} onChange={e => update('trade', e.target.value)}>
+                <option value="">Select…</option>
+                {tradeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
               <label>Subcontractor</label>
               <select value={form.company_id} onChange={e => update('company_id', e.target.value)}>
                 <option value="">Select…</option>
@@ -205,11 +214,6 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
           {availableItems.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <label>Include on this work order</label>
-              {usingTradeActions && form.company_id && (
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>
-                  Pre-checked based on this subcontractor's trade — add or remove as needed.
-                </div>
-              )}
               <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, background: 'var(--card-bg)', maxHeight: 180, overflowY: 'auto' }}>
                 {availableItems.map((item, i) => (
                   <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, fontWeight: 400, marginBottom: 6, cursor: 'pointer' }}>

@@ -86,9 +86,6 @@ export default function BudgetCard({ jobId, job }) {
   return (
     <div className="card">
       <h3>Budget</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-        Where the money's going, line by line — for cash position and margin, see the Overview tab.
-      </div>
 
       {/* Budget burn */}
       {projectedCost != null && (
@@ -110,11 +107,8 @@ export default function BudgetCard({ jobId, job }) {
 
       {/* Priced line items, straight from Estimate → Pricing */}
       <div>
-        <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 10 }}>
           Priced Line Items
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 10 }}>
-          Estimated is every line from the Estimate tab's Pricing page, including sales tax. Committed and Actual are only trackable by group, not per line: Committed is issued work orders/POs not yet paid; Actual is receipts, invoiced work orders, and other logged expenses.
         </div>
 
         {estimateItems.length === 0 && <div className="empty-state">Nothing priced out yet — add materials and subcontractor cost on the Estimate tab.</div>}

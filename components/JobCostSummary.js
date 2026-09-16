@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { JOB_COST_CATEGORIES, JOB_COST_CATEGORY_LABELS } from '../lib/constants';
 import { acceptedChangeOrdersTotal } from '../lib/jobFinancials';
 
 function fmtMoney(v) {
@@ -9,14 +8,9 @@ function fmtMoney(v) {
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const EMPTY_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
-
 export default function JobCostSummary({ jobId, contractPrice, projectedCost, changeOrders, invoiceAmount, invoiceStatus }) {
   const [costs, setCosts] = useState([]);
   const [draws, setDraws] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
 
   const loadCosts = useCallback(async () => {
     const [{ data: c }, { data: d }] = await Promise.all([
@@ -35,31 +29,6 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, loadCosts]);
-
-  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
-
-  async function addManualCost(e) {
-    e.preventDefault();
-    if (!form.amount) return;
-    setSaving(true);
-    await supabase.from('job_costs').insert({
-      job_id: jobId,
-      category: form.category,
-      description: form.description || null,
-      amount: Math.round(parseFloat(form.amount) * 100) / 100,
-      cost_date: form.cost_date,
-      status: form.status,
-      source_type: 'manual',
-    });
-    setSaving(false);
-    setForm(EMPTY_FORM);
-    setShowForm(false);
-  }
-
-  async function deleteCost(id) {
-    if (!confirm('Delete this cost entry?')) return;
-    await supabase.from('job_costs').delete().eq('id', id);
-  }
 
   const totalCommitted = costs.filter(c => c.status === 'committed').reduce((s, c) => s + Number(c.amount || 0), 0);
   const totalActual = costs.filter(c => c.status === 'actual').reduce((s, c) => s + Number(c.amount || 0), 0);
@@ -131,7 +100,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
         </div>
       </div>
 
-      <div style={{ marginBottom: 18 }}>
+      <div>
         <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 10 }}>
           Cash Position
         </div>
@@ -145,7 +114,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
             <div className="portal-info-value">{fmtMoney(outstanding)}</div>
           </div>
           <div>
-            <div className="portal-info-label">Not Yet Billed</div>
+            <div className="portal-info-label">Unbilled</div>
             <div className="portal-info-value">{fmtMoney(notYetBilled)}</div>
           </div>
           <div>
@@ -153,61 +122,7 @@ export default function JobCostSummary({ jobId, contractPrice, projectedCost, ch
             <div className="portal-info-value" style={{ color: netCash < 0 ? '#a13f3f' : '#3a6b45' }}>{fmtMoney(netCash)}</div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
-          Net cash position is what's been collected minus what's actually been spent — committed-but-unpaid costs aren't counted against it yet.
-        </div>
       </div>
-
-      <div className="section-actions" style={{ marginTop: 0 }}>
-        <button className="btn btn-sm" onClick={() => setShowForm(s => !s)}>{showForm ? 'Cancel' : '+ Add manual cost entry'}</button>
-      </div>
-
-      {showForm && (
-        <form onSubmit={addManualCost} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
-          <div className="two-col">
-            <div>
-              <label>Category</label>
-              <select value={form.category} onChange={e => update('category', e.target.value)}>
-                {JOB_COST_CATEGORIES.map(c => <option key={c} value={c}>{JOB_COST_CATEGORY_LABELS[c]}</option>)}
-              </select>
-            </div>
-            <div><label>Amount ($)</label><input value={form.amount} onChange={e => update('amount', e.target.value)} required /></div>
-            <div><label>Date</label><input type="date" value={form.cost_date} onChange={e => update('cost_date', e.target.value)} /></div>
-            <div>
-              <label>Status</label>
-              <select value={form.status} onChange={e => update('status', e.target.value)}>
-                <option value="actual">Actual (already spent)</option>
-                <option value="committed">Committed (obligated, not yet spent)</option>
-              </select>
-            </div>
-          </div>
-          <label style={{ marginTop: 8 }}>Description</label>
-          <input value={form.description} onChange={e => update('description', e.target.value)} />
-          <div className="section-actions">
-            <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save cost entry'}</button>
-          </div>
-        </form>
-      )}
-
-      {costs.length === 0 && <div className="empty-state" style={{ marginTop: 14 }}>No costs logged yet.</div>}
-      {costs.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          {costs.map(c => (
-            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-              <div>
-                <b>{fmtMoney(c.amount)}</b> — {JOB_COST_CATEGORY_LABELS[c.category]}
-                {c.description && <span style={{ color: 'var(--ink-soft)' }}> · {c.description}</span>}
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                  {c.cost_date} · {c.status === 'committed' ? 'Committed' : 'Actual'} · {c.source_type === 'receipt' ? 'From receipt' : c.source_type === 'work_order' ? 'From work order' : 'Manual entry'}
-                </div>
-              </div>
-              {c.source_type === 'manual' && (
-                <button className="btn btn-sm btn-danger" onClick={() => deleteCost(c.id)}>Delete</button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
