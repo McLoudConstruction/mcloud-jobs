@@ -19,7 +19,7 @@ export async function POST(request) {
       return Response.json({ error: 'Server not configured (missing SUPABASE_SERVICE_ROLE_KEY).' }, { status: 500 });
     }
 
-    const { accessToken, targetUserId, action, role, newPassword } = await request.json();
+    const { accessToken, targetUserId, action, role, newPassword, fullName } = await request.json();
     if (!accessToken || !targetUserId || !action) {
       return Response.json({ error: 'Missing required fields.' }, { status: 400 });
     }
@@ -72,6 +72,12 @@ export async function POST(request) {
       if (targetRow.status === 'invited') {
         await service.from('staff_users').update({ status: 'active' }).eq('id', targetUserId);
       }
+    } else if (action === 'set_full_name') {
+      if (!fullName || !fullName.trim()) {
+        return Response.json({ error: 'Full name is required.' }, { status: 400 });
+      }
+      const { error } = await service.from('staff_users').update({ full_name: fullName.trim() }).eq('id', targetUserId);
+      if (error) return Response.json({ error: error.message }, { status: 500 });
     } else if (action === 'resend_invite') {
       if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
         return Response.json({ error: 'SMTP is not configured — add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM in Vercel.' }, { status: 500 });

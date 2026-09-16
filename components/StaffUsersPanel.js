@@ -22,6 +22,9 @@ export default function StaffUsersPanel({ session }) {
   const [passwordTargetId, setPasswordTargetId] = useState(null);
   const [passwordValue, setPasswordValue] = useState('');
 
+  const [nameTargetId, setNameTargetId] = useState(null);
+  const [nameValue, setNameValue] = useState('');
+
   const load = useCallback(async () => {
     const { data } = await supabase.from('staff_users').select('*').order('created_at', { ascending: true });
     if (data) setStaff(data);
@@ -115,9 +118,22 @@ export default function StaffUsersPanel({ session }) {
     }
   }
 
+  async function handleSetFullName(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      await callApi('/api/staff/update', { targetUserId: nameTargetId, action: 'set_full_name', fullName: nameValue });
+      setNameTargetId(null);
+      setNameValue('');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="card">
-      <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
+      <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between' }}>
         <h3 style={{ margin: 0 }}>Staff Accounts</h3>
         <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(o => !o)} type="button">
           {formOpen ? 'Cancel' : 'Add staff account'}
@@ -194,6 +210,9 @@ export default function StaffUsersPanel({ session }) {
               </span>
 
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-sm" type="button" onClick={() => { setNameTargetId(member.id); setNameValue(member.full_name || ''); }}>
+                  Edit
+                </button>
                 {member.status === 'invited' && (
                   <button className="btn btn-sm" type="button" onClick={() => handleResendInvite(member)}>Resend invite</button>
                 )}
@@ -206,6 +225,17 @@ export default function StaffUsersPanel({ session }) {
                   </button>
                 )}
               </div>
+
+              {nameTargetId === member.id && (
+                <form onSubmit={handleSetFullName} style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}>
+                  <input
+                    type="text" placeholder="Full name" value={nameValue}
+                    onChange={e => setNameValue(e.target.value)} required style={{ flex: 1 }}
+                  />
+                  <button className="btn btn-primary btn-sm" type="submit">Save</button>
+                  <button className="btn btn-sm" type="button" onClick={() => setNameTargetId(null)}>Cancel</button>
+                </form>
+              )}
 
               {passwordTargetId === member.id && (
                 <form onSubmit={handleSetPassword} style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}>

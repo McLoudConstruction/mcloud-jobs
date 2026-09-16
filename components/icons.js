@@ -12,6 +12,21 @@ const common = {
   strokeLinejoin: 'round',
 };
 
+export function ScheduleIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3" y="4" width="14" height="13" rx="1.5" />
+      <path d="M3 8h14" />
+      <path d="M7 2.5v3" />
+      <path d="M13 2.5v3" />
+      <path d="M6.5 11h1.5" />
+      <path d="M10 11h1.5" />
+      <path d="M6.5 14h1.5" />
+      <path d="M10 14h1.5" />
+    </svg>
+  );
+}
+
 export function DashboardIcon(props) {
   return (
     <svg {...common} {...props}>

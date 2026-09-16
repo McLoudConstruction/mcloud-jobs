@@ -27,7 +27,6 @@ const OAUTH_INTEGRATIONS = [
 const KEY_INTEGRATIONS = [
   { key: 'resend', name: 'Resend (email)', description: 'Auto-send estimates, contracts, and updates by email through your Resend account. Falls back to your SMTP server if not set up.', fields: [] },
   { key: 'weather', name: 'Weather', description: 'Powers the dashboard weather widgets and outdoor-phase forecast flagging, via OpenWeatherMap One Call 3.0. Needs a "One Call by Call" subscription active on your OpenWeatherMap account (free at normal volume, requires a card on file with them).', fields: [{ key: 'zip', label: 'Default zip code (used for the dashboard widgets)', placeholder: '64111' }] },
-  { key: 'unsplash', name: 'Image search (materials)', description: 'Powers the "search for a photo" option in the Estimate material picture chooser, via Unsplash.', fields: [] },
   { key: 'google_maps', name: 'Google Maps (address autocomplete)', description: 'Powers "start typing a name and pick the real address" on the Properties form and Sales > Create Sales Route. Needs a Google Maps Platform API key with Maps JavaScript API + Places API enabled — see INTEGRATIONS_SETUP.md section 8 for setup and cost. Falls back to plain text address fields if not set up.', fields: [] },
 ];
 
@@ -38,12 +37,6 @@ const FONT_OPTIONS = [
   { value: 'rounded', label: 'Rounded sans-serif' },
 ];
 
-// Not a positioned card — the "New Opportunity" button lives in the
-// page header, so it's a plain toggle here rather than part of the
-// draggable widget order below.
-const OTHER_DASHBOARD_TOGGLES = [
-  { key: 'new_opportunity_button', label: 'New Opportunity Button' },
-];
 
 
 export default function SettingsPage() {
@@ -70,7 +63,7 @@ function SettingsPageInner() {
   const [integrationStatus, setIntegrationStatus] = useState(null);
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [connecting, setConnecting] = useState(null); // provider key currently redirecting
-  const [keyInputs, setKeyInputs] = useState({ resend: '', weather: '', unsplash: '', google_maps: '' });
+  const [keyInputs, setKeyInputs] = useState({ resend: '', weather: '', google_maps: '' });
   const [zipInput, setZipInput] = useState('');
   const [savingCred, setSavingCred] = useState(null);
   const [syncingNow, setSyncingNow] = useState(false);
@@ -390,19 +383,6 @@ function SettingsPageInner() {
           </select>
         </div>
 
-        <div className="card">
-          <h3>Header Text Color</h3>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-            The header bar itself is always dark chrome in both Light and Dark mode, by design — this only controls the text and icon color on top of it. It's separate from the brand color above, which only drives buttons and accents.
-          </div>
-          <ColorField label="Header text color" id="headerTextColor" value={form.header_text_color || '#f0ede8'} fallback="#f0ede8" onChange={v => update('header_text_color', v)} />
-          {form.header_text_color && (
-            <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => update('header_text_color', null)}>
-              Use default
-            </button>
-          )}
-        </div>
-
         </>
         )}
 
@@ -421,19 +401,6 @@ function SettingsPageInner() {
                 onChange={() => toggleWidget(key)}
               />
               {DASHBOARD_WIDGET_LABELS[key]}
-            </label>
-          ))}
-
-          <h3 style={{ marginTop: 20 }}>Other</h3>
-          {OTHER_DASHBOARD_TOGGLES.map(w => (
-            <label key={w.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                style={{ width: 'auto' }}
-                checked={(form.dashboard_widgets || {})[w.key] !== false}
-                onChange={() => toggleWidget(w.key)}
-              />
-              {w.label}
             </label>
           ))}
         </div>

@@ -239,9 +239,7 @@ export default function DashboardPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Dashboard</h2>
-          {show('new_opportunity_button') && (
-            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
-          )}
+          <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
         </div>
 
         {show('weather') && (
@@ -332,23 +330,14 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {(show('sales_route_ai') || show('total_profit')) && (
+        {show('sales_route_ai') && (
           <div className="dash-section" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {show('sales_route_ai') && (
-              <button type="button" className="btn btn-sm" onClick={() => setRouteModalOpen(true)}>
-                Build my sales route →
-              </button>
-            )}
-            {show('sales_route_ai') && (
-              <button type="button" className="btn btn-sm" onClick={() => setManualRouteModalOpen(true)}>
-                Create Sales Route →
-              </button>
-            )}
-            {show('total_profit') && (
-              <Link href="/financials" className="btn btn-sm">
-                Full profit &amp; margin breakdown →
-              </Link>
-            )}
+            <button type="button" className="btn btn-sm" onClick={() => setRouteModalOpen(true)}>
+              Build my sales route →
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setManualRouteModalOpen(true)}>
+              Create Sales Route →
+            </button>
           </div>
         )}
       </div>

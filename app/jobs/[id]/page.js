@@ -421,7 +421,7 @@ export default function JobDetailPage() {
   }
 
   if (loading || !session) return null;
-  if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Job Tracker</Link></div>;
+  if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Overview</Link></div>;
   if (!job) return null;
 
   const visibleTabs = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
@@ -430,7 +430,7 @@ export default function JobDetailPage() {
   return (
     <AppShell>
       <div className="container">
-        <Breadcrumb href="/jobs" label="Back to Job Tracker" />
+        <Breadcrumb href="/jobs" label="Back to Overview" />
 
         {offlineViewing && (
           <div className="sync-badge sync-badge-offline">
