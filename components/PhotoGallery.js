@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { watermarkImage } from '../lib/watermark';
-import { compressImage } from '../lib/imageCompress';
 import PhotoMarkupEditor from './PhotoMarkupEditor';
 import CameraCapture from './CameraCapture';
 
@@ -19,13 +18,21 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [generalUrls, setGeneralUrls] = useState({});
   const [markupPhoto, setMarkupPhoto] = useState(null); // { id, url } of photo currently being marked up
   const [markupSaving, setMarkupSaving] = useState(false);
+  const [folders, setFolders] = useState([]); // distinct folder names already used on this job
+  const [selectedFolder, setSelectedFolder] = useState(''); // folder new uploads go into; '' = General
+  const [newFolderName, setNewFolderName] = useState('');
+  const [addingFolder, setAddingFolder] = useState(false);
+  const [filterFolder, setFilterFolder] = useState('__all__'); // which folder's photos to display
   const fileInputRef = useRef(null);
 
   const loadPhotos = useCallback(async () => {
     let query = supabase.from('job_photos').select('*').eq('job_id', jobId).order('created_at', { ascending: false });
     query = updateId ? query.eq('update_id', updateId) : query.is('update_id', null);
     const { data } = await query;
-    if (data) setPhotos(data);
+    if (data) {
+      setPhotos(data);
+      setFolders([...new Set(data.map(p => p.folder).filter(Boolean))].sort());
+    }
   }, [jobId, updateId]);
 
   useEffect(() => {
@@ -62,7 +69,17 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
       job_id: jobId,
       update_id: updateId || null,
       storage_path: path,
+      folder: selectedFolder || null,
     });
+  }
+
+  function confirmNewFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    setSelectedFolder(name);
+    setFolders(prev => prev.includes(name) ? prev : [...prev, name].sort());
+    setNewFolderName('');
+    setAddingFolder(false);
   }
 
   async function handleFiles(e) {
@@ -71,20 +88,20 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     setUploading(true);
     setUploadNote(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}…`);
 
-    for (const file of files) {
-      try {
-        await uploadOnePhoto(file);
-      } catch (err) {
-        setUploadNote(`Upload failed: ${err.message}`);
-        setUploading(false);
-        return;
-      }
-    }
+    // Uploaded in parallel rather than one-at-a-time — a batch of photos
+    // used to wait on each file's watermark+upload+insert before starting
+    // the next; now every file's round trip happens at once.
+    const results = await Promise.allSettled(files.map(uploadOnePhoto));
+    const failedCount = results.filter(r => r.status === 'rejected').length;
 
-    setUploadNote(`${files.length} photo${files.length === 1 ? '' : 's'} uploaded.`);
+    setUploadNote(
+      failedCount === 0
+        ? `${files.length} photo${files.length === 1 ? '' : 's'} uploaded.`
+        : `${files.length - failedCount} of ${files.length} uploaded — ${failedCount} failed.`
+    );
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setTimeout(() => setUploadNote(''), 3000);
+    setTimeout(() => setUploadNote(''), failedCount ? 6000 : 3000);
   }
 
   // Called once per photo as the camera accepts it (retake/use flow), so
@@ -183,6 +200,34 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             onChange={handleFiles}
             style={{ display: 'none' }}
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+            <label style={{ fontSize: 11.5, color: 'var(--ink-soft)', margin: 0 }}>Select a Folder for Upload</label>
+            <select
+              value={addingFolder ? '__new__' : selectedFolder}
+              onChange={e => {
+                if (e.target.value === '__new__') { setAddingFolder(true); return; }
+                setAddingFolder(false);
+                setSelectedFolder(e.target.value);
+              }}
+              style={{ width: 'auto', minWidth: 140 }}
+            >
+              <option value="">General (no folder)</option>
+              {folders.map(f => <option key={f} value={f}>{f}</option>)}
+              <option value="__new__">+ New folder…</option>
+            </select>
+            {addingFolder && (
+              <>
+                <input
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  placeholder="Folder name"
+                  style={{ width: 160 }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmNewFolder(); } }}
+                />
+                <button className="btn btn-sm" type="button" onClick={confirmNewFolder}>Add</button>
+              </>
+            )}
+          </div>
           <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
             <button className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)} disabled={uploading} type="button">
               {uploading ? 'Uploading…' : 'Take Photos'}
@@ -223,9 +268,21 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
       {photos.length === 0 && !bare && <div className="empty-state">No photos yet.</div>}
 
+      {folders.length > 0 && photos.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button className={`btn btn-sm ${filterFolder === '__all__' ? 'btn-primary' : ''}`} onClick={() => setFilterFolder('__all__')} type="button">All</button>
+          <button className={`btn btn-sm ${filterFolder === '__general__' ? 'btn-primary' : ''}`} onClick={() => setFilterFolder('__general__')} type="button">General</button>
+          {folders.map(f => (
+            <button key={f} className={`btn btn-sm ${filterFolder === f ? 'btn-primary' : ''}`} onClick={() => setFilterFolder(f)} type="button">{f}</button>
+          ))}
+        </div>
+      )}
+
       {photos.length > 0 && (
         <div className="photo-grid">
-          {photos.map(p => (
+          {photos
+            .filter(p => filterFolder === '__all__' || (filterFolder === '__general__' ? !p.folder : p.folder === filterFolder))
+            .map(p => (
             <div className="photo-tile" key={p.id}>
               {urls[p.id] ? (
                 <a href={urls[p.id]} target="_blank" rel="noopener noreferrer">
@@ -234,6 +291,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
               ) : (
                 <div className="photo-tile-loading" />
               )}
+              {p.folder && <span className="photo-markup-badge" style={{ left: 6, right: 'auto' }}>{p.folder}</span>}
               {p.derived_from_photo_id && <span className="photo-markup-badge">Marked up</span>}
               <div className="photo-tile-actions">
                 {urls[p.id] && <button className="btn btn-sm" onClick={() => openMarkup(p)} type="button">Markup</button>}
