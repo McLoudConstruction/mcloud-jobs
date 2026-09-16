@@ -559,7 +559,7 @@ export default function JobDetailPage() {
         {tab === 'Overview' && (
           <>
             <div className="overview-split">
-              <ProjectInfoCard job={job} onSave={saveJob} />
+              <ProjectInfoCard job={job} onSave={saveJob} onTabChange={goToTab} />
               <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
             </div>
             <div className="card" style={{ marginTop: 20 }}>
