@@ -161,6 +161,39 @@ a { color: inherit; text-decoration: none; }
   padding-top: 16px;
   padding-bottom: 16px;
 }
+
+/* Dashboard two-column layout: scrolling main content on the left, a
+   static Notifications feed pinned to the right for the full height of
+   the viewport (not just the top of the page). */
+.dashboard-layout{ display: flex; gap: 24px; align-items: flex-start; }
+.dashboard-main{ flex: 1; min-width: 0; }
+.dashboard-notifications-rail{
+  width: 320px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 76px;
+  max-height: calc(100vh - 92px);
+  max-height: calc(100dvh - 92px);
+  display: flex;
+}
+.dash-notifications-card{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+.dash-notifications-header{ display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
+.dash-notifications-scroll{ overflow-y: auto; flex: 1; min-height: 0; }
+.dash-notification-row{ padding: 10px 0; border-bottom: 1px solid var(--line); }
+.dash-notification-row:last-child{ border-bottom: none; }
+.dash-notification-row p{ font-size: 12.5px; margin: 3px 0 0; line-height: 1.45; }
+.dash-notification-date{ font-size: 10.5px; color: var(--ink-soft); }
+.dash-notification-actions{ display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+@media (max-width: 1100px){
+  .dashboard-layout{ flex-direction: column; }
+  .dashboard-notifications-rail{ width: 100%; position: static; max-height: none; }
+  .dash-notifications-scroll{ max-height: 360px; }
+}
 /* A clickable stat in the Snapshot section — underline only on hover,
    so it doesn't read as a wall of links at rest. */
 .stat-tile-link:hover > div > div:first-child{
@@ -443,7 +476,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 
 .pay-banner{
-  position: sticky; top: 12px; z-index: 20;
+  position: sticky; top: 76px; z-index: 20;
   max-width: 800px; margin: 0 auto 20px; padding: 16px 22px;
   background: var(--card-bg); border: 1px solid var(--panel-line); border-radius: 12px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.1);
@@ -799,7 +832,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  padding: 5px 12px 13px;
+  height: 60px;
+  padding: 0 16px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-line);
   position: sticky;
@@ -807,6 +841,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   z-index: 40;
 }
 .shell-logo{ display: flex; justify-content: flex-start; align-items: center; margin-left: auto; }
+.shell-logo img{ max-height: 44px; }
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--header-text); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
@@ -843,12 +878,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex-shrink: 0;
   transition: background-color 0.15s ease;
   position: fixed;
-  top: 47px;
+  top: 60px;
   left: 0;
   bottom: 0;
   z-index: 30;
-  height: calc(100vh - 47px);
-  height: calc(100dvh - 47px);
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
 }
 .shell-sidebar-inner{
   width: 84px;

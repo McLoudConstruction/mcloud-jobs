@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
@@ -96,9 +96,7 @@ export default function AppShell({ children }) {
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(47);
   const [unreadCount, setUnreadCount] = useState(0);
-  const topbarRef = useRef(null);
 
   useEffect(() => {
     let mounted2 = true;
@@ -128,16 +126,6 @@ export default function AppShell({ children }) {
     return () => window.removeEventListener('resize', checkSize);
   }, []);
 
-  useEffect(() => {
-    if (!topbarRef.current) return;
-    const el = topbarRef.current;
-    const update = () => setHeaderHeight(el.offsetHeight);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/login');
@@ -151,7 +139,7 @@ export default function AppShell({ children }) {
 
   return (
     <div className="shell">
-      <div className="shell-topbar" ref={topbarRef}>
+      <div className="shell-topbar">
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
@@ -162,11 +150,7 @@ export default function AppShell({ children }) {
       <div className="shell-body">
         <div
           className="shell-sidebar"
-          style={mounted ? {
-            width: sidebarWidth,
-            top: headerHeight,
-            height: `calc(100dvh - ${headerHeight}px)`,
-          } : { width: 0 }}
+          style={{ width: mounted ? sidebarWidth : 0 }}
         >
           <div className="shell-sidebar-inner">
             <div className="shell-nav-links">

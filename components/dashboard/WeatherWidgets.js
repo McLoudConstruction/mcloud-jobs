@@ -80,15 +80,13 @@ function earliestRainWindow(dayAt, hourly) {
   return { hasRain: false };
 }
 
-// A compact, borderless strip under the dashboard header — current
-// conditions on the left, a 7-day glance on the right, with an optional
-// expand for hourly detail (the operationally useful "when does rain
-// start today" view) rather than showing it by default. This replaces
-// the earlier three-tab weather card: that was still a boxed card
-// competing for space with everything else, when weather here is meant
-// to be background context you glance at, not a destination.
+// A compact, borderless strip under the dashboard header. Three views —
+// Right Now, Hourly, Weekly — behind the same bordered segmented control
+// used elsewhere in the app (Financials' Change Orders/Work Orders/etc.
+// sub-nav), rather than a single combined view with an ad-hoc expand
+// button.
 export function WeatherRibbon({ forecast, loading, error }) {
-  const [expanded, setExpanded] = useState(false);
+  const [view, setView] = useState('now');
   const c = forecast?.current;
   const days = (forecast?.daily || []).slice(0, 7);
   const hourly = forecast?.hourly || [];
@@ -99,8 +97,14 @@ export function WeatherRibbon({ forecast, loading, error }) {
 
   return (
     <div className="dash-section weather-ribbon">
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+      <div className="tab-sections-pills" style={{ marginBottom: 14 }}>
+        <button type="button" className={`tab-section-btn ${view === 'now' ? 'active' : ''}`} onClick={() => setView('now')}>Right Now</button>
+        <button type="button" className={`tab-section-btn ${view === 'hourly' ? 'active' : ''}`} onClick={() => setView('hourly')}>Hourly</button>
+        <button type="button" className={`tab-section-btn ${view === 'weekly' ? 'active' : ''}`} onClick={() => setView('weekly')}>Weekly</button>
+      </div>
+
+      {view === 'now' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ConditionIcon icon={c.icon} alt={c.description} size={40} />
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--heading)', lineHeight: 1 }}>{c.tempF}°F</div>
@@ -110,8 +114,34 @@ export function WeatherRibbon({ forecast, loading, error }) {
             )}
           </div>
         </div>
+      )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px 4px', flex: 1 }}>
+      {view === 'hourly' && (
+        hourly.length > 0 ? (
+          <div style={{ height: 90 }}>
+            <ScrollerWithArrows ariaLabel="hours">
+              {hourly.slice(0, 24).map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flexShrink: 0, width: 68, textAlign: 'center', padding: '4px 4px',
+                    borderRight: i < 23 ? '1px solid var(--line)' : 'none',
+                    scrollSnapAlign: 'start',
+                  }}
+                >
+                  <div style={{ fontSize: 9.5, color: 'var(--ink-soft)', marginBottom: 4 }}>{hourLabel(h.at)}</div>
+                  <ConditionIcon icon={h.icon} alt={h.condition} size={26} />
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--heading)', marginTop: 2 }}>{h.tempF}°</div>
+                  <div style={{ fontSize: 9, color: '#4a90c4', marginTop: 2 }}>💧{h.pop}%</div>
+                </div>
+              ))}
+            </ScrollerWithArrows>
+          </div>
+        ) : <div className="empty-state">No hourly data available.</div>
+      )}
+
+      {view === 'weekly' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px 4px' }}>
           {days.map((d, i) => {
             const rain = earliestRainWindow(d.at, hourly);
             return (
@@ -128,37 +158,6 @@ export function WeatherRibbon({ forecast, loading, error }) {
               </div>
             );
           })}
-        </div>
-
-        <button
-          type="button"
-          className="btn btn-sm"
-          onClick={() => setExpanded(e => !e)}
-          style={{ flexShrink: 0 }}
-        >
-          {expanded ? 'Hide hourly ▴' : 'Hourly ▾'}
-        </button>
-      </div>
-
-      {expanded && hourly.length > 0 && (
-        <div style={{ marginTop: 14, height: 90 }}>
-          <ScrollerWithArrows ariaLabel="hours">
-            {hourly.slice(0, 24).map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  flexShrink: 0, width: 68, textAlign: 'center', padding: '4px 4px',
-                  borderRight: i < 23 ? '1px solid var(--line)' : 'none',
-                  scrollSnapAlign: 'start',
-                }}
-              >
-                <div style={{ fontSize: 9.5, color: 'var(--ink-soft)', marginBottom: 4 }}>{hourLabel(h.at)}</div>
-                <ConditionIcon icon={h.icon} alt={h.condition} size={26} />
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--heading)', marginTop: 2 }}>{h.tempF}°</div>
-                <div style={{ fontSize: 9, color: '#4a90c4', marginTop: 2 }}>💧{h.pop}%</div>
-              </div>
-            ))}
-          </ScrollerWithArrows>
         </div>
       )}
     </div>

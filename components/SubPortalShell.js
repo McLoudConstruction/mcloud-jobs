@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
@@ -45,8 +45,6 @@ export default function SubPortalShell({ company, role, children }) {
   const { settings } = useSettings();
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(47);
-  const topbarRef = useRef(null);
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   useEffect(() => {
@@ -55,16 +53,6 @@ export default function SubPortalShell({ company, role, children }) {
     setMounted(true);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
-  }, []);
-
-  useEffect(() => {
-    if (!topbarRef.current) return;
-    const el = topbarRef.current;
-    const update = () => setHeaderHeight(el.offsetHeight);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
   }, []);
 
   async function handleSignOut() {
@@ -76,7 +64,7 @@ export default function SubPortalShell({ company, role, children }) {
 
   return (
     <div className="shell">
-      <div className="shell-topbar" ref={topbarRef}>
+      <div className="shell-topbar">
         {company && (
           <div className="shell-header-left">
             <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--header-text)' }}>{company.company_name}</div>
@@ -95,11 +83,7 @@ export default function SubPortalShell({ company, role, children }) {
       <div className="shell-body">
         <div
           className="shell-sidebar"
-          style={mounted ? {
-            width: sidebarWidth,
-            top: headerHeight,
-            height: `calc(100dvh - ${headerHeight}px)`,
-          } : { width: 0 }}
+          style={{ width: mounted ? sidebarWidth : 0 }}
         >
           <div className="shell-sidebar-inner">
             <div className="shell-nav-links">

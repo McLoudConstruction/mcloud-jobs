@@ -8,6 +8,7 @@ import AppShell from '../../components/AppShell';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { useCompanyForecast, WeatherRibbon } from '../../components/dashboard/WeatherWidgets';
+import NotificationsCard from '../../components/dashboard/NotificationsCard';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
 
@@ -27,8 +28,8 @@ const TARGET_MARGIN_PERCENT = 20;
 function StatTile({ value, label, href, warn }) {
   const body = (
     <div>
-      <div style={{ fontSize: 27, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
-      <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 3 }}>{label}</div>
     </div>
   );
   if (!href) return body;
@@ -46,8 +47,8 @@ function StatTile({ value, label, href, warn }) {
 function StatGroup({ label, tiles }) {
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>{label}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 28px' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
         {tiles.map(t => <StatTile key={t.label} {...t} />)}
       </div>
     </div>
@@ -242,104 +243,112 @@ export default function DashboardPage() {
           <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
         </div>
 
-        {show('weather') && (
-          <WeatherRibbon forecast={companyForecast} loading={weatherLoading} error={weatherError} />
-        )}
+        <div className="dashboard-layout">
+          <div className="dashboard-main">
+            {show('weather') && (
+              <WeatherRibbon forecast={companyForecast} loading={weatherLoading} error={weatherError} />
+            )}
 
-        {(show('cash') || show('pipeline_backlog') || show('profitability') || show('schedule_health')) && (
-          <div className="dash-section">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
-              {show('cash') && (
-                <StatGroup
-                  label="Cash"
-                  tiles={[
-                    { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
-                    { label: 'Total AR', value: fmtMoney(stats.totalAR), href: '/financials/receivable' },
-                    { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
-                    { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid), href: '/financials' },
-                  ]}
-                />
-              )}
-              {show('pipeline_backlog') && (
-                <StatGroup
-                  label="Pipeline & Backlog"
-                  tiles={[
-                    { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
-                    { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue), href: '/jobs' },
-                    { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`, href: '/jobs' },
-                    { label: 'Sold jobs', value: stats.soldCount, href: '/jobs' },
-                  ]}
-                />
-              )}
-              {show('profitability') && (
-                <StatGroup
-                  label="Profitability"
-                  tiles={[
-                    { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
-                    { label: 'Income MTD', value: fmtMoney(stats.revenueMTD), href: '/financials' },
-                    { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`, href: '/financials' },
-                    { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0, href: '/financials' },
-                  ]}
-                />
-              )}
-              {show('schedule_health') && (
-                <StatGroup
-                  label="Schedule"
-                  tiles={[
-                    { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
-                    { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
-                  ]}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        {show('job_counts_by_stage') && (
-          <div className="dash-section">
-            <h3>Job counts by stage</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
-              {STAGE_ORDER.map(s => (
-                <div key={s} style={{ minWidth: 60 }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+            {(show('cash') || show('pipeline_backlog') || show('profitability') || show('schedule_health')) && (
+              <div className="dash-section">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
+                  {show('cash') && (
+                    <StatGroup
+                      label="Cash"
+                      tiles={[
+                        { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
+                        { label: 'Total AR', value: fmtMoney(stats.totalAR), href: '/financials/receivable' },
+                        { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
+                        { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid), href: '/financials' },
+                      ]}
+                    />
+                  )}
+                  {show('pipeline_backlog') && (
+                    <StatGroup
+                      label="Pipeline & Backlog"
+                      tiles={[
+                        { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
+                        { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue), href: '/jobs' },
+                        { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`, href: '/jobs' },
+                        { label: 'Sold jobs', value: stats.soldCount, href: '/jobs' },
+                      ]}
+                    />
+                  )}
+                  {show('profitability') && (
+                    <StatGroup
+                      label="Profitability"
+                      tiles={[
+                        { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
+                        { label: 'Income MTD', value: fmtMoney(stats.revenueMTD), href: '/financials' },
+                        { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`, href: '/financials' },
+                        { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0, href: '/financials' },
+                      ]}
+                    />
+                  )}
+                  {show('schedule_health') && (
+                    <StatGroup
+                      label="Schedule"
+                      tiles={[
+                        { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
+                        { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
+                      ]}
+                    />
+                  )}
                 </div>
-              ))}
-              <div style={{ minWidth: 60, borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {show('overdue_opportunities') && (
-          <div className="dash-section">
-            <h3>Overdue opportunities</h3>
-            {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
-            {stats.overdue.map(job => (
-              <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
-                <div className="job-main">
-                  <span className="job-number">{formattedProjectNumber(job)}</span>
-                  <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
-                  <span className="job-address">Expected close: {job.expected_close_date}</span>
+            {show('job_counts_by_stage') && (
+              <div className="dash-section">
+                <h3>Job counts by stage</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
+                  {STAGE_ORDER.map(s => (
+                    <div key={s} style={{ minWidth: 60 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                    </div>
+                  ))}
+                  <div style={{ minWidth: 60, borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                    <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                  </div>
                 </div>
-                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              </Link>
-            ))}
-          </div>
-        )}
+              </div>
+            )}
 
-        {show('sales_route_ai') && (
-          <div className="dash-section" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-sm" onClick={() => setRouteModalOpen(true)}>
-              Build my sales route →
-            </button>
-            <button type="button" className="btn btn-sm" onClick={() => setManualRouteModalOpen(true)}>
-              Create Sales Route →
-            </button>
+            {show('overdue_opportunities') && (
+              <div className="dash-section">
+                <h3>Overdue opportunities</h3>
+                {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
+                {stats.overdue.map(job => (
+                  <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
+                    <div className="job-main">
+                      <span className="job-number">{formattedProjectNumber(job)}</span>
+                      <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
+                      <span className="job-address">Expected close: {job.expected_close_date}</span>
+                    </div>
+                    <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {show('sales_route_ai') && (
+              <div className="dash-section" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-sm" onClick={() => setRouteModalOpen(true)}>
+                  Build my sales route →
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => setManualRouteModalOpen(true)}>
+                  Create Sales Route →
+                </button>
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="dashboard-notifications-rail">
+            <NotificationsCard />
+          </div>
+        </div>
       </div>
 
       <RouteBuilderModal open={routeModalOpen} onClose={() => setRouteModalOpen(false)} />
