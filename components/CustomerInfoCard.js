@@ -7,7 +7,7 @@ import AddressFields, { formatAddress } from './AddressFields';
 export default function CustomerInfoCard({ job, onSave }) {
   const isCommercial = job.project_type === 'commercial';
   const [form, setForm] = useState({
-    company_name: job.company_name || '',
+    customer_name: job.customer_name || '',
     customer_contact: job.customer_contact || '',
     customer_email: job.customer_email || '',
     customer_phone: job.customer_phone || '',
@@ -24,6 +24,10 @@ export default function CustomerInfoCard({ job, onSave }) {
   const [billingSameAsContact, setBillingSameAsContact] = useState(
     !job.billing_email || job.billing_email === job.customer_email
   );
+
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const nameSearchTimer = useRef(null);
 
   const [contactSuggestions, setContactSuggestions] = useState([]);
   const [showContactSuggestions, setShowContactSuggestions] = useState(false);
@@ -60,6 +64,30 @@ export default function CustomerInfoCard({ job, onSave }) {
     if (checked) update('billing_email', form.customer_email);
   }
 
+  // ---- Customer Name autofill from People Database (contacts table),
+  // residential only — this is the single field that drives job.customer_name,
+  // the "who this is" value used everywhere downstream (documents, portal,
+  // messages, dashboards). ----
+  function handleCustomerNameChange(value) {
+    update('customer_name', value);
+    if (nameSearchTimer.current) clearTimeout(nameSearchTimer.current);
+    if (!value.trim()) { setNameSuggestions([]); setShowNameSuggestions(false); return; }
+    nameSearchTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from('contacts').select('*').ilike('name', `%${value.trim()}%`).limit(5);
+      setNameSuggestions(data || []);
+      setShowNameSuggestions((data || []).length > 0);
+    }, 250);
+  }
+  function applyNameSuggestion(contact) {
+    setForm(prev => ({
+      ...prev,
+      customer_name: contact.name || prev.customer_name,
+      customer_email: contact.contact_email || prev.customer_email,
+      customer_phone: contact.contact_phone || prev.customer_phone,
+    }));
+    setShowNameSuggestions(false);
+  }
+
   // ---- Contact Person autofill from People Database (contacts table) ----
   function handleContactNameChange(value) {
     update('customer_contact', value);
@@ -81,9 +109,14 @@ export default function CustomerInfoCard({ job, onSave }) {
     setShowContactSuggestions(false);
   }
 
-  // ---- Company Name autofill from Company Database (companies table), commercial only ----
-  function handleCompanyNameChange(value) {
-    update('company_name', value);
+  // ---- Company autofill from Company Database (companies table), commercial
+  // only — writes to customer_name too. For a commercial job, the company
+  // IS the "who this is" value used everywhere downstream, same field
+  // Residential's Customer Name writes to; there's no separate
+  // job.company_name column, so this doesn't silently write to a column
+  // nothing else reads. ----
+  function handleCompanyChange(value) {
+    update('customer_name', value);
     if (companySearchTimer.current) clearTimeout(companySearchTimer.current);
     if (!value.trim()) { setCompanySuggestions([]); setShowCompanySuggestions(false); return; }
     companySearchTimer.current = setTimeout(async () => {
@@ -95,7 +128,7 @@ export default function CustomerInfoCard({ job, onSave }) {
   function applyCompanySuggestion(company) {
     setForm(prev => ({
       ...prev,
-      company_name: company.company_name || prev.company_name,
+      customer_name: company.company_name || prev.customer_name,
       customer_email: prev.customer_email || company.contact_email || '',
     }));
     setShowCompanySuggestions(false);
@@ -113,12 +146,12 @@ export default function CustomerInfoCard({ job, onSave }) {
     <div className="card">
       <h3>Customer</h3>
       <div className="two-col">
-        {isCommercial && (
+        {isCommercial ? (
           <div style={{ position: 'relative' }}>
-            <label>Company name</label>
+            <label>Company</label>
             <input
-              value={form.company_name}
-              onChange={e => handleCompanyNameChange(e.target.value)}
+              value={form.customer_name}
+              onChange={e => handleCompanyChange(e.target.value)}
               onFocus={() => companySuggestions.length > 0 && setShowCompanySuggestions(true)}
               onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 150)}
               autoComplete="off"
@@ -134,30 +167,55 @@ export default function CustomerInfoCard({ job, onSave }) {
               </div>
             )}
           </div>
+        ) : (
+          <div style={{ position: 'relative' }}>
+            <label>Customer Name</label>
+            <input
+              value={form.customer_name}
+              onChange={e => handleCustomerNameChange(e.target.value)}
+              onFocus={() => nameSuggestions.length > 0 && setShowNameSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
+              autoComplete="off"
+            />
+            {showNameSuggestions && (
+              <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                {nameSuggestions.map(s => (
+                  <div key={s.id} onMouseDown={() => applyNameSuggestion(s)} style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}>
+                    <b>{s.name}</b>
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                      {[s.contact_email, s.contact_phone ? formatPhone(s.contact_phone) : null].filter(Boolean).join(' · ') || 'Click to autofill'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
-        <div style={{ position: 'relative' }}>
-          <label>Contact person</label>
-          <input
-            value={form.customer_contact}
-            onChange={e => handleContactNameChange(e.target.value)}
-            onFocus={() => contactSuggestions.length > 0 && setShowContactSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowContactSuggestions(false), 150)}
-            autoComplete="off"
-          />
-          {showContactSuggestions && (
-            <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
-              {contactSuggestions.map(s => (
-                <div key={s.id} onMouseDown={() => applyContactSuggestion(s)} style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}>
-                  <b>{s.name}</b>
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                    {[s.contact_email, s.contact_phone ? formatPhone(s.contact_phone) : null].filter(Boolean).join(' · ') || 'Click to autofill'}
+        {isCommercial && (
+          <div style={{ position: 'relative' }}>
+            <label>Contact person</label>
+            <input
+              value={form.customer_contact}
+              onChange={e => handleContactNameChange(e.target.value)}
+              onFocus={() => contactSuggestions.length > 0 && setShowContactSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowContactSuggestions(false), 150)}
+              autoComplete="off"
+            />
+            {showContactSuggestions && (
+              <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                {contactSuggestions.map(s => (
+                  <div key={s.id} onMouseDown={() => applyContactSuggestion(s)} style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}>
+                    <b>{s.name}</b>
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                      {[s.contact_email, s.contact_phone ? formatPhone(s.contact_phone) : null].filter(Boolean).join(' · ') || 'Click to autofill'}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div><label>Contact email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
         <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} /></div>
