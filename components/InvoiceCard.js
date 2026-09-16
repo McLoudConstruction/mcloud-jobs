@@ -45,7 +45,11 @@ export default function InvoiceCard({ job, onSave, jobId }) {
   }
 
   const contractTotal = job.contract_price != null ? Number(job.contract_price) : null;
-  const billedAmount = amount ? Number(amount) : 0;
+  // The amount field defaults to the contract price before anything's
+  // actually been invoiced (see useState above) — so it can't be used
+  // directly here, or this reads as fully billed on a brand-new,
+  // never-sent invoice. Nothing is actually billed until it's gone out.
+  const billedAmount = status === 'not_sent' ? 0 : (amount ? Number(amount) : 0);
 
   return (
     <div className="card">

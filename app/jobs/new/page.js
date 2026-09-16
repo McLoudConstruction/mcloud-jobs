@@ -346,7 +346,7 @@ function NewOpportunityPageInner() {
             <div className="two-col" style={{ marginTop: 12 }}>
               <div>
                 <label>Contact phone *</label>
-                <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} required />
+                <input value={form.customer_phone} onChange={e => update('customer_phone', formatPhone(e.target.value))} required />
               </div>
               <div>
                 <label>Contact email *</label>

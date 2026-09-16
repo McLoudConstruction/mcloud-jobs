@@ -237,7 +237,7 @@ export default function SalesDashboardPage() {
                 )}
               </div>
               <div><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} /></div>
+              <div><label>Contact phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', formatPhone(e.target.value))} /></div>
               <div><label>Anticipated timeline</label><input value={form.anticipated_timeline} onChange={e => update('anticipated_timeline', e.target.value)} placeholder="e.g. Q1 2027" /></div>
               <div><label>Referral name</label><input value={form.referral_name} onChange={e => update('referral_name', e.target.value)} placeholder="Who referred this lead to us?" /></div>
               <div>

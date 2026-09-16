@@ -87,7 +87,7 @@ const TABS = [
       { key: 'budget', label: 'Budget' },
       { key: 'change_orders', label: 'Change Orders' },
       { key: 'work_orders', label: 'Work Orders' },
-      { key: 'invoicing', label: 'Draws' },
+      { key: 'invoicing', label: 'Invoices' },
       { key: 'receipts', label: 'Job Costs' },
     ],
   },
@@ -348,8 +348,8 @@ export default function JobDetailPage() {
         const total = Math.round(parseFloat(job.contract_price) * 100) / 100;
         const half = Math.round((total / 2) * 100) / 100;
         await supabase.from('invoices').insert([
-          { job_id: id, description: 'Draw 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Draw 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
+          { job_id: id, description: 'Invoice 1 — Deposit', amount: half, status: 'not_sent' },
+          { job_id: id, description: 'Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
         ]);
       }
     }

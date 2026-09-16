@@ -218,7 +218,7 @@ export default function CustomerInfoCard({ job, onSave }) {
         )}
 
         <div><label>Contact email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
-        <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} /></div>
+        <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', formatPhone(e.target.value))} /></div>
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={billingSameAsContact} onChange={e => toggleBillingSameAsContact(e.target.checked)} />

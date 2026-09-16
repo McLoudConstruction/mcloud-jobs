@@ -236,7 +236,7 @@ export default function ReceiptsCard({ jobId }) {
         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} style={{ display: 'none' }} />
         {!pendingFile && (
           <button className="btn btn-primary btn-sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? 'Uploading…' : '+ Add Receipt'}
+            {uploading ? 'Uploading…' : '+ Upload Receipt'}
           </button>
         )}
         <button className="btn btn-sm" onClick={() => setShowManualForm(s => !s)}>{showManualForm ? 'Cancel' : '+ Add Manual Cost Entry'}</button>
