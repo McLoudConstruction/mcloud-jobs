@@ -61,7 +61,15 @@ const NAV_ITEMS = [
 function isSectionActive(item, pathname) {
   if (pathname === item.href) return true;
   if (item.children && item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) return true;
-  return pathname.startsWith(item.href + '/');
+  if (!pathname.startsWith(item.href + '/')) return false;
+  // The prefix fallback above is what lets e.g. /jobs/{id} still highlight
+  // Projects. But Schedule's own href ('/jobs/calendar') sits under that
+  // same '/jobs/' prefix, so without this check both Projects and Schedule
+  // would light up together on the calendar page. If a sibling top-level
+  // item's own href is a more specific match for this path, it wins and
+  // this item is not active.
+  const claimedBySibling = NAV_ITEMS.some(other => other !== item && (pathname === other.href || pathname.startsWith(other.href + '/')));
+  return !claimedBySibling;
 }
 
 function getCurrentSection(pathname) {
@@ -177,6 +185,7 @@ export default function AppShell({ children }) {
                   <span className="shell-nav-label">{item.label}</span>
                 </Link>
               ))}
+              <div className="shell-nav-divider" />
             </div>
 
             <div>
@@ -189,6 +198,7 @@ export default function AppShell({ children }) {
                 {theme === 'dark' ? <MoonIcon className="shell-nav-icon" /> : <SunIcon className="shell-nav-icon" />}
                 <span className="shell-nav-label">Theme</span>
               </button>
+              <div className="shell-nav-divider" />
               <Link
                 href="/settings"
                 className={`shell-nav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
