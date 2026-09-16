@@ -5,6 +5,7 @@ import { compressImage } from '../lib/imageCompress';
 import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
 import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
+import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -31,6 +32,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const { isOnline, pendingCount, failedCount, pending, sync } = useOfflineSync(jobId);
 
   const [noteText, setNoteText] = useState('');
+  const [category, setCategory] = useState('');
   const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
   const [posting, setPosting] = useState(false);
 
@@ -105,6 +107,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     return pendingUpdates.map(u => ({
       id: u.id,
       issues_notes: u.payload.issues_notes,
+      category: u.payload.category,
       created_at: u.createdAt,
       _pending: true,
       _photos: pendingPhotos
@@ -132,7 +135,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     setPosting(true);
 
     const updateId = crypto.randomUUID();
-    await queueInternalUpdate({ id: updateId, jobId, text: noteText.trim() || null, createdByEmail });
+    await queueInternalUpdate({ id: updateId, jobId, text: noteText.trim() || null, category: category || null, createdByEmail });
 
     for (const { file } of stagedPhotos) {
       const compressed = await compressImage(file);
@@ -140,6 +143,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     }
 
     setNoteText('');
+    setCategory('');
     setStagedPhotos([]);
     setPosting(false);
   }
@@ -175,6 +179,10 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       <section className="field-log-section">
         <h3>Post an internal update</h3>
         <form onSubmit={handlePost} className="field-log-form">
+          <select value={category} onChange={e => setCategory(e.target.value)} style={{ marginBottom: 8 }}>
+            <option value="">Category (optional)</option>
+            {INTERNAL_UPDATE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <textarea placeholder="What's happening on site?" value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} />
 
           {stagedPhotos.length > 0 && (
@@ -208,6 +216,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             <div className="update-entry" key={u.id}>
               <div className="update-date">
                 {fmtTimestamp(u.created_at)}
+                {u.category && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{u.category}</span>}
                 {u._pending && <span className="pending-tag"> · syncing…</span>}
               </div>
               {u.issues_notes && <p>{u.issues_notes}</p>}
