@@ -12,7 +12,6 @@ import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
-import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
@@ -22,7 +21,7 @@ import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
-  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon,
+  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
   PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon,
 } from '../../../components/icons';
 
@@ -69,10 +68,11 @@ const TABS = [
     key: 'Estimate', label: 'Estimate', icon: CalculatorIcon,
     sections: [
       { key: 'scope', label: 'Scope' },
-      { key: 'schedule', label: 'Schedule' },
+      { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
     ],
   },
+  { key: 'Schedule', label: 'Schedule', icon: JobDashboardIcon },
   {
     key: 'Financials', label: 'Financials', icon: FinanceIcon,
     // Change Orders, Work Orders, Invoicing, and Receipts live here as
@@ -584,23 +584,22 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Estimate' && section === 'scope' && (
-          <div className="estimate-grid">
-            <div className="estimate-main">
-              <ScopeCard job={job} jobId={id} onSave={saveJob} />
-              <TermsCard job={job} onSave={saveJob} />
-            </div>
-            <div className="estimate-sidebar">
-              <TradeBreakdownCard jobId={id} />
-            </div>
-          </div>
+          <>
+            <ScopeCard job={job} jobId={id} onSave={saveJob} />
+            <TermsCard job={job} onSave={saveJob} />
+          </>
         )}
 
-        {tab === 'Estimate' && section === 'schedule' && (
+        {tab === 'Estimate' && section === 'cost' && (
+          <EstimateTab job={job} jobId={id} section="cost" />
+        )}
+
+        {tab === 'Schedule' && (
           <ScheduleCard job={job} jobId={id} />
         )}
 
         {tab === 'Estimate' && section === 'pricing' && (
-          <EstimateTab job={job} jobId={id}>
+          <EstimateTab job={job} jobId={id} section="pricing">
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
         )}

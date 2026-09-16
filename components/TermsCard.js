@@ -26,9 +26,6 @@ export default function TermsCard({ job, onSave }) {
   return (
     <div className="card">
       <h3>Project Assumptions &amp; Exclusions</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-        Standard list matches this job's project type ({job.project_type === 'commercial' ? 'Commercial' : 'Residential'}) — change project type on the Project tab if needed.
-      </div>
       {items.length === 0 && <div className="empty-state">None added.</div>}
       {items.map((text, i) => (
         <div className="list-row" key={i}>
@@ -39,7 +36,7 @@ export default function TermsCard({ job, onSave }) {
       <div className="section-actions">
         <button className="btn btn-sm" onClick={add}>+ Add item</button>
         <button className="btn btn-sm" onClick={restoreStandard}>↺ Restore standard list</button>
-        <button className="btn btn-primary btn-sm" onClick={save}>Save assumptions &amp; exclusions</button>
+        <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
       </div>
     </div>
   );

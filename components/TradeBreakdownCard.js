@@ -9,6 +9,7 @@ const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '',
 export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   const [actions, setActions] = useState([]);
   const [view, setView] = useState('trade'); // 'trade' | 'area' | 'flat'
+  const [selectedTrade, setSelectedTrade] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_ROW);
   const [editingId, setEditingId] = useState(null);
@@ -81,6 +82,8 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     acc[key].push(a);
     return acc;
   }, {});
+  const tradesWithActions = Object.keys(grouped);
+  const activeTrade = selectedTrade && grouped[selectedTrade] ? selectedTrade : tradesWithActions[0];
 
   const groupedByArea = actions.reduce((acc, a) => {
     const key = a.area || 'Whole job';
@@ -93,11 +96,11 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   return (
     <div className="card">
       <h3>Exhaustive Action List &amp; Trade Breakdown</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-        {readOnly
-          ? <>Reference only — this is what the job needs, for pricing. {linkHref && <a href={linkHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Edit on the Scope tab →</a>}</>
-          : "The full internal task list behind the customer estimate — this is what actually populates a subcontractor's work order by trade."}
-      </div>
+      {readOnly && linkHref && (
+        <div style={{ fontSize: 11.5, marginBottom: 12 }}>
+          <a href={linkHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Edit on the Scope tab →</a>
+        </div>
+      )}
 
       <div className="section-actions" style={{ marginTop: 0 }}>
         <button className={`btn btn-sm ${view === 'trade' ? 'btn-primary' : ''}`} onClick={() => setView('trade')}>By Trade</button>
@@ -139,17 +142,30 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
       )}
 
       {actions.length > 0 && view === 'trade' && (
-        <div style={{ marginTop: 14 }}>
-          {Object.entries(grouped).map(([trade, rows]) => (
-            <div key={trade} style={{ marginBottom: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>
-                {trade} <span style={{ color: 'var(--ink-soft)', fontWeight: 400, textTransform: 'none' }}>({rows.length})</span>
-              </div>
-              {rows.map(a => (
-                <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
-              ))}
-            </div>
-          ))}
+        <div style={{ display: 'flex', gap: 0, marginTop: 14, minHeight: 200 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--line)', flexShrink: 0 }}>
+            {tradesWithActions.map(trade => (
+              <button
+                key={trade}
+                onClick={() => setSelectedTrade(trade)}
+                style={{
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  background: trade === activeTrade ? 'var(--panel)' : 'transparent',
+                  border: 'none', borderRight: trade === activeTrade ? '2px solid var(--gold)' : 'none',
+                  padding: '14px 8px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em',
+                  textTransform: 'uppercase', color: trade === activeTrade ? 'var(--gold)' : 'var(--ink-soft)',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                {trade} ({grouped[trade].length})
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, paddingLeft: 16 }}>
+            {activeTrade && grouped[activeTrade].map(a => (
+              <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+            ))}
+          </div>
         </div>
       )}
 

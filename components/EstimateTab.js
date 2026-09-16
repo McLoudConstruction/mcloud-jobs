@@ -11,7 +11,7 @@ function fmtMoney(v) {
 }
 function lineTotal(it) { return (Number(it.quantity) || 0) * (Number(it.unit_price) || 0); }
 
-export default function EstimateTab({ job, jobId, children }) {
+export default function EstimateTab({ job, jobId, section, children }) {
   const [actions, setActions] = useState([]);
   const [items, setItems] = useState([]);
   const [margin, setMargin] = useState(job.estimate_margin_percent != null ? String(job.estimate_margin_percent) : '');
@@ -292,31 +292,22 @@ export default function EstimateTab({ job, jobId, children }) {
       supabase.from('jobs').update({ projected_cost: subtotal }).eq('id', jobId),
     ]);
     setPushing(false);
-    setPushedFlash('Saved to this job\u2019s Contract Price & Projected Cost — no need to re-enter it on the Project tab.');
+    setPushedFlash('Saved as this job\u2019s Contract Price.');
     setTimeout(() => setPushedFlash(''), 6000);
   }
 
-  return (
-    <>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16, background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '10px 14px' }}>
-        Nothing here affects this job's real Contract Price or Financials until you decide to use it. Every quantity and price is yours to set; nothing is calculated or padded for you — including subcontractor cost, which only you actually know.
-      </div>
-
-      <div className="estimate-grid">
+  if (section === 'cost') {
+    return (
+      <div className="estimate-grid-wide">
         <div className="estimate-main">
           <div className="card">
             <h3>Materials</h3>
 
-            <div className="section-actions" style={{ marginTop: 0 }}>
+            <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestMaterials} disabled={suggesting || actions.length === 0}>
                 {suggesting ? 'Suggesting…' : 'Suggest materials from action list'}
               </button>
             </div>
-            {actions.length === 0 && (
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-                No exhaustive action list yet — build one on the Scope tab first, or just add line items manually below.
-              </div>
-            )}
             {suggestError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{suggestError}</div>}
 
             <div className="estimate-table" style={{ marginTop: 16 }}>
@@ -407,11 +398,8 @@ export default function EstimateTab({ job, jobId, children }) {
 
           <div className="card">
             <h3>Subcontractor Cost</h3>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-              What the trade itself costs you — separate from the materials they install. Never AI-suggested — nobody but you knows what your subs actually charge.
-            </div>
 
-            <div className="section-actions" style={{ marginTop: 0 }}>
+            <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestTradesFromActions} disabled={suggestingTrades || actions.length === 0}>
                 {suggestingTrades ? 'Adding…' : 'Add a row per trade from action list'}
               </button>
@@ -474,57 +462,63 @@ export default function EstimateTab({ job, jobId, children }) {
               </div>
             </form>
           </div>
-
-          {children}
         </div>
 
         <div className="estimate-sidebar">
-          {/* Generate & Send moved (Aug 2026) to the centralized action row next to
-              the Scope/Pricing pills, so it's reachable from either section instead
-              of being buried down here only on Pricing. See page.js. */}
-          <div className="card">
-            <h3>Margin &amp; Sale Price</h3>
-            <table className="estimate-margin-table">
-              <tbody>
-                <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
-                <tr>
-                  <td>Sales Tax</td>
-                  <td>
-                    <div className="estimate-margin-inline">
-                      <span className="estimate-margin-pct">
-                        <input type="number" step="0.001" min="0" value={salesTax} onChange={e => saveSalesTax(e.target.value)} placeholder="8.6" />%
-                      </span>
-                      <span>{fmtMoney(salesTaxDollars)}</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr><td>Subcontractor Cost</td><td>{fmtMoney(laborSubtotal)}</td></tr>
-                <tr className="estimate-margin-total-row"><td>Total Cost</td><td>{fmtMoney(subtotal)}</td></tr>
-                <tr>
-                  <td>Margin</td>
-                  <td>
-                    <div className="estimate-margin-inline">
-                      <span className="estimate-margin-pct">
-                        <input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="25" />%
-                      </span>
-                      <span>{fmtMoney(marginDollars)}</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr className="estimate-margin-total-row"><td>Final Sale Price</td><td style={{ fontSize: 16 }}>{fmtMoney(salePrice)}</td></tr>
-              </tbody>
-            </table>
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
-                {pushing ? 'Saving…' : "Use as this Job's Contract Price"}
-              </button>
-            </div>
-            {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
-          </div>
-
-          <TradeBreakdownCard jobId={jobId} readOnly linkHref={`/jobs/${jobId}?tab=Estimate&section=scope`} />
+          <TradeBreakdownCard jobId={jobId} />
         </div>
       </div>
-    </>
+    );
+  }
+
+  // section === 'pricing'
+  return (
+    <div className="estimate-grid">
+      <div className="estimate-main">
+        {children}
+      </div>
+
+      <div className="estimate-sidebar">
+        <div className="card">
+          <h3>Margin &amp; Sale Price</h3>
+          <table className="estimate-margin-table">
+            <tbody>
+              <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
+              <tr>
+                <td>Sales Tax</td>
+                <td>
+                  <div className="estimate-margin-inline">
+                    <span className="estimate-margin-pct">
+                      <input type="number" step="0.001" min="0" value={salesTax} onChange={e => saveSalesTax(e.target.value)} placeholder="8.6" />%
+                    </span>
+                    <span>{fmtMoney(salesTaxDollars)}</span>
+                  </div>
+                </td>
+              </tr>
+              <tr><td>Subcontractor Cost</td><td>{fmtMoney(laborSubtotal)}</td></tr>
+              <tr className="estimate-margin-total-row"><td>Total Cost</td><td>{fmtMoney(subtotal)}</td></tr>
+              <tr>
+                <td>Margin</td>
+                <td>
+                  <div className="estimate-margin-inline">
+                    <span className="estimate-margin-pct">
+                      <input type="number" step="0.1" min="0" max="99" value={margin} onChange={e => saveMargin(e.target.value)} placeholder="25" />%
+                    </span>
+                    <span>{fmtMoney(marginDollars)}</span>
+                  </div>
+                </td>
+              </tr>
+              <tr className="estimate-margin-total-row"><td>Final Sale Price</td><td style={{ fontSize: 16 }}>{fmtMoney(salePrice)}</td></tr>
+            </tbody>
+          </table>
+          <div className="section-actions">
+            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
+              {pushing ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
+        </div>
+      </div>
+    </div>
   );
 }

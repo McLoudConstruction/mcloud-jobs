@@ -1013,6 +1013,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
    opened them without visiting Estimate first in that session. Moved
    here so it's always present, regardless of which tab loads first. */
 .estimate-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+.estimate-grid-wide { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
 .estimate-sidebar { position: sticky; top: 20px; }
 .estimate-margin-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
 .estimate-margin-table td { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
@@ -1076,6 +1077,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .estimate-add-grid { display: grid; grid-template-columns: 2fr 110px 110px auto; gap: 8px; align-items: center; }
 @media (max-width: 900px) {
   .estimate-grid { grid-template-columns: 1fr; }
+  .estimate-grid-wide { grid-template-columns: 1fr; }
   .estimate-sidebar { position: static; }
   .estimate-row, .estimate-header-row, .estimate-add-grid { grid-template-columns: 1fr; }
 }

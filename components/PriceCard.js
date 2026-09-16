@@ -1,41 +1,20 @@
 'use client';
 import { useState } from 'react';
 
-// Strips non-numeric characters and caps input to 2 decimal places as
-// the user types — e.g. "185000.999" becomes "185000.99".
-function sanitizeMoney(raw) {
-  let v = raw.replace(/[^0-9.]/g, '');
-  const firstDot = v.indexOf('.');
-  if (firstDot !== -1) {
-    v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
-  }
-  return v;
-}
-
 export default function PriceCard({ job, onSave }) {
-  const [price, setPrice] = useState(sanitizeMoney(String(job.contract_price ?? '')));
-  const [projectedCost, setProjectedCost] = useState(sanitizeMoney(String(job.projected_cost ?? '')));
   const [milestones, setMilestones] = useState(job.milestones || []);
 
   function add() { setMilestones(prev => [...prev, { desc: '', amount: '' }]); }
   function update(i, field, v) { setMilestones(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: v } : m)); }
   function remove(i) { setMilestones(prev => prev.filter((_, idx) => idx !== i)); }
   function save() {
-    onSave({
-      contract_price: price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
-      projected_cost: projectedCost ? Math.round(parseFloat(String(projectedCost).replace(/[^0-9.]/g, '')) * 100) / 100 : null,
-      milestones,
-    });
+    onSave({ milestones });
   }
 
   return (
     <div className="card">
-      <h3>Contract price &amp; payment schedule</h3>
-      <label>Total contract price ($)</label>
-      <input value={price} onChange={e => setPrice(sanitizeMoney(e.target.value))} placeholder="e.g. 185000.00" />
-      <label style={{ marginTop: 12 }}>Projected cost ($)</label>
-      <input value={projectedCost} onChange={e => setProjectedCost(sanitizeMoney(e.target.value))} placeholder="What you expect this job to cost, all-in" />
-      <label style={{ marginTop: 16 }}>Payment milestones</label>
+      <h3>Payment Schedule</h3>
+      <label>Payment milestones</label>
       {milestones.length === 0 && <div className="empty-state">No milestones yet.</div>}
       {milestones.map((m, i) => (
         <div className="list-row" key={i}>
@@ -46,7 +25,7 @@ export default function PriceCard({ job, onSave }) {
       ))}
       <div className="section-actions">
         <button className="btn btn-sm" onClick={add}>+ Add milestone</button>
-        <button className="btn btn-primary btn-sm" onClick={save}>Save price &amp; schedule</button>
+        <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
       </div>
     </div>
   );
