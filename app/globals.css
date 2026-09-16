@@ -171,9 +171,8 @@ a { color: inherit; text-decoration: none; }
   width: 320px;
   flex-shrink: 0;
   position: sticky;
-  top: 76px;
-  max-height: calc(100vh - 92px);
-  max-height: calc(100dvh - 92px);
+  top: 16px;
+  max-height: calc(100vh - 150px);
   display: flex;
 }
 .dash-notifications-card{
@@ -827,21 +826,23 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .saved-flash{ font-size: 12px; color: #3a6b45; margin-left: 10px; }
 
 /* ---------- App shell (always-contracted icon rail) ---------- */
-.shell{ min-height: 100vh; }
+/* Full-height flex column: the topbar takes whatever natural height its
+   content needs (so any configured logo size, up to the slider's max,
+   just works — no hardcoded pixel height to fight it), and shell-body
+   gets the exact remaining height for free via flex:1, no JS
+   measurement or magic numbers required anywhere. */
+.shell{ display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 .shell-topbar{
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  height: 60px;
-  padding: 0 16px;
+  flex-shrink: 0;
+  padding: 8px 16px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-line);
-  position: sticky;
-  top: 0;
-  z-index: 40;
 }
 .shell-logo{ display: flex; justify-content: flex-start; align-items: center; margin-left: auto; }
-.shell-logo img{ max-height: 44px; }
+.shell-logo img{ display: block; max-height: 190px; } /* effectively a no-op against the logo-size slider's own 50-200px range — just a sane ceiling */
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--header-text); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
@@ -869,21 +870,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .signout-btn{ width: calc(100% - 32px); margin: 0 16px; justify-content: center; }
 .signout-btn:hover{ background: var(--signout-hover-bg) !important; }
 
-.shell-body{ display: flex; align-items: flex-start; }
+.shell-body{ display: flex; align-items: stretch; flex: 1; min-height: 0; }
 
 .shell-sidebar{
   background: var(--panel);
   border-right: 1px solid var(--panel-line);
-  overflow: hidden;
   flex-shrink: 0;
   transition: background-color 0.15s ease;
-  position: fixed;
-  top: 60px;
-  left: 0;
-  bottom: 0;
-  z-index: 30;
-  height: calc(100vh - 60px);
-  height: calc(100dvh - 60px);
+  overflow-y: auto;
 }
 .shell-sidebar-inner{
   width: 84px;
@@ -920,7 +914,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-nav-link.active{ background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
 .shell-nav-divider{ height: 1px; background: var(--panel-line); margin: 4px 14px; flex-shrink: 0; }
 
-.shell-content{ flex: 1; min-width: 0; }
+.shell-content{ flex: 1; min-width: 0; overflow-y: auto; }
 
 /* ---------- Mobile: unfixed header + bottom icon nav ---------- */
 .shell-bottomnav{ display: none; }

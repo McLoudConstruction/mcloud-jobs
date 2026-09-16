@@ -122,7 +122,11 @@ export default function SalesDashboardPage() {
     setForm({ ...EMPTY_FORM, ...o });
     setEditingId(o.id);
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // The page content now scrolls inside .shell-content (not the window
+    // itself — see the app shell's flex-column layout), so this has to
+    // target that element instead of window.scrollTo, which would only
+    // affect the ancestor viewport.
+    document.querySelector('.shell-content')?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function setStage(id, stage) {
