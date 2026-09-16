@@ -108,7 +108,7 @@ export default function UpdateDocumentPage() {
             <div className="doc-brand-tag">Project Update</div>
           </div>
           <div className="doc-body">
-            <h1 className="doc-title">Project Update</h1>
+            <h1 className="doc-title">Site Progress Update</h1>
             <div className="doc-meta">
               <span><b>{job.customer_name || 'Customer name'}</b></span>
               <span>{job.project_address || 'Project address'}</span>

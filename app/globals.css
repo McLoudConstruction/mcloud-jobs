@@ -793,11 +793,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 
 .saved-flash{ font-size: 12px; color: #3a6b45; margin-left: 10px; }
 
-/* ---------- App shell (hamburger sidebar) ---------- */
+/* ---------- App shell (always-contracted icon rail) ---------- */
 .shell{ min-height: 100vh; }
 .shell-topbar{
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 5px 12px 13px;
   background: var(--header-bg);
@@ -810,22 +810,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--header-text); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
 
-.shell-header-left{ display: flex; align-items: center; gap: 8px; }
 .shell-nav-dot{
   position: absolute; top: -2px; right: -2px;
   width: 8px; height: 8px; border-radius: 50%;
   background: #c0524f;
   border: 1.5px solid var(--panel);
 }
-
-.hamburger-btn{
-  width: 32px; height: 32px;
-  background: transparent; border: 1px solid var(--header-line); border-radius: 6px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.hamburger-btn span{ width: 16px; height: 2px; background: var(--header-text); display: block; }
 
 .theme-toggle-btn{
   width: 34px; height: 34px;
@@ -834,30 +824,6 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   cursor: pointer; color: var(--header-text); flex-shrink: 0;
 }
 .theme-toggle-btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
-
-.theme-slider-row{ padding: 8px 24px 14px; }
-.theme-slider{
-  position: relative;
-  width: 68px; height: 34px;
-  border-radius: 17px;
-  border: 1px solid var(--panel-line);
-  background: var(--card-bg);
-  cursor: pointer;
-  padding: 0 8px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.theme-slider-track-icon{
-  color: var(--ink-soft); opacity: 0.55; display: flex; position: static; transform: none;
-}
-.theme-slider-knob{
-  position: absolute; top: 2px; left: 2px;
-  width: 28px; height: 28px; border-radius: 50%;
-  background: #d9a441; /* warm gold — light mode / sun */
-  display: flex; align-items: center; justify-content: center;
-  color: #fff;
-  transition: transform 0.18s ease, background-color 0.18s ease;
-}
-.theme-slider.is-dark .theme-slider-knob{ transform: translateX(34px); background: #4a5a78; /* cool slate — dark mode / moon */ }
 
 .signout-link{
   background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
@@ -874,7 +840,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   border-right: 1px solid var(--panel-line);
   overflow: hidden;
   flex-shrink: 0;
-  transition: width 0.2s ease, transform 0.2s ease, background-color 0.15s ease;
+  transition: background-color 0.15s ease;
   position: fixed;
   top: 47px;
   left: 0;
@@ -884,40 +850,38 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   height: calc(100dvh - 47px);
 }
 .shell-sidebar-inner{
-  width: 240px;
+  width: 72px;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 0 0 16px;
   box-sizing: border-box;
-  overflow-y: hidden;
-  transition: width 0.2s ease;
+  overflow-y: auto;
 }
-.shell-sidebar.collapsed .shell-sidebar-inner{ width: 64px; }
 .shell-nav-links{ display: flex; flex-direction: column; }
 .shell-nav-link{
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 11px;
-  padding: 13px 24px;
-  font-size: 13.5px;
+  justify-content: center;
+  gap: 4px;
+  padding: 11px 4px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--sidebar-inactive-text);
-  white-space: nowrap;
+  text-align: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
 }
-.shell-sidebar.collapsed .shell-nav-link{ padding: 10px 0; justify-content: center; gap: 0; }
-.shell-sidebar.collapsed .shell-nav-label{ display: none; }
-.shell-sidebar.collapsed .shell-nav-icon{ width: 24px; height: 24px; }
-.shell-sidebar.collapsed .signout-btn{ width: 40px; height: 40px; padding: 0; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.shell-nav-icon{ flex-shrink: 0; opacity: 0.8; transition: width 0.15s, height 0.15s; }
+.shell-nav-label{ display: block; line-height: 1.15; max-width: 64px; }
+.shell-nav-icon{ flex-shrink: 0; width: 22px; height: 22px; opacity: 0.8; }
 .shell-nav-link.active .shell-nav-icon{ opacity: 1; }
 .shell-nav-link:hover{ background: var(--line); }
 .shell-nav-link.active{ background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
-
-.shell-overlay{
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 25;
-}
 
 .shell-content{ flex: 1; min-width: 0; }
 
@@ -925,10 +889,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-bottomnav{ display: none; }
 @media (max-width: 899px){
   .shell-topbar{ position: static; }
-  .hamburger-btn{ display: none; }
   .shell-sidebar{ display: none !important; }
-  .shell-overlay{ display: none !important; }
-  .shell-content{ padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
+  .shell-content{ padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
   .shell-bottomnav{
     display: flex;
@@ -942,6 +904,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   }
   .shell-bottomnav-link{
     display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px;
     flex: 1; min-width: 0;
     padding: 6px 2px;
     color: rgba(255,255,255,0.6);
@@ -949,6 +912,15 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .shell-bottomnav-link.active{ color: #fff; }
   .shell-bottomnav-icon{ width: 22px; height: 22px; opacity: 0.9; }
   .shell-bottomnav-link.active .shell-bottomnav-icon{ opacity: 1; }
+  .shell-bottomnav-label{
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .shell-bottomnav-dot{
     position: absolute; top: -1px; right: -3px;
     width: 7px; height: 7px; border-radius: 50%;

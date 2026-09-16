@@ -114,7 +114,7 @@ export default function InvoiceDocumentPage() {
           </div>
 
           <div className="doc-body">
-            <h1 className="doc-title">Invoice</h1>
+            <h1 className="doc-title">Invoice Summary</h1>
             <div className="doc-meta">
               <span><b>{job.customer_name || 'Customer name'}</b></span>
               <span>{job.project_address || 'Project address'}</span>
@@ -148,7 +148,7 @@ export default function InvoiceDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Invoice #{job.job_number}</span>
+              <span>Job #{job.job_number}</span>
             </div>
           </div>
         </div>

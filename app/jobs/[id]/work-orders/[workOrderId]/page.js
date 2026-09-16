@@ -175,7 +175,7 @@ export default function WorkOrderDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Work Order — Job #{job.job_number}</span>
+              <span>Job #{job.job_number}</span>
             </div>
           </div>
         </div>

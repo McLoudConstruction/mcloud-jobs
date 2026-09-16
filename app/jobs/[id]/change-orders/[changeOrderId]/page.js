@@ -8,6 +8,7 @@ import SendDocModal from '../../../../../components/SendDocModal';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
 import SignaturePad from '../../../../../components/SignaturePad';
 import { useSettings } from '../../../../../lib/useSettings';
+import { useStaffAuth } from '../../../../../lib/staffAuthContext';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -27,6 +28,7 @@ export default function ChangeOrderDocumentPage() {
   const { settings } = useSettings();
   const logoUrl = settings.logo_url || LOGO_SRC;
   const { session, loading } = useDocumentAuth();
+  const { fullName: staffFullName } = useStaffAuth();
   const { id, changeOrderId } = useParams();
   const [job, setJob] = useState(null);
   const [co, setCo] = useState(null);
@@ -119,7 +121,7 @@ export default function ChangeOrderDocumentPage() {
             <div className="doc-brand-tag">Change Order</div>
           </div>
           <div className="doc-body">
-            <h1 className="doc-title">Change Order</h1>
+            <h1 className="doc-title">Change Order Authorization</h1>
             <div className="doc-meta">
               <span><b>{job.customer_name || 'Customer name'}</b></span>
               <span>{job.project_address || 'Project address'}</span>
@@ -152,7 +154,7 @@ export default function ChangeOrderDocumentPage() {
                   saved={(co.co_signatures || {}).contractor}
                   onSave={(payload) => saveSignature('contractor', payload)}
                   saving={signing}
-                  defaultName="Stachys"
+                  defaultName={staffFullName || 'Stachys'}
                   defaultTitle="Owner, McLoud Construction"
                 />
                 <SignaturePad
@@ -169,7 +171,7 @@ export default function ChangeOrderDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Change Order — Job #{job.job_number}</span>
+              <span>Job #{job.job_number}</span>
             </div>
           </div>
         </div>

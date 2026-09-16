@@ -68,12 +68,24 @@ function getCurrentSection(pathname) {
   return NAV_ITEMS.find(item => item.children && isSectionActive(item, pathname)) || null;
 }
 
+// The section-subnav strip (Overview + children tabs) should only render on
+// the section's own top-level pages. Individual job detail pages and other
+// nested routes (e.g. /jobs/{id}, /jobs/calendar) live under the same '/jobs/'
+// prefix for icon-highlighting purposes but have their own internal tab nav,
+// so showing this strip there duplicated navigation. This is intentionally
+// stricter than isSectionActive, which still drives sidebar/bottomnav
+// highlighting.
+function shouldShowSubnav(item, pathname) {
+  if (!item) return false;
+  if (pathname === item.href) return true;
+  return item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'));
+}
+
 export default function AppShell({ children }) {
   const { theme, setTheme } = useTheme();
   const { settings } = useSettings();
   const pathname = usePathname();
   const router = useRouter();
-  const [navOpen, setNavOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(47);
@@ -103,27 +115,10 @@ export default function AppShell({ children }) {
       setIsMobile(window.innerWidth < 900);
     }
     checkSize();
-    const isDesktop = window.innerWidth >= 900;
-    if (isDesktop) {
-      // On desktop, remember whichever expanded/collapsed state the user
-      // last left the sidebar in, rather than always reopening it.
-      const stored = window.localStorage.getItem('mcloud-sidebar-open');
-      setNavOpen(stored === null ? true : stored === '1');
-    } else {
-      setNavOpen(false); // mobile always starts closed regardless of the stored desktop preference
-    }
     setMounted(true);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
-
-  function toggleNav() {
-    setNavOpen(o => {
-      const next = !o;
-      if (!isMobile) window.localStorage.setItem('mcloud-sidebar-open', next ? '1' : '0');
-      return next;
-    });
-  }
 
   useEffect(() => {
     if (!topbarRef.current) return;
@@ -142,20 +137,13 @@ export default function AppShell({ children }) {
 
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
-  function closeOnMobile() { if (isMobile) setNavOpen(false); }
-
-  const sidebarWidth = isMobile ? (navOpen ? 240 : 0) : (navOpen ? 240 : 64);
+  const sidebarWidth = isMobile ? 0 : 72;
   const currentSection = getCurrentSection(pathname);
+  const showSubnav = shouldShowSubnav(currentSection, pathname);
 
   return (
     <div className="shell">
       <div className="shell-topbar" ref={topbarRef}>
-        <div className="shell-header-left">
-          <button className="hamburger-btn" onClick={toggleNav} aria-label="Toggle navigation">
-            <span /><span /><span />
-          </button>
-        </div>
-
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
@@ -165,10 +153,9 @@ export default function AppShell({ children }) {
 
       <div className="shell-body">
         <div
-          className={`shell-sidebar ${!isMobile && !navOpen ? 'collapsed' : ''}`}
+          className="shell-sidebar"
           style={mounted ? {
             width: sidebarWidth,
-            transform: isMobile ? (navOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
             top: headerHeight,
             height: `calc(100dvh - ${headerHeight}px)`,
           } : { width: 0 }}
@@ -180,8 +167,6 @@ export default function AppShell({ children }) {
                   key={item.href}
                   href={item.href}
                   className={`shell-nav-link ${isSectionActive(item, pathname) ? 'active' : ''}`}
-                  onClick={closeOnMobile}
-                  title={!isMobile && !navOpen ? item.label : undefined}
                 >
                   {item.icon && (
                     <span style={{ position: 'relative', display: 'inline-flex' }}>
@@ -195,27 +180,18 @@ export default function AppShell({ children }) {
             </div>
 
             <div>
-              {(isMobile || navOpen) && (
-                <div className="theme-slider-row">
-                  <button
-                    className={`theme-slider ${theme === 'dark' ? 'is-dark' : ''}`}
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    aria-label="Toggle light/dark mode"
-                    type="button"
-                  >
-                    <span className="theme-slider-track-icon"><SunIcon width={13} height={13} /></span>
-                    <span className="theme-slider-track-icon"><MoonIcon width={13} height={13} /></span>
-                    <span className="theme-slider-knob">
-                      {theme === 'dark' ? <MoonIcon width={14} height={14} /> : <SunIcon width={14} height={14} />}
-                    </span>
-                  </button>
-                </div>
-              )}
+              <button
+                className="shell-nav-link theme-icon-toggle"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                aria-label="Toggle light/dark mode"
+                type="button"
+              >
+                {theme === 'dark' ? <MoonIcon className="shell-nav-icon" /> : <SunIcon className="shell-nav-icon" />}
+                <span className="shell-nav-label">Theme</span>
+              </button>
               <Link
                 href="/settings"
                 className={`shell-nav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
-                onClick={closeOnMobile}
-                title={!isMobile && !navOpen ? 'Settings' : undefined}
               >
                 <SettingsIcon className="shell-nav-icon" />
                 <span className="shell-nav-label">Settings</span>
@@ -223,7 +199,6 @@ export default function AppShell({ children }) {
               <button
                 className="shell-nav-link signout-link"
                 onClick={handleSignOut}
-                title={!isMobile && !navOpen ? 'Sign out' : undefined}
               >
                 <SignOutIcon className="shell-nav-icon" />
                 <span className="shell-nav-label">Sign out</span>
@@ -231,8 +206,6 @@ export default function AppShell({ children }) {
             </div>
           </div>
         </div>
-
-        {isMobile && navOpen && <div className="shell-overlay" onClick={() => setNavOpen(false)} />}
 
         {isMobile && (
           <nav className="shell-bottomnav">
@@ -247,6 +220,7 @@ export default function AppShell({ children }) {
                   <item.icon className="shell-bottomnav-icon" />
                   {item.href === '/messages' && unreadCount > 0 && <span className="shell-bottomnav-dot" />}
                 </span>
+                <span className="shell-bottomnav-label">{item.label}</span>
               </Link>
             ))}
             <Link
@@ -255,12 +229,13 @@ export default function AppShell({ children }) {
               aria-label="Settings"
             >
               <SettingsIcon className="shell-bottomnav-icon" />
+              <span className="shell-bottomnav-label">Settings</span>
             </Link>
           </nav>
         )}
 
-        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0, transition: 'margin-left 0.2s ease' }}>
-          {currentSection && (
+        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
+          {showSubnav && (
             <div className="section-subnav">
               <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
               {currentSection.children.map(child => (
