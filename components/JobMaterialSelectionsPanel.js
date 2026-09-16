@@ -12,7 +12,7 @@ const STATUS_LABELS = { draft: 'Draft', sent: 'Awaiting Customer', approved: 'Ap
 // they're typically issued to the customer all at once — with a
 // click-to-preview snapshot of exactly what the customer sees on each
 // sheet, without navigating away or risking picking on their behalf.
-export default function JobMaterialSelectionsPanel({ jobId, job }) {
+export default function JobMaterialSelectionsPanel({ jobId, job, section }) {
   const [selections, setSelections] = useState([]);
   const [optionsBySelection, setOptionsBySelection] = useState({});
   const [photoUrls, setPhotoUrls] = useState({});
@@ -55,8 +55,9 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
 
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [issuing, setIssuing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const draftSelections = selections.filter(s => s.status === 'draft');
-  const [activeTab, setActiveTab] = useState('approved');
+  const activeTab = section || 'approved';
 
   const approvedItems = selections
     .filter(s => s.status === 'approved' && s.selected_option_id)
@@ -121,22 +122,34 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
     await load();
   }
 
+  async function deleteSelected() {
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} selection sheet${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    setDeleting(true);
+
+    // Remove any uploaded option photos from storage before deleting the
+    // rows, same cleanup pattern as removePhoto/deleteReceipt elsewhere.
+    const optionsToRemove = ids.flatMap(id => optionsBySelection[id] || []).filter(o => o.photo_storage_path);
+    if (optionsToRemove.length > 0) {
+      await supabase.storage.from('job-photos').remove(optionsToRemove.map(o => o.photo_storage_path));
+    }
+    await supabase.from('material_selection_options').delete().in('selection_id', ids);
+    const { error } = await supabase.from('material_selections').delete().in('id', ids);
+    setDeleting(false);
+    if (error) {
+      alert('Failed to delete: ' + error.message);
+      return;
+    }
+    setCheckedIds(new Set());
+    await load();
+  }
+
   return (
     <div className="card">
-      <h3>Material Selections</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-        {activeTab === 'approved'
-          ? "What's been approved by the customer and ready to order — the shopping list for this job."
-          : "Every selection sheet for this job, grouped together since they're typically issued to the customer all at once. Click a sheet to preview exactly what the customer sees."}
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)', marginBottom: 16 }}>
-        <button className={`tab-section-btn ${activeTab === 'approved' ? 'active' : ''}`} onClick={() => setActiveTab('approved')}>
-          Approved Materials{approvedItems.length > 0 ? ` (${approvedItems.length})` : ''}
-        </button>
-        <button className={`tab-section-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
-          All Sheets
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <h3 style={{ margin: 0 }}>Material Selections</h3>
+        <button className="btn btn-sm" onClick={() => setWizardOpen(true)}>+ New Selection</button>
       </div>
 
       {activeTab === 'approved' && (
@@ -173,16 +186,24 @@ export default function JobMaterialSelectionsPanel({ jobId, job }) {
 
       {activeTab === 'all' && (
         <>
-          <div className="section-actions" style={{ marginTop: 0 }}>
-            <button className="btn btn-sm" onClick={() => setWizardOpen(true)}>+ New Selection</button>
+          <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
             {draftSelections.length > 0 && (
-              <button
-                className="btn btn-primary btn-sm"
-                disabled={checkedIds.size === 0 || issuing}
-                onClick={issueSelected}
-              >
-                {issuing ? 'Issuing…' : `Issue Selected${checkedIds.size > 0 ? ` (${checkedIds.size})` : ''}`}
-              </button>
+              <>
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={checkedIds.size === 0 || issuing}
+                  onClick={issueSelected}
+                >
+                  {issuing ? 'Issuing…' : `Issue Selected${checkedIds.size > 0 ? ` (${checkedIds.size})` : ''}`}
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  disabled={checkedIds.size === 0 || deleting}
+                  onClick={deleteSelected}
+                >
+                  {deleting ? 'Deleting…' : `Delete Selection${checkedIds.size > 0 ? ` (${checkedIds.size})` : ''}`}
+                </button>
+              </>
             )}
           </div>
 

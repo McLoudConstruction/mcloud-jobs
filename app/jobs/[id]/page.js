@@ -92,7 +92,10 @@ const TABS = [
     ],
   },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon },
-  { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
+  { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon, sections: [
+    { key: 'approved', label: 'Approved Materials' },
+    { key: 'all', label: 'All Sheets' },
+  ] },
   // Kept in TABS (so goToTab/#? URL params/the "land somewhere valid"
   // safety effect all still work) but left out of the tab-button row
   // below — each now has its own quick-access button up in the job
@@ -674,7 +677,7 @@ export default function JobDetailPage() {
 
         {tab === 'Material Selections' && (
           phaseForStage(job.stage) !== 'opportunity' ? (
-            <JobMaterialSelectionsPanel jobId={id} job={job} />
+            <JobMaterialSelectionsPanel jobId={id} job={job} section={section} />
           ) : (
             <div className="card">
               <h3>Material Selections</h3>
