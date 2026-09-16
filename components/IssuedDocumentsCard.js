@@ -49,9 +49,6 @@ export default function IssuedDocumentsCard({ jobId, job, updates, changeOrders 
   return (
     <div className="card">
       <h3>Documents</h3>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-        Only what's actually been issued shows up here — an estimate before it's sent, or an invoice before it's issued, won't appear.
-      </div>
       {entries.length === 0 && <div className="empty-state">Nothing issued yet.</div>}
       {entries.map((e, i) => (
         <div className="update-entry" key={i}>

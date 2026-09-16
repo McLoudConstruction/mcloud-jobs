@@ -15,7 +15,7 @@ function fmtDateTime(v) {
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export default function UpdatesCard({ jobId, updates, onChanged }) {
+export default function UpdatesCard({ jobId, updates, onChanged, session }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     update_date: new Date().toISOString().slice(0, 10),
@@ -23,6 +23,39 @@ export default function UpdatesCard({ jobId, updates, onChanged }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [staffNames, setStaffNames] = useState({}); // email -> full_name
+
+  useEffect(() => {
+    supabase.from('staff_users').select('email, full_name').then(({ data }) => {
+      if (data) setStaffNames(Object.fromEntries(data.map(s => [s.email, s.full_name])));
+    });
+  }, []);
+
+  // Opens the compose form with Estimated Completion and Upcoming Work
+  // pre-filled from the Schedule — the last scheduled day, and whatever
+  // trades are due in the next 7 days — both still fully editable.
+  async function openForm() {
+    const { data: phases } = await supabase.from('job_phases').select('*').eq('job_id', jobId);
+    if (phases && phases.length > 0) {
+      const lastEnd = phases.reduce((max, p) => (!max || p.end_date > max ? p.end_date : max), null);
+      const weekOut = new Date();
+      weekOut.setDate(weekOut.getDate() + 7);
+      const upcoming = phases
+        .filter(p => {
+          const start = new Date(p.start_date + 'T00:00:00');
+          return start >= new Date(new Date().setHours(0, 0, 0, 0)) && start <= weekOut;
+        })
+        .sort((a, b) => a.start_date.localeCompare(b.start_date))
+        .map(p => `${fmtDate(p.start_date)} — ${p.label}${p.trade ? ` (${p.trade})` : ''}`)
+        .join('\n');
+      setForm(prev => ({
+        ...prev,
+        estimated_completion: prev.estimated_completion || lastEnd || '',
+        upcoming_work: prev.upcoming_work || upcoming,
+      }));
+    }
+    setShowForm(true);
+  }
 
   // Photos staged while composing — attached to the update at submit time
   // rather than requiring you to save the text first and then find it in
@@ -100,8 +133,12 @@ export default function UpdatesCard({ jobId, updates, onChanged }) {
     return () => supabase.removeChannel(channel);
   }, [showForm, jobId, loadInternalLog]);
 
-  function insertIntoDraft(text) {
-    setForm(prev => ({ ...prev, work_completed: prev.work_completed ? `${prev.work_completed}\n\n${text}` : text }));
+  function insertIntoDraft(entry) {
+    setForm(prev => ({ ...prev, work_completed: prev.work_completed ? `${prev.work_completed}\n\n${entry.issues_notes}` : entry.issues_notes }));
+    const photos = internalPhotos[entry.id] || [];
+    if (photos.length > 0) {
+      setSelectedExisting(prev => [...prev, ...photos.filter(p => !prev.some(s => s.id === p.id))]);
+    }
   }
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
@@ -125,7 +162,11 @@ export default function UpdatesCard({ jobId, updates, onChanged }) {
     // update in the same submit action, instead of needing a second
     // round-trip after the insert to learn the new row's id.
     const updateId = crypto.randomUUID();
-    const { error: insertError } = await supabase.from('job_updates').insert({ id: updateId, job_id: jobId, ...form, estimated_completion: form.estimated_completion || null });
+    const { error: insertError } = await supabase.from('job_updates').insert({
+      id: updateId, job_id: jobId, ...form,
+      estimated_completion: form.estimated_completion || null,
+      created_by_email: session?.user?.email || null,
+    });
     if (insertError) {
       setSaving(false);
       setError(insertError.message);
@@ -286,7 +327,7 @@ export default function UpdatesCard({ jobId, updates, onChanged }) {
                     </div>
                   )}
                   {entry.issues_notes && (
-                    <button type="button" className="btn btn-sm" onClick={() => insertIntoDraft(entry.issues_notes)}>Insert into draft</button>
+                    <button type="button" className="btn btn-sm" onClick={() => insertIntoDraft(entry)}>Insert into draft</button>
                   )}
                 </div>
               ))}
@@ -295,14 +336,17 @@ export default function UpdatesCard({ jobId, updates, onChanged }) {
         </div>
       ) : (
         <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Post new update</button>
+          <button className="btn btn-primary btn-sm" onClick={openForm}>+ Post new update</button>
         </div>
       )}
 
       {updates.length === 0 && <div className="empty-state">No updates posted yet.</div>}
       {updates.map(u => (
         <div className="update-entry" key={u.id}>
-          <div className="update-date">{fmtDate(u.update_date)}</div>
+          <div className="update-date">
+            {fmtDate(u.update_date)}
+            {u.created_by_email && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · {staffNames[u.created_by_email] || u.created_by_email}</span>}
+          </div>
           {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
           {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
           {u.issues_notes && <><div className="update-field-label">Issues / notes</div><p>{u.issues_notes}</p></>}
