@@ -38,7 +38,7 @@ export default function DrawsCard({ jobId }) {
     setError('');
     const { error: insertError } = await supabase.from('invoices').insert({
       job_id: jobId,
-      description: form.description || `Invoice ${draws.length + 1}`,
+      description: form.description || `Progress Invoice ${draws.length + 1}`,
       amount: Math.round(parseFloat(form.amount) * 100) / 100,
       status: 'not_sent',
     });
@@ -59,7 +59,7 @@ export default function DrawsCard({ jobId }) {
   }
 
   async function deleteDraw(d) {
-    if (!confirm('Delete this draw? This cannot be undone.')) return;
+    if (!confirm('Delete this invoice? This cannot be undone.')) return;
     const { error: deleteError } = await supabase.from('invoices').delete().eq('id', d.id);
     if (deleteError) { setError(deleteError.message); return; }
     await loadDraws();
@@ -68,12 +68,12 @@ export default function DrawsCard({ jobId }) {
   if (draws.length === 0 && !showForm) {
     return (
       <div className="card">
-        <h3>Invoices</h3>
+        <h3>Progress Invoicing</h3>
         <div className="empty-state">
           No invoices yet — these are created automatically when the job moves to Approved (Deposit + Final Payment, matching your standard contract terms), or you can add one manually below.
         </div>
         <div className="section-actions">
-          <button className="btn btn-sm" onClick={() => setShowForm(true)}>+ Add an invoice manually</button>
+          <button className="btn btn-sm" onClick={() => setShowForm(true)}>+ Add a progress invoice manually</button>
         </div>
       </div>
     );
@@ -84,7 +84,7 @@ export default function DrawsCard({ jobId }) {
 
   return (
     <div className="card">
-      <h3>Invoices</h3>
+      <h3>Progress Invoicing</h3>
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
         {fmtMoney(paidTotal)} collected of {fmtMoney(total)} across {draws.length} invoice{draws.length === 1 ? '' : 's'}
       </div>
@@ -93,7 +93,7 @@ export default function DrawsCard({ jobId }) {
       {draws.map(d => (
         <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
           <div>
-            <b>{d.description || 'Invoice'}</b> — {fmtMoney(d.amount)}
+            <b>{d.description || 'Progress Invoice'}</b> — {fmtMoney(d.amount)}
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{STATUS_LABELS[d.status]}</div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -111,7 +111,7 @@ export default function DrawsCard({ jobId }) {
       {showForm && (
         <form onSubmit={addDraw} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
-            <div><label>Description</label><input value={form.description} onChange={e => update('description', e.target.value)} placeholder="e.g. Invoice 3 — Rough-in complete" /></div>
+            <div><label>Description</label><input value={form.description} onChange={e => update('description', e.target.value)} placeholder="e.g. Progress Invoice 3 — Rough-in complete" /></div>
             <div><label>Amount ($)</label><input value={form.amount} onChange={e => update('amount', e.target.value)} required /></div>
           </div>
           <div className="section-actions">

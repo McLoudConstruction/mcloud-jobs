@@ -348,8 +348,8 @@ export default function JobDetailPage() {
         const total = Math.round(parseFloat(job.contract_price) * 100) / 100;
         const half = Math.round((total / 2) * 100) / 100;
         await supabase.from('invoices').insert([
-          { job_id: id, description: 'Invoice 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
+          { job_id: id, description: 'Progress Invoice 1 — Deposit', amount: half, status: 'not_sent' },
+          { job_id: id, description: 'Progress Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
         ]);
       }
     }
