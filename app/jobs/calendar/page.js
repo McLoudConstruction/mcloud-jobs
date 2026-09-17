@@ -290,29 +290,47 @@ export default function JobCalendarPage() {
     );
   }
 
+  const viewPicker = (
+    <div className="tab-sections-pills" style={{ margin: 0 }}>
+      <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
+      <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
+      <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
+    </div>
+  );
+  const arrowGroup = (
+    <div className="section-actions" style={{ marginTop: 0 }}>
+      <button className="btn btn-sm" onClick={goPrev}>←</button>
+      <button className="btn btn-sm" onClick={goToday}>Today</button>
+      <button className="btn btn-sm" onClick={goNext}>→</button>
+    </div>
+  );
+
   return (
     <AppShell>
       <div className="container container-wide">
-        <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-          <div className="tab-sections-pills" style={{ margin: 0 }}>
-            <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
-            <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
-            <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-            {!isMobile && (
-              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
-            )}
-            {!(isMobile && view === 'month') && (
-              <div className="section-actions" style={{ marginTop: 0 }}>
-                <button className="btn btn-sm" onClick={goPrev}>←</button>
-                <button className="btn btn-sm" onClick={goToday}>Today</button>
-                <button className="btn btn-sm" onClick={goNext}>→</button>
+        {isMobile ? (
+          <>
+            <div className="top-actions" style={{ marginBottom: view === 'month' ? 18 : 10 }}>
+              <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
+              {view === 'month' && viewPicker}
+            </div>
+            {view !== 'month' && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                {viewPicker}
+                {arrowGroup}
               </div>
             )}
+          </>
+        ) : (
+          <div className="top-actions">
+            <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
+            {viewPicker}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
+              {arrowGroup}
+            </div>
           </div>
-        </div>
+        )}
 
         {isMobile && view === 'month' && (
           <div className="cal-month-chips">
