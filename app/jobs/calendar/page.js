@@ -301,15 +301,15 @@ export default function JobCalendarPage() {
               <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
               <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
             </div>
+            {!isMobile && (
+              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
+            )}
             {!(isMobile && view === 'month') && (
               <div className="section-actions" style={{ marginTop: 0 }}>
                 <button className="btn btn-sm" onClick={goPrev}>←</button>
                 <button className="btn btn-sm" onClick={goToday}>Today</button>
                 <button className="btn btn-sm" onClick={goNext}>→</button>
               </div>
-            )}
-            {!isMobile && (
-              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
             )}
           </div>
         </div>
