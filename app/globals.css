@@ -965,6 +965,49 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }.contact-card .contact-name{ font-weight: 700; font-size: 14.5px; color: var(--heading); }
 .contact-card .contact-meta{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.6; }
 
+/* ---------- Mobile: shared FAB + overflow-menu, used sitewide ---------- */
+/* One floating "+" per mobile page for its primary create action, and one
+   "⋯" overflow trigger for secondary/setup actions — see MobileFab.js and
+   MobileOverflowMenu.js. Kept global (not page-scoped) since this pattern
+   is meant to roll out to every mobile page, not be redefined per page. */
+.mobile-fab-wrap{
+  position: fixed; right: 18px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  z-index: 45; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+.mobile-fab{
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: var(--accent); color: #fff; font-size: 28px; line-height: 1;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.mobile-fab-menu{ display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.mobile-fab-menu-item{
+  white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  min-height: 50px; padding: 0 22px; font-size: 15px; font-weight: 600;
+  border-radius: 10px; display: flex; align-items: center;
+}
+
+.mobile-overflow-wrap{ position: relative; display: inline-block; }
+.mobile-overflow-btn{
+  font-size: 18px; line-height: 1; padding: 6px 12px;
+}
+.mobile-overflow-menu{
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 45;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding: 4px;
+  display: flex; flex-direction: column;
+}
+/* The overflow menu already draws its own border — anything dropped inside
+   it (e.g. AddColumnButton's own .btn) loses its individual border/shadow
+   so the two don't stack into a visible double outline, and fills the
+   menu's width instead of floating an oversized pill inside it. */
+.mobile-overflow-menu .btn{
+  border: none; box-shadow: none; background: transparent; width: 100%;
+  text-align: left; border-radius: 5px; white-space: nowrap;
+}
+.mobile-overflow-menu .btn:hover{ background: var(--panel); color: inherit; }
+
 .sales-route-card{ cursor: pointer; }
 .sales-route-card:hover{ border-color: var(--rust); }
 

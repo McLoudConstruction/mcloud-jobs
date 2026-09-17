@@ -9,6 +9,8 @@ import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
+import MobileFab from '../../components/MobileFab';
+import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
@@ -152,8 +154,6 @@ export default function SubcontractorsPage() {
   const [docViewerError, setDocViewerError] = useState('');
   const fileInputRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
-  const [overflowOpen, setOverflowOpen] = useState(false);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -540,49 +540,20 @@ export default function SubcontractorsPage() {
             </div>
           )}
           {isMobile && (
-            <div className="sub-overflow-wrap">
-              <button
-                className="btn btn-sm sub-overflow-btn"
-                aria-label="More actions"
-                onClick={() => setOverflowOpen(v => !v)}
-              >
-                ⋯
-              </button>
-              {overflowOpen && (
-                <div className="sub-overflow-menu" onClick={() => setOverflowOpen(false)}>
-                  <AddColumnButton addColumn={addColumn} />
-                </div>
-              )}
-            </div>
+            <MobileOverflowMenu>
+              <AddColumnButton addColumn={addColumn} />
+            </MobileOverflowMenu>
           )}
         </div>
 
         {isMobile && (
-          <div className="sub-fab-wrap">
-            {fabOpen && (
-              <div className="sub-fab-menu">
-                <button
-                  className="btn btn-primary btn-sm sub-fab-menu-item"
-                  onClick={() => { setFabOpen(false); setApplyModalOpen(true); setApplyResult(''); }}
-                >
-                  + Invite a Subcontractor
-                </button>
-                <button
-                  className="btn btn-sm sub-fab-menu-item"
-                  onClick={() => { setFabOpen(false); setShowForm(true); }}
-                >
-                  + Add subcontractor manually
-                </button>
-              </div>
-            )}
-            <button
-              className="sub-fab"
-              aria-label={fabOpen ? 'Close menu' : 'Add subcontractor'}
-              onClick={() => setFabOpen(v => !v)}
-            >
-              {fabOpen ? '×' : '+'}
-            </button>
-          </div>
+          <MobileFab
+            label="Add subcontractor"
+            items={[
+              { label: '+ Invite a Subcontractor', primary: true, onClick: () => { setApplyModalOpen(true); setApplyResult(''); } },
+              { label: '+ Add subcontractor manually', onClick: () => setShowForm(true) },
+            ]}
+          />
         )}
 
         {importResult && (
@@ -797,28 +768,6 @@ export default function SubcontractorsPage() {
         </PopupModal>
 
         <style jsx>{`
-          .sub-overflow-wrap{ position: relative; }
-          .sub-overflow-btn{ font-size: 18px; line-height: 1; padding: 6px 12px; }
-          .sub-overflow-menu{
-            position: absolute; top: calc(100% + 6px); right: 0; z-index: 45;
-            background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding: 8px; min-width: 160px;
-          }
-
-          .sub-fab-wrap{
-            position: fixed; right: 18px;
-            bottom: calc(78px + env(safe-area-inset-bottom));
-            z-index: 45; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
-          }
-          .sub-fab{
-            width: 56px; height: 56px; border-radius: 50%; border: none;
-            background: var(--accent); color: #fff; font-size: 28px; line-height: 1;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.3); cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-          }
-          .sub-fab-menu{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-          .sub-fab-menu-item{ white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-
           .sub-mobile-list{ display: flex; flex-direction: column; }
           .sub-mobile-row{
             display: flex; align-items: center; gap: 12px; width: 100%;

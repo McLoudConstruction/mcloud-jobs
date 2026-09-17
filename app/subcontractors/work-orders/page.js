@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import MobileFab from '../../../components/MobileFab';
 import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
 
 const ACTIVE_JOB_STAGES = ['approved', 'scheduled', 'active'];
@@ -25,6 +26,14 @@ export default function WorkOrdersHubPage() {
   const [subcontractors, setSubcontractors] = useState([]);
   const [filterSub, setFilterSub] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   // create mode state
   const [createSubId, setCreateSubId] = useState('');
@@ -108,11 +117,30 @@ export default function WorkOrdersHubPage() {
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Work Orders</h2>
-          <div className="section-actions" style={{ marginTop: 0 }}>
-            <button className={`btn btn-sm ${mode === 'view' ? 'btn-primary' : ''}`} onClick={() => setMode('view')}>View All</button>
-            <button className={`btn btn-sm ${mode === 'create' ? 'btn-primary' : ''}`} onClick={() => setMode('create')}>+ Create Work Orders</button>
-          </div>
+          {!isMobile && (
+            <div className="section-actions" style={{ marginTop: 0 }}>
+              <button className={`btn btn-sm ${mode === 'view' ? 'btn-primary' : ''}`} onClick={() => setMode('view')}>View All</button>
+              <button className={`btn btn-sm ${mode === 'create' ? 'btn-primary' : ''}`} onClick={() => setMode('create')}>+ Create Work Orders</button>
+            </div>
+          )}
         </div>
+
+        {isMobile && (
+          <MobileFab
+            label="Create Work Order"
+            items={[{ label: '+ Create Work Order', primary: true, onClick: () => setMode('create') }]}
+          />
+        )}
+
+        {isMobile && mode === 'create' && (
+          <button
+            className="btn btn-sm"
+            style={{ marginBottom: 12 }}
+            onClick={() => setMode('view')}
+          >
+            ← Back to Work Orders
+          </button>
+        )}
 
         {mode === 'view' && (
           <div className="card">
