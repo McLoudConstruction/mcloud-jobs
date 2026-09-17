@@ -64,9 +64,12 @@ function assignLanes(jobsInWeek) {
 export default function JobCalendarPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
+  const [view, setView] = useState('month'); // 'month' | 'week' | 'day'
   const [monthDate, setMonthDate] = useState(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
+  const [cursorDate, setCursorDate] = useState(() => toDateOnly(new Date()));
   const [jobs, setJobs] = useState([]);
   const [busyEvents, setBusyEvents] = useState([]);
+  const [bidWalks, setBidWalks] = useState([]);
 
   useEffect(() => {
     if (!session) return;
@@ -75,6 +78,19 @@ export default function JobCalendarPage() {
       .then(({ data }) => { if (data) setJobs(data); });
     load();
     const channel = supabase.channel('jobs-calendar').on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, load).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session]);
+
+  // Bid walks / inspections scheduled on leads (Sales page) — plotted as
+  // individual events alongside job bars, not just synced out to a
+  // personal calendar.
+  useEffect(() => {
+    if (!session) return;
+    const load = () => supabase.from('opportunities').select('id, contact_name, project, bid_walk_scheduled_at')
+      .not('bid_walk_scheduled_at', 'is', null)
+      .then(({ data }) => { if (data) setBidWalks(data); });
+    load();
+    const channel = supabase.channel('opportunities-calendar').on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, load).subscribe();
     return () => supabase.removeChannel(channel);
   }, [session]);
 
@@ -102,6 +118,18 @@ export default function JobCalendarPage() {
     return busyEvents.filter(e => new Date(e.start_at) < dayEnd && new Date(e.end_at) > dayStart);
   }
 
+  function bidWalksForDay(date) {
+    const dayStart = toDateOnly(date);
+    const dayEnd = addDays(dayStart, 1);
+    return bidWalks.filter(b => { const at = new Date(b.bid_walk_scheduled_at); return at >= dayStart && at < dayEnd; })
+      .sort((a, b) => new Date(a.bid_walk_scheduled_at) - new Date(b.bid_walk_scheduled_at));
+  }
+
+  function jobsForDay(date) {
+    const day = toDateOnly(date);
+    return jobBars.filter(j => j.start <= day && j.end >= day);
+  }
+
   const jobBars = useMemo(() => jobs.map(j => {
     const start = parseDateOnly(j.scheduled_start_date);
     const end = j.scheduled_end_date ? parseDateOnly(j.scheduled_end_date) : start;
@@ -110,11 +138,68 @@ export default function JobCalendarPage() {
 
   if (loading || !session) return null;
 
-  function goToday() { const t = new Date(); setMonthDate(new Date(t.getFullYear(), t.getMonth(), 1)); }
-  function goPrev() { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)); }
-  function goNext() { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)); }
+  function goToday() {
+    const t = toDateOnly(new Date());
+    setMonthDate(new Date(t.getFullYear(), t.getMonth(), 1));
+    setCursorDate(t);
+  }
+  function goPrev() {
+    if (view === 'month') { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)); return; }
+    setCursorDate(prev => addDays(prev, view === 'week' ? -7 : -1));
+  }
+  function goNext() {
+    if (view === 'month') { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)); return; }
+    setCursorDate(prev => addDays(prev, view === 'week' ? 7 : 1));
+  }
 
   const today = toDateOnly(new Date());
+
+  // The Mon-Fri week containing cursorDate, for the Week agenda view.
+  const cursorWeekStart = addDays(cursorDate, cursorDate.getDay() === 0 ? -6 : 1 - cursorDate.getDay());
+  const cursorWeekDays = Array.from({ length: 5 }, (_, i) => addDays(cursorWeekStart, i));
+
+  function AgendaDay({ date }) {
+    const jobsToday = jobsForDay(date);
+    const walksToday = bidWalksForDay(date);
+    const busyToday = busyForDay(date);
+    const isEmpty = jobsToday.length === 0 && walksToday.length === 0 && busyToday.length === 0;
+    return (
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--heading)' }}>
+            {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </span>
+          {sameDay(date, today) && <span className="badge" style={{ background: 'var(--accent)', color: '#fff' }}>Today</span>}
+        </div>
+        {isEmpty && <div className="empty-state">Nothing scheduled.</div>}
+        {walksToday.map(b => (
+          <div key={b.id} className="job-row" style={{ cursor: 'default' }}>
+            <div className="job-main">
+              <span className="job-number">🔨 {new Date(b.bid_walk_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+              <span className="job-customer">Bid walk — {b.contact_name || 'Lead'}</span>
+              {b.project && <span className="job-address">{b.project}</span>}
+            </div>
+          </div>
+        ))}
+        {jobsToday.map(job => (
+          <div key={job.id} className="job-row" onClick={() => router.push(`/jobs/${job.id}`)}>
+            <div className="job-main">
+              <span className="job-number">{formattedProjectNumber(job)}</span>
+              <span className="job-customer">{job.customer_name || 'Unnamed'}</span>
+            </div>
+            <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+          </div>
+        ))}
+        {busyToday.map((b, i) => (
+          <div key={i} className="job-row" style={{ cursor: 'default', opacity: 0.7 }}>
+            <div className="job-main">
+              <span className="job-customer">📅 {b.title} (personal)</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <AppShell>
@@ -127,11 +212,20 @@ export default function JobCalendarPage() {
             <button className="btn btn-sm" onClick={goNext}>→</button>
           </div>
         </div>
+
+        <div className="tab-sections-pills" style={{ marginBottom: 14 }}>
+          <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
+          <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
+          <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
+        </div>
+
+        {view === 'month' && (
+        <>
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
           {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-          Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. Click any bar to open that job.
+          Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
         </div>
 
         <div className="calendar-grid">
@@ -162,14 +256,24 @@ export default function JobCalendarPage() {
                   style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
                 >
                   <span className="calendar-day-number">{day.date.getDate()}</span>
-                  {busyForDay(day.date).length > 0 && (
-                    <span
-                      title={busyForDay(day.date).map(b => b.title).join(', ')}
-                      style={{ position: 'absolute', top: 4, right: 6, fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                    >
-                      {busyForDay(day.date).length} personal
-                    </span>
-                  )}
+                  <span style={{ position: 'absolute', top: 4, right: 6, display: 'flex', gap: 4 }}>
+                    {bidWalksForDay(day.date).length > 0 && (
+                      <span
+                        title={bidWalksForDay(day.date).map(b => `Bid walk — ${b.contact_name || 'Lead'}`).join(', ')}
+                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                      >
+                        🔨 {bidWalksForDay(day.date).length}
+                      </span>
+                    )}
+                    {busyForDay(day.date).length > 0 && (
+                      <span
+                        title={busyForDay(day.date).map(b => b.title).join(', ')}
+                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                      >
+                        {busyForDay(day.date).length} personal
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
               {placed.map(job => (
@@ -189,6 +293,23 @@ export default function JobCalendarPage() {
 
         {jobBars.length === 0 && (
           <div className="empty-state" style={{ marginTop: 16 }}>No jobs have a Scheduled Start Date set yet.</div>
+        )}
+        </>
+        )}
+
+        {view === 'week' && (
+          <div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+              Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[4].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+            {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
+          </div>
+        )}
+
+        {view === 'day' && (
+          <div>
+            <AgendaDay date={cursorDate} />
+          </div>
         )}
       </div>
     </AppShell>

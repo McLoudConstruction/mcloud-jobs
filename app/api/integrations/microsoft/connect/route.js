@@ -20,7 +20,7 @@ export async function POST(request) {
       redirect_uri: redirectUri,
       response_type: 'code',
       response_mode: 'query',
-      scope: 'offline_access Calendars.ReadWrite User.Read',
+      scope: 'offline_access Calendars.ReadWrite User.Read Mail.Read',
       state,
     });
 

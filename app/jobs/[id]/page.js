@@ -17,6 +17,7 @@ import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
+import EmailThreadCard from '../../../components/EmailThreadCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
@@ -104,6 +105,7 @@ const TABS = [
   { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
   { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
   { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
+  { key: 'Email', label: 'Email', icon: MessagesIcon },
 ];
 
 export default function JobDetailPage() {
@@ -348,8 +350,8 @@ export default function JobDetailPage() {
         const total = Math.round(parseFloat(job.contract_price) * 100) / 100;
         const half = Math.round((total / 2) * 100) / 100;
         await supabase.from('invoices').insert([
-          { job_id: id, description: 'Progress Invoice 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Progress Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
+          { job_id: id, description: 'Invoice 1 — Deposit', amount: half, status: 'not_sent' },
+          { job_id: id, description: 'Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
         ]);
       }
     }
@@ -653,6 +655,10 @@ export default function JobDetailPage() {
 
         {tab === 'Internal Updates' && (
           <InternalUpdatesPanel jobId={id} session={session} />
+        )}
+
+        {tab === 'Email' && (
+          <EmailThreadCard jobId={id} job={job} />
         )}
 
         {tab === 'Documents' && (

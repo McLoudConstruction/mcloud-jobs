@@ -25,7 +25,7 @@ export async function POST(request) {
       response_type: 'code',
       access_type: 'offline',
       prompt: 'consent', // forces a refresh_token on every connect, not just the first
-      scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email',
+      scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly',
       state,
     });
 

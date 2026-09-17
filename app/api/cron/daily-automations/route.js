@@ -3,6 +3,7 @@ import { buildFollowupEmail, buildScheduleReminderEmail, buildProposalFollowupEm
 import nodemailer from 'nodemailer';
 import { logCommunication } from '../../../../lib/logCommunication';
 import { phaseForStage } from '../../../../lib/constants';
+import { tagSubjectWithJob } from '../../../../lib/emailThreading';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -21,12 +22,13 @@ function getTransporter() {
   });
 }
 
-async function sendMail(transporter, { to, subject, html, text, category, jobId }) {
+async function sendMail(transporter, { to, subject, html, text, category, jobId, jobNumber }) {
+  const taggedSubject = jobNumber ? tagSubjectWithJob(subject, jobNumber) : subject;
   try {
-    await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html, text });
-    await logCommunication({ category, toEmail: to, subject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider: 'smtp' });
+    await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: taggedSubject, html, text });
+    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider: 'smtp' });
   } catch (err) {
-    await logCommunication({ category, toEmail: to, subject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'smtp' });
+    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'smtp' });
     throw err;
   }
 }
@@ -127,7 +129,7 @@ export async function GET(request) {
           scheduledStartDate: job.scheduled_start_date,
           daysOut,
         });
-        await sendMail(transporter, { to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id });
+        await sendMail(transporter, { to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id, jobNumber: job.job_number });
         await supabase.from('jobs').update({ schedule_reminders_sent: [...alreadySent, daysOut] }).eq('id', job.id);
         results.reminders_sent++;
       } catch (err) {
@@ -150,7 +152,7 @@ export async function GET(request) {
 
     const { data: jobs } = await supabase
       .from('jobs')
-      .select('id, stage, job_type, customer_email, billing_email, customer_name, proposal_sent_at, proposal_followups_sent_count, proposal_followup_last_sent_at')
+      .select('id, job_number, stage, job_type, customer_email, billing_email, customer_name, proposal_sent_at, proposal_followups_sent_count, proposal_followup_last_sent_at')
       .not('proposal_sent_at', 'is', null)
       .lt('proposal_followups_sent_count', followupCount);
 
@@ -172,7 +174,7 @@ export async function GET(request) {
       try {
         const nextCount = (job.proposal_followups_sent_count || 0) + 1;
         const { subject, html, text } = buildProposalFollowupEmail({ customerName: job.customer_name, jobType: job.job_type, followupNumber: nextCount });
-        await sendMail(transporter, { to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id });
+        await sendMail(transporter, { to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id, jobNumber: job.job_number });
         await supabase.from('jobs').update({
           proposal_followups_sent_count: nextCount,
           proposal_followup_last_sent_at: new Date().toISOString(),
