@@ -30,6 +30,14 @@ export default function PayablePage() {
   const [workOrders, setWorkOrders] = useState([]);
   const [businessExpenses, setBusinessExpenses] = useState([]);
   const [receipts, setReceipts] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [{ data: wo }, { data: be }, { data: r }] = await Promise.all([
@@ -73,7 +81,25 @@ export default function PayablePage() {
         <div className="card">
           <h3>Subcontractor &amp; Vendor Work Orders</h3>
           {workOrders.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
-          {workOrders.length > 0 && (
+          {workOrders.length > 0 && isMobile && (
+            <div className="data-mobile-list">
+              {workOrders.map(wo => (
+                <div
+                  key={wo.id}
+                  className="data-mobile-row"
+                  onClick={() => { if (wo.job_id) window.location.href = `/jobs/${wo.job_id}?tab=Financials`; }}
+                  style={{ cursor: wo.job_id ? 'pointer' : 'default' }}
+                >
+                  <span className="data-mobile-row-text">
+                    <span className="data-mobile-row-title">{wo.companies?.company_name || 'Unknown'}</span>
+                    <span className="data-mobile-row-sub">{wo.jobs ? `#${wo.jobs.job_number}` : '—'} · {WORK_ORDER_STATUS_LABELS[wo.status]} · {agingLabel(daysAgo(wo.issued_at || wo.created_at))}</span>
+                  </span>
+                  <span className="data-mobile-row-amount">{fmtMoney(wo.invoiced_amount ?? wo.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {workOrders.length > 0 && !isMobile && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
@@ -104,7 +130,20 @@ export default function PayablePage() {
         <div className="card">
           <h3>Business Expenses (Overhead)</h3>
           {businessExpenses.length === 0 && <div className="empty-state">None logged yet.</div>}
-          {businessExpenses.length > 0 && (
+          {businessExpenses.length > 0 && isMobile && (
+            <div className="data-mobile-list">
+              {businessExpenses.map(be => (
+                <div key={be.id} className="data-mobile-row">
+                  <span className="data-mobile-row-text">
+                    <span className="data-mobile-row-title">{be.vendor_name || '—'}</span>
+                    <span className="data-mobile-row-sub">{be.category || '—'} · {agingLabel(daysAgo(be.expense_date))}</span>
+                  </span>
+                  <span className="data-mobile-row-amount">{fmtMoney(be.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {businessExpenses.length > 0 && !isMobile && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
@@ -132,7 +171,25 @@ export default function PayablePage() {
         <div className="card">
           <h3>Unpaid Receipts</h3>
           {receipts.length === 0 && <div className="empty-state">None outstanding.</div>}
-          {receipts.length > 0 && (
+          {receipts.length > 0 && isMobile && (
+            <div className="data-mobile-list">
+              {receipts.map(r => (
+                <div
+                  key={r.id}
+                  className="data-mobile-row"
+                  onClick={() => { if (r.job_id) window.location.href = `/jobs/${r.job_id}?tab=Financials`; }}
+                  style={{ cursor: r.job_id ? 'pointer' : 'default' }}
+                >
+                  <span className="data-mobile-row-text">
+                    <span className="data-mobile-row-title">{r.vendor_name || '—'}</span>
+                    <span className="data-mobile-row-sub">{r.jobs ? `#${r.jobs.job_number}` : '—'} · {agingLabel(daysAgo(r.receipt_date))}</span>
+                  </span>
+                  <span className="data-mobile-row-amount">{fmtMoney(r.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {receipts.length > 0 && !isMobile && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>

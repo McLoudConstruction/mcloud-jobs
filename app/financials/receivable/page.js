@@ -28,6 +28,14 @@ export default function ReceivablePage() {
   const { session, loading } = useRequireAuth();
   const [jobs, setJobs] = useState([]);
   const [draws, setDraws] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: inv }] = await Promise.all([
@@ -75,7 +83,20 @@ export default function ReceivablePage() {
         <div className="card">
           <h3>Unpaid Draws (Progress Invoicing)</h3>
           {sortedDraws.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
-          {sortedDraws.length > 0 && (
+          {sortedDraws.length > 0 && isMobile && (
+            <div className="data-mobile-list">
+              {sortedDraws.map(d => (
+                <div key={d.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`} style={{ cursor: 'pointer' }}>
+                  <span className="data-mobile-row-text">
+                    <span className="data-mobile-row-title">{d.jobs?.customer_name || 'Unnamed'}</span>
+                    <span className="data-mobile-row-sub">{d.jobs ? `#${d.jobs.job_number}` : '—'} · {d.description || 'Draw'} · {agingLabel(daysAgo(d.invoiced_at))}</span>
+                  </span>
+                  <span className="data-mobile-row-amount">{fmtMoney(d.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {sortedDraws.length > 0 && !isMobile && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
@@ -106,7 +127,20 @@ export default function ReceivablePage() {
         <div className="card">
           <h3>Unpaid Single Invoices</h3>
           {sortedJobs.length === 0 && <div className="empty-state">Nothing outstanding.</div>}
-          {sortedJobs.length > 0 && (
+          {sortedJobs.length > 0 && isMobile && (
+            <div className="data-mobile-list">
+              {sortedJobs.map(j => (
+                <div key={j.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`} style={{ cursor: 'pointer' }}>
+                  <span className="data-mobile-row-text">
+                    <span className="data-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
+                    <span className="data-mobile-row-sub">#{j.job_number} · {agingLabel(daysAgo(j.invoiced_at))}</span>
+                  </span>
+                  <span className="data-mobile-row-amount">{fmtMoney(j.invoice_amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {sortedJobs.length > 0 && !isMobile && (
             <div className="data-table-wrap">
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>

@@ -269,6 +269,47 @@ a { color: inherit; text-decoration: none; }
   transition: border-color 0.15s;
 }
 .kpi-card:hover{ border-color: var(--rust); }
+.kpi-card.kpi-card-active{ border-color: var(--accent); }
+
+/* Financials — Jobs Cost & Margin as a collapsible accordion (closed by
+   default) instead of one more block stacked under everything else on
+   the page, so landing on Financials doesn't mean scrolling past a
+   heavy table just to see the summary above it. */
+.fin-accordion-header{
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; background: none; border: none; padding: 0; margin: 0;
+  text-align: left; cursor: pointer; font-family: inherit;
+}
+.fin-accordion-meta{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); flex-shrink: 0; }
+.fin-accordion-chevron{ display: inline-block; transition: transform 0.15s ease; }
+.fin-accordion-chevron.open{ transform: rotate(90deg); }
+
+/* Jobs — Cost & Margin as a flat mobile list — see .overdue-mobile-row
+   for the same "less is more" pattern: name + one summary line, no
+   9-column table crammed into a phone width. */
+.fin-job-list{ display: flex; flex-direction: column; width: 100%; min-width: 0; margin-top: 14px; }
+.fin-job-row{ display: block; width: 100%; min-width: 0; padding: 14px 4px; border-bottom: 1px solid var(--line); }
+.fin-job-row:last-child{ border-bottom: none; }
+.fin-job-row:active{ background: var(--panel); }
+.fin-job-row-top{ display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; }
+.fin-job-row-name{ font-size: 14.5px; font-weight: 600; color: var(--heading); min-width: 0; overflow-wrap: break-word; }
+.fin-job-row-margin{ flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--heading); }
+.fin-job-row-sub{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; overflow-wrap: break-word; }
+
+/* Any table (Accounts Payable / Receivable) as a flat mobile list —
+   same pattern again: a title line, a quieter meta line, the amount
+   pinned to the right where a badge would otherwise go. */
+.data-mobile-list{ display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.data-mobile-row{
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  width: 100%; min-width: 0; padding: 14px 4px; border-bottom: 1px solid var(--line);
+}
+.data-mobile-row:last-child{ border-bottom: none; }
+.data-mobile-row:active{ background: var(--panel); }
+.data-mobile-row-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.data-mobile-row-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
+.data-mobile-row-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
+.data-mobile-row-amount{ flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--heading); }
 
 .sub-popup-grid{
   display: grid;

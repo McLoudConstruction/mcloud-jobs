@@ -21,6 +21,19 @@ export default function FinancialDashboardPage() {
   const [receipts, setReceipts] = useState([]);
   const [draws, setDraws] = useState([]);
   const [drillDown, setDrillDown] = useState(null); // 'revenue' | 'costs' | 'ap' | 'ar' | null
+  // Collapsed by default — the Jobs table is the heaviest thing on this
+  // page (9 columns on desktop, and on mobile it's a whole separate card
+  // list), so it stays out of the way until someone actually wants it
+  // rather than adding a permanent scroll-past on every visit.
+  const [jobsOpen, setJobsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: jc }, { data: wo }, { data: be }, { data: r }, { data: inv }] = await Promise.all([
@@ -103,38 +116,58 @@ export default function FinancialDashboardPage() {
     return { ...j, actual, committed, total, margin, marginPercent, projectedMargin, projectedMarginPercent };
   }).filter(j => j.total > 0 || j.contract_price); // only show jobs with any financial activity
 
+  // The Snapshot row — Revenue / Income / Costs / AP / AR — as one set of
+  // tiles shared between the mobile scroll strip and the desktop grid,
+  // instead of writing the five buttons out twice.
+  const kpis = [
+    { key: 'revenue', label: 'Revenue YTD', value: fmtMoney(revenueYtd), sub: `${fmtMoney(revenueMtd)} this month` },
+    { key: 'income', label: 'Income YTD', value: fmtMoney(incomeYtd), sub: `${fmtMoney(incomeMtd)} this month` },
+    { key: 'costs', label: 'Total Job Costs', value: fmtMoney(totalActualCosts + totalCommittedCosts), sub: `${fmtMoney(totalCommittedCosts)} committed` },
+    { key: 'ap', label: 'Open AP', value: fmtMoney(openAP), sub: 'Owed to subs & vendors' },
+    { key: 'ar', label: 'Open AR', value: fmtMoney(openAR), sub: 'Owed by customers' },
+  ];
+
   return (
     <AppShell>
       <div className="container">
         <h2 style={{ margin: '0 0 20px', color: 'var(--heading)' }}>Financials</h2>
 
-        <div className="portal-info-grid" style={{ marginBottom: 4 }}>
-          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'revenue' ? null : 'revenue')}>
-            <div className="portal-info-label">Revenue YTD</div>
-            <div className="portal-info-value">{fmtMoney(revenueYtd)}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(revenueMtd)} this month</div>
-          </button>
-          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'income' ? null : 'income')}>
-            <div className="portal-info-label">Income YTD</div>
-            <div className="portal-info-value">{fmtMoney(incomeYtd)}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(incomeMtd)} this month</div>
-          </button>
-          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'costs' ? null : 'costs')}>
-            <div className="portal-info-label">Total Job Costs</div>
-            <div className="portal-info-value">{fmtMoney(totalActualCosts + totalCommittedCosts)}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMoney(totalCommittedCosts)} committed</div>
-          </button>
-          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'ap' ? null : 'ap')}>
-            <div className="portal-info-label">Open AP</div>
-            <div className="portal-info-value">{fmtMoney(openAP)}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Owed to subs &amp; vendors</div>
-          </button>
-          <button className="kpi-card" onClick={() => setDrillDown(drillDown === 'ar' ? null : 'ar')}>
-            <div className="portal-info-label">Open AR</div>
-            <div className="portal-info-value">{fmtMoney(openAR)}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Owed by customers</div>
-          </button>
-        </div>
+        {isMobile ? (
+          <div
+            className="hide-scrollbar"
+            style={{
+              display: 'flex', gap: 10, width: '100%', minWidth: 0, maxWidth: '100%',
+              overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity',
+            }}
+          >
+            {kpis.map(k => (
+              <button
+                key={k.key}
+                className={`kpi-card ${drillDown === k.key ? 'kpi-card-active' : ''}`}
+                style={{ flexShrink: 0, width: 152, scrollSnapAlign: 'start' }}
+                onClick={() => setDrillDown(drillDown === k.key ? null : k.key)}
+              >
+                <div className="portal-info-label">{k.label}</div>
+                <div className="portal-info-value" style={{ fontSize: 16 }}>{k.value}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 3 }}>{k.sub}</div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="portal-info-grid" style={{ marginBottom: 4 }}>
+            {kpis.map(k => (
+              <button
+                key={k.key}
+                className={`kpi-card ${drillDown === k.key ? 'kpi-card-active' : ''}`}
+                onClick={() => setDrillDown(drillDown === k.key ? null : k.key)}
+              >
+                <div className="portal-info-label">{k.label}</div>
+                <div className="portal-info-value">{k.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{k.sub}</div>
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
           Revenue = contract price the month a job is Approved (sold). Income = cash actually collected.
         </div>
@@ -220,9 +253,30 @@ export default function FinancialDashboardPage() {
         )}
 
         <div className="card">
-          <h3>Jobs — Cost &amp; Margin</h3>
-          {jobRows.length === 0 && <div className="empty-state">No job financial activity yet.</div>}
-          {jobRows.length > 0 && (
+          <button type="button" className="fin-accordion-header" onClick={() => setJobsOpen(o => !o)}>
+            <h3 style={{ margin: 0 }}>Jobs — Cost &amp; Margin</h3>
+            <span className="fin-accordion-meta">
+              {jobRows.length} job{jobRows.length === 1 ? '' : 's'}
+              <span className={`fin-accordion-chevron ${jobsOpen ? 'open' : ''}`}>›</span>
+            </span>
+          </button>
+          {jobsOpen && jobRows.length === 0 && <div className="empty-state">No job financial activity yet.</div>}
+          {jobsOpen && jobRows.length > 0 && isMobile && (
+            <div className="fin-job-list">
+              {jobRows.map(j => (
+                <Link key={j.id} href={`/jobs/${j.id}?tab=Financials`} className="fin-job-row">
+                  <div className="fin-job-row-top">
+                    <span className="fin-job-row-name">#{j.job_number} — {j.customer_name || 'Unnamed'}</span>
+                    <span className="fin-job-row-margin" style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>
+                      {j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="fin-job-row-sub">Contract {fmtMoney(j.contract_price)} · Cost {fmtMoney(j.total)} · Margin {fmtMoney(j.margin)}</div>
+                </Link>
+              ))}
+            </div>
+          )}
+          {jobsOpen && jobRows.length > 0 && !isMobile && (
             <DataTable
               getRowKey={j => j.id}
               onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Financials`}
@@ -249,9 +303,9 @@ export default function FinancialDashboardPage() {
 
 function DrillRow({ href, label, value }) {
   const content = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-      <span>{label}</span>
-      <b>{value}</b>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+      <span style={{ minWidth: 0, overflowWrap: 'break-word' }}>{label}</span>
+      <b style={{ flexShrink: 0 }}>{value}</b>
     </div>
   );
   return href ? <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{content}</Link> : content;
