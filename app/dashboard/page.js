@@ -1,10 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
+import MobileFab from '../../components/MobileFab';
+import ScrollerWithArrows from '../../components/dashboard/ScrollerWithArrows';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { useCompanyForecast, WeatherRibbon } from '../../components/dashboard/WeatherWidgets';
@@ -43,14 +46,28 @@ function StatTile({ value, label, href, warn }) {
 // One labeled group of tiles within the Snapshot section — Cash,
 // Pipeline & Backlog, etc. Just a label and a flowing row, not its own
 // boxed card, so four groups read as one continuous section instead of
-// four separate tiles competing for space.
-function StatGroup({ label, tiles }) {
+// four separate tiles competing for space. On mobile the tiles scroll
+// horizontally (same ScrollerWithArrows pattern as the weather ribbon's
+// Hourly view) instead of wrapping into a cramped multi-row grid.
+function StatGroup({ label, tiles, isMobile }) {
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{label}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
-        {tiles.map(t => <StatTile key={t.label} {...t} />)}
-      </div>
+      {isMobile ? (
+        <div style={{ height: 62 }}>
+          <ScrollerWithArrows ariaLabel={`${label} stats`}>
+            {tiles.map(t => (
+              <div key={t.label} style={{ flexShrink: 0, width: 132, scrollSnapAlign: 'start' }}>
+                <StatTile {...t} />
+              </div>
+            ))}
+          </ScrollerWithArrows>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
+          {tiles.map(t => <StatTile key={t.label} {...t} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -58,10 +75,19 @@ function StatGroup({ label, tiles }) {
 export default function DashboardPage() {
   const { session, loading } = useRequireAuth();
   const { settings } = useSettings();
+  const router = useRouter();
   const [jobs, setJobs] = useState([]);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
   const [manualRouteModalOpen, setManualRouteModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { forecast: companyForecast, loading: weatherLoading, error: weatherError } = useCompanyForecast();
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -240,8 +266,15 @@ export default function DashboardPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Dashboard</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          {!isMobile && <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>}
         </div>
+
+        {isMobile && (
+          <MobileFab
+            label="New Opportunity"
+            items={[{ label: '+ New Opportunity', primary: true, onClick: () => router.push('/jobs/new') }]}
+          />
+        )}
 
         <div className="dashboard-layout">
           <div className="dashboard-main">
@@ -251,9 +284,10 @@ export default function DashboardPage() {
 
             {(show('cash') || show('pipeline_backlog') || show('profitability') || show('schedule_health')) && (
               <div className="dash-section">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
+                <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 18 } : { display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
                   {show('cash') && (
                     <StatGroup
+                      isMobile={isMobile}
                       label="Cash"
                       tiles={[
                         { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
@@ -265,6 +299,7 @@ export default function DashboardPage() {
                   )}
                   {show('pipeline_backlog') && (
                     <StatGroup
+                      isMobile={isMobile}
                       label="Pipeline & Backlog"
                       tiles={[
                         { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
@@ -276,6 +311,7 @@ export default function DashboardPage() {
                   )}
                   {show('profitability') && (
                     <StatGroup
+                      isMobile={isMobile}
                       label="Profitability"
                       tiles={[
                         { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
@@ -287,6 +323,7 @@ export default function DashboardPage() {
                   )}
                   {show('schedule_health') && (
                     <StatGroup
+                      isMobile={isMobile}
                       label="Schedule"
                       tiles={[
                         { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
@@ -301,18 +338,35 @@ export default function DashboardPage() {
             {show('job_counts_by_stage') && (
               <div className="dash-section">
                 <h3>Job counts by stage</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
-                  {STAGE_ORDER.map(s => (
-                    <div key={s} style={{ minWidth: 60 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                      <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
-                    </div>
-                  ))}
-                  <div style={{ minWidth: 60, borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                    <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                {isMobile ? (
+                  <div style={{ height: 58 }}>
+                    <ScrollerWithArrows ariaLabel="job stages">
+                      {STAGE_ORDER.map(s => (
+                        <div key={s} style={{ flexShrink: 0, width: 76, textAlign: 'center', scrollSnapAlign: 'start' }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                          <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                        </div>
+                      ))}
+                      <div style={{ flexShrink: 0, width: 76, textAlign: 'center', borderLeft: '1px solid var(--line)', scrollSnapAlign: 'start' }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                        <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                      </div>
+                    </ScrollerWithArrows>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
+                    {STAGE_ORDER.map(s => (
+                      <div key={s} style={{ minWidth: 60 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                        <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                      </div>
+                    ))}
+                    <div style={{ minWidth: 60, borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
