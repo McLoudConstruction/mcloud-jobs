@@ -295,7 +295,7 @@ export default function JobCalendarPage() {
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
             <div className="tab-sections-pills" style={{ margin: 0 }}>
               <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
               <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
