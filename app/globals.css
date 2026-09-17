@@ -135,6 +135,9 @@ a { color: inherit; text-decoration: none; }
   max-width: 1400px;
   margin: 0 auto;
   padding: 32px 24px 80px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .container-wide{
   max-width: 1400px;
@@ -723,6 +726,24 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .job-row .job-number{ font-size: 11px; color: var(--ink-soft); }
 .job-row .job-customer{ font-weight: 600; font-size: 14.5px; overflow-wrap: break-word; }
 .job-row .job-address{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
+
+/* Overdue Opportunities on mobile — same flat, hairline-divided list
+   pattern as the Subcontractors mobile list (.sub-mobile-row): a status
+   dot plus two lines of text, no card border/shadow/badge. Deliberately
+   narrower on data than the desktop .job-row version — less is more. */
+.overdue-mobile-list{ display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.overdue-mobile-row{
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0;
+  padding: 14px 4px; border-bottom: 1px solid var(--line);
+}
+.overdue-mobile-row:last-child{ border-bottom: none; }
+.overdue-mobile-row:active{ background: var(--panel); }
+.overdue-dot{ flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; }
+.overdue-dot.late{ background: #a13f3f; }
+.overdue-dot.soon{ background: #b8952e; }
+.overdue-mobile-row-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.overdue-mobile-row-name{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
+.overdue-mobile-row-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
 
 .list-row{ display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
 .list-row textarea{ flex: 1; min-height: 44px; }

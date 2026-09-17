@@ -7,7 +7,6 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings, widgetEnabled } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import MobileFab from '../../components/MobileFab';
-import ScrollerWithArrows from '../../components/dashboard/ScrollerWithArrows';
 import RouteBuilderModal from '../../components/RouteBuilderModal';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { useCompanyForecast, WeatherRibbon } from '../../components/dashboard/WeatherWidgets';
@@ -47,28 +46,35 @@ function StatTile({ value, label, href, warn, compact }) {
 // Pipeline & Backlog, etc. Just a label and a flowing row, not its own
 // boxed card, so four groups read as one continuous section instead of
 // four separate tiles competing for space. On mobile the tiles scroll
-// horizontally (same ScrollerWithArrows pattern as the weather ribbon's
-// Hourly view) instead of wrapping into a cramped multi-row grid.
+// horizontally with a plain native swipe — no arrow buttons. Arrows
+// added a second flex layer (button + scroller + button) whose width
+// math kept coming out wrong in practice, letting the row spill past
+// the screen edge instead of actually scrolling; a single overflow-x:
+// auto div has nothing left to get wrong.
 //
 // width: '100%' + minWidth: 0 + overflow: hidden are set explicitly at
-// every level down to the scroller, rather than trusted to flex
+// every level down to the scroll strip, rather than trusted to flex
 // stretch/inheritance — nested plain <div>s between this and the actual
 // flex ancestor don't reliably get a *definite* cross size from stretch
-// alone, so without an explicit width here the scroller below ends up
+// alone, so without an explicit width here the strip below ends up
 // sized to its unconstrained content instead of the visible viewport.
 function StatGroup({ label, tiles, isMobile }) {
   return (
-    <div style={isMobile ? { width: '100%', minWidth: 0 } : undefined}>
+    <div style={isMobile ? { width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' } : undefined}>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{label}</div>
       {isMobile ? (
-        <div style={{ height: 70, width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-          <ScrollerWithArrows ariaLabel={`${label} stats`} gap={8}>
-            {tiles.map(t => (
-              <div key={t.label} style={{ flexShrink: 0, width: 106, scrollSnapAlign: 'start' }}>
-                <StatTile {...t} compact />
-              </div>
-            ))}
-          </ScrollerWithArrows>
+        <div
+          className="hide-scrollbar"
+          style={{
+            display: 'flex', gap: 10, width: '100%', minWidth: 0, maxWidth: '100%',
+            overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity',
+          }}
+        >
+          {tiles.map(t => (
+            <div key={t.label} style={{ flexShrink: 0, width: 106, scrollSnapAlign: 'start' }}>
+              <StatTile {...t} compact />
+            </div>
+          ))}
         </div>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
@@ -202,12 +208,20 @@ export default function DashboardPage() {
       .filter(j => j.invoiced_at && new Date(j.invoiced_at).getFullYear() === thisYear && new Date(j.invoiced_at).getMonth() === thisMonth)
       .reduce((sum, j) => sum + (parseFloat(j.invoice_amount) || 0), 0);
 
-    const overdue = jobs.filter(j =>
-      j.expected_close_date &&
-      new Date(j.expected_close_date) < now &&
-      phaseForStage(j.stage) === 'opportunity' &&
-      j.stage !== 'lost'
-    );
+    // Overdue opportunities: anything already past its expected close
+    // date, plus anything closing within the next 3 days so it surfaces
+    // before it's actually late. daysUntilClose < 0 = overdue (red dot),
+    // 0-3 = due soon (yellow dot) — computed once here so the render
+    // just reads it off each job instead of re-diffing dates per row.
+    const overdue = jobs
+      .filter(j =>
+        j.expected_close_date &&
+        phaseForStage(j.stage) === 'opportunity' &&
+        j.stage !== 'lost'
+      )
+      .map(j => ({ ...j, daysUntilClose: (new Date(j.expected_close_date) - now) / 86400000 }))
+      .filter(j => j.daysUntilClose <= 3)
+      .sort((a, b) => a.daysUntilClose - b.daysUntilClose);
 
     // Backlog: signed, not-yet-finished contract value — approved/
     // scheduled/active, deliberately excluding 'completed' since that
@@ -346,19 +360,23 @@ export default function DashboardPage() {
               <div className="dash-section">
                 <h3>Job counts by stage</h3>
                 {isMobile ? (
-                  <div style={{ height: 58, width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-                    <ScrollerWithArrows ariaLabel="job stages" gap={6}>
-                      {STAGE_ORDER.map(s => (
-                        <div key={s} style={{ flexShrink: 0, width: 62, textAlign: 'center', scrollSnapAlign: 'start' }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                          <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3, lineHeight: 1.2 }}>{STAGE_LABELS[s]}</div>
-                        </div>
-                      ))}
-                      <div style={{ flexShrink: 0, width: 62, textAlign: 'center', borderLeft: '1px solid var(--line)', scrollSnapAlign: 'start' }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                        <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                  <div
+                    className="hide-scrollbar"
+                    style={{
+                      display: 'flex', gap: 6, width: '100%', minWidth: 0, maxWidth: '100%',
+                      overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity',
+                    }}
+                  >
+                    {STAGE_ORDER.map(s => (
+                      <div key={s} style={{ flexShrink: 0, width: 62, textAlign: 'center', scrollSnapAlign: 'start' }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
+                        <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3, lineHeight: 1.2 }}>{STAGE_LABELS[s]}</div>
                       </div>
-                    </ScrollerWithArrows>
+                    ))}
+                    <div style={{ flexShrink: 0, width: 62, textAlign: 'center', borderLeft: '1px solid var(--line)', scrollSnapAlign: 'start' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
+                      <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                    </div>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
@@ -378,10 +396,23 @@ export default function DashboardPage() {
             )}
 
             {show('overdue_opportunities') && (
-              <div className="dash-section">
+              <div className="dash-section" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
                 <h3>Overdue opportunities</h3>
                 {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
-                {stats.overdue.map(job => (
+                {stats.overdue.length > 0 && isMobile && (
+                  <div className="overdue-mobile-list">
+                    {stats.overdue.map(job => (
+                      <Link key={job.id} href={`/jobs/${job.id}`} className="overdue-mobile-row">
+                        <span className={`overdue-dot ${job.daysUntilClose < 0 ? 'late' : 'soon'}`} aria-hidden="true" />
+                        <span className="overdue-mobile-row-text">
+                          <span className="overdue-mobile-row-name">{job.customer_name || 'Unnamed customer'}</span>
+                          <span className="overdue-mobile-row-sub">{formattedProjectNumber(job)} · Close {job.expected_close_date}</span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                {stats.overdue.length > 0 && !isMobile && stats.overdue.map(job => (
                   <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
                     <div className="job-main">
                       <span className="job-number">{formattedProjectNumber(job)}</span>
