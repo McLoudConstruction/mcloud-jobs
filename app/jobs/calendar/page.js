@@ -4,9 +4,11 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import PopupModal from '../../../components/PopupModal';
 import { STAGE_LABELS, formattedProjectNumber } from '../../../lib/constants';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function toDateOnly(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
@@ -64,12 +66,32 @@ function assignLanes(jobsInWeek) {
 export default function JobCalendarPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
+  const [isMobile, setIsMobile] = useState(false);
+  const [defaultViewApplied, setDefaultViewApplied] = useState(false);
   const [view, setView] = useState('month'); // 'month' | 'week' | 'day'
   const [monthDate, setMonthDate] = useState(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
   const [cursorDate, setCursorDate] = useState(() => toDateOnly(new Date()));
   const [jobs, setJobs] = useState([]);
   const [busyEvents, setBusyEvents] = useState([]);
   const [bidWalks, setBidWalks] = useState([]);
+  const [previewJob, setPreviewJob] = useState(null);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
+
+  // Mobile defaults to the agenda-style Week view instead of the dense
+  // Month grid — this only steers the initial view once, so it doesn't
+  // fight a person who deliberately switches to Month afterward.
+  useEffect(() => {
+    if (isMobile && !defaultViewApplied) {
+      setView('week');
+      setDefaultViewApplied(true);
+    }
+  }, [isMobile, defaultViewApplied]);
 
   useEffect(() => {
     if (!session) return;
@@ -151,12 +173,23 @@ export default function JobCalendarPage() {
     if (view === 'month') { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)); return; }
     setCursorDate(prev => addDays(prev, view === 'week' ? 7 : 1));
   }
+  function goToMonth(d) { setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
 
   const today = toDateOnly(new Date());
 
   // The Mon-Fri week containing cursorDate, for the Week agenda view.
   const cursorWeekStart = addDays(cursorDate, cursorDate.getDay() === 0 ? -6 : 1 - cursorDate.getDay());
   const cursorWeekDays = Array.from({ length: 5 }, (_, i) => addDays(cursorWeekStart, i));
+
+  // Mobile month navigation: a horizontally scrollable strip of month
+  // chips (like a Google Calendar month/year switcher) in place of the
+  // prev/Today/next arrows — 3 months back through 8 months ahead of the
+  // real current month, regardless of which month is currently shown.
+  const monthChips = useMemo(() => {
+    const t = new Date();
+    const base = new Date(t.getFullYear(), t.getMonth(), 1);
+    return Array.from({ length: 12 }, (_, i) => new Date(base.getFullYear(), base.getMonth() - 3 + i, 1));
+  }, []);
 
   function AgendaDay({ date }) {
     const jobsToday = jobsForDay(date);
@@ -206,12 +239,28 @@ export default function JobCalendarPage() {
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-          <div className="section-actions" style={{ marginTop: 0 }}>
-            <button className="btn btn-sm" onClick={goPrev}>←</button>
-            <button className="btn btn-sm" onClick={goToday}>Today</button>
-            <button className="btn btn-sm" onClick={goNext}>→</button>
-          </div>
+          {!(isMobile && view === 'month') && (
+            <div className="section-actions" style={{ marginTop: 0 }}>
+              <button className="btn btn-sm" onClick={goPrev}>←</button>
+              <button className="btn btn-sm" onClick={goToday}>Today</button>
+              <button className="btn btn-sm" onClick={goNext}>→</button>
+            </div>
+          )}
         </div>
+
+        {isMobile && view === 'month' && (
+          <div className="cal-month-chips">
+            {monthChips.map(d => (
+              <button
+                key={d.toISOString()}
+                className={`cal-month-chip ${d.getFullYear() === monthDate.getFullYear() && d.getMonth() === monthDate.getMonth() ? 'active' : ''}`}
+                onClick={() => goToMonth(d)}
+              >
+                {MONTH_ABBR[d.getMonth()]}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="tab-sections-pills" style={{ marginBottom: 14 }}>
           <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
@@ -224,9 +273,11 @@ export default function JobCalendarPage() {
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
           {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-          Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
-        </div>
+        {!isMobile && (
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+            Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
+          </div>
+        )}
 
         <div className="calendar-grid">
           {DAY_LABELS.map(d => <div key={d} className="calendar-day-label">{d}</div>)}
@@ -281,10 +332,10 @@ export default function JobCalendarPage() {
                   key={job.id}
                   className={`calendar-bar badge-${job.stage}`}
                   style={{ gridColumn: `${job.startCol + 1} / ${job.endCol + 2}`, gridRow: job.lane + 2 }}
-                  onClick={() => router.push(`/jobs/${job.id}`)}
+                  onClick={() => (isMobile ? setPreviewJob(job) : router.push(`/jobs/${job.id}`))}
                   title={`${formattedProjectNumber(job)} — ${job.customer_name || 'Unnamed'} (${STAGE_LABELS[job.stage]})`}
                 >
-                  {formattedProjectNumber(job)} {job.customer_name || ''}
+                  {isMobile ? (job.customer_name || 'Unnamed') : `${formattedProjectNumber(job)} ${job.customer_name || ''}`}
                 </div>
               ))}
             </div>
@@ -312,6 +363,40 @@ export default function JobCalendarPage() {
           </div>
         )}
       </div>
+
+      <PopupModal open={!!previewJob} onClose={() => setPreviewJob(null)} maxWidth={360}>
+        {previewJob && (
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{formattedProjectNumber(previewJob)}</div>
+            <h3 style={{ margin: '4px 0 10px' }}>{previewJob.customer_name || 'Unnamed'}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <span className={`badge badge-${previewJob.stage}`}>{STAGE_LABELS[previewJob.stage]}</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
+              {previewJob.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {' – '}
+              {previewJob.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+            <div className="section-actions" style={{ marginTop: 16 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => router.push(`/jobs/${previewJob.id}`)}>View job →</button>
+            </div>
+          </div>
+        )}
+      </PopupModal>
+
+      <style jsx>{`
+        .cal-month-chips{
+          display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; padding-bottom: 4px; margin-bottom: 14px;
+        }
+        .cal-month-chips::-webkit-scrollbar{ display: none; }
+        .cal-month-chip{
+          flex-shrink: 0; padding: 7px 16px; border-radius: 20px; border: 1px solid var(--line);
+          background: var(--card-bg); color: var(--ink-soft); font-size: 13px; font-weight: 600;
+          cursor: pointer;
+        }
+        .cal-month-chip.active{ background: var(--accent); border-color: var(--accent); color: #fff; }
+      `}</style>
     </AppShell>
   );
 }
