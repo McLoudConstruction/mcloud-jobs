@@ -69,6 +69,15 @@ function coiStatus(expiresAt) {
   return <span style={{ color: '#3a6b45' }}>Current</span>;
 }
 
+// A single green/red compliance signal for the mobile row list — expired,
+// expiring within 30 days, or missing entirely all read as "needs
+// attention" (red); anything else reads as compliant (green).
+function coiCompliant(expiresAt) {
+  if (!expiresAt) return false;
+  const days = Math.floor((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+  return days > 30;
+}
+
 function SubcontractorStats({ companyId }) {
   const [workOrders, setWorkOrders] = useState(null);
 
@@ -142,6 +151,16 @@ export default function SubcontractorsPage() {
   const [docViewerUrl, setDocViewerUrl] = useState(null); // null | 'loading' | signedUrl
   const [docViewerError, setDocViewerError] = useState('');
   const fileInputRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const [applications, setApplications] = useState([]);
   const [applyModalOpen, setApplyModalOpen] = useState(false);
@@ -509,16 +528,62 @@ export default function SubcontractorsPage() {
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Subcontractors</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
-            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing…' : '↑ Import from Excel'}
-            </button>
-            <button className="btn" onClick={() => { setApplyModalOpen(true); setApplyResult(''); }}>+ Invite a Subcontractor</button>
-            <AddColumnButton addColumn={addColumn} />
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add subcontractor</button>
-          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <button className="btn" onClick={() => { setApplyModalOpen(true); setApplyResult(''); }}>+ Invite a Subcontractor</button>
+              <AddColumnButton addColumn={addColumn} />
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add subcontractor</button>
+            </div>
+          )}
+          {isMobile && (
+            <div className="sub-overflow-wrap">
+              <button
+                className="btn btn-sm sub-overflow-btn"
+                aria-label="More actions"
+                onClick={() => setOverflowOpen(v => !v)}
+              >
+                ⋯
+              </button>
+              {overflowOpen && (
+                <div className="sub-overflow-menu" onClick={() => setOverflowOpen(false)}>
+                  <AddColumnButton addColumn={addColumn} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {isMobile && (
+          <div className="sub-fab-wrap">
+            {fabOpen && (
+              <div className="sub-fab-menu">
+                <button
+                  className="btn btn-primary btn-sm sub-fab-menu-item"
+                  onClick={() => { setFabOpen(false); setApplyModalOpen(true); setApplyResult(''); }}
+                >
+                  + Invite a Subcontractor
+                </button>
+                <button
+                  className="btn btn-sm sub-fab-menu-item"
+                  onClick={() => { setFabOpen(false); setShowForm(true); }}
+                >
+                  + Add subcontractor manually
+                </button>
+              </div>
+            )}
+            <button
+              className="sub-fab"
+              aria-label={fabOpen ? 'Close menu' : 'Add subcontractor'}
+              onClick={() => setFabOpen(v => !v)}
+            >
+              {fabOpen ? '×' : '+'}
+            </button>
+          </div>
+        )}
 
         {importResult && (
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
@@ -731,6 +796,46 @@ export default function SubcontractorsPage() {
           )}
         </PopupModal>
 
+        <style jsx>{`
+          .sub-overflow-wrap{ position: relative; }
+          .sub-overflow-btn{ font-size: 18px; line-height: 1; padding: 6px 12px; }
+          .sub-overflow-menu{
+            position: absolute; top: calc(100% + 6px); right: 0; z-index: 45;
+            background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding: 8px; min-width: 160px;
+          }
+
+          .sub-fab-wrap{
+            position: fixed; right: 18px;
+            bottom: calc(78px + env(safe-area-inset-bottom));
+            z-index: 45; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+          }
+          .sub-fab{
+            width: 56px; height: 56px; border-radius: 50%; border: none;
+            background: var(--accent); color: #fff; font-size: 28px; line-height: 1;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .sub-fab-menu{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+          .sub-fab-menu-item{ white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+          .sub-mobile-list{ display: flex; flex-direction: column; }
+          .sub-mobile-row{
+            display: flex; align-items: center; gap: 12px; width: 100%;
+            padding: 16px 4px; border: none; border-bottom: 1px solid var(--line);
+            background: transparent; text-align: left; cursor: pointer; font-family: inherit;
+          }
+          .sub-mobile-row:active{ background: var(--panel); }
+          .sub-coi-dot{
+            flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%;
+          }
+          .sub-coi-dot.ok{ background: #3a6b45; }
+          .sub-coi-dot.warn{ background: #a13f3f; }
+          .sub-mobile-row-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+          .sub-mobile-row-name{ font-size: 14.5px; font-weight: 600; color: var(--heading); }
+          .sub-mobile-row-contact{ font-size: 12.5px; color: var(--ink-soft); }
+        `}</style>
+
         <style jsx global>{`
           .sub-review-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
           @media (max-width: 560px){ .sub-review-grid{ grid-template-columns: 1fr; } }
@@ -766,7 +871,24 @@ export default function SubcontractorsPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No subcontractors yet.</div>}
-        {filtered.length > 0 && (
+        {filtered.length > 0 && isMobile && (
+          <div className="sub-mobile-list">
+            {filtered.map(c => (
+              <button
+                key={c.id}
+                className="sub-mobile-row"
+                onClick={() => startEdit(c)}
+              >
+                <span className={`sub-coi-dot ${coiCompliant(c.coi_expires_at) ? 'ok' : 'warn'}`} aria-hidden="true" />
+                <span className="sub-mobile-row-text">
+                  <span className="sub-mobile-row-name">{c.company_name}</span>
+                  <span className="sub-mobile-row-contact">{c.contact_name || 'No contact on file'}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={c => c.id}
             onRowClick={startEdit}
