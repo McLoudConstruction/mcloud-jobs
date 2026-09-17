@@ -58,7 +58,7 @@ function StatTile({ value, label, href, warn, compact }) {
 // sized to its unconstrained content instead of the visible viewport.
 function StatGroup({ label, tiles, isMobile }) {
   return (
-    <div style={{ width: '100%', minWidth: 0 }}>
+    <div style={isMobile ? { width: '100%', minWidth: 0 } : undefined}>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{label}</div>
       {isMobile ? (
         <div style={{ height: 70, width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
