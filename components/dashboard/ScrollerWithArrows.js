@@ -48,7 +48,7 @@ export default function ScrollerWithArrows({ children, ariaLabel = 'items', gap 
   }
 
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, height: '100%', maxWidth: '100%' }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, height: '100%', width: '100%', minWidth: 0, maxWidth: '100%' }}>
       <button
         type="button"
         aria-label={`Scroll ${ariaLabel} earlier`}

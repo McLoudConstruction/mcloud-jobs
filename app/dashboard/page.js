@@ -28,11 +28,11 @@ const TARGET_MARGIN_PERCENT = 20;
 // detail behind the number actually lives. Sized generously: the number
 // is the point of a dashboard stat, so it gets to be the biggest thing
 // on the line.
-function StatTile({ value, label, href, warn }) {
+function StatTile({ value, label, href, warn, compact }) {
   const body = (
     <div>
-      <div style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: compact ? 16 : 19, fontWeight: 700, lineHeight: 1.15, color: warn ? '#a13f3f' : 'var(--heading)' }}>{value}</div>
+      <div style={{ fontSize: compact ? 10.5 : 11.5, color: 'var(--ink-soft)', marginTop: 3, lineHeight: 1.25 }}>{label}</div>
     </div>
   );
   if (!href) return body;
@@ -49,16 +49,23 @@ function StatTile({ value, label, href, warn }) {
 // four separate tiles competing for space. On mobile the tiles scroll
 // horizontally (same ScrollerWithArrows pattern as the weather ribbon's
 // Hourly view) instead of wrapping into a cramped multi-row grid.
+//
+// width: '100%' + minWidth: 0 + overflow: hidden are set explicitly at
+// every level down to the scroller, rather than trusted to flex
+// stretch/inheritance — nested plain <div>s between this and the actual
+// flex ancestor don't reliably get a *definite* cross size from stretch
+// alone, so without an explicit width here the scroller below ends up
+// sized to its unconstrained content instead of the visible viewport.
 function StatGroup({ label, tiles, isMobile }) {
   return (
-    <div>
+    <div style={{ width: '100%', minWidth: 0 }}>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>{label}</div>
       {isMobile ? (
-        <div style={{ height: 62 }}>
-          <ScrollerWithArrows ariaLabel={`${label} stats`}>
+        <div style={{ height: 70, width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+          <ScrollerWithArrows ariaLabel={`${label} stats`} gap={8}>
             {tiles.map(t => (
-              <div key={t.label} style={{ flexShrink: 0, width: 132, scrollSnapAlign: 'start' }}>
-                <StatTile {...t} />
+              <div key={t.label} style={{ flexShrink: 0, width: 106, scrollSnapAlign: 'start' }}>
+                <StatTile {...t} compact />
               </div>
             ))}
           </ScrollerWithArrows>
@@ -284,7 +291,7 @@ export default function DashboardPage() {
 
             {(show('cash') || show('pipeline_backlog') || show('profitability') || show('schedule_health')) && (
               <div className="dash-section">
-                <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 18 } : { display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
+                <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 18, width: '100%', minWidth: 0 } : { display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
                   {show('cash') && (
                     <StatGroup
                       isMobile={isMobile}
@@ -339,17 +346,17 @@ export default function DashboardPage() {
               <div className="dash-section">
                 <h3>Job counts by stage</h3>
                 {isMobile ? (
-                  <div style={{ height: 58 }}>
-                    <ScrollerWithArrows ariaLabel="job stages">
+                  <div style={{ height: 58, width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+                    <ScrollerWithArrows ariaLabel="job stages" gap={6}>
                       {STAGE_ORDER.map(s => (
-                        <div key={s} style={{ flexShrink: 0, width: 76, textAlign: 'center', scrollSnapAlign: 'start' }}>
+                        <div key={s} style={{ flexShrink: 0, width: 62, textAlign: 'center', scrollSnapAlign: 'start' }}>
                           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                          <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                          <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3, lineHeight: 1.2 }}>{STAGE_LABELS[s]}</div>
                         </div>
                       ))}
-                      <div style={{ flexShrink: 0, width: 76, textAlign: 'center', borderLeft: '1px solid var(--line)', scrollSnapAlign: 'start' }}>
+                      <div style={{ flexShrink: 0, width: 62, textAlign: 'center', borderLeft: '1px solid var(--line)', scrollSnapAlign: 'start' }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                        <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                        <div style={{ fontSize: 8.5, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
                       </div>
                     </ScrollerWithArrows>
                   </div>
