@@ -5,16 +5,14 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 // used anywhere a row of same-height items (weather hours/days, dashboard
 // stat tiles, stage counts) would otherwise wrap into a cramped grid on a
 // narrow screen. Everything stays reachable without ever scrolling the
-// page itself — only this strip scrolls, and only in the direction that
-// actually has more content.
+// page itself — only this strip scrolls.
 //
-// Correctness note: ResizeObserver on the scroll viewport itself does
-// NOT fire when only its *content* (scrollWidth) changes — the viewport's
-// own box stays the same size as the window doesn't resize. So this
-// watches a separate inner "track" div that wraps the children instead;
-// the track's box size IS the content's total width, and does fire
-// ResizeObserver callbacks whenever items are added, removed, or change
-// size (e.g. async data arriving after first mount).
+// Both arrow buttons are always rendered (never conditionally unmounted)
+// and just disable themselves at each end. Two reasons: it keeps the
+// strip's own layout constant from the very first paint — nothing shifts
+// size when an arrow would otherwise appear/disappear — and it means a
+// broken overflow measurement fails safe (a merely-greyed-out arrow)
+// instead of failing to render navigation at all.
 export default function ScrollerWithArrows({ children, ariaLabel = 'items', gap = 10 }) {
   const scrollerRef = useRef(null);
   const trackRef = useRef(null);
@@ -24,8 +22,6 @@ export default function ScrollerWithArrows({ children, ariaLabel = 'items', gap 
   const updateArrows = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    // A few px of slack — sub-pixel widths on some devices otherwise
-    // leave an arrow visibly stuck on (or off) by a hair.
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
   }, []);
@@ -52,16 +48,15 @@ export default function ScrollerWithArrows({ children, ariaLabel = 'items', gap 
   }
 
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, height: '100%' }}>
-      {canScrollLeft && (
-        <button
-          type="button"
-          aria-label={`Scroll ${ariaLabel} earlier`}
-          onClick={() => scrollByPage(-1)}
-          className="btn btn-sm"
-          style={{ flexShrink: 0, padding: '10px 6px' }}
-        >‹</button>
-      )}
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, height: '100%', maxWidth: '100%' }}>
+      <button
+        type="button"
+        aria-label={`Scroll ${ariaLabel} earlier`}
+        onClick={() => scrollByPage(-1)}
+        disabled={!canScrollLeft}
+        className="btn btn-sm"
+        style={{ flexShrink: 0, padding: '10px 6px', visibility: canScrollLeft ? 'visible' : 'hidden' }}
+      >‹</button>
 
       {/* minWidth: 0 overrides the flex-item default of min-width: auto —
           without it this element refuses to shrink below its children's
@@ -70,22 +65,21 @@ export default function ScrollerWithArrows({ children, ariaLabel = 'items', gap 
       <div
         ref={scrollerRef}
         className="hide-scrollbar"
-        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', flex: 1, minWidth: 0, height: '100%' }}
+        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', flex: '1 1 0%', minWidth: 0, maxWidth: '100%', height: '100%' }}
       >
         <div ref={trackRef} style={{ display: 'flex', gap, height: '100%' }}>
           {children}
         </div>
       </div>
 
-      {canScrollRight && (
-        <button
-          type="button"
-          aria-label={`Scroll ${ariaLabel} later`}
-          onClick={() => scrollByPage(1)}
-          className="btn btn-sm"
-          style={{ flexShrink: 0, padding: '10px 6px' }}
-        >›</button>
-      )}
+      <button
+        type="button"
+        aria-label={`Scroll ${ariaLabel} later`}
+        onClick={() => scrollByPage(1)}
+        disabled={!canScrollRight}
+        className="btn btn-sm"
+        style={{ flexShrink: 0, padding: '10px 6px', visibility: canScrollRight ? 'visible' : 'hidden' }}
+      >›</button>
     </div>
   );
 }

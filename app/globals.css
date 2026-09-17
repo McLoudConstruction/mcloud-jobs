@@ -918,7 +918,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .shell-nav-link.active{ background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
 .shell-nav-divider{ height: 1px; background: var(--panel-line); margin: 4px 14px; flex-shrink: 0; }
 
-.shell-content{ flex: 1; min-width: 0; overflow-y: auto; }
+.shell-content{ flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; }
 
 /* ---------- Mobile: unfixed header + bottom icon nav ---------- */
 .shell-bottomnav{ display: none; }
