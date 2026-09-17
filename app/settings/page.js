@@ -18,8 +18,8 @@ const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'C
 // provider's login screen. Google & Microsoft power two-way calendar
 // sync; QuickBooks powers invoice sync.
 const OAUTH_INTEGRATIONS = [
-  { key: 'google', name: 'Google Calendar', description: 'Two-way sync: job schedules push to your Google Calendar, and your personal events show as busy time on the job calendar.' },
-  { key: 'microsoft', name: 'Microsoft Calendar', description: 'Two-way sync: job schedules push to your Outlook/Microsoft 365 calendar, and your personal events show as busy time on the job calendar.' },
+  { key: 'google', name: 'Google Workspace', description: 'Two-way calendar sync (job schedules push out, personal events show as busy time) plus job-tagged Gmail replies get filed onto the matching job automatically.' },
+  { key: 'microsoft', name: 'Microsoft Outlook', description: 'Two-way calendar sync (job schedules push out, personal events show as busy time) plus job-tagged Outlook replies get filed onto the matching job automatically.' },
   { key: 'quickbooks', name: 'QuickBooks Online', description: 'Log in to your QBO account to sync invoices and payments to your books.' },
 ];
 
@@ -474,7 +474,7 @@ function SettingsPageInner() {
           {(integrationStatus?.google?.connected || integrationStatus?.microsoft?.connected) && (
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
               <button className="btn btn-sm" onClick={syncCalendarNow} disabled={syncingNow}>{syncingNow ? 'Syncing…' : 'Sync calendar now'}</button>
-              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Also runs automatically every 2 hours.</span>
+              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Calendar and email both also sync automatically once a day.</span>
             </div>
           )}
           {integrationsLoading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 }}>Loading…</div>}
