@@ -121,7 +121,7 @@ export function WeatherRibbon({ forecast, loading, error }) {
       {view === 'hourly' && (
         hourly.length > 0 ? (
           <div style={{ height: 90 }}>
-            <ScrollerWithArrows ariaLabel="hours">
+            <ScrollerWithArrows ariaLabel="hours" gap={0}>
               {hourly.slice(0, 24).map((h, i) => (
                 <div
                   key={i}
@@ -143,23 +143,25 @@ export function WeatherRibbon({ forecast, loading, error }) {
       )}
 
       {view === 'weekly' && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px 4px' }}>
-          {days.map((d, i) => {
-            const rain = earliestRainWindow(d.at, hourly);
-            return (
-              <div key={i} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>{dayLetter(d.at, i)}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
-                  <ConditionIcon icon={d.icon} alt={d.condition} size={34} />
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.25 }}>{d.maxF}°</div>
-                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.25 }}>{d.minF}°</div>
+        <div style={{ height: 100 }}>
+          <ScrollerWithArrows ariaLabel="days">
+            {days.map((d, i) => {
+              const rain = earliestRainWindow(d.at, hourly);
+              return (
+                <div key={i} style={{ flexShrink: 0, width: 92, textAlign: 'center', scrollSnapAlign: 'start' }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>{dayLetter(d.at, i)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
+                    <ConditionIcon icon={d.icon} alt={d.condition} size={34} />
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.25 }}>{d.maxF}°</div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.25 }}>{d.minF}°</div>
+                    </div>
                   </div>
+                  {rain?.hasRain && <div style={{ fontSize: 9.5, color: '#4a90c4', marginTop: 2 }}>💧 {rain.label} {rain.pop}%</div>}
                 </div>
-                {rain?.hasRain && <div style={{ fontSize: 9.5, color: '#4a90c4', marginTop: 2 }}>💧 {rain.label} {rain.pop}%</div>}
-              </div>
-            );
-          })}
+              );
+            })}
+          </ScrollerWithArrows>
         </div>
       )}
     </div>

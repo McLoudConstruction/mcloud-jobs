@@ -705,6 +705,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 16px 20px;
   background: var(--card-bg);
   border: 1px solid var(--panel-line);
@@ -714,10 +715,14 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .job-row:hover{ border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 [data-theme="dark"] .job-row{ border-color: #3d3d40; box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 10px rgba(0,0,0,0.35); }
-.job-row .job-main{ display:flex; flex-direction: column; gap: 3px; }
+/* min-width: 0 lets this flex item shrink to fit a narrow screen instead
+   of refusing to go below its text's natural width — without it, a long
+   customer name or address forces the whole row (and the page) wider
+   than the viewport rather than wrapping/truncating in place. */
+.job-row .job-main{ display:flex; flex-direction: column; gap: 3px; min-width: 0; }
 .job-row .job-number{ font-size: 11px; color: var(--ink-soft); }
-.job-row .job-customer{ font-weight: 600; font-size: 14.5px; }
-.job-row .job-address{ font-size: 12.5px; color: var(--ink-soft); }
+.job-row .job-customer{ font-weight: 600; font-size: 14.5px; overflow-wrap: break-word; }
+.job-row .job-address{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
 
 .list-row{ display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
 .list-row textarea{ flex: 1; min-height: 44px; }
