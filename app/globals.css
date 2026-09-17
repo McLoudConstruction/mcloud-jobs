@@ -672,6 +672,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .section-subnav .stage-tab{ flex-shrink: 0; }
 .section-subnav .stage-tab{ text-decoration: none; }
 
+/* Peeking-chip scroll affordance for any horizontally-scrollable tab/chip
+   row (see ScrollFadeRow.js) — a soft edge fade that appears only on the
+   side that still has more to reveal, so a scrollable row never reads as
+   simply clipped. Sits directly on the page background, not a card, so it
+   fades to --bg rather than --card-bg. */
+.scroll-fade-wrap{ position: relative; min-width: 0; }
+.scroll-fade-edge{ position: absolute; top: 0; bottom: 0; width: 28px; pointer-events: none; z-index: 1; }
+.scroll-fade-left{ left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+.scroll-fade-right{ right: 0; background: linear-gradient(to left, var(--bg), transparent); }
+
 /* Sub-sections within a job-detail tab (e.g. Estimate: Scope / Pricing;
    Financials: Overview / Change Orders / Work Orders / Invoicing /
    Receipts). A bordered segmented control rather than floating pills —

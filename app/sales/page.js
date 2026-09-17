@@ -1,11 +1,23 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
+import MobileFab from '../../components/MobileFab';
+import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { formatPhone } from '../../lib/constants';
+
+// Stage -> badge color, reusing the site's existing badge palette rather
+// than inventing new colors just for this page's mobile cards.
+const STAGE_BADGE_CLASS = {
+  prospecting: 'badge-new',
+  contacted: 'badge-proposal_delivered',
+  lost: 'badge-lost',
+  converted: 'badge-approved',
+};
 
 const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
 const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
@@ -15,7 +27,25 @@ const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '
 
 export default function SalesDashboardPage() {
   const { session, loading } = useRequireAuth();
+  const router = useRouter();
   const [opps, setOpps] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedIds, setExpandedIds] = useState(() => new Set());
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
+
+  function toggleExpanded(id) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -189,28 +219,54 @@ export default function SalesDashboardPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn" onClick={() => setManualRouteModalOpen(true)}>Create Sales Route</button>
-            <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
-              {showForm ? 'Cancel' : '+ New Lead'}
-            </button>
-            <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn" onClick={() => setManualRouteModalOpen(true)}>Create Sales Route</button>
+              <button className="btn" onClick={() => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); }}>
+                {showForm ? 'Cancel' : '+ New Lead'}
+              </button>
+              <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+            </div>
+          )}
+        </div>
+        {!isMobile && (
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
+            "New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it's worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.
           </div>
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-          "New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it's worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.
-        </div>
+        )}
+
+        {isMobile && (
+          <MobileFab
+            label="Add"
+            items={[
+              { label: '+ New Lead', onClick: () => { setShowForm(s => !s); setEditingId(null); setForm(EMPTY_FORM); } },
+              { label: '+ New Opportunity', primary: true, onClick: () => router.push('/jobs/new') },
+              { label: 'Create Sales Route', onClick: () => setManualRouteModalOpen(true) },
+            ]}
+          />
+        )}
 
         <div className="card">
           <h3>Pipeline overview</h3>
-          <div className="two-col">
-            {STAGES.map(s => (
-              <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}>
-                <span>{STAGE_LABELS[s]}</span>
-                <span style={{ fontWeight: 700 }}>{stats[s] || 0}</span>
-              </div>
-            ))}
-          </div>
+          {isMobile ? (
+            <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity' }}>
+              {STAGES.map(s => (
+                <div key={s} style={{ flexShrink: 0, minWidth: 96, scrollSnapAlign: 'start', padding: '4px 0' }}>
+                  <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--heading)' }}>{stats[s] || 0}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>{STAGE_LABELS[s]}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="two-col">
+              {STAGES.map(s => (
+                <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}>
+                  <span>{STAGE_LABELS[s]}</span>
+                  <span style={{ fontWeight: 700 }}>{stats[s] || 0}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {showForm && (
@@ -285,17 +341,96 @@ export default function SalesDashboardPage() {
           </div>
         )}
 
-        <div className="stage-tabs">
+        <ScrollFadeRow trackClassName="stage-tabs">
           <button className={`stage-tab ${stageFilter === 'all' ? 'active' : ''}`} onClick={() => setStageFilter('all')}>All ({opps.length})</button>
           {STAGES.map(s => (
             <button key={s} className={`stage-tab ${stageFilter === s ? 'active' : ''}`} onClick={() => setStageFilter(s)}>
               {STAGE_LABELS[s]} ({stats[s] || 0})
             </button>
           ))}
-        </div>
+        </ScrollFadeRow>
 
         {filtered.length === 0 && <div className="empty-state">No opportunities here yet.</div>}
-        {filtered.map(o => (
+
+        {isMobile && filtered.length > 0 && (
+          <div className="opp-mobile-list">
+            {filtered.map(o => {
+              const expanded = expandedIds.has(o.id);
+              const badgeClass = STAGE_BADGE_CLASS[o.stage] || 'badge-new';
+              const badgeLabel = o.stage === 'converted' ? 'Converted' : STAGE_LABELS[o.stage];
+              return (
+                <div className="opp-card" key={o.id}>
+                  <button type="button" className="opp-card-head" onClick={() => toggleExpanded(o.id)}>
+                    <span className="opp-card-text">
+                      <span className="opp-card-title">{o.company || o.contact_name || 'Unnamed'}{o.project ? ` — ${o.project}` : ''}</span>
+                      <span className="opp-card-sub">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
+                    </span>
+                    <span className={`badge ${badgeClass}`} style={{ flexShrink: 0 }}>{badgeLabel}</span>
+                    <span className={`opp-card-chevron ${expanded ? 'open' : ''}`} aria-hidden="true">›</span>
+                  </button>
+
+                  {!expanded && (
+                    <div className="opp-card-primary">
+                      {o.stage === 'converted' ? (
+                        o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>
+                      ) : (
+                        ACTIVE_STAGES.includes(o.stage) && (
+                          <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {expanded && (
+                    <div className="opp-card-details">
+                      {o.stage === 'lost' && o.loss_reason && (
+                        <div className="opp-card-detail-line">Loss reason: {o.loss_reason}</div>
+                      )}
+                      {o.bid_walk_scheduled_at && (
+                        <div className="opp-card-detail-line">
+                          Bid walk scheduled: {new Date(o.bid_walk_scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                      )}
+
+                      {o.stage === 'converted' ? (
+                        o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>
+                      ) : (
+                        <>
+                          <select value={o.stage} onChange={e => setStage(o.id, e.target.value)}>
+                            {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                          </select>
+                          {ACTIVE_STAGES.includes(o.stage) && (
+                            <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
+                          )}
+                          {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <input
+                                type="datetime-local"
+                                style={{ width: 'auto' }}
+                                value={bidWalkDrafts[o.id] || ''}
+                                onChange={e => setBidWalkDrafts(prev => ({ ...prev, [o.id]: e.target.value }))}
+                              />
+                              <button className="btn btn-sm" disabled={!bidWalkDrafts[o.id]} onClick={() => scheduleBidWalk(o.id)}>
+                                Schedule Bid Walk
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      <div className="opp-card-detail-actions">
+                        <button className="btn btn-sm" onClick={() => startEdit(o)}>Edit</button>
+                        <button className="btn btn-sm btn-danger" onClick={() => removeOpp(o.id)}>Delete</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!isMobile && filtered.map(o => (
           <div className="job-row" key={o.id} style={{ flexWrap: 'wrap', gap: 10 }}>
             <div className="job-main">
               <span className="job-customer">{o.company || o.contact_name || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
@@ -339,6 +474,27 @@ export default function SalesDashboardPage() {
             </div>
           </div>
         ))}
+
+        <style jsx>{`
+          .opp-mobile-list{ display: flex; flex-direction: column; }
+          .opp-card{ border-bottom: 1px solid var(--line); }
+          .opp-card:last-child{ border-bottom: none; }
+          .opp-card-head{
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 14px 4px; border: none; background: transparent;
+            text-align: left; cursor: pointer; font-family: inherit;
+          }
+          .opp-card-head:active{ background: var(--panel); }
+          .opp-card-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+          .opp-card-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
+          .opp-card-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
+          .opp-card-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); transition: transform 0.15s; }
+          .opp-card-chevron.open{ transform: rotate(90deg); }
+          .opp-card-primary{ padding: 0 4px 14px; }
+          .opp-card-details{ padding: 0 4px 16px; display: flex; flex-direction: column; gap: 10px; }
+          .opp-card-detail-line{ font-size: 12.5px; color: var(--ink-soft); }
+          .opp-card-detail-actions{ display: flex; gap: 8px; flex-wrap: wrap; }
+        `}</style>
       </div>
       <ManualRouteBuilderModal open={manualRouteModalOpen} onClose={() => setManualRouteModalOpen(false)} />
     </AppShell>

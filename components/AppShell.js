@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
+import ScrollFadeRow from './ScrollFadeRow';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -230,14 +231,14 @@ export default function AppShell({ children }) {
 
         <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
           {showSubnav && (
-            <div className="section-subnav">
+            <ScrollFadeRow trackClassName="section-subnav">
               <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
               {currentSection.children.map(child => (
                 <Link key={child.href} href={child.href} className={`stage-tab ${pathname === child.href || pathname.startsWith(child.href + '/') ? 'active' : ''}`}>
                   {child.label}
                 </Link>
               ))}
-            </div>
+            </ScrollFadeRow>
           )}
           {children}
         </div>
