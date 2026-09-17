@@ -398,7 +398,7 @@ export default function DashboardPage() {
             {show('overdue_opportunities') && (
               <div className="dash-section" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
                 <h3>Overdue opportunities</h3>
-                {stats.overdue.length === 0 && <div className="empty-state">Nothing overdue.</div>}
+                {stats.overdue.length === 0 && <div className="dash-empty-state">Nothing overdue.</div>}
                 {stats.overdue.length > 0 && isMobile && (
                   <div className="overdue-mobile-list">
                     {stats.overdue.map(job => (
