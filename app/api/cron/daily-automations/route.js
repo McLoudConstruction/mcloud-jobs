@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import { logCommunication } from '../../../../lib/logCommunication';
 import { phaseForStage } from '../../../../lib/constants';
 import { tagSubjectWithJob } from '../../../../lib/emailThreading';
+import { syncConnectionEmail } from '../../../../lib/integrations/emailSync';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -186,6 +187,30 @@ export async function GET(request) {
     }
   } catch (err) {
     results.errors.push(`Proposal follow-up query failed: ${err.message}`);
+  }
+
+  // ── Inbound email sync — folded in here rather than its own cron
+  // entry. Hobby-plan Vercel caps cron at 2 jobs total, both daily-only;
+  // a separate more-frequent schedule for this exceeded both limits at
+  // once. Runs once a day, same as everything else in this route, and
+  // /api/cron/sync-email still exists standalone for a manual/admin
+  // trigger if a faster check is ever needed by hand.
+  try {
+    const { data: connections } = await supabase
+      .from('integration_connections')
+      .select('*')
+      .in('provider', ['google', 'microsoft']);
+    results.email_synced = 0;
+    for (const connection of connections || []) {
+      try {
+        const { synced } = await syncConnectionEmail(connection);
+        results.email_synced += synced || 0;
+      } catch (err) {
+        results.errors.push(`Email sync (${connection.provider}, staff ${connection.staff_id}): ${err.message}`);
+      }
+    }
+  } catch (err) {
+    results.errors.push(`Email sync query failed: ${err.message}`);
   }
 
   return Response.json(results);

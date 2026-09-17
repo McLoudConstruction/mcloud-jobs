@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/calendar-sync",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/sync-email",
-      "schedule": "0 */2 * * *"
     }
   ]
 }
