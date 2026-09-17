@@ -1,11 +1,13 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
-import { STAGE_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import MobileFab from '../../../components/MobileFab';
+import NewEventModal from '../../../components/NewEventModal';
+import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -17,6 +19,12 @@ function parseDateOnly(s) {
   if (!s) return null;
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
+}
+function formatEventTime(t) {
+  if (!t) return 'All day';
+  const [h, m] = t.split(':').map(Number);
+  const d = new Date(2000, 0, 1, h, m);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 // Mon=0 .. Fri=4. Weekend dates clamp to the nearest weekday column so a
 // job spanning a weekend still renders as one continuous bar across the
@@ -75,6 +83,11 @@ export default function JobCalendarPage() {
   const [busyEvents, setBusyEvents] = useState([]);
   const [bidWalks, setBidWalks] = useState([]);
   const [previewJob, setPreviewJob] = useState(null);
+  const [scheduleEvents, setScheduleEvents] = useState([]);
+  const [staffById, setStaffById] = useState({});
+  const [showNewEvent, setShowNewEvent] = useState(false);
+  const [previewEvent, setPreviewEvent] = useState(null);
+  const [deletingEvent, setDeletingEvent] = useState(false);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -116,6 +129,23 @@ export default function JobCalendarPage() {
     return () => supabase.removeChannel(channel);
   }, [session]);
 
+  // Manually-created calendar events (schedule_events) from the "New
+  // Event" flow, plus the active staff directory so an event's
+  // assigned-staff ids can be shown as names in the preview popup.
+  const loadScheduleEvents = useCallback(async () => {
+    const { data } = await supabase.from('schedule_events').select('*').order('event_date', { ascending: true });
+    if (data) setScheduleEvents(data);
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    loadScheduleEvents();
+    supabase.from('staff_users').select('id, full_name').eq('status', 'active').then(({ data }) => {
+      if (data) setStaffById(Object.fromEntries(data.map(s => [s.id, s.full_name])));
+    });
+    const channel = supabase.channel('schedule-events-calendar').on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_events' }, loadScheduleEvents).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session, loadScheduleEvents]);
+
   const weeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
 
   // Personal calendar events (Google/Microsoft) synced in via
@@ -147,6 +177,12 @@ export default function JobCalendarPage() {
       .sort((a, b) => new Date(a.bid_walk_scheduled_at) - new Date(b.bid_walk_scheduled_at));
   }
 
+  function scheduleEventsForDay(date) {
+    const day = toDateOnly(date);
+    return scheduleEvents.filter(ev => sameDay(parseDateOnly(ev.event_date), day))
+      .sort((a, b) => (a.event_time || '').localeCompare(b.event_time || ''));
+  }
+
   function jobsForDay(date) {
     const day = toDateOnly(date);
     return jobBars.filter(j => j.start <= day && j.end >= day);
@@ -175,6 +211,16 @@ export default function JobCalendarPage() {
   }
   function goToMonth(d) { setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
 
+  async function deleteScheduleEvent(id) {
+    if (!confirm('Delete this event?')) return;
+    setDeletingEvent(true);
+    const { error } = await supabase.from('schedule_events').delete().eq('id', id);
+    setDeletingEvent(false);
+    if (error) { alert('Failed to delete: ' + error.message); return; }
+    setPreviewEvent(null);
+    await loadScheduleEvents();
+  }
+
   const today = toDateOnly(new Date());
 
   // The Mon-Fri week containing cursorDate, for the Week agenda view.
@@ -195,7 +241,8 @@ export default function JobCalendarPage() {
     const jobsToday = jobsForDay(date);
     const walksToday = bidWalksForDay(date);
     const busyToday = busyForDay(date);
-    const isEmpty = jobsToday.length === 0 && walksToday.length === 0 && busyToday.length === 0;
+    const eventsToday = scheduleEventsForDay(date);
+    const isEmpty = jobsToday.length === 0 && walksToday.length === 0 && busyToday.length === 0 && eventsToday.length === 0;
     return (
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
@@ -205,6 +252,15 @@ export default function JobCalendarPage() {
           {sameDay(date, today) && <span className="badge" style={{ background: 'var(--accent)', color: '#fff' }}>Today</span>}
         </div>
         {isEmpty && <div className="empty-state">Nothing scheduled.</div>}
+        {eventsToday.map(ev => (
+          <div key={ev.id} className="job-row" onClick={() => setPreviewEvent(ev)}>
+            <div className="job-main">
+              <span className="job-number">📌 {formatEventTime(ev.event_time)}</span>
+              <span className="job-customer">{ev.description || EVENT_TYPE_LABELS[ev.event_type]}</span>
+            </div>
+            <span className="badge">{EVENT_TYPE_LABELS[ev.event_type]}</span>
+          </div>
+        ))}
         {walksToday.map(b => (
           <div key={b.id} className="job-row" style={{ cursor: 'default' }}>
             <div className="job-main">
@@ -239,13 +295,23 @@ export default function JobCalendarPage() {
       <div className="container container-wide">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-          {!(isMobile && view === 'month') && (
-            <div className="section-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-sm" onClick={goPrev}>←</button>
-              <button className="btn btn-sm" onClick={goToday}>Today</button>
-              <button className="btn btn-sm" onClick={goNext}>→</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div className="tab-sections-pills" style={{ margin: 0 }}>
+              <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
+              <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
+              <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
             </div>
-          )}
+            {!(isMobile && view === 'month') && (
+              <div className="section-actions" style={{ marginTop: 0 }}>
+                <button className="btn btn-sm" onClick={goPrev}>←</button>
+                <button className="btn btn-sm" onClick={goToday}>Today</button>
+                <button className="btn btn-sm" onClick={goNext}>→</button>
+              </div>
+            )}
+            {!isMobile && (
+              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
+            )}
+          </div>
         </div>
 
         {isMobile && view === 'month' && (
@@ -261,12 +327,6 @@ export default function JobCalendarPage() {
             ))}
           </div>
         )}
-
-        <div className="tab-sections-pills" style={{ marginBottom: 14 }}>
-          <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
-          <button type="button" className={`tab-section-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
-          <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
-        </div>
 
         {view === 'month' && (
         <>
@@ -308,6 +368,14 @@ export default function JobCalendarPage() {
                 >
                   <span className="calendar-day-number">{day.date.getDate()}</span>
                   <span style={{ position: 'absolute', top: 4, right: 6, display: 'flex', gap: 4 }}>
+                    {scheduleEventsForDay(day.date).length > 0 && (
+                      <span
+                        title={scheduleEventsForDay(day.date).map(ev => `${EVENT_TYPE_LABELS[ev.event_type]} — ${ev.description || 'No description'}`).join(', ')}
+                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                      >
+                        📌 {scheduleEventsForDay(day.date).length}
+                      </span>
+                    )}
                     {bidWalksForDay(day.date).length > 0 && (
                       <span
                         title={bidWalksForDay(day.date).map(b => `Bid walk — ${b.contact_name || 'Lead'}`).join(', ')}
@@ -363,6 +431,43 @@ export default function JobCalendarPage() {
           </div>
         )}
       </div>
+
+      {isMobile && (
+        <MobileFab
+          label="New Event"
+          items={[{ label: '+ New Event', primary: true, onClick: () => setShowNewEvent(true) }]}
+        />
+      )}
+
+      <NewEventModal
+        open={showNewEvent}
+        onClose={() => setShowNewEvent(false)}
+        onCreated={loadScheduleEvents}
+        defaultDate={cursorDate ? `${cursorDate.getFullYear()}-${String(cursorDate.getMonth() + 1).padStart(2, '0')}-${String(cursorDate.getDate()).padStart(2, '0')}` : undefined}
+      />
+
+      <PopupModal open={!!previewEvent} onClose={() => setPreviewEvent(null)} maxWidth={380}>
+        {previewEvent && (
+          <div>
+            <span className="badge">{EVENT_TYPE_LABELS[previewEvent.event_type]}</span>
+            <h3 style={{ margin: '8px 0 4px' }}>{previewEvent.description || EVENT_TYPE_LABELS[previewEvent.event_type]}</h3>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+              {parseDateOnly(previewEvent.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              {' · '}{formatEventTime(previewEvent.event_time)}
+            </div>
+            {previewEvent.assigned_staff_ids?.length > 0 && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
+                With: {previewEvent.assigned_staff_ids.map(id => staffById[id] || 'Unknown').join(', ')}
+              </div>
+            )}
+            <div className="section-actions" style={{ marginTop: 16 }}>
+              <button className="btn btn-sm btn-danger" disabled={deletingEvent} onClick={() => deleteScheduleEvent(previewEvent.id)}>
+                {deletingEvent ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        )}
+      </PopupModal>
 
       <PopupModal open={!!previewJob} onClose={() => setPreviewJob(null)} maxWidth={360}>
         {previewJob && (
