@@ -30,6 +30,13 @@
   --accent: var(--rust);
   --accent-hover: var(--rust-dim);
 
+  /* Mobile FAB menu — the top (primary) item is always this fixed blue
+     regardless of the configured brand accent color, so "the primary
+     action" reads the same way on every FAB across the app; non-primary
+     items are plain white pills (see .mobile-fab-menu-item below). */
+  --fab-primary: #2f4858;
+  --fab-primary-hover: #24363f;
+
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 
   /* Schedule page — one hue per trade (SERVICES_OFFERED), so a phase's
@@ -84,6 +91,9 @@
 
   --accent: var(--rust);
   --accent-hover: var(--rust-dim);
+
+  --fab-primary: #3f6579;
+  --fab-primary-hover: #4d7890;
 
   --trade-framing: hsl(0, 50%, 64%);
   --trade-roofing: hsl(17, 50%, 64%);
@@ -1075,11 +1085,22 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex; align-items: center; justify-content: center;
 }
 .mobile-fab-menu{ display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+/* Every FAB menu's top item is the fixed --fab-primary blue; every other
+   item is a plain white pill with a border and shadow (not transparent —
+   floating over varied content, a transparent .btn background would pick
+   up whatever's directly behind it). MobileFab.js already sorts the
+   `primary` item to the top and gives it the .btn-primary class, so the
+   compound selector below is all that's needed to recolor it. */
 .mobile-fab-menu-item{
   white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   min-height: 50px; padding: 0 22px; font-size: 15px; font-weight: 600;
   border-radius: 10px; display: flex; align-items: center;
+  background: #ffffff; color: var(--heading); border: 1px solid var(--panel-line);
 }
+.mobile-fab-menu-item.btn-primary{
+  background: var(--fab-primary); color: #ffffff; border-color: var(--fab-primary);
+}
+.mobile-fab-menu-item.btn-primary:hover{ background: var(--fab-primary-hover); border-color: var(--fab-primary-hover); color: #fff; }
 
 .mobile-overflow-wrap{ position: relative; display: inline-block; }
 .mobile-overflow-btn{
@@ -1100,6 +1121,46 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   text-align: left; border-radius: 5px; white-space: nowrap;
 }
 .mobile-overflow-menu .btn:hover{ background: var(--panel); color: inherit; }
+
+/* ---------- BidWalkScheduler: calendar step + Apple-style wheel step ---------- */
+.dt-picker-title{ font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 14px; }
+.dt-picker-banner{ background: var(--panel); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+.dt-picker-banner-year{ font-size: 12px; color: var(--ink-soft); }
+.dt-picker-banner-day{ font-size: 19px; font-weight: 700; color: var(--heading); margin-top: 2px; }
+.dt-picker-monthnav{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 13.5px; font-weight: 600; color: var(--heading); }
+.dt-picker-monthnav button{ background: none; border: none; font-size: 19px; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 4px 10px; }
+.dt-picker-monthnav button:hover{ color: var(--accent); }
+.dt-picker-weekdays{ display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10.5px; color: var(--ink-soft); font-weight: 700; margin-bottom: 4px; }
+.dt-picker-days{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dt-picker-day{
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; border-radius: 50%; font-size: 13px; color: var(--ink);
+  cursor: pointer; font-family: inherit;
+}
+.dt-picker-day:hover{ background: var(--panel); }
+.dt-picker-day.today{ color: var(--accent); font-weight: 700; }
+.dt-picker-day.selected{ background: var(--accent); color: #fff; font-weight: 700; }
+
+.dt-picker-subtitle{ display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-soft); margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+.dt-picker-changedate{ background: none; border: none; color: var(--accent); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 0; font-family: inherit; }
+
+.dt-picker-wheels{ position: relative; display: flex; justify-content: center; align-items: center; gap: 2px; }
+.dt-picker-wheel-highlight{
+  position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%);
+  height: 40px; background: var(--panel); border-radius: 8px; pointer-events: none; z-index: 0;
+}
+.dt-wheel{
+  position: relative; height: 200px; width: 72px; overflow-y: auto;
+  scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; z-index: 1;
+}
+.dt-wheel::-webkit-scrollbar{ display: none; }
+.dt-wheel-item{
+  height: 40px; display: flex; align-items: center; justify-content: center;
+  scroll-snap-align: center; font-size: 15px; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.dt-wheel-item.selected{ color: var(--heading); font-weight: 700; font-size: 17px; }
 
 .sales-route-card{ cursor: pointer; }
 .sales-route-card:hover{ border-color: var(--rust); }

@@ -5,7 +5,9 @@ import { useState } from 'react';
 // items: [{ label, onClick, primary? }] — with one item, tapping the FAB
 // fires it directly (no menu). With more than one, tapping the FAB opens
 // a small stack of full-size buttons above it; `primary` puts an item at
-// the top of that stack in the accent color.
+// the top of that stack. The top item is always the fixed --fab-primary
+// blue (see .mobile-fab-menu-item in globals.css) — every other item is a
+// plain white pill with a border and shadow, on every FAB in the app.
 export default function MobileFab({ items, label = 'Add' }) {
   const [open, setOpen] = useState(false);
   const list = (items || []).filter(Boolean);

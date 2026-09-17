@@ -8,6 +8,7 @@ import AppShell from '../../components/AppShell';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import MobileFab from '../../components/MobileFab';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
+import BidWalkScheduler from '../../components/BidWalkScheduler';
 import { formatPhone } from '../../lib/constants';
 
 // Stage -> badge color, reusing the site's existing badge palette rather
@@ -174,15 +175,20 @@ export default function SalesDashboardPage() {
     window.location.href = `/jobs/new?opp=${id}`;
   }
 
-  const [bidWalkDrafts, setBidWalkDrafts] = useState({});
+  // Which opportunity's bid walk is currently being scheduled — drives the
+  // BidWalkScheduler popup below. The date/time itself is no longer kept
+  // as per-row draft state (there's nothing to draft once picking one
+  // opens a dedicated picker instead of an inline field).
+  const [schedulingId, setSchedulingId] = useState(null);
 
   // Scheduling a bid walk/inspection is treated as the qualifying moment
   // for a lead — as soon as a date is set, this walks straight into the
   // same "Convert to Opportunity" flow the manual button uses, instead
   // of leaving conversion as a separate step someone has to remember
-  // to do later.
-  async function scheduleBidWalk(id) {
-    const value = bidWalkDrafts[id];
+  // to do later. `value` is a "YYYY-MM-DDTHH:mm" local-time string, the
+  // same shape BidWalkScheduler and the old datetime-local input both
+  // produce.
+  async function scheduleBidWalk(id, value) {
     if (!value) return;
     const { error } = await supabase.from('opportunities').update({ bid_walk_scheduled_at: new Date(value).toISOString() }).eq('id', id);
     if (error) { setSaveError(error.message); return; }
@@ -246,14 +252,19 @@ export default function SalesDashboardPage() {
           />
         )}
 
-        <div className="card">
+        <div className="card" style={isMobile ? { padding: '16px 14px' } : undefined}>
           <h3>Pipeline overview</h3>
           {isMobile ? (
-            <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity' }}>
+            // Only 4 stages — a compact 4-column grid fits all of them on
+            // screen at once, rather than a horizontal scroll strip that
+            // clips the last one (the exact "hint at more, don't make it
+            // obvious you can swipe" problem this redesign is fixing
+            // elsewhere; here the real fix is just not needing to scroll).
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
               {STAGES.map(s => (
-                <div key={s} style={{ flexShrink: 0, minWidth: 96, scrollSnapAlign: 'start', padding: '4px 0' }}>
-                  <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--heading)' }}>{stats[s] || 0}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>{STAGE_LABELS[s]}</div>
+                <div key={s} style={{ textAlign: 'center', padding: '4px 2px' }}>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.1 }}>{stats[s] || 0}</div>
+                  <div style={{ fontSize: 9.5, color: 'var(--ink-soft)', marginTop: 3, lineHeight: 1.25 }}>{STAGE_LABELS[s]}</div>
                 </div>
               ))}
             </div>
@@ -403,17 +414,9 @@ export default function SalesDashboardPage() {
                             <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
                           )}
                           {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <input
-                                type="datetime-local"
-                                style={{ width: 'auto' }}
-                                value={bidWalkDrafts[o.id] || ''}
-                                onChange={e => setBidWalkDrafts(prev => ({ ...prev, [o.id]: e.target.value }))}
-                              />
-                              <button className="btn btn-sm" disabled={!bidWalkDrafts[o.id]} onClick={() => scheduleBidWalk(o.id)}>
-                                Schedule Bid Walk
-                              </button>
-                            </div>
+                            <button className="btn btn-sm" onClick={() => setSchedulingId(o.id)}>
+                              Schedule Bid Walk
+                            </button>
                           )}
                         </>
                       )}
@@ -455,17 +458,9 @@ export default function SalesDashboardPage() {
                     <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
                   )}
                   {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
-                    <>
-                      <input
-                        type="datetime-local"
-                        style={{ width: 'auto' }}
-                        value={bidWalkDrafts[o.id] || ''}
-                        onChange={e => setBidWalkDrafts(prev => ({ ...prev, [o.id]: e.target.value }))}
-                      />
-                      <button className="btn btn-sm" disabled={!bidWalkDrafts[o.id]} onClick={() => scheduleBidWalk(o.id)}>
-                        Schedule Bid Walk
-                      </button>
-                    </>
+                    <button className="btn btn-sm" onClick={() => setSchedulingId(o.id)}>
+                      Schedule Bid Walk
+                    </button>
                   )}
                 </>
               )}
@@ -497,6 +492,11 @@ export default function SalesDashboardPage() {
         `}</style>
       </div>
       <ManualRouteBuilderModal open={manualRouteModalOpen} onClose={() => setManualRouteModalOpen(false)} />
+      <BidWalkScheduler
+        open={!!schedulingId}
+        onCancel={() => setSchedulingId(null)}
+        onConfirm={value => { const id = schedulingId; setSchedulingId(null); scheduleBidWalk(id, value); }}
+      />
     </AppShell>
   );
 }
