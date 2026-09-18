@@ -4,7 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import SubPortalShell from '../../../../components/SubPortalShell';
-import { RFP_RECIPIENT_STATUS_LABELS } from '../../../../lib/constants';
+import RfpMessageThread from '../../../../components/RfpMessageThread';
+import { RFP_RECIPIENT_STATUS_LABELS, projectLabel } from '../../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -20,7 +21,14 @@ export default function SubPortalRfpDetailPage() {
   const [recipient, setRecipient] = useState(null);
   const [photoUrls, setPhotoUrls] = useState([]);
 
-  const [proposalText, setProposalText] = useState('');
+  // Structured proposal fields — replaces the old single free-text box.
+  // "Upload Proposal" is the actual bid document; amount/duration/
+  // exclusions are real fields staff can scan across bids instead of
+  // hunting for them inside a paragraph.
+  const [proposalAmount, setProposalAmount] = useState('');
+  const [proposalDuration, setProposalDuration] = useState('');
+  const [proposalExclusions, setProposalExclusions] = useState('');
+  const [proposalNotes, setProposalNotes] = useState('');
   const [files, setFiles] = useState([]); // already-uploaded [{name, storage_path}]
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,13 +45,16 @@ export default function SubPortalRfpDetailPage() {
   const load = useCallback(async (email) => {
     const { data: rrData } = await supabase
       .from('rfp_recipients')
-      .select('*, companies(id, company_name, contact_email), rfps(*, jobs(job_number, project_address))')
+      .select('*, companies(id, company_name, contact_email), rfps(*, jobs(job_number, estimate_number, stage, project_address))')
       .eq('id', recipientId)
       .single();
     if (!rrData) return;
     setRecipient(rrData);
     setRole(rrData.companies?.contact_email === email ? 'admin' : 'crew');
-    setProposalText(rrData.proposal_text || '');
+    setProposalAmount(rrData.proposal_amount ?? '');
+    setProposalDuration(rrData.proposal_duration || '');
+    setProposalExclusions(rrData.proposal_exclusions || '');
+    setProposalNotes(rrData.proposal_text || '');
     setFiles(Array.isArray(rrData.proposal_files) ? rrData.proposal_files : []);
 
     if (rrData.status === 'sent') {
@@ -98,12 +109,18 @@ export default function SubPortalRfpDetailPage() {
 
   async function handleSubmit() {
     setError('');
-    if (!proposalText.trim() && files.length === 0) { setError('Add a note or a file before submitting.'); return; }
+    if (files.length === 0 && !String(proposalAmount).trim()) {
+      setError('Upload your proposal document or at least enter a bid amount before submitting.');
+      return;
+    }
     setSaving(true);
     const { error: rpcErr } = await supabase.rpc('submit_rfp_proposal', {
       target_recipient_id: recipientId,
-      proposal_text_in: proposalText.trim() || null,
+      proposal_text_in: proposalNotes.trim() || null,
       proposal_files_in: files,
+      proposal_amount_in: proposalAmount === '' ? null : Number(proposalAmount),
+      proposal_duration_in: proposalDuration.trim() || null,
+      proposal_exclusions_in: proposalExclusions.trim() || null,
     });
     setSaving(false);
     if (rpcErr) { setError(rpcErr.message); return; }
@@ -134,7 +151,7 @@ export default function SubPortalRfpDetailPage() {
           <div className="dash-section" style={{ paddingTop: 18 }}>
             <h3>{rfp?.title}</h3>
             <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
-              {rfp?.jobs?.project_address}
+              {projectLabel(rfp?.jobs)}{rfp?.jobs?.project_address}
             </div>
             {rfp?.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
           </div>
@@ -166,37 +183,83 @@ export default function SubPortalRfpDetailPage() {
           {role === 'admin' && (
             <div className="dash-section">
               <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-                A couple of sentences and a number is fine, or attach a full write-up — whatever fits the job.
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                Upload your proposal document, then fill in the details below.
               </div>
-              <textarea
-                value={proposalText}
-                onChange={e => setProposalText(e.target.value)}
-                rows={4}
-                placeholder="Your bid, timeline, anything they should know…"
-                disabled={resolved}
-              />
 
+              <label>Upload Proposal</label>
               {files.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 10px' }}>
                   {files.map((f, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button className="btn btn-sm" onClick={() => viewFile(f)}>{f.name}</button>
-                      {!resolved && <button className="btn btn-sm btn-danger" onClick={() => removeFile(i)}>×</button>}
+                      <button className="btn btn-sm" type="button" onClick={() => viewFile(f)}>{f.name}</button>
+                      {!resolved && <button className="btn btn-sm btn-danger" type="button" onClick={() => removeFile(i)}>×</button>}
                     </div>
                   ))}
                 </div>
               )}
+              {!resolved && (
+                <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginBottom: 16 }}>
+                  {uploading ? 'Uploading…' : files.length > 0 ? 'Upload Another File' : 'Upload Proposal'}
+                  <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+                </label>
+              )}
+
+              <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: files.length > 0 ? 0 : 16 }}>
+                <div>
+                  <label htmlFor="rfpAmount">Bid Amount</label>
+                  <input
+                    id="rfpAmount"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={proposalAmount}
+                    onChange={e => setProposalAmount(e.target.value)}
+                    placeholder="$"
+                    disabled={resolved}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="rfpDuration">Expected Project Duration</label>
+                  <input
+                    id="rfpDuration"
+                    type="text"
+                    value={proposalDuration}
+                    onChange={e => setProposalDuration(e.target.value)}
+                    placeholder="e.g. 3 weeks"
+                    disabled={resolved}
+                  />
+                </div>
+              </div>
+
+              <label htmlFor="rfpExclusions" style={{ marginTop: 14 }}>Exclusions / Inclusions</label>
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>
+                Anything out of the norm you're including or leaving out of this bid.
+              </div>
+              <textarea
+                id="rfpExclusions"
+                value={proposalExclusions}
+                onChange={e => setProposalExclusions(e.target.value)}
+                rows={3}
+                placeholder="e.g. Excludes permit fees. Includes dumpster rental."
+                disabled={resolved}
+              />
+
+              <label htmlFor="rfpNotes" style={{ marginTop: 14 }}>Additional Notes (optional)</label>
+              <textarea
+                id="rfpNotes"
+                value={proposalNotes}
+                onChange={e => setProposalNotes(e.target.value)}
+                rows={3}
+                placeholder="Anything else they should know…"
+                disabled={resolved}
+              />
+
+              {error && <div className="error-text" style={{ marginTop: 10 }}>{error}</div>}
 
               {!resolved && (
                 <>
-                  <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginTop: 8 }}>
-                    {uploading ? 'Uploading…' : 'Attach a file'}
-                    <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
-                  </label>
-
-                  {error && <div className="error-text">{error}</div>}
-
                   <div className="section-actions">
                     <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
                       {saving ? 'Submitting…' : recipient.responded_at ? 'Update Proposal' : 'Submit Proposal'}
@@ -209,8 +272,27 @@ export default function SubPortalRfpDetailPage() {
                   )}
                 </>
               )}
+
+              {resolved && (proposalAmount !== '' || proposalDuration || proposalExclusions || proposalNotes) && (
+                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                  Submitted {fmtDateTime(recipient.responded_at)}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Coded to this specific request — a question asked here shows
+              up tagged to this RFP on the staff side, not just dropped
+              into the general company thread. */}
+          <div className="dash-section">
+            <h3>Messages</h3>
+            <RfpMessageThread
+              recipientId={recipientId}
+              companyId={recipient.company_id}
+              jobId={rfp?.job_id}
+              viewer="sub"
+            />
+          </div>
         </div>
       </div>
     </SubPortalShell>

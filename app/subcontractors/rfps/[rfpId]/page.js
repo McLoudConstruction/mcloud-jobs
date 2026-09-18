@@ -5,19 +5,17 @@ import Link from 'next/link';
 import { useRequireAuth } from '../../../../lib/useAuth';
 import { supabase } from '../../../../lib/supabaseClient';
 import AppShell from '../../../../components/AppShell';
-import { RFP_STATUS_LABELS, RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../../lib/constants';
-
-// Same convention as the RFP list page — RFPs go out pre-approval,
-// while the project is still an Estimate (job_number is null then).
-function projectLabel(job) {
-  if (!job) return '';
-  const num = projectNumber(job);
-  return num && num !== '—' ? `${projectNumberLabel(job)} #${num} — ` : '';
-}
+import RfpMessageThread from '../../../../components/RfpMessageThread';
+import { RFP_STATUS_LABELS, RFP_RECIPIENT_STATUS_LABELS, projectLabel } from '../../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '—';
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function fmtMoney(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function RfpDetailPage() {
@@ -28,6 +26,7 @@ export default function RfpDetailPage() {
   const [photoUrls, setPhotoUrls] = useState([]);
   const [closing, setClosing] = useState(false);
   const [acting, setActing] = useState(false);
+  const [openMessagesFor, setOpenMessagesFor] = useState(null);
 
   const load = useCallback(async () => {
     const { data: rfpData } = await supabase.from('rfps').select('*, jobs(job_number, estimate_number, stage, project_address)').eq('id', rfpId).single();
@@ -126,22 +125,56 @@ export default function RfpDetailPage() {
                 {rr.responded_at && ` · Responded ${fmtDateTime(rr.responded_at)}`}
               </div>
 
+              {(fmtMoney(rr.proposal_amount) || rr.proposal_duration) && (
+                <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
+                  {fmtMoney(rr.proposal_amount) && (
+                    <div>
+                      <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Bid Amount</div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtMoney(rr.proposal_amount)}</div>
+                    </div>
+                  )}
+                  {rr.proposal_duration && (
+                    <div>
+                      <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Expected Duration</div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{rr.proposal_duration}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {rr.proposal_exclusions && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Exclusions / Inclusions</div>
+                  <p style={{ fontSize: 13, whiteSpace: 'pre-wrap', margin: '2px 0 0' }}>{rr.proposal_exclusions}</p>
+                </div>
+              )}
               {rr.proposal_text && (
-                <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', marginTop: 8 }}>{rr.proposal_text}</p>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Notes</div>
+                  <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: '2px 0 0' }}>{rr.proposal_text}</p>
+                </div>
               )}
               {Array.isArray(rr.proposal_files) && rr.proposal_files.length > 0 && (
-                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {rr.proposal_files.map((f, i) => (
                     <ProposalFileLink key={i} file={f} />
                   ))}
                 </div>
               )}
 
-              {rfp.status === 'open' && rr.status !== 'awarded' && rr.status !== 'not_awarded' && (
-                <div className="section-actions" style={{ marginTop: 8 }}>
+              <div className="section-actions" style={{ marginTop: 8 }}>
+                {rfp.status === 'open' && rr.status !== 'awarded' && rr.status !== 'not_awarded' && (
                   <button className="btn btn-primary btn-sm" onClick={() => handleAward(rr.company_id)} disabled={acting}>
                     Award to {rr.companies?.company_name}
                   </button>
+                )}
+                <button className="btn btn-sm" onClick={() => setOpenMessagesFor(id => id === rr.id ? null : rr.id)}>
+                  {openMessagesFor === rr.id ? 'Hide Messages' : 'Messages'}
+                </button>
+              </div>
+
+              {openMessagesFor === rr.id && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--line)' }}>
+                  <RfpMessageThread recipientId={rr.id} companyId={rr.company_id} jobId={rfp.job_id} viewer="staff" />
                 </div>
               )}
             </div>

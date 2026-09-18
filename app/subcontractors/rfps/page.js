@@ -4,19 +4,7 @@ import Link from 'next/link';
 import { useRequireAuth } from '../../../lib/useAuth';
 import { supabase } from '../../../lib/supabaseClient';
 import AppShell from '../../../components/AppShell';
-import { RFP_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../lib/constants';
-
-// RFPs are meant to go out before a project is approved, while it's
-// still an Estimate/Opportunity (job_number is null at that stage —
-// only estimate_number is set). projectLabel() uses the same
-// isOpportunity()/projectNumber()/projectNumberLabel() convention as
-// the rest of the app so this never drifts from how job numbers are
-// shown everywhere else.
-function projectLabel(job) {
-  if (!job) return '';
-  const num = projectNumber(job);
-  return num && num !== '—' ? `${projectNumberLabel(job)} #${num} — ` : '';
-}
+import { RFP_STATUS_LABELS, projectLabel } from '../../../lib/constants';
 import { buildRfpEmail } from '../../../lib/emailTemplates';
 
 function fmtDate(v) {
