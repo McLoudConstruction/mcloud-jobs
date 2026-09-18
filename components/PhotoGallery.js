@@ -27,7 +27,13 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
   const loadPhotos = useCallback(async () => {
     let query = supabase.from('job_photos').select('*').eq('job_id', jobId).order('created_at', { ascending: false });
-    query = updateId ? query.eq('update_id', updateId) : query.is('update_id', null);
+    // Scoped to one update's photos when embedded on that update (e.g. the
+    // customer-facing Updates card). Otherwise (the main Job Photos tab)
+    // show every photo on the job, including ones taken through an
+    // Internal Update — those used to be filtered out entirely here
+    // (update_id IS NULL), which made them invisible outside the
+    // Internal Updates panel's own feed even though they were saved fine.
+    if (updateId) query = query.eq('update_id', updateId);
     const { data } = await query;
     if (data) {
       setPhotos(data);
