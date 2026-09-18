@@ -10,19 +10,33 @@ export default function NotificationSettingsCard({ job, onSave }) {
 
   useEffect(() => {
     if (!job.customer_email) { setOptedOut(null); return; }
-    // .eq() is case-sensitive in Postgres, and contact emails get typed in
-    // by hand in several places with no normalization (job creation, the
-    // Customer tab, the Portal Access card) — the exact same gap that
-    // migration 093 had to fix for portal-access matching. A contact typed
-    // in as e.g. "SMcloud96@gmail.com" was silently invisible to a job
-    // whose customer_email was "smcloud96@gmail.com" here, always falling
-    // through to "No matching contact record found" even though the
-    // contact genuinely exists. ilike matches case-insensitively (there's
-    // no wildcard in an email address for it to misinterpret).
-    supabase.from('contacts').select('id, automated_emails_opt_out').ilike('contact_email', job.customer_email.trim()).maybeSingle().then(({ data }) => {
-      if (data) { setContactId(data.id); setOptedOut(data.automated_emails_opt_out); }
-      else { setContactId(null); setOptedOut(null); }
-    });
+    // Two separate gaps were hiding a contact that genuinely exists:
+    //
+    // 1. .eq() is case-sensitive in Postgres, and contact emails get typed
+    //    in by hand in several places with no normalization (job creation,
+    //    the Customer tab, the Portal Access card) — the same gap migration
+    //    093 had to fix for portal-access matching. ilike() matches
+    //    case-insensitively (no wildcard characters in an email for it to
+    //    misinterpret).
+    // 2. This used .maybeSingle(), which errors out (data: null, silently
+    //    swallowed here since only `data` was read) the moment MORE than
+    //    one contacts row shares that email — e.g. the same person added
+    //    as a contact on more than one property/job. That's a real,
+    //    unremarkable situation in this CRM, not corrupt data, so it can't
+    //    be treated as "no match": order by most recently created and just
+    //    take the first row instead of demanding exactly one.
+    supabase
+      .from('contacts')
+      .select('id, automated_emails_opt_out')
+      .ilike('contact_email', job.customer_email.trim())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (error) { console.error('Contact lookup failed:', error); setContactId(null); setOptedOut(null); return; }
+        const row = (data || [])[0];
+        if (row) { setContactId(row.id); setOptedOut(row.automated_emails_opt_out); }
+        else { setContactId(null); setOptedOut(null); }
+      });
   }, [job.customer_email]);
 
   async function toggleOptOut() {
