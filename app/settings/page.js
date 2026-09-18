@@ -244,6 +244,7 @@ function SettingsPageInner() {
           dashboard_widgets: form.dashboard_widgets,
           proposal_followup_count: form.proposal_followup_count,
           proposal_followup_interval_days: form.proposal_followup_interval_days,
+          notification_email: form.notification_email || null,
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -435,6 +436,24 @@ function SettingsPageInner() {
               />
             </div>
           </div>
+        </div>
+        )}
+
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Notification emails</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Where notification-level events (a contract signed, a work order accepted, and similar — anything
+            that already shows up in the bell/Inbox) get emailed the moment they happen. Leave blank to turn
+            these emails off without losing the in-app notifications themselves.
+          </div>
+          <label>Send to</label>
+          <input
+            type="email"
+            value={form.notification_email || ''}
+            onChange={e => update('notification_email', e.target.value)}
+            placeholder="you@example.com"
+          />
         </div>
         )}
 

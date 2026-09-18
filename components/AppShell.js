@@ -185,7 +185,22 @@ export default function AppShell({ children }) {
 
   const sidebarWidth = isMobile ? 0 : 84;
   const currentSection = getCurrentSection(pathname);
-  const showSubnav = shouldShowSubnav(currentSection, pathname);
+  // Messages' only child is Notifications, which the mobile Inbox page now
+  // merges into its own All/Messages/System chip row — showing this strip
+  // too on mobile would duplicate that filter with a redundant
+  // "Notifications" tab.
+  const showSubnav = shouldShowSubnav(currentSection, pathname) && !(isMobile && currentSection?.href === '/messages');
+
+  const subnavStrip = showSubnav && (
+    <ScrollFadeRow trackClassName="section-subnav">
+      <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
+      {currentSection.children.map(child => (
+        <Link key={child.href} href={child.href} className={`stage-tab ${pathname === child.href || pathname.startsWith(child.href + '/') ? 'active' : ''}`}>
+          {child.label}
+        </Link>
+      ))}
+    </ScrollFadeRow>
+  );
 
   return (
     <div className="shell">
@@ -297,6 +312,15 @@ export default function AppShell({ children }) {
           </nav>
         )}
 
+        {/* On mobile, the section subnav (Overview/People/Properties/…)
+            moves down here — a fixed bar stacked directly above the main
+            bottom nav, within thumb's reach — instead of sitting at the
+            very top of the screen above the page content, which on a
+            phone means reaching all the way up every time you want to
+            switch sub-tabs. Desktop keeps it at the top of the content,
+            unchanged (see below). */}
+        {isMobile && subnavStrip && <div className="shell-subnav-bottom">{subnavStrip}</div>}
+
         <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
           {MORE_SHEET_ITEMS.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -328,24 +352,8 @@ export default function AppShell({ children }) {
           </button>
         </BottomSheet>
 
-        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
-          {/* Messages' only child is Notifications, which the mobile Inbox
-              page now merges into its own All/Messages/System chip row —
-              showing this strip too on mobile would duplicate that filter
-              with a redundant "Notifications" tab. Every other section still
-              relies on this strip as its own mobile chip nav (Sales'
-              People/Properties/Companies, Projects' Estimating/Invoicing/
-              Material Selections), so it's suppressed for Messages alone. */}
-          {showSubnav && !(isMobile && currentSection?.href === '/messages') && (
-            <ScrollFadeRow trackClassName="section-subnav">
-              <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
-              {currentSection.children.map(child => (
-                <Link key={child.href} href={child.href} className={`stage-tab ${pathname === child.href || pathname.startsWith(child.href + '/') ? 'active' : ''}`}>
-                  {child.label}
-                </Link>
-              ))}
-            </ScrollFadeRow>
-          )}
+        <div className={`shell-content ${isMobile && subnavStrip ? 'has-bottom-subnav' : ''}`} style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
+          {!isMobile && subnavStrip}
           {children}
         </div>
       </div>

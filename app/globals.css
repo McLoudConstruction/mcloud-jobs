@@ -1145,6 +1145,20 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .shell-topbar{ position: static; }
   .shell-sidebar{ display: none !important; }
   .shell-content{ padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .shell-content.has-bottom-subnav{ padding-bottom: calc(64px + 46px + env(safe-area-inset-bottom)); }
+
+  /* The section subnav (Overview/People/Properties/…), stacked directly
+     above the fixed bottom nav instead of sitting at the top of the
+     screen — see AppShell's subnavStrip. */
+  .shell-subnav-bottom{
+    position: fixed; left: 0; right: 0;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    z-index: 49;
+    background: var(--header-bg);
+    border-top: 1px solid var(--header-line);
+    padding: 6px 4px;
+  }
+  .shell-subnav-bottom .section-subnav{ padding: 0 10px; margin-bottom: 0; border-bottom: none; }
 
   .shell-bottomnav{
     display: flex;
