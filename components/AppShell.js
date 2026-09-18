@@ -312,15 +312,6 @@ export default function AppShell({ children }) {
           </nav>
         )}
 
-        {/* On mobile, the section subnav (Overview/People/Properties/…)
-            moves down here — a fixed bar stacked directly above the main
-            bottom nav, within thumb's reach — instead of sitting at the
-            very top of the screen above the page content, which on a
-            phone means reaching all the way up every time you want to
-            switch sub-tabs. Desktop keeps it at the top of the content,
-            unchanged (see below). */}
-        {isMobile && subnavStrip && <div className="shell-subnav-bottom">{subnavStrip}</div>}
-
         <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
           {MORE_SHEET_ITEMS.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -352,8 +343,8 @@ export default function AppShell({ children }) {
           </button>
         </BottomSheet>
 
-        <div className={`shell-content ${isMobile && subnavStrip ? 'has-bottom-subnav' : ''}`} style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
-          {!isMobile && subnavStrip}
+        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
+          {subnavStrip}
           {children}
         </div>
       </div>

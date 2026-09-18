@@ -6,7 +6,6 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import MobileFab from '../../components/MobileFab';
-import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
 const STAGES = ['all', ...STAGE_ORDER];
@@ -100,8 +99,8 @@ export default function JobTrackerPage() {
         </div>
 
         {isMobile ? (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18, minWidth: 0 }}>
-            <div className="search-bar" style={{ margin: 0, flex: view === 'active' ? '0 1 130px' : '1 1 auto', minWidth: 0 }}>
+          <div className="list-toolbar">
+            <div className="search-bar">
               <input
                 placeholder={view === 'lost' ? 'Search…' : 'Search…'}
                 value={search}
@@ -109,13 +108,13 @@ export default function JobTrackerPage() {
               />
             </div>
             {view === 'active' && (
-              <ScrollFadeRow trackClassName="stage-tabs" wrapClassName="jobs-phase-chips">
+              <select value={stage} onChange={e => setStage(e.target.value)} aria-label="Phase">
                 {STAGES.map(s => (
-                  <button key={s} className={`stage-tab ${stage === s ? 'active' : ''}`} onClick={() => setStage(s)}>
+                  <option key={s} value={s}>
                     {TAB_LABELS[s]} ({s !== 'all' ? activeJobs.filter(j => j.stage === s).length : activeJobs.length})
-                  </button>
+                  </option>
                 ))}
-              </ScrollFadeRow>
+              </select>
             )}
           </div>
         ) : (

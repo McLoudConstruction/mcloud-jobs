@@ -245,6 +245,7 @@ function SettingsPageInner() {
           proposal_followup_count: form.proposal_followup_count,
           proposal_followup_interval_days: form.proposal_followup_interval_days,
           notification_email: form.notification_email || null,
+          timezone: form.timezone || 'America/Chicago',
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -436,6 +437,27 @@ function SettingsPageInner() {
               />
             </div>
           </div>
+        </div>
+        )}
+
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Timezone</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            What the app treats as "now" for anything with a specific time — right now that's just calendar
+            events created on the Schedule page and pushed to Google/Microsoft Calendar (a job's own scheduled
+            dates and bid walks aren't affected; they're already timezone-correct).
+          </div>
+          <label>Business timezone</label>
+          <select value={form.timezone || 'America/Chicago'} onChange={e => update('timezone', e.target.value)}>
+            <option value="America/New_York">Eastern (New York)</option>
+            <option value="America/Chicago">Central (Chicago)</option>
+            <option value="America/Denver">Mountain (Denver)</option>
+            <option value="America/Phoenix">Mountain, no DST (Phoenix)</option>
+            <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+            <option value="America/Anchorage">Alaska (Anchorage)</option>
+            <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+          </select>
         </div>
         )}
 

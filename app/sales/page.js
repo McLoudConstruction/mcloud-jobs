@@ -52,6 +52,7 @@ export default function SalesDashboardPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [stageFilter, setStageFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [lossReasonPromptId, setLossReasonPromptId] = useState(null);
   const [lossReasonText, setLossReasonText] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -223,7 +224,16 @@ export default function SalesDashboardPage() {
     return byStage;
   }, [opps]);
 
-  const filtered = stageFilter === 'all' ? opps : opps.filter(o => o.stage === stageFilter);
+  const filtered = useMemo(() => {
+    const byStage = stageFilter === 'all' ? opps : opps.filter(o => o.stage === stageFilter);
+    if (!search.trim()) return byStage;
+    const q = search.trim().toLowerCase();
+    return byStage.filter(o =>
+      (o.company || '').toLowerCase().includes(q) ||
+      (o.contact_name || '').toLowerCase().includes(q) ||
+      (o.project || '').toLowerCase().includes(q)
+    );
+  }, [opps, stageFilter, search]);
 
   if (loading || !session) return null;
 
@@ -359,14 +369,28 @@ export default function SalesDashboardPage() {
           </div>
         )}
 
-        <ScrollFadeRow trackClassName="stage-tabs">
-          <button className={`stage-tab ${stageFilter === 'all' ? 'active' : ''}`} onClick={() => setStageFilter('all')}>All ({opps.length})</button>
-          {STAGES.map(s => (
-            <button key={s} className={`stage-tab ${stageFilter === s ? 'active' : ''}`} onClick={() => setStageFilter(s)}>
-              {STAGE_LABELS[s]} ({stats[s] || 0})
-            </button>
-          ))}
-        </ScrollFadeRow>
+        {isMobile ? (
+          <div className="list-toolbar">
+            <div className="search-bar">
+              <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} aria-label="Stage">
+              <option value="all">All ({opps.length})</option>
+              {STAGES.map(s => (
+                <option key={s} value={s}>{STAGE_LABELS[s]} ({stats[s] || 0})</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <ScrollFadeRow trackClassName="stage-tabs">
+            <button className={`stage-tab ${stageFilter === 'all' ? 'active' : ''}`} onClick={() => setStageFilter('all')}>All ({opps.length})</button>
+            {STAGES.map(s => (
+              <button key={s} className={`stage-tab ${stageFilter === s ? 'active' : ''}`} onClick={() => setStageFilter(s)}>
+                {STAGE_LABELS[s]} ({stats[s] || 0})
+              </button>
+            ))}
+          </ScrollFadeRow>
+        )}
 
         {filtered.length === 0 && <div className="empty-state">No opportunities here yet.</div>}
 
