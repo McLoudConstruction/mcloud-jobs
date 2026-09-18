@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { buildFollowupEmail, buildScheduleReminderEmail, buildProposalFollowupEmail } from '../../../../lib/emailTemplates';
-import nodemailer from 'nodemailer';
+import { sendMail as dispatchMail } from '../../../../lib/sendMail';
 import { logCommunication } from '../../../../lib/logCommunication';
 import { phaseForStage } from '../../../../lib/constants';
 import { tagSubjectWithJob } from '../../../../lib/emailThreading';
@@ -13,23 +13,21 @@ function getAdminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-function getTransporter() {
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-  });
-}
-
-async function sendMail(transporter, { to, subject, html, text, category, jobId, jobNumber }) {
+// Kept as a local wrapper (same name every call site below already
+// uses) but now dispatches through dispatchMail() — Resend when
+// configured, SMTP as a fallback — instead of a hand-rolled SMTP-only
+// nodemailer transporter, so there's no longer a transporter to pass
+// in. Subject is tagged with the job number here (jobNumber is already
+// on hand from each query below, avoiding an extra DB round-trip)
+// rather than passing jobId through to dispatchMail(), which would tag
+// it a second time.
+async function sendMail({ to, subject, html, text, category, jobId, jobNumber }) {
   const taggedSubject = jobNumber ? tagSubjectWithJob(subject, jobNumber) : subject;
   try {
-    await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: taggedSubject, html, text });
-    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider: 'smtp' });
+    const { provider } = await dispatchMail({ to, subject: taggedSubject, html, text });
+    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider });
   } catch (err) {
-    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'smtp' });
+    await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'unknown' });
     throw err;
   }
 }
@@ -51,12 +49,8 @@ export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return Response.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' }, { status: 500 });
   }
-  if (!process.env.SMTP_HOST) {
-    return Response.json({ error: 'SMTP is not configured.' }, { status: 500 });
-  }
 
   const supabase = getAdminClient();
-  const transporter = getTransporter();
   const today = new Date();
   const results = { followups_sent: 0, reminders_sent: 0, proposal_followups_sent: 0, skipped_opted_out: 0, errors: [] };
 
@@ -90,7 +84,7 @@ export async function GET(request) {
 
       try {
         const { subject, html, text } = buildFollowupEmail({ contactName: opp.contact_name, project: opp.project });
-        await sendMail(transporter, { to: opp.contact_email, subject, html, text, category: 'opportunity_followup' });
+        await sendMail({ to: opp.contact_email, subject, html, text, category: 'opportunity_followup' });
         const patch = {};
         due.forEach(field => { patch[field] = new Date().toISOString(); });
         await supabase.from('opportunities').update(patch).eq('id', opp.id);
@@ -130,7 +124,7 @@ export async function GET(request) {
           scheduledStartDate: job.scheduled_start_date,
           daysOut,
         });
-        await sendMail(transporter, { to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id, jobNumber: job.job_number });
+        await sendMail({ to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id, jobNumber: job.job_number });
         await supabase.from('jobs').update({ schedule_reminders_sent: [...alreadySent, daysOut] }).eq('id', job.id);
         results.reminders_sent++;
       } catch (err) {
@@ -175,7 +169,7 @@ export async function GET(request) {
       try {
         const nextCount = (job.proposal_followups_sent_count || 0) + 1;
         const { subject, html, text } = buildProposalFollowupEmail({ customerName: job.customer_name, jobType: job.job_type, followupNumber: nextCount });
-        await sendMail(transporter, { to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id, jobNumber: job.job_number });
+        await sendMail({ to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id, jobNumber: job.job_number });
         await supabase.from('jobs').update({
           proposal_followups_sent_count: nextCount,
           proposal_followup_last_sent_at: new Date().toISOString(),

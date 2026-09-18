@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
 import { buildStaffInviteEmail } from '../../../../lib/emailTemplates';
 import { ROLES, ROLE_LABELS } from '../../../../lib/permissions';
+import { sendMail } from '../../../../lib/sendMail';
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -79,9 +79,6 @@ export async function POST(request) {
       const { error } = await service.from('staff_users').update({ full_name: fullName.trim() }).eq('id', targetUserId);
       if (error) return Response.json({ error: error.message }, { status: 500 });
     } else if (action === 'resend_invite') {
-      if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
-        return Response.json({ error: 'SMTP is not configured — add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM in Vercel.' }, { status: 500 });
-      }
       const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://jobs.mcloudconstruction.com'}/login`;
       const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
         type: 'invite',
@@ -95,14 +92,7 @@ export async function POST(request) {
         roleLabel: ROLE_LABELS[targetRow.role],
         actionLink: linkData.properties.action_link,
       });
-      const port = parseInt(process.env.SMTP_PORT || '587', 10);
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-      });
-      await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: targetRow.email, subject, html, text });
+      await sendMail({ to: targetRow.email, subject, html, text });
     } else {
       return Response.json({ error: 'Not a valid action.' }, { status: 400 });
     }

@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
 import { buildStaffInviteEmail } from '../../../../lib/emailTemplates';
 import { ROLES, ROLE_LABELS } from '../../../../lib/permissions';
 import { logCommunication } from '../../../../lib/logCommunication';
+import { sendMail } from '../../../../lib/sendMail';
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -65,9 +65,6 @@ export async function POST(request) {
       }
       userId = created.user.id;
     } else {
-      if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
-        return Response.json({ error: 'SMTP is not configured yet — add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM in Vercel, or use "set a temporary password" instead.' }, { status: 500 });
-      }
       const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://jobs.mcloudconstruction.com'}/login`;
       const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
         type: 'invite',
@@ -82,9 +79,10 @@ export async function POST(request) {
       }
       userId = linkData.user.id;
 
-      // Invite emails go out through the same SMTP transport as every other
-      // email in this app rather than Supabase's rate-limited built-in
-      // mailer — same reasoning as the customer portal invite route.
+      // Invite emails go out through sendMail() — Resend when configured,
+      // SMTP as a fallback — rather than Supabase's rate-limited built-in
+      // mailer or a hand-rolled SMTP-only send. Same reasoning as the
+      // customer portal invite route.
       await service.auth.admin.updateUserById(userId, { app_metadata: { role: 'admin' } });
 
       const { subject, html, text } = buildStaffInviteEmail({
@@ -92,24 +90,11 @@ export async function POST(request) {
         roleLabel: ROLE_LABELS[role],
         actionLink: linkData.properties.action_link,
       });
-      const port = parseInt(process.env.SMTP_PORT || '587', 10);
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-      });
       try {
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
-          to: email,
-          subject,
-          html,
-          text,
-        });
-        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'sent', provider: 'smtp' });
+        const { provider } = await sendMail({ to: email, subject, html, text });
+        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'sent', provider });
       } catch (sendErr) {
-        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'smtp' });
+        await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });
         throw sendErr;
       }
     }
