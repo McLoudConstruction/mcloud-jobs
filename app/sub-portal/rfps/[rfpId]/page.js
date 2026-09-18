@@ -127,86 +127,91 @@ export default function SubPortalRfpDetailPage() {
           <span className={`badge badge-${recipient.status}`}>{RFP_RECIPIENT_STATUS_LABELS[recipient.status]}</span>
         </div>
 
-        <div className="card">
-          <h3>{rfp?.title}</h3>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            {rfp?.jobs?.project_address}
-          </div>
-          {rfp?.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
-        </div>
-
-        {photoUrls.length > 0 && (
-          <div className="card">
-            <h3>Photos</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
-              {photoUrls.map((url, i) => (
-                <img key={i} src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 4 }} />
-              ))}
+        {/* One card, hairline-divided dash-sections inside — matches
+            the GC-side "one structured panel" pattern instead of a
+            separate .card per subsection. */}
+        <div className="card" style={{ padding: '4px 24px' }}>
+          <div className="dash-section" style={{ paddingTop: 18 }}>
+            <h3>{rfp?.title}</h3>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
+              {rfp?.jobs?.project_address}
             </div>
+            {rfp?.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
           </div>
-        )}
 
-        {recipient.status === 'not_awarded' && (
-          <div className="card">
-            <h3>Not Awarded</h3>
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request is closed and wasn't awarded to your company. Your submitted proposal is kept below for your records.</p>
-          </div>
-        )}
-        {recipient.status === 'awarded' && (
-          <div className="card">
-            <h3>Awarded</h3>
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request was awarded to your company. Look for the Work Order in Work Orders once it's issued.</p>
-          </div>
-        )}
-
-        {role === 'admin' && (
-          <div className="card">
-            <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-              A couple of sentences and a number is fine, or attach a full write-up — whatever fits the job.
-            </div>
-            <textarea
-              value={proposalText}
-              onChange={e => setProposalText(e.target.value)}
-              rows={4}
-              placeholder="Your bid, timeline, anything they should know…"
-              disabled={resolved}
-            />
-
-            {files.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0' }}>
-                {files.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button className="btn btn-sm" onClick={() => viewFile(f)}>{f.name}</button>
-                    {!resolved && <button className="btn btn-sm btn-danger" onClick={() => removeFile(i)}>×</button>}
-                  </div>
+          {photoUrls.length > 0 && (
+            <div className="dash-section">
+              <h3>Photos</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                {photoUrls.map((url, i) => (
+                  <img key={i} src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 4 }} />
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {!resolved && (
-              <>
-                <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginTop: 8 }}>
-                  {uploading ? 'Uploading…' : 'Attach a file'}
-                  <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
-                </label>
+          {recipient.status === 'not_awarded' && (
+            <div className="dash-section">
+              <h3>Not Awarded</h3>
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request is closed and wasn't awarded to your company. Your submitted proposal is kept below for your records.</p>
+            </div>
+          )}
+          {recipient.status === 'awarded' && (
+            <div className="dash-section">
+              <h3>Awarded</h3>
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request was awarded to your company. Look for the Work Order in Work Orders once it's issued.</p>
+            </div>
+          )}
 
-                {error && <div className="error-text">{error}</div>}
+          {role === 'admin' && (
+            <div className="dash-section">
+              <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                A couple of sentences and a number is fine, or attach a full write-up — whatever fits the job.
+              </div>
+              <textarea
+                value={proposalText}
+                onChange={e => setProposalText(e.target.value)}
+                rows={4}
+                placeholder="Your bid, timeline, anything they should know…"
+                disabled={resolved}
+              />
 
-                <div className="section-actions">
-                  <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
-                    {saving ? 'Submitting…' : recipient.responded_at ? 'Update Proposal' : 'Submit Proposal'}
-                  </button>
+              {files.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0' }}>
+                  {files.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button className="btn btn-sm" onClick={() => viewFile(f)}>{f.name}</button>
+                      {!resolved && <button className="btn btn-sm btn-danger" onClick={() => removeFile(i)}>×</button>}
+                    </div>
+                  ))}
                 </div>
-                {recipient.responded_at && (
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
-                    Last submitted {fmtDateTime(recipient.responded_at)} — you can update this until the request is awarded or closed.
+              )}
+
+              {!resolved && (
+                <>
+                  <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginTop: 8 }}>
+                    {uploading ? 'Uploading…' : 'Attach a file'}
+                    <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+                  </label>
+
+                  {error && <div className="error-text">{error}</div>}
+
+                  <div className="section-actions">
+                    <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
+                      {saving ? 'Submitting…' : recipient.responded_at ? 'Update Proposal' : 'Submit Proposal'}
+                    </button>
                   </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                  {recipient.responded_at && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                      Last submitted {fmtDateTime(recipient.responded_at)} — you can update this until the request is awarded or closed.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </SubPortalShell>
   );

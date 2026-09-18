@@ -85,125 +85,130 @@ export default function SubPortalWorkOrderPage() {
           <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
         </div>
 
-        <div className="card">
-          <h3>Job Information</h3>
-          <div className="portal-info-grid">
-            <div>
-              <div className="portal-info-label">Address</div>
-              <div className="portal-info-value">{job?.project_address || '—'}</div>
-            </div>
-            <div>
-              <div className="portal-info-label">Job Type</div>
-              <div className="portal-info-value">{job?.job_type || '—'}</div>
-            </div>
-            <div>
-              <div className="portal-info-label">Stage</div>
-              <div className="portal-info-value">{job?.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
-            </div>
-            <div>
-              <div className="portal-info-label">Est. Completion</div>
-              <div className="portal-info-value">{fmtDate(job?.expected_close_date)}</div>
-            </div>
-          </div>
-        </div>
-
-        {scopeItems.length > 0 && (
-          <div className="card">
-            <h3>Scope of Work</h3>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {scopeItems.map((item, i) => (
-                <li key={i} style={{ fontSize: 13.5, lineHeight: 1.6, paddingLeft: 20, position: 'relative', marginBottom: 7 }}>
-                  <span style={{ position: 'absolute', left: 0, color: 'var(--gold)' }}>—</span>{item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {wo.description && (
-          <div className="card">
-            <h3>Additional Details</h3>
-            <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{wo.description}</p>
-          </div>
-        )}
-
-        {role === 'admin' && (
-          <div className="card">
-            <h3>Amount</h3>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{fmtMoney(wo.amount)}</div>
-          </div>
-        )}
-
-        {role === 'admin' && wo.status === 'issued' && !declining && (
-          <div className="card">
-            <h3>Accept This Work Order</h3>
-            <SignaturePad
-              label="Signature"
-              saved={draftSignature}
-              saving={saving}
-              onSave={setDraftSignature}
-              note="Sign to accept this work order"
-              showTitle
-              titlePlaceholder="Title (e.g. Owner)"
-              requireName
-              requireTitle
-            />
-            {draftSignature?.signature && (
-              <div style={{ marginTop: 14 }}>
-                <button className="btn btn-primary btn-sm" onClick={submitAcceptance} disabled={saving}>
-                  {saving ? 'Submitting…' : 'Submit'}
-                </button>
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
-                  You can still clear and re-sign above until you click Submit.
-                </div>
+        {/* One card, hairline-divided dash-sections inside — the GC
+            dashboard's own "one structured panel, not loose boxes"
+            pattern, in place of a separate .card per subsection. */}
+        <div className="card" style={{ padding: '4px 24px' }}>
+          <div className="dash-section" style={{ paddingTop: 18 }}>
+            <h3>Job Information</h3>
+            <div className="portal-info-grid">
+              <div>
+                <div className="portal-info-label">Address</div>
+                <div className="portal-info-value">{job?.project_address || '—'}</div>
               </div>
-            )}
-            <div className="section-actions">
-              <button className="btn btn-sm btn-danger" onClick={() => setDeclining(true)}>Decline Work Order</button>
+              <div>
+                <div className="portal-info-label">Job Type</div>
+                <div className="portal-info-value">{job?.job_type || '—'}</div>
+              </div>
+              <div>
+                <div className="portal-info-label">Stage</div>
+                <div className="portal-info-value">{job?.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
+              </div>
+              <div>
+                <div className="portal-info-label">Est. Completion</div>
+                <div className="portal-info-value">{fmtDate(job?.expected_close_date)}</div>
+              </div>
             </div>
           </div>
-        )}
 
-        {role === 'admin' && declining && (
-          <div className="card">
-            <h3>Decline This Work Order</h3>
-            <label>Reason (optional)</label>
-            <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} rows={3} placeholder="Let them know why, if you'd like…" />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={submitDecline} disabled={saving}>{saving ? 'Sending…' : 'Confirm decline'}</button>
-              <button className="btn btn-sm" onClick={() => setDeclining(false)}>Cancel</button>
+          {scopeItems.length > 0 && (
+            <div className="dash-section">
+              <h3>Scope of Work</h3>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {scopeItems.map((item, i) => (
+                  <li key={i} style={{ fontSize: 13.5, lineHeight: 1.6, paddingLeft: 20, position: 'relative', marginBottom: 7 }}>
+                    <span style={{ position: 'absolute', left: 0, color: 'var(--gold)' }}>—</span>{item}
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
+          )}
 
-        {wo.status === 'accepted' && wo.sub_signature && (
-          <div className="card">
-            <h3>Signed</h3>
-            <div style={{ height: 70, borderBottom: '1.5px solid #221f16', display: 'flex', alignItems: 'flex-end', paddingBottom: 4, marginBottom: 6 }}>
-              <img src={wo.sub_signature.signature} alt="Signature" style={{ maxHeight: 64, maxWidth: '100%' }} />
+          {wo.description && (
+            <div className="dash-section">
+              <h3>Additional Details</h3>
+              <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{wo.description}</p>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-              {wo.sub_signature.name || 'Signed'} — {fmtDate(wo.sub_signature.date)}
+          )}
+
+          {role === 'admin' && (
+            <div className="dash-section">
+              <h3>Amount</h3>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>{fmtMoney(wo.amount)}</div>
             </div>
-          </div>
-        )}
+          )}
 
-        {role === 'admin' && (wo.status === 'accepted' || wo.status === 'completed') && (
-          <InvoiceUploadCard wo={wo} />
-        )}
+          {role === 'admin' && wo.status === 'issued' && !declining && (
+            <div className="dash-section">
+              <h3>Accept This Work Order</h3>
+              <SignaturePad
+                label="Signature"
+                saved={draftSignature}
+                saving={saving}
+                onSave={setDraftSignature}
+                note="Sign to accept this work order"
+                showTitle
+                titlePlaceholder="Title (e.g. Owner)"
+                requireName
+                requireTitle
+              />
+              {draftSignature?.signature && (
+                <div style={{ marginTop: 14 }}>
+                  <button className="btn btn-primary btn-sm" onClick={submitAcceptance} disabled={saving}>
+                    {saving ? 'Submitting…' : 'Submit'}
+                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                    You can still clear and re-sign above until you click Submit.
+                  </div>
+                </div>
+              )}
+              <div className="section-actions">
+                <button className="btn btn-sm btn-danger" onClick={() => setDeclining(true)}>Decline Work Order</button>
+              </div>
+            </div>
+          )}
 
-        {wo.status === 'declined' && (
-          <div className="card">
-            <h3>Declined</h3>
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{wo.decline_reason || 'No reason given.'}</p>
-          </div>
-        )}
+          {role === 'admin' && declining && (
+            <div className="dash-section">
+              <h3>Decline This Work Order</h3>
+              <label>Reason (optional)</label>
+              <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} rows={3} placeholder="Let them know why, if you'd like…" />
+              <div className="section-actions">
+                <button className="btn btn-primary btn-sm" onClick={submitDecline} disabled={saving}>{saving ? 'Sending…' : 'Confirm decline'}</button>
+                <button className="btn btn-sm" onClick={() => setDeclining(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {wo.status === 'accepted' && wo.sub_signature && (
+            <div className="dash-section">
+              <h3>Signed</h3>
+              <div style={{ height: 70, borderBottom: '1.5px solid #221f16', display: 'flex', alignItems: 'flex-end', paddingBottom: 4, marginBottom: 6 }}>
+                <img src={wo.sub_signature.signature} alt="Signature" style={{ maxHeight: 64, maxWidth: '100%' }} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                {wo.sub_signature.name || 'Signed'} — {fmtDate(wo.sub_signature.date)}
+              </div>
+            </div>
+          )}
+
+          {role === 'admin' && (wo.status === 'accepted' || wo.status === 'completed') && (
+            <InvoiceUploadSection wo={wo} />
+          )}
+
+          {wo.status === 'declined' && (
+            <div className="dash-section">
+              <h3>Declined</h3>
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{wo.decline_reason || 'No reason given.'}</p>
+            </div>
+          )}
+        </div>
       </div>
     </SubPortalShell>
   );
 }
 
-function InvoiceUploadCard({ wo }) {
+function InvoiceUploadSection({ wo }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [viewUrl, setViewUrl] = useState('');
@@ -238,7 +243,7 @@ function InvoiceUploadCard({ wo }) {
   }
 
   return (
-    <div className="card">
+    <div className="dash-section">
       <h3>Your Invoice</h3>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
         Upload your invoice for this work order so McLoud Construction can see it.

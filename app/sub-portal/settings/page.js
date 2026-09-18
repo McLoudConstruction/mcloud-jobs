@@ -134,7 +134,8 @@ export default function SubPortalSettingsPage() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container" style={{ paddingTop: 24 }}>
-        <div className="card">
+        <div className="card" style={{ padding: '4px 24px' }}>
+        <div className="dash-section" style={{ paddingTop: 18 }}>
           <h3>Sign-In Password</h3>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
             Set up a password for {session.user.email} and you can sign in anytime without waiting on an email link.
@@ -150,7 +151,7 @@ export default function SubPortalSettingsPage() {
         </div>
 
         {role === 'admin' && (
-        <div className="card">
+        <div className="dash-section">
           <h3>Team Logins</h3>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
             Add or remove who can sign in to {company.company_name}'s subcontractor portal. <b>Owner/Manager</b> logins can
@@ -219,6 +220,7 @@ export default function SubPortalSettingsPage() {
           </form>
         </div>
         )}
+        </div>
       </div>
     </SubPortalShell>
   );

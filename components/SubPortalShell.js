@@ -3,53 +3,30 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { SignOutIcon, SettingsIcon } from './icons';
+import { SignOutIcon } from './icons';
 
-function DashboardIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.2" />
-      <rect x="11" y="2.5" width="6.5" height="6.5" rx="1.2" />
-      <rect x="2.5" y="11" width="6.5" height="6.5" rx="1.2" />
-      <rect x="11" y="11" width="6.5" height="6.5" rx="1.2" />
-    </svg>
-  );
-}
-function WorkOrdersIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M4 3.5h8l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-12a1 1 0 011-1z" />
-      <path d="M12 3.5v4h4M7 10.5h6M7 13.5h6" />
-    </svg>
-  );
-}
-function InvoicesIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M5.5 2.5h9v15l-2.2-1.5-2.3 1.5-2.3-1.5-2.2 1.5v-15z" />
-      <path d="M7.7 6.2h4.6M7.7 9h4.6M7.7 11.8h3" />
-    </svg>
-  );
-}
-// Deliberately distinct from WorkOrdersIcon (a clipboard) — a
-// speech-bubble/question shape, since Requests are an open ask, not
-// assigned, in-progress work.
-function RequestsIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M3 4.5h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3.5v-3.5H3a1 1 0 01-1-1v-8a1 1 0 011-1z" />
-      <path d="M10 7.5a1.5 1.5 0 013 0c0 1-1.5 1.2-1.5 2.3M10.5 12.2h.01" />
-    </svg>
-  );
-}
-
+// Sub-portal-only nav: wide sidebar, spelled-out labels, no icons — this
+// is deliberately a different shape than AppShell/CustomerPortalShell's
+// narrow icon rail, so it lives in its own class names (sp-*) rather than
+// reusing shell-sidebar-inner/shell-nav-link, which stay untouched for
+// the GC and customer portals.
 const NAV_ITEMS = [
-  { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { href: '/sub-portal/rfps', label: 'Requests', icon: RequestsIcon },
-  { href: '/sub-portal/work-orders', label: 'Work Orders', icon: WorkOrdersIcon },
-  { href: '/sub-portal/invoices', label: 'Invoices', icon: InvoicesIcon },
-  { href: '/sub-portal/settings', label: 'Settings', icon: SettingsIcon },
+  { href: '/sub-portal/dashboard', label: 'Dashboard' },
+  { href: '/sub-portal/rfps', label: 'Requests for Proposal' },
+  { href: '/sub-portal/work-orders', label: 'Work Orders' },
+  { href: '/sub-portal/invoices', label: 'Invoices' },
+  { href: '/sub-portal/settings', label: 'Settings' },
 ];
+
+function CompanyBlock({ company, role }) {
+  if (!company) return null;
+  return (
+    <div className="sp-company-block">
+      <div className="sp-company-name">{company.company_name}</div>
+      <div className="sp-company-role">{role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}</div>
+    </div>
+  );
+}
 
 export default function SubPortalShell({ company, role, children }) {
   const router = useRouter();
@@ -72,19 +49,16 @@ export default function SubPortalShell({ company, role, children }) {
     router.replace('/sub-portal');
   }
 
-  const sidebarWidth = isMobile ? 0 : 84;
+  // Wider than the icon-rail shells (84px) since labels are spelled out
+  // in full rather than abbreviated under a small icon.
+  const sidebarWidth = isMobile ? 0 : 232;
 
   return (
     <div className="shell">
       <div className="shell-topbar">
-        {company && (
-          <div className="shell-header-left">
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--header-text)' }}>{company.company_name}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-              {role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}
-            </div>
-          </div>
-        )}
+        {/* No shell-header-left block here — with nothing else in the
+            topbar, the flex-start layout puts the logo at the far left
+            on its own. Company identity now lives in the sidebar. */}
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 96, width: 'auto' }} />
@@ -92,52 +66,61 @@ export default function SubPortalShell({ company, role, children }) {
         </div>
       </div>
 
+      {/* The sidebar (and the company block inside it) is hidden below
+          900px along with the rest of shell-sidebar, so mobile gets its
+          own compact strip here instead of losing company context. */}
+      {isMobile && company && (
+        <div className="sp-mobile-company-strip">
+          <span className="sp-company-name">{company.company_name}</span>
+          <span className="sp-company-role">{role === 'admin' ? 'Owner/Manager' : 'Crew — view only'}</span>
+        </div>
+      )}
+
       <div className="shell-body">
         <div
           className="shell-sidebar"
           style={{ width: mounted ? sidebarWidth : 0 }}
         >
-          <div className="shell-sidebar-inner">
-            <div className="shell-nav-links">
-              {NAV_ITEMS.map(item => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                >
-                  <item.icon className="shell-nav-icon" />
-                  <span className="shell-nav-label">{item.label}</span>
-                </a>
-              ))}
+          <div className="sp-sidebar-inner">
+            <div>
+              <CompanyBlock company={company} role={role} />
+              <div className="sp-nav-links">
+                {NAV_ITEMS.map(item => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={`sp-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
             </div>
 
-            <button
-              className="shell-nav-link signout-link"
-              onClick={handleSignOut}
-            >
-              <SignOutIcon className="shell-nav-icon" />
-              <span className="shell-nav-label">Sign out</span>
-            </button>
+            <div className="sp-nav-bottom">
+              <button
+                className="sp-nav-link sp-signout-link"
+                onClick={handleSignOut}
+              >
+                <SignOutIcon className="sp-nav-icon" />
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
 
         {isMobile && (
-          <nav className="shell-bottomnav">
+          <nav className="sp-bottomnav">
             {NAV_ITEMS.map(item => (
               <a
                 key={item.href}
                 href={item.href}
-                className={`shell-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                aria-label={item.label}
+                className={`sp-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
               >
-                <item.icon className="shell-bottomnav-icon" />
-                <span className="shell-bottomnav-label">{item.label}</span>
+                {item.label}
               </a>
             ))}
-            <button className="shell-bottomnav-link" onClick={handleSignOut} aria-label="Sign out">
-              <SignOutIcon className="shell-bottomnav-icon" />
-              <span className="shell-bottomnav-label">Sign out</span>
-            </button>
+            <button className="sp-bottomnav-link" onClick={handleSignOut}>Sign out</button>
           </nav>
         )}
 

@@ -88,59 +88,64 @@ export default function SubPortalDashboard() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        {needsSignature.length > 0 && (
-          <div className="card">
-            <h3>Needs Your Signature</h3>
-            {needsSignature.map(wo => (
-              <WorkOrderRow key={wo.id} wo={wo} job={jobsById[wo.job_id]} role={role} />
-            ))}
-          </div>
-        )}
+        {/* One card holding the whole dashboard body — Needs Your
+            Signature (when present) plus the active tab — divided by
+            hairlines instead of stacked as separate boxes. */}
+        <div className="card" style={{ padding: '4px 24px' }}>
+          {needsSignature.length > 0 && (
+            <div className="dash-section" style={{ paddingTop: 18 }}>
+              <h3>Needs Your Signature</h3>
+              {needsSignature.map(wo => (
+                <WorkOrderRow key={wo.id} wo={wo} job={jobsById[wo.job_id]} role={role} />
+              ))}
+            </div>
+          )}
 
-        <div className="sub-portal-tabs">
-          {TABS.map(t => (
-            <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
-          ))}
-        </div>
+          <div className={needsSignature.length > 0 ? 'dash-section' : ''} style={needsSignature.length === 0 ? { paddingTop: 18 } : undefined}>
+            <div className="sub-portal-tabs" style={{ margin: '0 0 16px' }}>
+              {TABS.map(t => (
+                <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
+              ))}
+            </div>
 
-        {tab === 'Active Projects' && (
-          <div className="card">
-            <h3>Active Projects</h3>
-            {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
-            {activeProjects.map(({ job, jobId, count }) => (
-              <Link key={jobId} href={`/sub-portal/projects/${jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job?.project_address || (job ? formattedProjectNumber(job) : 'Job details unavailable')}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job?.job_type} · Est. completion {fmtDate(job?.expected_close_date)}</div>
+            {tab === 'Active Projects' && (
+              <>
+                {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
+                {activeProjects.map(({ job, jobId, count }) => (
+                  <Link key={jobId} href={`/sub-portal/projects/${jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job?.project_address || (job ? formattedProjectNumber(job) : 'Job details unavailable')}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job?.job_type} · Est. completion {fmtDate(job?.expected_close_date)}</div>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{count} work order{count === 1 ? '' : 's'} →</span>
+                    </div>
+                  </Link>
+                ))}
+              </>
+            )}
+
+            {tab === 'Scope of Work' && (
+              <>
+                {Object.keys(scopeByJob).length === 0 && <div className="empty-state">Nothing active right now.</div>}
+                {Object.entries(scopeByJob).map(([jobId, items]) => (
+                  <div key={jobId} style={{ marginBottom: 18 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                      {jobsById[jobId]?.project_address || (jobsById[jobId] ? formattedProjectNumber(jobsById[jobId]) : '')}
+                    </div>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {items.map((item, i) => (
+                        <li key={i} style={{ fontSize: 13, lineHeight: 1.6, paddingLeft: 18, position: 'relative', marginBottom: 4 }}>
+                          <span style={{ position: 'absolute', left: 0, color: 'var(--gold)' }}>—</span>{item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{count} work order{count === 1 ? '' : 's'} →</span>
-                </div>
-              </Link>
-            ))}
+                ))}
+              </>
+            )}
           </div>
-        )}
-
-        {tab === 'Scope of Work' && (
-          <div className="card">
-            <h3>Scope of Work — Active Jobs</h3>
-            {Object.keys(scopeByJob).length === 0 && <div className="empty-state">Nothing active right now.</div>}
-            {Object.entries(scopeByJob).map(([jobId, items]) => (
-              <div key={jobId} style={{ marginBottom: 18 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
-                  {jobsById[jobId]?.project_address || (jobsById[jobId] ? formattedProjectNumber(jobsById[jobId]) : '')}
-                </div>
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                  {items.map((item, i) => (
-                    <li key={i} style={{ fontSize: 13, lineHeight: 1.6, paddingLeft: 18, position: 'relative', marginBottom: 4 }}>
-                      <span style={{ position: 'absolute', left: 0, color: 'var(--gold)' }}>—</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
+        </div>
       </div>
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </SubPortalShell>
