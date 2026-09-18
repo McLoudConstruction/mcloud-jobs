@@ -642,7 +642,7 @@ export default function JobCalendarPage() {
   );
 
   const mainCalendar = (
-    <div style={{ minWidth: 0, flex: 1 }}>
+    <div className="cal-main-scroll" style={{ minWidth: 0, flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
       {isMobile ? (
         <>
           <div className="top-actions" style={{ marginBottom: view === 'month' ? 18 : 10 }}>
@@ -826,8 +826,20 @@ export default function JobCalendarPage() {
 
   return (
     <AppShell>
-      <div className="container container-wide">
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div className="container container-wide" style={!isMobile ? { paddingBottom: 0 } : undefined}>
+        <div
+          style={
+            isMobile
+              ? { display: 'flex', gap: 24, alignItems: 'flex-start' }
+              // Desktop: clip the whole two-column row to the remaining
+              // viewport height instead of letting it grow the page — the
+              // sidebar and the calendar each scroll on their own inside
+              // that fixed box, rather than the page scrolling everything
+              // (sidebar included) just to reach a tall month grid's
+              // bottom row.
+              : { display: 'flex', gap: 24, alignItems: 'stretch', height: 'calc(100vh - 260px)' }
+          }
+        >
           {!isMobile && (
             <CalendarSidebar
               monthDate={monthDate}
@@ -920,7 +932,18 @@ export default function JobCalendarPage() {
         .calendar-day-selected{ box-shadow: inset 0 0 0 2px var(--accent); }
 
         /* --- Sidebar: Create button, mini month-picker, filter/legend --- */
-        .cal-sidebar{ width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; }
+        .cal-sidebar{
+          width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px;
+          height: 100%; overflow-y: auto; overflow-x: hidden;
+          scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .cal-sidebar::-webkit-scrollbar{ width: 0; height: 0; display: none; }
+
+        .cal-main-scroll{ scrollbar-width: none; -ms-overflow-style: none; }
+        .cal-main-scroll::-webkit-scrollbar{ width: 0; height: 0; display: none; }
+        @media (max-width: 900px){
+          .cal-main-scroll{ height: auto !important; overflow: visible !important; }
+        }
         .cal-sidebar-create{ width: 100%; text-align: center; }
 
         .cal-mini{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
