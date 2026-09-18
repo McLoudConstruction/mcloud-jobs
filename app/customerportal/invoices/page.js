@@ -45,7 +45,7 @@ export default function CustomerInvoicesPage() {
   }
 
   return (
-    <CustomerPortalShell>
+    <CustomerPortalShell customerName={job?.customer_name}>
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 

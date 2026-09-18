@@ -58,7 +58,7 @@ export default function CustomerDocumentsPage() {
   const pendingSelections = selections.filter(s => s.status !== 'approved');
 
   return (
-    <CustomerPortalShell>
+    <CustomerPortalShell customerName={job?.customer_name}>
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 

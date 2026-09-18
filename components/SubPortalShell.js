@@ -5,11 +5,9 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { SignOutIcon } from './icons';
 
-// Sub-portal-only nav: wide sidebar, spelled-out labels, no icons — this
-// is deliberately a different shape than AppShell/CustomerPortalShell's
-// narrow icon rail, so it lives in its own class names (sp-*) rather than
-// reusing shell-sidebar-inner/shell-nav-link, which stay untouched for
-// the GC and customer portals.
+// Wide, text-only nav (pnav-* classes) — shared shape with
+// CustomerPortalShell, deliberately different from AppShell's own 84px
+// icon rail (shell-sidebar-inner/shell-nav-link), which stays untouched.
 const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard' },
   { href: '/sub-portal/rfps', label: 'Requests for Proposal' },
@@ -19,12 +17,12 @@ const NAV_ITEMS = [
   { href: '/sub-portal/settings', label: 'Settings' },
 ];
 
-function CompanyBlock({ company, role }) {
+function IdentityBlock({ company, role }) {
   if (!company) return null;
   return (
-    <div className="sp-company-block">
-      <div className="sp-company-name">{company.company_name}</div>
-      <div className="sp-company-role">{role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}</div>
+    <div className="pnav-identity-block">
+      <div className="pnav-identity-name">{company.company_name}</div>
+      <div className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}</div>
     </div>
   );
 }
@@ -85,13 +83,13 @@ export default function SubPortalShell({ company, role, children }) {
         </div>
       </div>
 
-      {/* The sidebar (and the company block inside it) is hidden below
+      {/* The sidebar (and the identity block inside it) is hidden below
           900px along with the rest of shell-sidebar, so mobile gets its
           own compact strip here instead of losing company context. */}
       {isMobile && company && (
-        <div className="sp-mobile-company-strip">
-          <span className="sp-company-name">{company.company_name}</span>
-          <span className="sp-company-role">{role === 'admin' ? 'Owner/Manager' : 'Crew — view only'}</span>
+        <div className="pnav-mobile-identity-strip">
+          <span className="pnav-identity-name">{company.company_name}</span>
+          <span className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager' : 'Crew — view only'}</span>
         </div>
       )}
 
@@ -100,31 +98,31 @@ export default function SubPortalShell({ company, role, children }) {
           className="shell-sidebar"
           style={{ width: mounted ? sidebarWidth : 0 }}
         >
-          <div className="sp-sidebar-inner">
+          <div className="pnav-sidebar-inner">
             <div>
-              <CompanyBlock company={company} role={role} />
-              <div className="sp-nav-links">
+              <IdentityBlock company={company} role={role} />
+              <div className="pnav-links">
                 {NAV_ITEMS.map(item => (
                   <a
                     key={item.href}
                     href={item.href}
-                    className={`sp-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                    className={`pnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
                   >
                     {item.label}
                     {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
-                      <span className="sp-nav-badge">{unreadMessages}</span>
+                      <span className="pnav-badge">{unreadMessages}</span>
                     )}
                   </a>
                 ))}
               </div>
             </div>
 
-            <div className="sp-nav-bottom">
+            <div className="pnav-bottom">
               <button
-                className="sp-nav-link sp-signout-link"
+                className="pnav-link"
                 onClick={handleSignOut}
               >
-                <SignOutIcon className="sp-nav-icon" />
+                <SignOutIcon className="pnav-icon" />
                 Sign out
               </button>
             </div>
@@ -132,20 +130,20 @@ export default function SubPortalShell({ company, role, children }) {
         </div>
 
         {isMobile && (
-          <nav className="sp-bottomnav">
+          <nav className="pnav-bottomnav">
             {NAV_ITEMS.map(item => (
               <a
                 key={item.href}
                 href={item.href}
-                className={`sp-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                className={`pnav-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
               >
                 {item.label}
                 {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
-                  <span className="sp-nav-badge">{unreadMessages}</span>
+                  <span className="pnav-badge">{unreadMessages}</span>
                 )}
               </a>
             ))}
-            <button className="sp-bottomnav-link" onClick={handleSignOut}>Sign out</button>
+            <button className="pnav-bottomnav-link" onClick={handleSignOut}>Sign out</button>
           </nav>
         )}
 

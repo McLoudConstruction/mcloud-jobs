@@ -60,7 +60,7 @@ export default function CustomerHomePage() {
   const showEstCompletion = job && STAGE_ORDER.indexOf(job.stage) >= STAGE_ORDER.indexOf('scheduled');
 
   return (
-    <CustomerPortalShell>
+    <CustomerPortalShell customerName={job?.customer_name}>
       <div className="container" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 

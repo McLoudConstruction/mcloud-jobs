@@ -5,40 +5,36 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { SignOutIcon } from './icons';
 
-function InboxIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M3 5.5h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3.5v-3.5H3a1 1 0 01-1-1v-8a1 1 0 011-1z" />
-      <path d="M6 9h8M6 12h5" />
-    </svg>
-  );
-}
-function ProjectsIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M3 8.5l7-5.5 7 5.5v7.5a1 1 0 01-1 1h-3.5v-5h-5v5H4a1 1 0 01-1-1v-7.5z" />
-    </svg>
-  );
-}
-function InvoicesIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M5.5 2.5h9v15l-2.2-1.5-2.3 1.5-2.3-1.5-2.2 1.5v-15z" />
-      <path d="M7.7 6.2h4.6M7.7 9h4.6M7.7 11.8h3" />
-    </svg>
-  );
-}
-
+// Wide, text-only nav (pnav-* classes) — same shape as SubPortalShell,
+// deliberately different from AppShell's own 84px icon rail
+// (shell-sidebar-inner/shell-nav-link), which stays untouched.
 const NAV_ITEMS = [
-  { href: '/customerportal/projects', label: 'Home', icon: ProjectsIcon },
-  { href: '/customerportal/invoices', label: 'Invoices', icon: InvoicesIcon },
-  { href: '/customerportal/inbox', label: 'Inbox', icon: InboxIcon },
+  { href: '/customerportal/projects', label: 'Home' },
+  { href: '/customerportal/invoices', label: 'Invoices' },
+  { href: '/customerportal/inbox', label: 'Inbox' },
 ];
 
-export default function CustomerPortalShell({ children }) {
-  const { settings } = useSettings();
+// First name only — "Welcome, John" reads friendlier in a narrow
+// sidebar than the full "John Smith" job records store customer_name as.
+function firstNameOf(fullName) {
+  if (!fullName) return '';
+  return fullName.trim().split(/\s+/)[0];
+}
+
+function IdentityBlock({ customerName }) {
+  const firstName = firstNameOf(customerName);
+  if (!firstName) return null;
+  return (
+    <div className="pnav-identity-block">
+      <div className="pnav-identity-name">Welcome, {firstName}</div>
+    </div>
+  );
+}
+
+export default function CustomerPortalShell({ customerName, children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { settings } = useSettings();
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -55,8 +51,11 @@ export default function CustomerPortalShell({ children }) {
     router.replace('/customerportal');
   }
 
-  const sidebarWidth = isMobile ? 0 : 84;
+  // Wider than the icon-rail shells (84px) since labels are spelled out
+  // in full rather than abbreviated under a small icon.
+  const sidebarWidth = isMobile ? 0 : 232;
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
+  const firstName = firstNameOf(customerName);
 
   return (
     <div className="shell">
@@ -68,52 +67,60 @@ export default function CustomerPortalShell({ children }) {
         </div>
       </div>
 
+      {/* The sidebar (and the welcome block inside it) is hidden below
+          900px along with the rest of shell-sidebar, so mobile gets its
+          own compact strip here instead of losing the greeting. */}
+      {isMobile && firstName && (
+        <div className="pnav-mobile-identity-strip">
+          <span className="pnav-identity-name">Welcome, {firstName}</span>
+        </div>
+      )}
+
       <div className="shell-body">
         <div
           className="shell-sidebar"
           style={{ width: mounted ? sidebarWidth : 0 }}
         >
-          <div className="shell-sidebar-inner">
-            <div className="shell-nav-links">
-              {NAV_ITEMS.map(item => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={`shell-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                >
-                  <item.icon className="shell-nav-icon" />
-                  <span className="shell-nav-label">{item.label}</span>
-                </a>
-              ))}
+          <div className="pnav-sidebar-inner">
+            <div>
+              <IdentityBlock customerName={customerName} />
+              <div className="pnav-links">
+                {NAV_ITEMS.map(item => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={`pnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
             </div>
 
-            <button
-              className="shell-nav-link signout-link"
-              onClick={handleSignOut}
-            >
-              <SignOutIcon className="shell-nav-icon" />
-              <span className="shell-nav-label">Sign out</span>
-            </button>
+            <div className="pnav-bottom">
+              <button
+                className="pnav-link"
+                onClick={handleSignOut}
+              >
+                <SignOutIcon className="pnav-icon" />
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
 
         {isMobile && (
-          <nav className="shell-bottomnav">
+          <nav className="pnav-bottomnav">
             {NAV_ITEMS.map(item => (
               <a
                 key={item.href}
                 href={item.href}
-                className={`shell-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
-                aria-label={item.label}
+                className={`pnav-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
               >
-                <item.icon className="shell-bottomnav-icon" />
-                <span className="shell-bottomnav-label">{item.label}</span>
+                {item.label}
               </a>
             ))}
-            <button className="shell-bottomnav-link" onClick={handleSignOut} aria-label="Sign out">
-              <SignOutIcon className="shell-bottomnav-icon" />
-              <span className="shell-bottomnav-label">Sign out</span>
-            </button>
+            <button className="pnav-bottomnav-link" onClick={handleSignOut}>Sign out</button>
           </nav>
         )}
 
