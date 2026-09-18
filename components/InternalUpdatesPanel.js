@@ -164,7 +164,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
 
     for (const { file } of stagedPhotos) {
       const compressed = await compressImage(file);
-      await queuePhoto({ jobId, file: compressed, createdByEmail, updateId });
+      await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
     }
 
     setNoteText('');

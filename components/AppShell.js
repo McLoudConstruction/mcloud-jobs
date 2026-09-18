@@ -39,6 +39,7 @@ const NAV_ITEMS = [
     icon: SubcontractorsIcon,
     children: [
       { href: '/subcontractors/work-orders', label: 'Work Orders' },
+      { href: '/subcontractors/rfps', label: 'RFPs' },
     ],
   },
   {

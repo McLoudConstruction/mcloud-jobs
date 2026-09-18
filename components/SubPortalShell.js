@@ -31,9 +31,21 @@ function InvoicesIcon(props) {
     </svg>
   );
 }
+// Deliberately distinct from WorkOrdersIcon (a clipboard) — a
+// speech-bubble/question shape, since Requests are an open ask, not
+// assigned, in-progress work.
+function RequestsIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3 4.5h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3.5v-3.5H3a1 1 0 01-1-1v-8a1 1 0 011-1z" />
+      <path d="M10 7.5a1.5 1.5 0 013 0c0 1-1.5 1.2-1.5 2.3M10.5 12.2h.01" />
+    </svg>
+  );
+}
 
 const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard', icon: DashboardIcon },
+  { href: '/sub-portal/rfps', label: 'Requests', icon: RequestsIcon },
   { href: '/sub-portal/work-orders', label: 'Work Orders', icon: WorkOrdersIcon },
   { href: '/sub-portal/invoices', label: 'Invoices', icon: InvoicesIcon },
   { href: '/sub-portal/settings', label: 'Settings', icon: SettingsIcon },

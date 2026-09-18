@@ -849,6 +849,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .badge-accepted{ background: #7d5a2e; }
 .badge-declined{ background: #a13f3f; }
 .badge-lost{ background: #6b6560; }
+.badge-open{ background: #6d5a2e; }
+.badge-awarded{ background: #3a6b45; }
+.badge-not_awarded{ background: #6b6560; }
+.badge-sent{ background: #9a9488; }
+.badge-viewed{ background: #8a7c4f; }
+.badge-responded{ background: #7d5a2e; }
 
 [data-theme="dark"] .badge-new{ background: #8a8563; }
 [data-theme="dark"] .badge-inspected{ background: #8f8360; }
@@ -863,6 +869,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 [data-theme="dark"] .badge-accepted{ background: #a3763f; }
 [data-theme="dark"] .badge-declined{ background: #c0524f; }
 [data-theme="dark"] .badge-lost{ background: #8a8580; }
+[data-theme="dark"] .badge-open{ background: #a3763f; }
+[data-theme="dark"] .badge-awarded{ background: #4f9160; }
+[data-theme="dark"] .badge-not_awarded{ background: #8a8580; }
+[data-theme="dark"] .badge-sent{ background: #7a7670; }
+[data-theme="dark"] .badge-viewed{ background: #a3936a; }
+[data-theme="dark"] .badge-responded{ background: #a3763f; }
 
 .stepper{ display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 16px 18px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; }
 .stepper-flat{ gap: 8px; }
