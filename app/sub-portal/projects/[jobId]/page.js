@@ -75,6 +75,10 @@ export default function SubPortalProjectPage() {
                 <div className="portal-info-value">{job.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
               </div>
               <div>
+                <div className="portal-info-label">Scheduled Start</div>
+                <div className="portal-info-value">{fmtDate(job.scheduled_start_date)}</div>
+              </div>
+              <div>
                 <div className="portal-info-label">Est. Completion</div>
                 <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
               </div>

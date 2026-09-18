@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
-import { WORK_ORDER_STATUS_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, formattedProjectNumber } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
@@ -47,6 +47,28 @@ export default function SubPortalDashboard() {
 
   const { company, role, workOrders, jobsById, ready } = useSubPortalData(session);
 
+  // Open RFPs — needed here (not just on the Requests page) so an
+  // unanswered request to bid shows up as something waiting on you,
+  // same as an unsigned work order.
+  const [openRfps, setOpenRfps] = useState([]);
+  const loadRfps = useCallback(async (companyId) => {
+    const { data } = await supabase
+      .from('rfp_recipients')
+      .select('*, rfps(id, title, job_id, jobs(job_number, project_address))')
+      .eq('company_id', companyId)
+      .in('status', ['sent', 'viewed'])
+      .order('sent_at', { ascending: false });
+    if (data) setOpenRfps(data);
+  }, []);
+  useEffect(() => {
+    if (!company) return;
+    loadRfps(company.id);
+    const channel = supabase.channel(`sub-portal-dash-rfps-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfp_recipients', filter: `company_id=eq.${company.id}` }, () => loadRfps(company.id))
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [company, loadRfps]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/sub-portal');
@@ -68,7 +90,22 @@ export default function SubPortalDashboard() {
   }
   if (!company) return null;
 
+  // "Needs Your Attention" — admin-login items only, same split as the
+  // actions themselves (accept/decline, submit proposal, upload invoice
+  // are all admin-only; crew logins are view-only across the board).
   const needsSignature = role === 'admin' ? workOrders.filter(wo => wo.status === 'issued') : [];
+  const needsProposal = role === 'admin' ? openRfps.filter(rr => !rr.responded_at) : [];
+  const needsInvoice = role === 'admin'
+    ? workOrders.filter(wo => ['accepted', 'completed'].includes(wo.status) && !wo.sub_invoice_filename)
+    : [];
+  const coiDays = company.coi_expires_at ? Math.floor((new Date(company.coi_expires_at) - new Date()) / 86400000) : null;
+  const complianceAlert = role === 'admin' && (!company.coi_expires_at || coiDays < 30);
+  const attentionCount = needsSignature.length + needsProposal.length + needsInvoice.length + (complianceAlert ? 1 : 0);
+
+  // Upcoming schedule — visible jobs with a future start date, soonest first.
+  const upcoming = Object.values(jobsById)
+    .filter(j => j.scheduled_start_date && new Date(j.scheduled_start_date) >= new Date(new Date().toDateString()))
+    .sort((a, b) => new Date(a.scheduled_start_date) - new Date(b.scheduled_start_date));
 
   const activeJobIds = [...new Set(workOrders.filter(wo => ACTIVE_STATUSES.includes(wo.status)).map(wo => wo.job_id))];
   const activeProjects = activeJobIds.map(jobId => ({
@@ -88,20 +125,70 @@ export default function SubPortalDashboard() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        {/* One card holding the whole dashboard body — Needs Your
-            Signature (when present) plus the active tab — divided by
-            hairlines instead of stacked as separate boxes. */}
-        <div className="card" style={{ padding: '4px 24px' }}>
-          {needsSignature.length > 0 && (
+        {/* Action-first: what's waiting on you, before anything else on
+            the page — an unsigned work order, an unanswered RFP, an
+            invoice still to upload, or a compliance doc about to lapse. */}
+        {attentionCount > 0 && (
+          <div className="card" style={{ padding: '4px 24px', borderColor: '#c0524f' }}>
             <div className="dash-section" style={{ paddingTop: 18 }}>
-              <h3>Needs Your Signature</h3>
+              <h3>Needs Your Attention</h3>
+
               {needsSignature.map(wo => (
-                <WorkOrderRow key={wo.id} wo={wo} job={jobsById[wo.job_id]} role={role} />
+                <AttentionRow
+                  key={`sig-${wo.id}`}
+                  href={`/sub-portal/work-orders/${wo.id}`}
+                  label={`Sign work order — ${jobsById[wo.job_id]?.project_address || formattedProjectNumber(jobsById[wo.job_id] || {})}`}
+                  detail={wo.description}
+                />
+              ))}
+              {needsProposal.map(rr => (
+                <AttentionRow
+                  key={`rfp-${rr.id}`}
+                  href={`/sub-portal/rfps/${rr.id}`}
+                  label={`Respond to request for proposal — ${rr.rfps?.title || ''}`}
+                  detail={rr.rfps?.jobs?.project_address}
+                />
+              ))}
+              {needsInvoice.map(wo => (
+                <AttentionRow
+                  key={`inv-${wo.id}`}
+                  href={`/sub-portal/work-orders/${wo.id}`}
+                  label={`Upload invoice — ${jobsById[wo.job_id]?.project_address || formattedProjectNumber(jobsById[wo.job_id] || {})}`}
+                  detail={wo.description}
+                />
+              ))}
+              {complianceAlert && (
+                <AttentionRow
+                  href="/sub-portal/settings"
+                  label={!company.coi_expires_at ? 'Upload your Certificate of Insurance' : coiDays < 0 ? 'Your Certificate of Insurance has expired' : 'Your Certificate of Insurance expires soon'}
+                  detail="Keep this current so there's no gap before a new job starts."
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {upcoming.length > 0 && (
+          <div className="card" style={{ padding: '4px 24px' }}>
+            <div className="dash-section" style={{ paddingTop: 18 }}>
+              <h3>Upcoming Schedule</h3>
+              {upcoming.map(job => (
+                <Link key={job.id} href={`/sub-portal/projects/${job.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job.project_address || formattedProjectNumber(job)}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job.job_type}</div>
+                    </div>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--gold)' }}>Starts {fmtDate(job.scheduled_start_date)}</span>
+                  </div>
+                </Link>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          <div className={needsSignature.length > 0 ? 'dash-section' : ''} style={needsSignature.length === 0 ? { paddingTop: 18 } : undefined}>
+        <div className="card" style={{ padding: '4px 24px' }}>
+          <div className="dash-section" style={{ paddingTop: 18 }}>
             <div className="sub-portal-tabs" style={{ margin: '0 0 16px' }}>
               {TABS.map(t => (
                 <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
@@ -152,6 +239,20 @@ export default function SubPortalDashboard() {
   );
 }
 
+function AttentionRow({ href, label, detail }) {
+  return (
+    <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)', gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>{label}</div>
+          {detail && <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{detail}</div>}
+        </div>
+        <span style={{ fontSize: 12, color: '#a13f3f', flexShrink: 0 }}>→</span>
+      </div>
+    </Link>
+  );
+}
+
 export function WorkOrderRow({ wo, job, role }) {
   return (
     <Link href={`/sub-portal/work-orders/${wo.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -162,6 +263,9 @@ export function WorkOrderRow({ wo, job, role }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {role === 'admin' && <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoneyRow(wo.amount)}</span>}
+          {wo.status === 'accepted' && wo.field_progress && wo.field_progress !== 'not_started' && (
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{FIELD_PROGRESS_LABELS[wo.field_progress]}</span>
+          )}
           <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
         </div>
       </div>

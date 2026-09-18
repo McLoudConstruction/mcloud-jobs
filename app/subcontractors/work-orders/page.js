@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import MobileFab from '../../../components/MobileFab';
-import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS } from '../../../lib/constants';
 
 const ACTIVE_JOB_STAGES = ['approved', 'scheduled', 'active'];
 
@@ -171,6 +171,9 @@ export default function WorkOrdersHubPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontWeight: 600 }}>{fmtMoney(wo.invoiced_amount ?? wo.amount)}</span>
+                  {wo.status === 'accepted' && wo.field_progress && wo.field_progress !== 'not_started' && (
+                    <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{FIELD_PROGRESS_LABELS[wo.field_progress]}</span>
+                  )}
                   <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
                 </div>
               </Link>

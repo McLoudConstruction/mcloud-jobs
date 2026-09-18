@@ -6,6 +6,131 @@ import { useSubPortalData } from '../../../lib/useSubPortalData';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 
+function fmtDate(v) {
+  if (!v) return '—';
+  return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function coiStatusLabel(expiresAt) {
+  if (!expiresAt) return { text: 'Not on file', color: 'var(--ink-soft)' };
+  const days = Math.floor((new Date(expiresAt) - new Date()) / 86400000);
+  if (days < 0) return { text: `Expired ${fmtDate(expiresAt)}`, color: '#a13f3f' };
+  if (days <= 30) return { text: `Expires soon — ${fmtDate(expiresAt)}`, color: '#a17c3f' };
+  return { text: `Current through ${fmtDate(expiresAt)}`, color: '#3a6b45' };
+}
+
+// Self-serve W-9/COI upload — same companies.w9_storage_path/
+// coi_storage_path/coi_expires_at fields the office already tracks
+// (migration 029), just writable by the sub's own admin login now too
+// (migration 114), through submit_sub_compliance_doc rather than a
+// direct table grant.
+function ComplianceDocsSection({ company }) {
+  const [w9Uploading, setW9Uploading] = useState(false);
+  const [coiUploading, setCoiUploading] = useState(false);
+  const [coiExpiresAt, setCoiExpiresAt] = useState(company.coi_expires_at || '');
+  const [error, setError] = useState('');
+  const [viewing, setViewing] = useState(false);
+  // useSubPortalData only re-fetches on work_orders changes, so a
+  // companies-table write from here wouldn't otherwise reflect until the
+  // next full reload — these local overrides give immediate feedback.
+  const [docs, setDocs] = useState({ w9_storage_path: company.w9_storage_path, coi_storage_path: company.coi_storage_path, coi_expires_at: company.coi_expires_at });
+
+  async function uploadDoc(file, kind) {
+    if (!file) return;
+    if (kind === 'coi' && !coiExpiresAt) {
+      setError('Set the COI expiration date before uploading.');
+      return;
+    }
+    const setUploading = kind === 'w9' ? setW9Uploading : setCoiUploading;
+    setUploading(true);
+    setError('');
+    try {
+      const path = `compliance/${company.id}/${kind}-${Date.now()}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from('subcontractor-docs').upload(path, file);
+      if (uploadErr) throw uploadErr;
+      const { error: rpcErr } = await supabase.rpc('submit_sub_compliance_doc', {
+        target_company_id: company.id,
+        kind,
+        storage_path_in: path,
+        expires_at_in: kind === 'coi' ? coiExpiresAt : null,
+      });
+      if (rpcErr) throw rpcErr;
+      setDocs(prev => kind === 'w9'
+        ? { ...prev, w9_storage_path: path }
+        : { ...prev, coi_storage_path: path, coi_expires_at: coiExpiresAt });
+    } catch (err) {
+      setError(err.message || 'Upload failed — try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function viewDoc(path) {
+    if (!path) return;
+    setViewing(true);
+    const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 300);
+    setViewing(false);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  const coi = coiStatusLabel(docs.coi_expires_at);
+
+  return (
+    <div className="dash-section">
+      <h3>Compliance Documents</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        Keep your W-9 and Certificate of Insurance on file current — the office can see these too.
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>W-9</div>
+          <div style={{ fontSize: 11.5, color: docs.w9_storage_path ? '#3a6b45' : 'var(--ink-soft)' }}>
+            {docs.w9_storage_path ? 'On file' : 'Not on file'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {docs.w9_storage_path && (
+            <button className="btn btn-sm" onClick={() => viewDoc(docs.w9_storage_path)} disabled={viewing}>View</button>
+          )}
+          <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
+            {w9Uploading ? 'Uploading…' : docs.w9_storage_path ? 'Replace' : 'Upload'}
+            <input type="file" accept="application/pdf,image/*" onChange={e => uploadDoc(e.target.files[0], 'w9')} disabled={w9Uploading} style={{ display: 'none' }} />
+          </label>
+        </div>
+      </div>
+
+      <div style={{ padding: '14px 0 4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Certificate of Insurance</div>
+            <div style={{ fontSize: 11.5, color: coi.color }}>{coi.text}</div>
+          </div>
+          {docs.coi_storage_path && (
+            <button className="btn btn-sm" onClick={() => viewDoc(docs.coi_storage_path)} disabled={viewing}>View</button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <input
+            type="date"
+            value={coiExpiresAt}
+            onChange={e => setCoiExpiresAt(e.target.value)}
+            style={{ flex: '1 1 160px' }}
+            aria-label="COI expiration date"
+          />
+          <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
+            {coiUploading ? 'Uploading…' : docs.coi_storage_path ? 'Replace' : 'Upload'}
+            <input type="file" accept="application/pdf,image/*" onChange={e => uploadDoc(e.target.files[0], 'coi')} disabled={coiUploading} style={{ display: 'none' }} />
+          </label>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>Set the expiration date shown on the certificate, then attach the file.</div>
+      </div>
+
+      {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
+    </div>
+  );
+}
+
 export default function SubPortalSettingsPage() {
   const router = useRouter();
   const [session, setSession] = useState(null);
@@ -149,6 +274,8 @@ export default function SubPortalSettingsPage() {
             {pwResult && <div style={{ fontSize: 12.5, marginTop: 8, color: pwResult.startsWith('Password set') ? '#3a6b45' : '#a13f3f' }}>{pwResult}</div>}
           </form>
         </div>
+
+        {role === 'admin' && <ComplianceDocsSection company={company} />}
 
         {role === 'admin' && (
         <div className="dash-section">

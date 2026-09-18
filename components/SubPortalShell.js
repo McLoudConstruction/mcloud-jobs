@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/sub-portal/rfps', label: 'Requests for Proposal' },
   { href: '/sub-portal/work-orders', label: 'Work Orders' },
   { href: '/sub-portal/invoices', label: 'Invoices' },
+  { href: '/sub-portal/messages', label: 'Messages' },
   { href: '/sub-portal/settings', label: 'Settings' },
 ];
 
@@ -34,6 +35,7 @@ export default function SubPortalShell({ company, role, children }) {
   const { settings } = useSettings();
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   useEffect(() => {
@@ -43,6 +45,23 @@ export default function SubPortalShell({ company, role, children }) {
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
+
+  // Unread badge on the Messages nav item — self-contained here so every
+  // page that renders this shell gets it for free, no per-page plumbing.
+  useEffect(() => {
+    if (!company?.id) return;
+    let active = true;
+    function loadUnread() {
+      supabase.from('sub_messages').select('*', { count: 'exact', head: true })
+        .eq('company_id', company.id).eq('sender', 'staff').is('read_at', null)
+        .then(({ count }) => { if (active) setUnreadMessages(count || 0); });
+    }
+    loadUnread();
+    const channel = supabase.channel(`sub-portal-unread-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_messages', filter: `company_id=eq.${company.id}` }, loadUnread)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [company?.id]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -92,6 +111,9 @@ export default function SubPortalShell({ company, role, children }) {
                     className={`sp-nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
                   >
                     {item.label}
+                    {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
+                      <span className="sp-nav-badge">{unreadMessages}</span>
+                    )}
                   </a>
                 ))}
               </div>
@@ -118,6 +140,9 @@ export default function SubPortalShell({ company, role, children }) {
                 className={`sp-bottomnav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
               >
                 {item.label}
+                {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
+                  <span className="sp-nav-badge">{unreadMessages}</span>
+                )}
               </a>
             ))}
             <button className="sp-bottomnav-link" onClick={handleSignOut}>Sign out</button>

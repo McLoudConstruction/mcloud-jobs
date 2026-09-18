@@ -80,6 +80,76 @@ function coiCompliant(expiresAt) {
   return days > 30;
 }
 
+function fmtMessageTime(v) {
+  if (!v) return '';
+  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// Company-scoped thread with a sub, same sub_messages table the Sub
+// Portal's own Messages page reads/writes — staff replies are a plain
+// insert (already covered by the admin "for all" policy), no RPC needed
+// on this side.
+function SubMessagesPanel({ companyId }) {
+  const [messages, setMessages] = useState(null);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('sub_messages').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    setMessages(data || []);
+  }, [companyId]);
+
+  useEffect(() => {
+    load();
+    supabase.rpc('mark_sub_messages_read', { target_company_id: companyId }).then(() => {});
+    const channel = supabase.channel(`staff-sub-messages-${companyId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_messages', filter: `company_id=eq.${companyId}` }, load)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [companyId, load]);
+
+  async function sendReply(e) {
+    e.preventDefault();
+    if (!reply.trim()) return;
+    setSending(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('sub_messages').insert({
+      company_id: companyId,
+      sender: 'staff',
+      sender_email: user?.email,
+      message: reply.trim(),
+    });
+    setSending(false);
+    setReply('');
+  }
+
+  if (messages === null) return null;
+
+  return (
+    <div className="card" style={{ marginTop: 20 }}>
+      <h3>Messages</h3>
+      <form onSubmit={sendReply} style={{ marginBottom: 14 }}>
+        <textarea value={reply} onChange={e => setReply(e.target.value)} rows={2} placeholder="Reply to this subcontractor…" />
+        <div className="section-actions">
+          <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
+        </div>
+      </form>
+      {messages.length === 0 && <div className="empty-state">No messages yet.</div>}
+      {messages.map(m => (
+        <div key={m.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontWeight: 700, fontSize: 12, color: m.sender === 'sub' ? 'var(--gold)' : 'var(--ink)' }}>
+              {m.sender === 'sub' ? 'Subcontractor' : 'You'}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtMessageTime(m.created_at)}</span>
+          </div>
+          <p style={{ fontSize: 13, lineHeight: 1.5, margin: '3px 0 0', whiteSpace: 'pre-wrap' }}>{m.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SubcontractorStats({ companyId }) {
   const [workOrders, setWorkOrders] = useState(null);
 
@@ -688,6 +758,7 @@ export default function SubcontractorsPage() {
             {inviteResult && <div style={{ fontSize: 12, color: inviteResult.startsWith('Failed') ? '#a13f3f' : '#3a6b45', marginTop: 8 }}>{inviteResult}</div>}
             </form>
             {editingId && <div style={{ marginTop: 24 }}><SubcontractorStats companyId={editingId} /></div>}
+            {editingId && <SubMessagesPanel companyId={editingId} />}
         </PopupModal>
 
         <PopupModal open={applyModalOpen} onClose={() => setApplyModalOpen(false)} maxWidth={460}>

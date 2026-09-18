@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
-import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS } from '../../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS, FIELD_PROGRESS_LABELS } from '../../../../lib/constants';
 import SignaturePad from '../../../../components/SignaturePad';
 import SubPortalShell from '../../../../components/SubPortalShell';
 
@@ -138,6 +138,17 @@ export default function SubPortalWorkOrderPage() {
             </div>
           )}
 
+          {/* Field progress and photos are open to crew logins too — this
+              is about the physical work, not money, so it doesn't follow
+              the admin-only "money things" gate the rest of this page uses. */}
+          {['accepted', 'completed'].includes(wo.status) && (
+            <FieldProgressSection wo={wo} />
+          )}
+
+          {['accepted', 'completed'].includes(wo.status) && (
+            <WorkOrderPhotosSection workOrderId={wo.id} />
+          )}
+
           {role === 'admin' && wo.status === 'issued' && !declining && (
             <div className="dash-section">
               <h3>Accept This Work Order</h3>
@@ -205,6 +216,142 @@ export default function SubPortalWorkOrderPage() {
         </div>
       </div>
     </SubPortalShell>
+  );
+}
+
+const PROGRESS_OPTIONS = ['not_started', 'in_progress', 'completed'];
+
+function FieldProgressSection({ wo }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function setProgress(value) {
+    if (value === wo.field_progress) return;
+    setSaving(true);
+    setError('');
+    const { error: rpcErr } = await supabase.rpc('set_work_order_progress', {
+      target_work_order_id: wo.id,
+      progress_in: value,
+    });
+    setSaving(false);
+    if (rpcErr) setError(rpcErr.message);
+  }
+
+  return (
+    <div className="dash-section">
+      <h3>Field Progress</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+        Let the office know where this work order stands.
+      </div>
+      <div className="sub-portal-tabs" style={{ margin: 0, border: 'none' }}>
+        {PROGRESS_OPTIONS.map(opt => (
+          <button
+            key={opt}
+            type="button"
+            className={opt === (wo.field_progress || 'not_started') ? 'active' : ''}
+            onClick={() => setProgress(opt)}
+            disabled={saving}
+            style={{ borderBottom: 'none', border: '1px solid var(--panel-line)', borderRadius: 20, marginRight: 6 }}
+          >
+            {FIELD_PROGRESS_LABELS[opt]}
+          </button>
+        ))}
+      </div>
+      {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
+    </div>
+  );
+}
+
+function WorkOrderPhotosSection({ workOrderId }) {
+  const [photos, setPhotos] = useState([]);
+  const [urls, setUrls] = useState({});
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('work_order_photos').select('*').eq('work_order_id', workOrderId).order('created_at', { ascending: false });
+    if (data) {
+      setPhotos(data);
+      const entries = await Promise.all(data.map(async p => {
+        const { data: signed } = await supabase.storage.from('subcontractor-docs').createSignedUrl(p.storage_path, 3600);
+        return [p.id, signed?.signedUrl];
+      }));
+      setUrls(Object.fromEntries(entries));
+    }
+  }, [workOrderId]);
+
+  useEffect(() => {
+    load();
+    const channel = supabase.channel(`sub-wo-photos-${workOrderId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_order_photos', filter: `work_order_id=eq.${workOrderId}` }, load)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [workOrderId, load]);
+
+  async function handleUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    setError('');
+    try {
+      for (const file of files) {
+        const path = `progress-photos/${workOrderId}/${Date.now()}-${file.name}`;
+        const { error: uploadErr } = await supabase.storage.from('subcontractor-docs').upload(path, file);
+        if (uploadErr) throw uploadErr;
+        const { error: rpcErr } = await supabase.rpc('add_work_order_photo', {
+          target_work_order_id: workOrderId,
+          storage_path_in: path,
+          caption_in: null,
+        });
+        if (rpcErr) throw rpcErr;
+      }
+    } catch (err) {
+      setError(err.message || 'Upload failed — try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function removePhoto(photoId, storagePath) {
+    if (!confirm('Remove this photo?')) return;
+    await supabase.rpc('remove_work_order_photo', { target_photo_id: photoId });
+    await supabase.storage.from('subcontractor-docs').remove([storagePath]);
+  }
+
+  return (
+    <div className="dash-section">
+      <h3>Photos</h3>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+        Site or progress photos for this work order — visible to the office.
+      </div>
+
+      {photos.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginBottom: 12 }}>
+          {photos.map(p => (
+            <div key={p.id} style={{ position: 'relative' }}>
+              {urls[p.id]
+                ? <img src={urls[p.id]} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 4, display: 'block' }} />
+                : <div style={{ width: '100%', height: 100, borderRadius: 4, background: 'var(--panel)' }} />}
+              <button
+                type="button"
+                onClick={() => removePhoto(p.id, p.storage_path)}
+                aria-label="Remove photo"
+                style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 12, lineHeight: '20px', cursor: 'pointer', padding: 0 }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer' }}>
+        {uploading ? 'Uploading…' : 'Add Photos'}
+        <input type="file" accept="image/*" multiple onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+      </label>
+      {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 8 }}>{error}</div>}
+    </div>
   );
 }
 
