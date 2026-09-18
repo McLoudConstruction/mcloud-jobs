@@ -319,6 +319,21 @@ export default function JobCalendarPage() {
     return { ...j, start, end: end < start ? start : end };
   }).filter(j => j.start), [jobs]);
 
+  // Mobile month navigation: a horizontally scrollable strip of month
+  // chips (like a Google Calendar month/year switcher) in place of the
+  // prev/Today/next arrows — 3 months back through 8 months ahead of the
+  // real current month, regardless of which month is currently shown.
+  const monthChips = useMemo(() => {
+    const t = new Date();
+    const base = new Date(t.getFullYear(), t.getMonth(), 1);
+    return Array.from({ length: 12 }, (_, i) => new Date(base.getFullYear(), base.getMonth() - 3 + i, 1));
+  }, []);
+
+  // Every hook above this line must run on every render, loading or not —
+  // this early return has to come after all of them, or the hook count
+  // changes between the loading render and the real one (React error #310,
+  // seen as a hard crash on this page once the timeline-grid hooks were
+  // added above the old return point).
   if (loading || !session) return null;
 
   function goToday() {
@@ -358,16 +373,6 @@ export default function JobCalendarPage() {
   // The Sun-Sat week containing cursorDate, for the Week agenda view.
   const cursorWeekStart = addDays(cursorDate, -cursorDate.getDay());
   const cursorWeekDays = Array.from({ length: 7 }, (_, i) => addDays(cursorWeekStart, i));
-
-  // Mobile month navigation: a horizontally scrollable strip of month
-  // chips (like a Google Calendar month/year switcher) in place of the
-  // prev/Today/next arrows — 3 months back through 8 months ahead of the
-  // real current month, regardless of which month is currently shown.
-  const monthChips = useMemo(() => {
-    const t = new Date();
-    const base = new Date(t.getFullYear(), t.getMonth(), 1);
-    return Array.from({ length: 12 }, (_, i) => new Date(base.getFullYear(), base.getMonth() - 3 + i, 1));
-  }, []);
 
   function AgendaDay({ date }) {
     const jobsToday = showJobs ? jobsForDay(date) : [];
