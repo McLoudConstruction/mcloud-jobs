@@ -216,6 +216,26 @@ export default function JobCalendarPage() {
     return `GMT${offsetHours >= 0 ? '+' : ''}${offsetHours}`;
   }, []);
 
+  // Week/Day view fills exactly to the bottom of the viewport (like
+  // Google's), so its scrollable hour grid never has a hidden dead zone
+  // below the fold and never overshoots into forcing the outer page to
+  // scroll. Measured from the row's actual on-screen position rather than
+  // a guessed pixel constant, so it's correct regardless of header/logo
+  // height. Month view deliberately ignores this — it renders in full,
+  // uncapped, never scrolling.
+  const sidebarRowRef = useRef(null);
+  const [availableHeight, setAvailableHeight] = useState(640);
+  useEffect(() => {
+    function measure() {
+      if (!sidebarRowRef.current) return;
+      const top = sidebarRowRef.current.getBoundingClientRect().top;
+      setAvailableHeight(Math.max(360, window.innerHeight - top - 24));
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
     checkSize();
@@ -641,8 +661,21 @@ export default function JobCalendarPage() {
     </div>
   );
 
+  // Month view is plain flow (no height cap, no scroll) so it always
+  // renders in full. Week/Day, on desktop, become a flex column that
+  // fills the row's measured height exactly: the title bar keeps its
+  // natural height and the timeline grid below it stretches (and
+  // internally scrolls) to fill whatever's left.
+  const fillsViewport = !isMobile && view !== 'month';
   const mainCalendar = (
-    <div className="cal-main-scroll" style={{ minWidth: 0, flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div
+      className={fillsViewport ? 'cal-main-scroll' : undefined}
+      style={
+        fillsViewport
+          ? { minWidth: 0, flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          : { minWidth: 0, flex: 1 }
+      }
+    >
       {isMobile ? (
         <>
           <div className="top-actions" style={{ marginBottom: view === 'month' ? 18 : 10 }}>
@@ -662,7 +695,7 @@ export default function JobCalendarPage() {
         // equivalent of Google's view dropdown — sits on the far right.
         // "+ New Event" now lives at the top of the sidebar in the Create
         // button's spot, not up here.
-        <div className="top-actions">
+        <div className="top-actions" style={fillsViewport ? { flexShrink: 0 } : undefined}>
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
           {arrowGroup}
           <div style={{ marginLeft: 'auto' }}>{viewPicker}</div>
@@ -808,7 +841,9 @@ export default function JobCalendarPage() {
             {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
           </div>
         ) : (
-          <DesktopTimeGrid days={cursorWeekDays} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <DesktopTimeGrid days={cursorWeekDays} />
+          </div>
         )
       )}
 
@@ -818,7 +853,9 @@ export default function JobCalendarPage() {
             <AgendaDay date={cursorDate} />
           </div>
         ) : (
-          <DesktopTimeGrid days={[cursorDate]} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <DesktopTimeGrid days={[cursorDate]} />
+          </div>
         )
       )}
     </div>
@@ -826,18 +863,16 @@ export default function JobCalendarPage() {
 
   return (
     <AppShell>
-      <div className="container container-wide" style={!isMobile ? { paddingBottom: 0 } : undefined}>
+      <div className="container container-wide" style={!isMobile && view !== 'month' ? { paddingBottom: 0 } : undefined}>
         <div
+          ref={sidebarRowRef}
           style={
-            isMobile
+            isMobile || view === 'month'
+              // Month view renders in full at its natural height, never
+              // clipped or scrolled — only Week/Day fill to the bottom of
+              // the viewport and scroll internally, like Google's does.
               ? { display: 'flex', gap: 24, alignItems: 'flex-start' }
-              // Desktop: clip the whole two-column row to the remaining
-              // viewport height instead of letting it grow the page — the
-              // sidebar and the calendar each scroll on their own inside
-              // that fixed box, rather than the page scrolling everything
-              // (sidebar included) just to reach a tall month grid's
-              // bottom row.
-              : { display: 'flex', gap: 24, alignItems: 'stretch', height: 'calc(100vh - 260px)' }
+              : { display: 'flex', gap: 24, alignItems: 'stretch', height: availableHeight }
           }
         >
           {!isMobile && (
@@ -977,8 +1012,13 @@ export default function JobCalendarPage() {
         }
 
         /* --- Desktop Week/Day hourly timeline grid --- */
-        .tg{ border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
-        .tg-header{ display: grid; border-bottom: 1px solid var(--line); }
+        /* Fills whatever height its flex-column parent gives it (the
+           wrapper in the page's Week/Day branch, which itself fills the
+           measured available-height row) — the header and all-day rows
+           keep their natural height, and .tg-scroll is the one flexible
+           piece that grows or shrinks to make the rest come out exact. */
+        .tg{ border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--card-bg); flex: 1; min-height: 0; display: flex; flex-direction: column; }
+        .tg-header{ display: grid; border-bottom: 1px solid var(--line); flex-shrink: 0; }
         .tg-header-corner{ border-right: 1px solid transparent; }
         .tg-header-day{
           display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -989,7 +1029,7 @@ export default function JobCalendarPage() {
         .tg-header-num{ font-size: 16px; font-weight: 700; color: var(--heading); margin-top: 2px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
         .tg-header-day.today .tg-header-num{ background: var(--accent); color: #fff; }
 
-        .tg-allday{ display: grid; border-bottom: 1px solid var(--line); position: relative; padding: 4px 0; }
+        .tg-allday{ display: grid; border-bottom: 1px solid var(--line); position: relative; padding: 4px 0; flex-shrink: 0; }
         .tg-allday-label{ font-size: 9.5px; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; }
         .tg-allday-cells{ min-height: 20px; }
         .tg-allday-bar{
@@ -1003,7 +1043,7 @@ export default function JobCalendarPage() {
            separate sibling above it), so the day columns below drift out
            of alignment with the day columns in the header. Hiding the
            scrollbar keeps both the same width and looks cleaner besides. */
-        .tg-scroll{ max-height: 620px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .tg-scroll{ flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
         .tg-scroll::-webkit-scrollbar{ width: 0; height: 0; display: none; }
         .tg-grid{ display: grid; position: relative; }
         .tg-hours{ position: relative; border-right: 1px solid var(--line); }
