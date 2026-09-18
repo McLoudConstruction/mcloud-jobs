@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
-import { SERVICES_OFFERED } from '../lib/constants';
+import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES } from '../lib/constants';
 
 const WORK_LOCATION_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
@@ -610,7 +610,15 @@ export default function ScheduleCard({ jobId, job }) {
                   <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Trade</label>
                   <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })} style={{ width: 150 }}>
                     <option value="">No specific trade</option>
-                    {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+                    <optgroup label="Trades">
+                      {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+                    </optgroup>
+                    {/* Not billable trades — delays, inspections, the
+                        punch list/walkthrough, admin time — but real
+                        schedule phases with their own color. */}
+                    <optgroup label="Other">
+                      {SCHEDULE_PHASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
