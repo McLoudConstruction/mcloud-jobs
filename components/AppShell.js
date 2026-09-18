@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon, MoreIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
 import ScrollFadeRow from './ScrollFadeRow';
+import BottomSheet from './BottomSheet';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -59,6 +60,20 @@ const NAV_ITEMS = [
   },
 ];
 
+// The bottom nav caps at 5 icons on mobile (the sidebar itself is untouched
+// — it already fits the full NAV_ITEMS list at 900px+). Four destinations
+// stay directly on the bar; everything else — Inbox, Subcontractors,
+// Financials, Settings, plus Theme/Sign out, which otherwise have no home
+// at all on mobile since the sidebar that carries them is hidden below
+// 900px — moves into the "More" sheet.
+const MOBILE_PRIMARY_HREFS = ['/dashboard', '/sales', '/jobs/calendar', '/jobs'];
+const MORE_SHEET_ITEMS = [
+  { href: '/messages', label: 'Inbox', icon: MessagesIcon, showUnreadDot: true },
+  { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
+  { href: '/financials', label: 'Financials', icon: FinanceIcon },
+  { href: '/settings', label: 'Settings', icon: SettingsIcon },
+];
+
 function isSectionActive(item, pathname) {
   if (pathname === item.href) return true;
   if (item.children && item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) return true;
@@ -90,6 +105,10 @@ function shouldShowSubnav(item, pathname) {
   return item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'));
 }
 
+function isMoreSheetActive(pathname) {
+  return MORE_SHEET_ITEMS.some(item => pathname === item.href || pathname.startsWith(item.href + '/'));
+}
+
 export default function AppShell({ children }) {
   const { theme, setTheme } = useTheme();
   const { settings } = useSettings();
@@ -98,6 +117,7 @@ export default function AppShell({ children }) {
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     let mounted2 = true;
@@ -204,7 +224,7 @@ export default function AppShell({ children }) {
 
         {isMobile && (
           <nav className="shell-bottomnav">
-            {NAV_ITEMS.map(item => (
+            {NAV_ITEMS.filter(item => MOBILE_PRIMARY_HREFS.includes(item.href)).map(item => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -213,21 +233,55 @@ export default function AppShell({ children }) {
               >
                 <span style={{ position: 'relative', display: 'inline-flex' }}>
                   <item.icon className="shell-bottomnav-icon" />
-                  {item.href === '/messages' && unreadCount > 0 && <span className="shell-bottomnav-dot" />}
                 </span>
                 <span className="shell-bottomnav-label">{item.label}</span>
               </Link>
             ))}
-            <Link
-              href="/settings"
-              className={`shell-bottomnav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
-              aria-label="Settings"
+            <button
+              type="button"
+              className={`shell-bottomnav-link ${isMoreSheetActive(pathname) ? 'active' : ''}`}
+              aria-label="More"
+              onClick={() => setMoreOpen(true)}
             >
-              <SettingsIcon className="shell-bottomnav-icon" />
-              <span className="shell-bottomnav-label">Settings</span>
-            </Link>
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <MoreIcon className="shell-bottomnav-icon" />
+                {unreadCount > 0 && <span className="shell-bottomnav-dot" />}
+              </span>
+              <span className="shell-bottomnav-label">More</span>
+            </button>
           </nav>
         )}
+
+        <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+          {MORE_SHEET_ITEMS.map(item => {
+            const active = pathname === item.href || pathname.startsWith(item.href + '/');
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`more-sheet-link ${active ? 'active' : ''}`}
+                onClick={() => setMoreOpen(false)}
+              >
+                <item.icon className="more-sheet-icon" />
+                {item.label}
+                {item.showUnreadDot && unreadCount > 0 && <span className="more-sheet-dot" />}
+              </Link>
+            );
+          })}
+          <div className="more-sheet-divider" />
+          <button
+            type="button"
+            className="more-sheet-link"
+            onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setMoreOpen(false); }}
+          >
+            {theme === 'dark' ? <MoonIcon className="more-sheet-icon" /> : <SunIcon className="more-sheet-icon" />}
+            {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+          </button>
+          <button type="button" className="more-sheet-link" onClick={handleSignOut}>
+            <SignOutIcon className="more-sheet-icon" />
+            Sign out
+          </button>
+        </BottomSheet>
 
         <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
           {showSubnav && (

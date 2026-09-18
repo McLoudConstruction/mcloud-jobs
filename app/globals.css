@@ -1156,6 +1156,38 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .mobile-overflow-menu .btn:hover{ background: var(--panel); color: inherit; }
 
+/* ---------- BottomSheet: generic slide-up panel (bottom nav's "More" menu today) ---------- */
+.bottom-sheet-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1100;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.bottom-sheet{
+  width: 100%; max-width: 520px; background: var(--card-bg);
+  border-radius: 16px 16px 0 0; padding: 10px 8px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
+  max-height: 80vh; overflow-y: auto;
+}
+.bottom-sheet-handle{ width: 36px; height: 4px; border-radius: 3px; background: var(--panel-line); margin: 4px auto 14px; }
+.bottom-sheet-title{ font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); padding: 0 10px 10px; }
+
+/* The More sheet's own contents: nav links styled like a taller version of
+   the sidebar's own nav-link row (icon + label, full width, tappable),
+   plus a hairline-divided lower group for Theme/Sign out — the two
+   controls that otherwise have no home on mobile at all, since the
+   sidebar that carries them on desktop is hidden below 900px. */
+.more-sheet-link{
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 14px 12px; border-radius: 8px; border: none; background: transparent;
+  color: var(--heading); font-size: 15px; font-weight: 600; text-align: left;
+  cursor: pointer; font-family: inherit; text-decoration: none;
+}
+.more-sheet-link:active{ background: var(--panel); }
+.more-sheet-link.active{ color: var(--accent); }
+.more-sheet-icon{ width: 22px; height: 22px; flex-shrink: 0; opacity: 0.85; }
+.more-sheet-link.active .more-sheet-icon{ opacity: 1; }
+.more-sheet-dot{ width: 8px; height: 8px; border-radius: 50%; background: var(--rust); margin-left: -6px; }
+.more-sheet-divider{ height: 1px; background: var(--line); margin: 8px 4px; }
+
 /* ---------- BidWalkScheduler: calendar step + Apple-style wheel step ---------- */
 .dt-picker-title{ font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 14px; }
 .dt-picker-banner{ background: var(--panel); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }

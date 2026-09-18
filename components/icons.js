@@ -148,6 +148,21 @@ export function SettingsIcon(props) {
   );
 }
 
+// Bottom-nav "More" overflow trigger — a 2x3 dot grid, the common
+// mobile-OS shorthand for "more destinations live behind this."
+export function MoreIcon(props) {
+  return (
+    <svg {...common} {...props} fill="currentColor" stroke="none">
+      <circle cx="6" cy="5" r="1.5" />
+      <circle cx="14" cy="5" r="1.5" />
+      <circle cx="6" cy="10" r="1.5" />
+      <circle cx="14" cy="10" r="1.5" />
+      <circle cx="6" cy="15" r="1.5" />
+      <circle cx="14" cy="15" r="1.5" />
+    </svg>
+  );
+}
+
 export function SignOutIcon(props) {
   return (
     <svg {...common} {...props}>
