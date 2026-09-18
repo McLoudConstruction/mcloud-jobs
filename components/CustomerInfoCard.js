@@ -4,9 +4,25 @@ import { supabase } from '../lib/supabaseClient';
 import { formatPhone } from '../lib/constants';
 import AddressFields, { formatAddress } from './AddressFields';
 
-export default function CustomerInfoCard({ job, onSave }) {
-  const isCommercial = job.project_type === 'commercial';
-  const [form, setForm] = useState({
+// Billing is assumed to be the same as the project/jobsite address unless
+// the saved record actually shows otherwise — a job only counts as
+// "different" if it has a billing address on file that doesn't match the
+// project address field-for-field. An empty billing address (nothing ever
+// entered) is treated as "same", not "different".
+function computeBillingDifferent(job) {
+  const hasBilling = Boolean(job.billing_street || job.billing_city || job.billing_state || job.billing_zip);
+  if (!hasBilling) return false;
+  return (
+    (job.billing_street || '') !== (job.project_street || '') ||
+    (job.billing_unit || '') !== (job.project_unit || '') ||
+    (job.billing_city || '') !== (job.project_city || '') ||
+    (job.billing_state || '') !== (job.project_state || '') ||
+    (job.billing_zip || '') !== (job.project_zip || '')
+  );
+}
+
+function buildForm(job) {
+  return {
     customer_name: job.customer_name || '',
     customer_contact: job.customer_contact || '',
     customer_email: job.customer_email || '',
@@ -14,13 +30,21 @@ export default function CustomerInfoCard({ job, onSave }) {
     billing_email: job.billing_email || job.customer_email || '',
     billing_street: job.billing_street || '', billing_unit: job.billing_unit || '', billing_city: job.billing_city || '', billing_state: job.billing_state || '', billing_zip: job.billing_zip || '',
     project_street: job.project_street || '', project_unit: job.project_unit || '', project_city: job.project_city || '', project_state: job.project_state || '', project_zip: job.project_zip || '',
-  });
-  // Billing follows Project (the primary address entered for the job);
-  // toggling off lets billing diverge, e.g. a property manager billed
-  // at a different address than the jobsite.
-  const [sameAsProject, setSameAsProject] = useState(
-    Boolean(job.project_street) && job.billing_street === job.project_street && job.billing_city === job.project_city
-  );
+  };
+}
+
+export default function CustomerInfoCard({ job, onSave }) {
+  const isCommercial = job.project_type === 'commercial';
+  // Read-only until "Edit" is clicked — this card used to be click-to-edit
+  // everywhere, which made it too easy to accidentally change a customer's
+  // info while just scrolling/scanning the page.
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(buildForm(job));
+  // Billing follows the Project/jobsite address by default; checking this
+  // box is what reveals the Billing Address fields for the (uncommon) case
+  // where billing actually goes somewhere else, e.g. a property manager
+  // billed at a different address than the jobsite.
+  const [billingDifferent, setBillingDifferent] = useState(computeBillingDifferent(job));
   const [billingSameAsContact, setBillingSameAsContact] = useState(
     !job.billing_email || job.billing_email === job.customer_email
   );
@@ -40,7 +64,7 @@ export default function CustomerInfoCard({ job, onSave }) {
   function update(field, value) {
     setForm(prev => {
       const next = { ...prev, [field]: value };
-      if (sameAsProject && field.startsWith('project_')) {
+      if (!billingDifferent && field.startsWith('project_')) {
         next[field.replace('project_', 'billing_')] = value;
       }
       if (field === 'customer_email' && billingSameAsContact) {
@@ -49,9 +73,13 @@ export default function CustomerInfoCard({ job, onSave }) {
       return next;
     });
   }
-  function toggleSameAsProject(checked) {
-    setSameAsProject(checked);
-    if (checked) {
+  function toggleBillingDifferent(checked) {
+    setBillingDifferent(checked);
+    if (!checked) {
+      // Un-checking means "billing is the same as project" again — snap
+      // the (now-hidden) billing fields back to match immediately, so a
+      // stale, previously-different billing address can't linger unseen
+      // in the saved record.
       setForm(prev => ({
         ...prev,
         billing_street: prev.project_street, billing_unit: prev.project_unit,
@@ -140,11 +168,29 @@ export default function CustomerInfoCard({ job, onSave }) {
       billing_address: formatAddress(form, 'billing'),
       project_address: formatAddress(form, 'project'),
     });
+    setEditing(false);
+  }
+
+  function cancelEdit() {
+    setForm(buildForm(job));
+    setBillingDifferent(computeBillingDifferent(job));
+    setBillingSameAsContact(!job.billing_email || job.billing_email === job.customer_email);
+    setEditing(false);
   }
 
   return (
     <div className="card">
-      <h3>Customer</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <h3 style={{ margin: 0 }}>Customer</h3>
+        {editing ? (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button className="btn btn-sm" onClick={cancelEdit} type="button">Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={save} type="button">Save customer info</button>
+          </div>
+        ) : (
+          <button className="btn btn-sm" onClick={() => setEditing(true)} type="button">Edit</button>
+        )}
+      </div>
       <div className="two-col">
         {isCommercial ? (
           <div style={{ position: 'relative' }}>
@@ -155,6 +201,7 @@ export default function CustomerInfoCard({ job, onSave }) {
               onFocus={() => companySuggestions.length > 0 && setShowCompanySuggestions(true)}
               onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 150)}
               autoComplete="off"
+              disabled={!editing}
             />
             {showCompanySuggestions && (
               <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
@@ -176,6 +223,7 @@ export default function CustomerInfoCard({ job, onSave }) {
               onFocus={() => nameSuggestions.length > 0 && setShowNameSuggestions(true)}
               onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
               autoComplete="off"
+              disabled={!editing}
             />
             {showNameSuggestions && (
               <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
@@ -201,6 +249,7 @@ export default function CustomerInfoCard({ job, onSave }) {
               onFocus={() => contactSuggestions.length > 0 && setShowContactSuggestions(true)}
               onBlur={() => setTimeout(() => setShowContactSuggestions(false), 150)}
               autoComplete="off"
+              disabled={!editing}
             />
             {showContactSuggestions && (
               <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
@@ -217,31 +266,34 @@ export default function CustomerInfoCard({ job, onSave }) {
           </div>
         )}
 
-        <div><label>Contact email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} /></div>
-        <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', formatPhone(e.target.value))} /></div>
+        <div><label>Contact email</label><input value={form.customer_email} onChange={e => update('customer_email', e.target.value)} disabled={!editing} /></div>
+        <div><label>Contact phone</label><input value={form.customer_phone} onChange={e => update('customer_phone', formatPhone(e.target.value))} disabled={!editing} /></div>
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={billingSameAsContact} onChange={e => toggleBillingSameAsContact(e.target.checked)} />
+            <input type="checkbox" style={{ width: 'auto' }} checked={billingSameAsContact} onChange={e => toggleBillingSameAsContact(e.target.checked)} disabled={!editing} />
             Same as Contact Email
           </label>
           <label>Billing email</label>
-          <input value={form.billing_email} onChange={e => update('billing_email', e.target.value)} disabled={billingSameAsContact} />
+          <input value={form.billing_email} onChange={e => update('billing_email', e.target.value)} disabled={!editing || billingSameAsContact} />
         </div>
       </div>
 
       <label style={{ marginTop: 16 }}>Project / jobsite address</label>
-      <AddressFields prefix="project" values={form} onChange={update} placesEnabled />
+      <AddressFields prefix="project" values={form} onChange={update} placesEnabled disabled={!editing} />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-        <input type="checkbox" style={{ width: 'auto' }} checked={sameAsProject} onChange={e => toggleSameAsProject(e.target.checked)} />
-        Billing address same as project address
+        <input type="checkbox" style={{ width: 'auto' }} checked={billingDifferent} onChange={e => toggleBillingDifferent(e.target.checked)} disabled={!editing} />
+        Billing Address different from Project Address
       </label>
-      <label>Billing address</label>
-      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
-
-      <div className="section-actions">
-        <button className="btn btn-primary btn-sm" onClick={save}>Save customer info</button>
-      </div>
+      {/* Assumed to be the same as the project address unless this is
+          checked — the fields only appear once someone actually says
+          billing goes somewhere else. */}
+      {billingDifferent && (
+        <>
+          <label>Billing address</label>
+          <AddressFields prefix="billing" values={form} onChange={update} placesEnabled disabled={!editing} />
+        </>
+      )}
     </div>
   );
 }

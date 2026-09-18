@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import DocBackLink from '../../../../../components/DocBackLink';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
 import { projectNumber } from '../../../../../lib/constants';
 import ProposalDocument from '../../../../../components/ProposalDocument';
@@ -81,7 +82,7 @@ export default function IndividualProposalDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={isAdmin ? `/jobs/${id}?tab=Estimate&section=proposals` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <DocBackLink fallbackHref={isAdmin ? `/jobs/${id}?tab=Estimate&section=proposals` : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isAdmin && isSelected && <span className="badge" style={{ marginRight: 4, background: '#3a6b45' }}>Selected</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

@@ -163,6 +163,17 @@ export function MoreIcon(props) {
   );
 }
 
+// Simple plus glyph for the mobile Individual Job page's floating action
+// button (quick access to Internal Updates / Messages / Project Updates).
+export function PlusIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M10 3.5v13" />
+      <path d="M3.5 10h13" />
+    </svg>
+  );
+}
+
 // Topbar notification bell — Facebook-style: a solid bell glyph, not the
 // thin outline used for the sidebar/bottom-nav Inbox icon, since this one
 // sits alone in the header rather than beside a text label.

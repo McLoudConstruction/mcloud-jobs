@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
+import DocBackLink from '../../../../components/DocBackLink';
 import { assignNextJobNumber } from '../../../../lib/assignJobNumber';
 import SignaturePad from '../../../../components/SignaturePad';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
@@ -163,7 +164,7 @@ export default function ContractDocumentPage() {
         This is a general-purpose template, not legal advice — have it reviewed by an attorney, especially the lien notice, before relying on it as a binding agreement.
       </div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

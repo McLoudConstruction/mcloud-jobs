@@ -6,6 +6,7 @@ import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
 import { useSettings } from '../../../../../lib/useSettings';
+import DocBackLink from '../../../../../components/DocBackLink';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -112,7 +113,7 @@ export default function WorkOrderDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={`/jobs/${id}?tab=Financials`} className="btn btn-sm">← Back</Link>
+        <DocBackLink fallbackHref={`/jobs/${id}?tab=Financials`} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
+import DocBackLink from '../../../../components/DocBackLink';
 import { assignNextJobNumber } from '../../../../lib/assignJobNumber';
 import SignaturePad from '../../../../components/SignaturePad';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
@@ -160,7 +161,7 @@ export default function ContractDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

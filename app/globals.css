@@ -1143,6 +1143,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex-shrink: 0;
   transition: background-color 0.15s ease;
   overflow-y: auto;
+  /* Setting overflow-y without overflow-x makes browsers compute the
+     x-axis as auto too (per spec, "visible" isn't allowed to pair with
+     a non-visible value on the other axis), so any 1px of horizontal
+     overflow from the fixed-width inner rail showed a scrollbar here. */
+  overflow-x: hidden;
 }
 .shell-sidebar-inner{
   width: 84px;
@@ -1232,6 +1237,34 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
     background: #c0524f;
     border: 1.5px solid #1c1b19;
   }
+}
+
+/* ---------- Individual Job (mobile): quick-actions FAB ---------- */
+/* Only ever rendered when isMobile, but scoped to the same breakpoint as
+   the fixed bottom nav so it never floats over desktop content if JS
+   mobile-detection lags a frame behind CSS on first paint. */
+.job-fab{
+  position: fixed;
+  right: 16px;
+  z-index: 45; /* under the bottom sheet/nav's z-index: 50, above page content */
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent, #1c1b19);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+.job-fab:active{ transform: scale(0.96); }
+@media (max-width: 899px){
+  .job-fab{ bottom: calc(64px + 16px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 900px){
+  .job-fab{ display: none; }
 }
 
 .contact-card{

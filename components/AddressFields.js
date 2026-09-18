@@ -5,7 +5,7 @@ function fieldName(prefix, suffix) {
   return prefix ? `${prefix}_${suffix}` : suffix;
 }
 
-export default function AddressFields({ prefix, values, onChange, required, placesEnabled }) {
+export default function AddressFields({ prefix, values, onChange, required, placesEnabled, disabled }) {
   function set(field, value) { onChange(field, value); }
 
   return (
@@ -24,26 +24,27 @@ export default function AddressFields({ prefix, values, onChange, required, plac
                 if (place.zip) set(fieldName(prefix, 'zip'), place.zip);
               }}
               required={required}
+              disabled={disabled}
             />
           ) : (
-            <input value={values[fieldName(prefix, 'street')] || ''} onChange={e => set(fieldName(prefix, 'street'), e.target.value)} required={required} />
+            <input value={values[fieldName(prefix, 'street')] || ''} onChange={e => set(fieldName(prefix, 'street'), e.target.value)} required={required} disabled={disabled} />
           )}
         </div>
         <div>
           <label>Unit / suite</label>
-          <input value={values[fieldName(prefix, 'unit')] || ''} onChange={e => set(fieldName(prefix, 'unit'), e.target.value)} />
+          <input value={values[fieldName(prefix, 'unit')] || ''} onChange={e => set(fieldName(prefix, 'unit'), e.target.value)} disabled={disabled} />
         </div>
         <div>
           <label>City {required ? '*' : ''}</label>
-          <input value={values[fieldName(prefix, 'city')] || ''} onChange={e => set(fieldName(prefix, 'city'), e.target.value)} required={required} />
+          <input value={values[fieldName(prefix, 'city')] || ''} onChange={e => set(fieldName(prefix, 'city'), e.target.value)} required={required} disabled={disabled} />
         </div>
         <div>
           <label>State {required ? '*' : ''}</label>
-          <input value={values[fieldName(prefix, 'state')] || ''} onChange={e => set(fieldName(prefix, 'state'), e.target.value)} required={required} />
+          <input value={values[fieldName(prefix, 'state')] || ''} onChange={e => set(fieldName(prefix, 'state'), e.target.value)} required={required} disabled={disabled} />
         </div>
         <div>
           <label>ZIP {required ? '*' : ''}</label>
-          <input value={values[fieldName(prefix, 'zip')] || ''} onChange={e => set(fieldName(prefix, 'zip'), e.target.value)} required={required} />
+          <input value={values[fieldName(prefix, 'zip')] || ''} onChange={e => set(fieldName(prefix, 'zip'), e.target.value)} required={required} disabled={disabled} />
         </div>
       </div>
     </div>

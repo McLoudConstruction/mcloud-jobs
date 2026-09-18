@@ -7,6 +7,7 @@ import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
 import ImageDropzone from '../../../../../components/ImageDropzone';
 import MaterialOptionCard from '../../../../../components/MaterialOptionCard';
+import DocBackLink from '../../../../../components/DocBackLink';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
@@ -173,7 +174,7 @@ export default function MaterialSelectionPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <Link href={isAdmin ? `/jobs/${id}?tab=Project Updates` : '/customerportal/projects'} className="btn btn-sm">← Back</Link>
+        <DocBackLink fallbackHref={isAdmin ? `/jobs/${id}?tab=Project Updates` : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isAdmin ? (
             <>

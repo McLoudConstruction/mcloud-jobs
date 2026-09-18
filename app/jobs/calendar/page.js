@@ -152,15 +152,15 @@ function CalendarSidebar({
         </label>
         <label className="cal-sidebar-toggle">
           <input type="checkbox" checked={showBidWalks} onChange={e => setShowBidWalks(e.target.checked)} />
-          🔨 Bid walks
+          Bid walks
         </label>
         <label className="cal-sidebar-toggle">
           <input type="checkbox" checked={showScheduleEvents} onChange={e => setShowScheduleEvents(e.target.checked)} />
-          📌 Events
+          Events
         </label>
         <label className="cal-sidebar-toggle">
           <input type="checkbox" checked={showPersonal} onChange={e => setShowPersonal(e.target.checked)} />
-          📅 Personal (synced)
+          Personal (synced)
         </label>
       </div>
 

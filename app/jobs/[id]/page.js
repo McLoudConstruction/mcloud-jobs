@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
+import BottomSheet from '../../../components/BottomSheet';
 import PhotoGallery from '../../../components/PhotoGallery';
 import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
 import JobCostSummary from '../../../components/JobCostSummary';
@@ -23,7 +24,7 @@ import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
-  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon,
+  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -124,6 +125,8 @@ export default function JobDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [isMobile, setIsMobile] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
 
   useEffect(() => {
     function goOnline() { setIsOnline(true); }
@@ -134,6 +137,13 @@ export default function JobDetailPage() {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
     };
+  }, []);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
   }, []);
   const [tab, setTab] = useState('Overview');
   const [section, setSection] = useState(null);
@@ -482,16 +492,28 @@ export default function JobDetailPage() {
             )}
           </div>
           <div className="section-actions">
-            <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
-              <MessagesIcon width={16} height={16} />
-            </button>
-            <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
-              <ProjectFeedIcon width={16} height={16} /> Project Updates
-            </button>
-            <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
-              {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
-            </button>
-            {STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
+            {/* Messages / Project Updates / portal invite are quick-access
+                shortcuts that duplicate their own tabs — on mobile these
+                move into the FAB below instead of crowding this row, and
+                the invite button moves onto the Customer > Portal &
+                Notifications section itself. */}
+            {!isMobile && (
+              <>
+                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
+                  <MessagesIcon width={16} height={16} />
+                </button>
+                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
+                  <ProjectFeedIcon width={16} height={16} /> Project Updates
+                </button>
+                <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
+                  {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
+                </button>
+              </>
+            )}
+            {/* Stage Advance dropped on mobile — it's an easy accidental
+                tap on a small screen next to Close Lost/Reopen, and the
+                job's stage badge is already visible right above. */}
+            {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
               <button className="btn btn-primary" onClick={advanceStage}>
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
               </button>
@@ -504,6 +526,33 @@ export default function JobDetailPage() {
             )}
           </div>
         </div>
+
+        {isMobile && (
+          <>
+            <button
+              type="button"
+              className="job-fab"
+              aria-label="Quick actions"
+              onClick={() => setFabOpen(true)}
+            >
+              <PlusIcon width={24} height={24} />
+            </button>
+            <BottomSheet open={fabOpen} onClose={() => setFabOpen(false)} title="Quick actions">
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Internal Updates'); }}>
+                <InternalUpdatesIcon className="more-sheet-icon" />
+                Internal Updates
+              </button>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Messages'); }}>
+                <MessagesIcon className="more-sheet-icon" />
+                Messages
+              </button>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Project Updates'); }}>
+                <ProjectFeedIcon className="more-sheet-icon" />
+                Project Updates
+              </button>
+            </BottomSheet>
+          </>
+        )}
         {inviteResult && (
           <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
             {inviteResult}
@@ -584,6 +633,26 @@ export default function JobDetailPage() {
 
         {tab === 'Customer' && section === 'portal' && (
           <>
+            {/* Mobile only — this used to be a quick-access button up in
+                the job header; on mobile that row moved to the FAB, so
+                this is now the only place to (re)send the primary portal
+                invite from on a phone. Desktop keeps the header shortcut. */}
+            {isMobile && (
+              <div className="card">
+                <h3>Portal Invite</h3>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                  Sends the account-activation invite to {job.customer_email || job.billing_email || 'this customer'}.
+                </div>
+                <button className="btn btn-sm" onClick={invitePortal} disabled={inviting || !(job.customer_email || job.billing_email)}>
+                  {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
+                </button>
+                {inviteResult && (
+                  <div style={{ fontSize: 12, marginTop: 8, color: inviteResult.startsWith('Activation invite sent') ? '#3a6b45' : '#a13f3f' }}>
+                    {inviteResult}
+                  </div>
+                )}
+              </div>
+            )}
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>

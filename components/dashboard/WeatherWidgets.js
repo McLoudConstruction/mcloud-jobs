@@ -143,7 +143,10 @@ export function WeatherRibbon({ forecast, loading, error }) {
       )}
 
       {view === 'weekly' && (
-        <div style={{ height: 100 }}>
+        // Matches the Hourly view's height (90px) exactly, rather than its
+        // own slightly taller value, so switching between the two tabs
+        // doesn't shift the ribbon's height.
+        <div style={{ height: 90 }}>
           <ScrollerWithArrows ariaLabel="days">
             {days.map((d, i) => {
               const rain = earliestRainWindow(d.at, hourly);

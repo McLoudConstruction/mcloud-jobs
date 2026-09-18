@@ -10,8 +10,18 @@ export default function NotificationSettingsCard({ job, onSave }) {
 
   useEffect(() => {
     if (!job.customer_email) { setOptedOut(null); return; }
-    supabase.from('contacts').select('id, automated_emails_opt_out').eq('contact_email', job.customer_email).maybeSingle().then(({ data }) => {
+    // .eq() is case-sensitive in Postgres, and contact emails get typed in
+    // by hand in several places with no normalization (job creation, the
+    // Customer tab, the Portal Access card) — the exact same gap that
+    // migration 093 had to fix for portal-access matching. A contact typed
+    // in as e.g. "SMcloud96@gmail.com" was silently invisible to a job
+    // whose customer_email was "smcloud96@gmail.com" here, always falling
+    // through to "No matching contact record found" even though the
+    // contact genuinely exists. ilike matches case-insensitively (there's
+    // no wildcard in an email address for it to misinterpret).
+    supabase.from('contacts').select('id, automated_emails_opt_out').ilike('contact_email', job.customer_email.trim()).maybeSingle().then(({ data }) => {
       if (data) { setContactId(data.id); setOptedOut(data.automated_emails_opt_out); }
+      else { setContactId(null); setOptedOut(null); }
     });
   }, [job.customer_email]);
 
