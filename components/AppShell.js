@@ -185,11 +185,12 @@ export default function AppShell({ children }) {
 
   const sidebarWidth = isMobile ? 0 : 84;
   const currentSection = getCurrentSection(pathname);
-  // Messages' only child is Notifications, which the mobile Inbox page now
-  // merges into its own All/Messages/System chip row — showing this strip
-  // too on mobile would duplicate that filter with a redundant
-  // "Notifications" tab.
-  const showSubnav = shouldShowSubnav(currentSection, pathname) && !(isMobile && currentSection?.href === '/messages');
+  // Messages' only child is Notifications, which the Inbox page (both
+  // mobile and now desktop) merges into its own All/Messages/System chip
+  // row — showing this top-level Overview/Notifications strip on top of
+  // that would just duplicate the same switch with a second, redundant
+  // control.
+  const showSubnav = shouldShowSubnav(currentSection, pathname) && currentSection?.href !== '/messages';
 
   const subnavStrip = showSubnav && (
     <ScrollFadeRow trackClassName="section-subnav">

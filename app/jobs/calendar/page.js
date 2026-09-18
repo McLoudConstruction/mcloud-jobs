@@ -7,9 +7,9 @@ import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
-import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import { STAGE_ORDER, STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function toDateOnly(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -26,25 +26,21 @@ function formatEventTime(t) {
   const d = new Date(2000, 0, 1, h, m);
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
-// Mon=0 .. Fri=4. Weekend dates clamp to the nearest weekday column so a
-// job spanning a weekend still renders as one continuous bar across the
-// adjacent Friday/Monday columns, rather than needing a gap that isn't there.
-function weekdayIndex(date, clampDirection) {
-  const day = date.getDay(); // 0=Sun..6=Sat
-  if (day === 0) return clampDirection === 'start' ? 0 : -1; // Sunday
-  if (day === 6) return clampDirection === 'start' ? -1 : 4; // Saturday
-  return day - 1;
+// Sun=0 .. Sat=6 — every day of the week gets its own column now, so this
+// is just the day-of-week index with no weekend clamping needed.
+function weekdayIndex(date) {
+  return date.getDay();
 }
 
-// Builds a full 5-column (Mon-Fri) grid of weeks covering the given month.
+// Builds a full 7-column (Sun-Sat) grid of weeks covering the given month.
 function buildWeeks(monthDate) {
   const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const firstMonday = addDays(firstOfMonth, firstOfMonth.getDay() === 0 ? -6 : 1 - firstOfMonth.getDay());
+  const firstSunday = addDays(firstOfMonth, -firstOfMonth.getDay());
   const weeks = [];
-  let cursor = firstMonday;
+  let cursor = firstSunday;
   for (let w = 0; w < 6; w++) {
     const week = [];
-    for (let d = 0; d < 5; d++) {
+    for (let d = 0; d < 7; d++) {
       week.push({ date: addDays(cursor, d), inMonth: addDays(cursor, d).getMonth() === monthDate.getMonth() });
     }
     weeks.push(week);
@@ -155,7 +151,7 @@ export default function JobCalendarPage() {
   useEffect(() => {
     if (!session || weeks.length === 0) return;
     const rangeStart = weeks[0][0].date;
-    const rangeEnd = addDays(weeks[weeks.length - 1][4].date, 1);
+    const rangeEnd = addDays(weeks[weeks.length - 1][6].date, 1);
     supabase
       .from('external_busy_events')
       .select('title, start_at, end_at')
@@ -194,6 +190,15 @@ export default function JobCalendarPage() {
     return { ...j, start, end: end < start ? start : end };
   }).filter(j => j.start), [jobs]);
 
+  // Bars are already colored by badge-${stage} (the same palette used
+  // everywhere else in the app) — this just surfaces which color means
+  // which stage, built from whatever stages actually appear on the
+  // calendar right now rather than a fixed guess at which ones matter.
+  const stagesInUse = useMemo(() => {
+    const present = new Set(jobBars.map(j => j.stage));
+    return STAGE_ORDER.filter(s => present.has(s));
+  }, [jobBars]);
+
   if (loading || !session) return null;
 
   function goToday() {
@@ -223,9 +228,9 @@ export default function JobCalendarPage() {
 
   const today = toDateOnly(new Date());
 
-  // The Mon-Fri week containing cursorDate, for the Week agenda view.
-  const cursorWeekStart = addDays(cursorDate, cursorDate.getDay() === 0 ? -6 : 1 - cursorDate.getDay());
-  const cursorWeekDays = Array.from({ length: 5 }, (_, i) => addDays(cursorWeekStart, i));
+  // The Sun-Sat week containing cursorDate, for the Week agenda view.
+  const cursorWeekStart = addDays(cursorDate, -cursorDate.getDay());
+  const cursorWeekDays = Array.from({ length: 7 }, (_, i) => addDays(cursorWeekStart, i));
 
   // Mobile month navigation: a horizontally scrollable strip of month
   // chips (like a Google Calendar month/year switcher) in place of the
@@ -352,8 +357,19 @@ export default function JobCalendarPage() {
           {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </div>
         {!isMobile && (
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
             Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
+          </div>
+        )}
+
+        {!isMobile && stagesInUse.length > 0 && (
+          <div className="cal-legend">
+            {stagesInUse.map(s => (
+              <span key={s} className="cal-legend-item">
+                <span className={`cal-legend-dot badge-${s}`} />
+                {STAGE_LABELS[s]}
+              </span>
+            ))}
           </div>
         )}
 
@@ -363,16 +379,16 @@ export default function JobCalendarPage() {
 
         {weeks.map((week, wi) => {
           const weekStartCol = 0;
-          const weekEndCol = 4;
+          const weekEndCol = 6;
           const weekStart = week[0].date;
-          const weekEnd = week[4].date;
+          const weekEnd = week[6].date;
 
           const overlapping = jobBars
             .filter(j => j.start <= weekEnd && j.end >= weekStart)
             .map(j => {
-              const startCol = j.start < weekStart ? weekStartCol : weekdayIndex(j.start, 'start');
-              const endCol = j.end > weekEnd ? weekEndCol : weekdayIndex(j.end, 'end');
-              return { ...j, startCol: Math.max(startCol, 0), endCol: Math.min(endCol < 0 ? weekEndCol : endCol, weekEndCol) };
+              const startCol = j.start < weekStart ? weekStartCol : weekdayIndex(j.start);
+              const endCol = j.end > weekEnd ? weekEndCol : weekdayIndex(j.end);
+              return { ...j, startCol, endCol };
             });
           const { placed, laneCount } = assignLanes(overlapping);
 
@@ -437,7 +453,7 @@ export default function JobCalendarPage() {
         {view === 'week' && (
           <div>
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-              Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[4].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
             {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
           </div>
@@ -519,6 +535,9 @@ export default function JobCalendarPage() {
           cursor: pointer;
         }
         .cal-month-chip.active{ background: var(--accent); border-color: var(--accent); color: #fff; }
+        .cal-legend{ display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; }
+        .cal-legend-item{ display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); }
+        .cal-legend-dot{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
       `}</style>
     </AppShell>
   );
