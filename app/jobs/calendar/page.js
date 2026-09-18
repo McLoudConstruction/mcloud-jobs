@@ -313,6 +313,54 @@ export default function JobCalendarPage() {
     return jobBars.filter(j => j.start <= day && j.end >= day);
   }
 
+  // The Month grid's per-day timed-item list — schedule events, bid
+  // walks, and synced personal blocks, merged and sorted by clock time so
+  // they read top-to-bottom the way Google's day cell does. Job bars stay
+  // out of this list; they're already their own full-width bar.
+  function timedItemsForDay(date) {
+    const items = [];
+    if (showScheduleEvents) {
+      scheduleEventsForDay(date).forEach(ev => {
+        const [h, m] = (ev.event_time || '').split(':').map(Number);
+        items.push({
+          key: `ev-${ev.id}`,
+          sortMinutes: ev.event_time ? h * 60 + (m || 0) : -1,
+          time: ev.event_time ? formatEventTime(ev.event_time) : null,
+          title: ev.description || EVENT_TYPE_LABELS[ev.event_type],
+          dotClass: 'dot-event',
+          onClick: () => setPreviewEvent(ev),
+        });
+      });
+    }
+    if (showBidWalks) {
+      bidWalksForDay(date).forEach(b => {
+        const at = new Date(b.bid_walk_scheduled_at);
+        items.push({
+          key: `bw-${b.id}`,
+          sortMinutes: at.getHours() * 60 + at.getMinutes(),
+          time: at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          title: `Bid walk — ${b.contact_name || 'Lead'}`,
+          dotClass: 'dot-bidwalk',
+          onClick: null,
+        });
+      });
+    }
+    if (showPersonal) {
+      busyForDay(date).forEach((b, i) => {
+        const at = new Date(b.start_at);
+        items.push({
+          key: `busy-${date.toDateString()}-${i}`,
+          sortMinutes: at.getHours() * 60 + at.getMinutes(),
+          time: null,
+          title: `${b.title} (personal)`,
+          dotClass: 'dot-personal',
+          onClick: null,
+        });
+      });
+    }
+    return items.sort((a, b) => a.sortMinutes - b.sortMinutes);
+  }
+
   const jobBars = useMemo(() => jobs.map(j => {
     const start = parseDateOnly(j.scheduled_start_date);
     const end = j.scheduled_end_date ? parseDateOnly(j.scheduled_end_date) : start;
@@ -576,10 +624,17 @@ export default function JobCalendarPage() {
       <button type="button" className={`tab-section-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Day</button>
     </div>
   );
+  // The middle nav button always jumps to today, but its label reflects
+  // what "today" means for the active view: the real current month's name
+  // on Month view (not the abstract word "Today"), "This Week" on Week
+  // view, and "Today" on Day view, where that word is already exact.
+  const goTodayLabel = view === 'month'
+    ? new Date().toLocaleDateString('en-US', { month: 'long' })
+    : view === 'week' ? 'This Week' : 'Today';
   const arrowGroup = (
     <div className="section-actions" style={{ marginTop: 0 }}>
       <button className="btn btn-sm" onClick={goPrev}>←</button>
-      <button className="btn btn-sm" onClick={goToday}>Today</button>
+      <button className="btn btn-sm" onClick={goToday}>{goTodayLabel}</button>
       <button className="btn btn-sm" onClick={goNext}>→</button>
     </div>
   );
@@ -658,49 +713,60 @@ export default function JobCalendarPage() {
           : [];
         const { placed, laneCount } = assignLanes(overlapping);
 
+        // Timed items (schedule events, bid walks, synced personal blocks)
+        // for each day, sorted by clock time — this is what makes the
+        // month grid read like Google's: a small dot + time + title line
+        // per event, not a corner badge you have to hover to decode.
+        const dayItems = week.map(day => timedItemsForDay(day.date));
+        const MAX_VISIBLE = 3;
+        const maxLines = Math.max(1, ...dayItems.map(items => Math.min(items.length, MAX_VISIBLE) + (items.length > MAX_VISIBLE ? 1 : 0)));
+        const headerHeight = 22 + maxLines * 15 + 6;
+
         return (
-          <div key={wi} className="calendar-week" style={{ gridTemplateRows: `36px repeat(${Math.max(laneCount, 1)}, 30px)` }}>
-            {week.map((day, di) => (
-              <div
-                key={di}
-                className={[
-                  'calendar-day-cell',
-                  day.inMonth ? '' : 'calendar-day-outside',
-                  sameDay(day.date, today) ? 'calendar-day-today' : '',
-                  sameDay(day.date, cursorDate) && !sameDay(day.date, today) ? 'calendar-day-selected' : '',
-                ].filter(Boolean).join(' ')}
-                style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
-                onClick={() => setCursorDate(day.date)}
-              >
-                <span className="calendar-day-number">{day.date.getDate()}</span>
-                <span style={{ position: 'absolute', top: 4, right: 6, display: 'flex', gap: 4 }}>
-                  {showScheduleEvents && scheduleEventsForDay(day.date).length > 0 && (
-                    <span
-                      title={scheduleEventsForDay(day.date).map(ev => `${EVENT_TYPE_LABELS[ev.event_type]} — ${ev.description || 'No description'}`).join(', ')}
-                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                    >
-                      📌 {scheduleEventsForDay(day.date).length}
-                    </span>
-                  )}
-                  {showBidWalks && bidWalksForDay(day.date).length > 0 && (
-                    <span
-                      title={bidWalksForDay(day.date).map(b => `Bid walk — ${b.contact_name || 'Lead'}`).join(', ')}
-                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                    >
-                      🔨 {bidWalksForDay(day.date).length}
-                    </span>
-                  )}
-                  {showPersonal && busyForDay(day.date).length > 0 && (
-                    <span
-                      title={busyForDay(day.date).map(b => b.title).join(', ')}
-                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                    >
-                      {busyForDay(day.date).length} personal
-                    </span>
-                  )}
-                </span>
-              </div>
-            ))}
+          <div key={wi} className="calendar-week" style={{ gridTemplateRows: `${headerHeight}px repeat(${Math.max(laneCount, 1)}, 30px)` }}>
+            {week.map((day, di) => {
+              const items = dayItems[di];
+              const isToday = sameDay(day.date, today);
+              return (
+                <div
+                  key={di}
+                  className={[
+                    'calendar-day-cell',
+                    day.inMonth ? '' : 'calendar-day-outside',
+                    isToday ? 'calendar-day-today' : '',
+                    sameDay(day.date, cursorDate) && !isToday ? 'calendar-day-selected' : '',
+                  ].filter(Boolean).join(' ')}
+                  style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
+                  onClick={() => setCursorDate(day.date)}
+                >
+                  <div className="calendar-day-number-row">
+                    <span className="calendar-day-number">{day.date.getDate()}</span>
+                  </div>
+                  <div className="cal-day-events">
+                    {items.slice(0, MAX_VISIBLE).map(item => (
+                      <div
+                        key={item.key}
+                        className={`cal-day-event-line ${item.onClick ? 'clickable' : ''}`}
+                        title={item.title}
+                        onClick={item.onClick ? (e) => { e.stopPropagation(); item.onClick(); } : undefined}
+                      >
+                        <span className={`cal-day-event-dot ${item.dotClass}`} />
+                        {item.time && <span className="cal-day-event-time">{item.time}</span>}
+                        <span className="cal-day-event-title">{item.title}</span>
+                      </div>
+                    ))}
+                    {items.length > MAX_VISIBLE && (
+                      <div
+                        className="cal-day-more"
+                        onClick={e => { e.stopPropagation(); setCursorDate(day.date); setView('day'); }}
+                      >
+                        +{items.length - MAX_VISIBLE} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             {placed.map(job => (
               <div
                 key={job.id}
@@ -862,10 +928,13 @@ export default function JobCalendarPage() {
         .cal-mini-day.today{ background: var(--accent); color: #fff; font-weight: 700; }
         .cal-mini-day.selected{ box-shadow: inset 0 0 0 1.5px var(--accent); font-weight: 700; }
 
-        .cal-sidebar-section{ display: flex; flex-direction: column; gap: 8px; }
-        .cal-sidebar-heading{ font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
-        .cal-sidebar-toggle{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); cursor: pointer; }
-        .cal-sidebar-toggle input{ margin: 0; }
+        .cal-sidebar-section{ display: flex; flex-direction: column; gap: 7px; }
+        .cal-sidebar-heading{ font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 1px; }
+        .cal-sidebar-toggle{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); cursor: pointer; line-height: 1.3; }
+        /* The global input{width:100%} rule otherwise stretches the
+           checkbox to fill the flex row, shoving its label off to the far
+           right — pin it back to its natural checkbox size. */
+        .cal-sidebar-toggle input{ margin: 0; width: 14px; height: 14px; flex: 0 0 auto; }
         .cal-legend-item{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); }
         .cal-legend-dot{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 

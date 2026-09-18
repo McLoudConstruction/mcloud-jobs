@@ -540,11 +540,41 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .calendar-day-label{ text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 0; }
 .calendar-week{ display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--line); }
 .calendar-week:last-child{ border-bottom: 1px solid var(--line); }
-.calendar-day-cell{ border-right: 1px solid var(--line); padding: 8px 10px; background: var(--card-bg); }
+.calendar-day-cell{ border-right: 1px solid var(--line); padding: 6px 6px 4px; background: var(--card-bg); cursor: pointer; }
 .calendar-day-cell:last-child{ border-right: none; }
 .calendar-day-outside{ background: var(--panel); opacity: 0.6; }
-.calendar-day-today .calendar-day-number{ background: var(--accent); color: #fff; border-radius: 50%; padding: 2px 8px; }
-.calendar-day-number{ font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+
+/* Day number sits top-right, Google-style — a plain number normally, a
+   filled accent circle on today. */
+.calendar-day-number-row{ display: flex; justify-content: flex-end; }
+.calendar-day-number{
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+}
+.calendar-day-today .calendar-day-number{ background: var(--accent); color: #fff; font-weight: 700; }
+
+/* Timed items (schedule events, bid walks, synced personal blocks) as a
+   compact dot + time + title line per event, stacked under the day
+   number — this is the piece that was missing to actually match Google's
+   month view instead of just reshaping the grid to 7 columns. */
+.cal-day-events{ display: flex; flex-direction: column; gap: 1px; margin-top: 1px; }
+.cal-day-event-line{
+  display: flex; align-items: center; gap: 4px; font-size: 10.5px; line-height: 15px;
+  color: var(--ink); white-space: nowrap; overflow: hidden;
+}
+.cal-day-event-line.clickable{ cursor: pointer; }
+.cal-day-event-line.clickable:hover{ text-decoration: underline; }
+.cal-day-event-dot{ width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cal-day-event-dot.dot-event{ background: var(--accent); }
+.cal-day-event-dot.dot-bidwalk{ background: #b8860b; }
+.cal-day-event-dot.dot-personal{ background: var(--ink-soft); }
+.cal-day-event-time{ color: var(--ink-soft); flex-shrink: 0; }
+.cal-day-event-title{ overflow: hidden; text-overflow: ellipsis; }
+.cal-day-more{
+  font-size: 10px; color: var(--ink-soft); cursor: pointer; line-height: 15px; padding-left: 11px;
+}
+.cal-day-more:hover{ text-decoration: underline; color: var(--ink); }
 .calendar-bar{
   margin: 2px 4px; padding: 5px 10px; border-radius: 5px;
   font-size: 11.5px; font-weight: 700; text-transform: none; letter-spacing: normal;
