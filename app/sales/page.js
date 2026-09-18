@@ -241,14 +241,7 @@ export default function SalesDashboardPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>
-            Sales
-            <span
-              className="info-tip"
-              title={'"New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it\'s worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.'}
-              aria-label={'"New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it\'s worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.'}
-            >?</span>
-          </h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
           {!isMobile && (
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn" onClick={() => setManualRouteModalOpen(true)}>Create Sales Route</button>

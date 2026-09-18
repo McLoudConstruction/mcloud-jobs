@@ -62,14 +62,7 @@ export default function NotificationsPage() {
       <div className="container">
         <div className="card">
           <div className="top-actions" style={{ marginBottom: 0 }}>
-            <h3 style={{ margin: 0 }}>
-              System Notifications {unreadCount > 0 ? `(${unreadCount} new)` : ''}
-              <span
-                className="info-tip"
-                title="Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages."
-                aria-label="Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages."
-              >?</span>
-            </h3>
+            <h3 style={{ margin: 0 }}>System Notifications {unreadCount > 0 ? `(${unreadCount} new)` : ''}</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               {unreadCount > 0 && <button className="btn btn-sm" onClick={markAllNotificationsRead}>Mark all read</button>}
               {readCount > 0 && <button className="btn btn-sm" onClick={dismissAllRead}>Dismiss all read</button>}
@@ -79,6 +72,9 @@ export default function NotificationsPage() {
                 </button>
               )}
             </div>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 4 }}>
+            Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages.
           </div>
           {visible.length === 0 && <div className="empty-state">{showDismissed ? 'No notifications yet.' : 'Nothing to show — try "Show dismissed" to see cleared notifications.'}</div>}
           {visible.map(n => (

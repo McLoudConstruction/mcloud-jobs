@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
 import SwipeableRow from '../../components/SwipeableRow';
+import NotificationRow from '../../components/NotificationRow';
 
 function fmtDate(v) {
   if (!v) return '';
@@ -172,6 +173,16 @@ export default function MessagesPage() {
   const feed = [...messageItems, ...systemItems].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   const filteredFeed = inboxFilter === 'all' ? feed : feed.filter(i => i.kind === (inboxFilter === 'messages' ? 'message' : 'system'));
 
+  // Same merge, shaped for the desktop two-pane layout instead of the
+  // mobile feed rows above — threads keep their existing sidebar item,
+  // system notifications render as the same NotificationRow used on the
+  // Dashboard and the Notifications page, so "All" reads as one inbox with
+  // two kinds of rows rather than two different lists stitched together.
+  const desktopMerged = [
+    ...threads.map(t => ({ kind: 'message', t, ts: new Date(t.last.created_at).getTime() })),
+    ...notifications.filter(n => !n.dismissed).map(n => ({ kind: 'system', n, ts: new Date(n.created_at).getTime() })),
+  ].sort((a, b) => b.ts - a.ts);
+
   function handleRowTap(item) {
     if (item.kind === 'message') {
       setMobileThreadId(item.jobId);
@@ -186,7 +197,7 @@ export default function MessagesPage() {
       <div className="container container-wide">
         {!isMobile && (
           <div className="top-actions">
-            <h2 style={{ margin: 0, color: 'var(--heading)' }}>Messages</h2>
+            <h2 style={{ margin: 0, color: 'var(--heading)' }}>Inbox</h2>
           </div>
         )}
 
@@ -259,67 +270,112 @@ export default function MessagesPage() {
             </>
           )
         ) : (
-          <div className="messages-layout">
-            <div className="messages-sidebar">
-              {threads.length === 0 && <div className="empty-state">No customer messages yet.</div>}
-              {threads.map(t => (
-                <button
-                  key={t.jobId}
-                  className={`messages-thread-item ${activeJobId === t.jobId ? 'active' : ''}`}
-                  onClick={() => setSelectedJobId(t.jobId)}
-                >
-                  <div className="messages-thread-name">{t.jobInfo?.customer_name || 'Unnamed'}</div>
-                  <div className="messages-thread-job">#{t.jobInfo?.job_number}</div>
-                  <div className="messages-thread-preview">{t.last.message}</div>
-                  {t.unreadCount > 0 && <span className="messages-unread-badge">{t.unreadCount}</span>}
-                </button>
-              ))}
-            </div>
+          <>
+            <ScrollFadeRow trackClassName="stage-tabs">
+              <button type="button" className={`stage-tab ${inboxFilter === 'all' ? 'active' : ''}`} onClick={() => setInboxFilter('all')}>All</button>
+              <button type="button" className={`stage-tab ${inboxFilter === 'messages' ? 'active' : ''}`} onClick={() => setInboxFilter('messages')}>Messages</button>
+              <button type="button" className={`stage-tab ${inboxFilter === 'system' ? 'active' : ''}`} onClick={() => setInboxFilter('system')}>System</button>
+            </ScrollFadeRow>
 
-            <div className="messages-chat">
-              {!selectedThread ? (
-                <div className="empty-state" style={{ padding: 40 }}>Select a conversation.</div>
-              ) : (
-                <>
-                  <div className="messages-chat-header">
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{selectedThread.jobInfo?.customer_name || 'Unnamed'}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Job #{selectedThread.jobInfo?.job_number}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {selectedThread.unreadCount > 0 && (
-                        <button className="btn btn-sm" onClick={markThreadRead} disabled={markingRead}>
-                          {markingRead ? 'Marking…' : 'Mark as Read'}
+            {inboxFilter === 'system' ? (
+              // System notifications have no conversation to open, so this
+              // filter drops the two-pane chat layout entirely and shows
+              // the full-width row list instead — same component, same
+              // design, as the Dashboard rail and the Notifications page.
+              <div className="card">
+                {notifications.filter(n => !n.dismissed).length === 0 && <div className="empty-state">Nothing here.</div>}
+                {notifications.filter(n => !n.dismissed).map(n => (
+                  <NotificationRow key={n.id} notification={n} onMarkRead={markNotificationRead} onDismiss={dismissNotification} />
+                ))}
+              </div>
+            ) : (
+              <div className="messages-layout">
+                <div className="messages-sidebar">
+                  {inboxFilter === 'all' ? (
+                    <>
+                      {desktopMerged.length === 0 && <div className="empty-state">Nothing here.</div>}
+                      {desktopMerged.map(item => item.kind === 'message' ? (
+                        <button
+                          key={`msg-${item.t.jobId}`}
+                          className={`messages-thread-item ${activeJobId === item.t.jobId ? 'active' : ''}`}
+                          onClick={() => setSelectedJobId(item.t.jobId)}
+                        >
+                          <div className="messages-thread-name">{item.t.jobInfo?.customer_name || 'Unnamed'}</div>
+                          <div className="messages-thread-job">#{item.t.jobInfo?.job_number}</div>
+                          <div className="messages-thread-preview">{item.t.last.message}</div>
+                          {item.t.unreadCount > 0 && <span className="messages-unread-badge">{item.t.unreadCount}</span>}
                         </button>
-                      )}
-                      <Link href={`/jobs/${activeJobId}`} className="btn btn-sm">View Job →</Link>
-                    </div>
-                  </div>
+                      ) : (
+                        <div key={`sys-${item.n.id}`} className="messages-sidebar-notif">
+                          <NotificationRow notification={item.n} onMarkRead={markNotificationRead} onDismiss={dismissNotification} />
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {threads.length === 0 && <div className="empty-state">No customer messages yet.</div>}
+                      {threads.map(t => (
+                        <button
+                          key={t.jobId}
+                          className={`messages-thread-item ${activeJobId === t.jobId ? 'active' : ''}`}
+                          onClick={() => setSelectedJobId(t.jobId)}
+                        >
+                          <div className="messages-thread-name">{t.jobInfo?.customer_name || 'Unnamed'}</div>
+                          <div className="messages-thread-job">#{t.jobInfo?.job_number}</div>
+                          <div className="messages-thread-preview">{t.last.message}</div>
+                          {t.unreadCount > 0 && <span className="messages-unread-badge">{t.unreadCount}</span>}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
 
-                  <div className="messages-thread-scroll">
-                    {selectedThread.msgs.map(m => (
-                      <div key={m.id}>
-                        <div className={`messages-bubble ${m.sender === 'admin' ? 'from-admin' : 'from-customer'}`}>
-                          <div className="messages-bubble-text">{m.message}</div>
-                          <div className="messages-bubble-time">{fmtDate(m.created_at)}</div>
+                <div className="messages-chat">
+                  {!selectedThread ? (
+                    <div className="empty-state" style={{ padding: 40 }}>Select a conversation.</div>
+                  ) : (
+                    <>
+                      <div className="messages-chat-header">
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{selectedThread.jobInfo?.customer_name || 'Unnamed'}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Job #{selectedThread.jobInfo?.job_number}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {selectedThread.unreadCount > 0 && (
+                            <button className="btn btn-sm" onClick={markThreadRead} disabled={markingRead}>
+                              {markingRead ? 'Marking…' : 'Mark as Read'}
+                            </button>
+                          )}
+                          <Link href={`/jobs/${activeJobId}`} className="btn btn-sm">View Job →</Link>
                         </div>
                       </div>
-                    ))}
-                  </div>
 
-                  <form onSubmit={e => sendReply(e)} className="messages-compose">
-                    <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Type a reply…" rows={2} />
-                    <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending…' : 'Send'}</button>
-                  </form>
-                </>
-              )}
-            </div>
-          </div>
+                      <div className="messages-thread-scroll">
+                        {selectedThread.msgs.map(m => (
+                          <div key={m.id}>
+                            <div className={`messages-bubble ${m.sender === 'admin' ? 'from-admin' : 'from-customer'}`}>
+                              <div className="messages-bubble-text">{m.message}</div>
+                              <div className="messages-bubble-time">{fmtDate(m.created_at)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <form onSubmit={e => sendReply(e)} className="messages-compose">
+                        <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Type a reply…" rows={2} />
+                        <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending…' : 'Send'}</button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <style jsx global>{`
-        .messages-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; height: calc(100vh - 220px); min-height: 460px; }
+        .messages-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; height: calc(100vh - 270px); min-height: 460px; }
         .messages-sidebar { background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; overflow-y: auto; height: 100%; }
         .messages-thread-item { display: block; width: 100%; text-align: left; padding: 12px 16px; border: none; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer; position: relative; font-family: inherit; }
         .messages-thread-item.active { background: var(--panel); }
@@ -327,6 +383,7 @@ export default function MessagesPage() {
         .messages-thread-job { font-size: 10.5px; color: var(--ink-soft); margin-bottom: 4px; }
         .messages-thread-preview { font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
         .messages-unread-badge { position: absolute; top: 12px; right: 14px; background: var(--rust); color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
+        .messages-sidebar-notif { padding: 0 12px; }
         .messages-chat { background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; height: 100%; }
         .messages-chat-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
         .messages-thread-scroll { flex: 1; }
