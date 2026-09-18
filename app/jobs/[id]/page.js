@@ -569,7 +569,7 @@ export default function JobDetailPage() {
         )}
 
         {(role === 'owner' || role === 'estimator') && (
-          <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} />
+          <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} projectAddress={job.project_address} />
         )}
 
         {inviteResult && (

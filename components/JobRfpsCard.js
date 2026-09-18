@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { RFP_STATUS_LABELS } from '../lib/constants';
+import { buildRfpEmail } from '../lib/emailTemplates';
 import PopupModal from './PopupModal';
 
 function fmtDate(v) {
@@ -15,7 +16,7 @@ function fmtDate(v) {
 // section — RFPs aren't really financials yet) as a single popup that
 // swaps between a list view and a create-new view, rather than a modal
 // opening a second modal on top of it.
-export default function JobRfpsPanel({ open, onClose, jobId, session }) {
+export default function JobRfpsPanel({ open, onClose, jobId, session, projectAddress }) {
   const [view, setView] = useState('list'); // 'list' | 'new'
   const [rfps, setRfps] = useState([]);
 
@@ -72,6 +73,7 @@ export default function JobRfpsPanel({ open, onClose, jobId, session }) {
         <NewRfpForm
           jobId={jobId}
           session={session}
+          projectAddress={projectAddress}
           onBack={() => setView('list')}
           onCreated={() => { setView('list'); load(); }}
         />
@@ -80,7 +82,7 @@ export default function JobRfpsPanel({ open, onClose, jobId, session }) {
   );
 }
 
-function NewRfpForm({ jobId, session, onBack, onCreated }) {
+function NewRfpForm({ jobId, session, projectAddress, onBack, onCreated }) {
   const [photos, setPhotos] = useState([]);
   const [signedUrls, setSignedUrls] = useState({});
   const [selectedFolder, setSelectedFolder] = useState('');
@@ -101,7 +103,7 @@ function NewRfpForm({ jobId, session, onBack, onCreated }) {
     (async () => {
       const [{ data: photoData }, { data: companyData }] = await Promise.all([
         supabase.from('job_photos').select('*').eq('job_id', jobId).not('folder', 'is', null).order('created_at', { ascending: false }),
-        supabase.from('companies').select('id, company_name').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
+        supabase.from('companies').select('id, company_name, contact_email').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
       ]);
       if (photoData) {
         setPhotos(photoData);
@@ -148,8 +150,32 @@ function NewRfpForm({ jobId, session, onBack, onCreated }) {
     const { error: recipientErr } = await supabase.from('rfp_recipients').insert(
       selectedCompanyIds.map(company_id => ({ rfp_id: rfp.id, company_id }))
     );
+    if (recipientErr) { setSaving(false); setError(recipientErr.message); return; }
+
+    // Best-effort, same pattern as issuing a work order — the RFP is
+    // already created and visible in the Sub Portal regardless of
+    // whether the notification email goes through.
+    for (const companyId of selectedCompanyIds) {
+      const company = companies.find(c => c.id === companyId);
+      if (!company?.contact_email) continue;
+      try {
+        const { subject, html, text } = buildRfpEmail({
+          companyName: company.company_name,
+          title: title.trim(),
+          description: description.trim() || null,
+          projectAddress,
+        });
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: company.contact_email, subject, html, text, category: 'rfp_sent', jobId, sentBy: session?.user?.email || null }),
+        });
+      } catch {
+        // best-effort — see above
+      }
+    }
+
     setSaving(false);
-    if (recipientErr) { setError(recipientErr.message); return; }
     onCreated();
   }
 

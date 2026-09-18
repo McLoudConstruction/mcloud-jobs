@@ -5,6 +5,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import { supabase } from '../../../lib/supabaseClient';
 import AppShell from '../../../components/AppShell';
 import { RFP_STATUS_LABELS } from '../../../lib/constants';
+import { buildRfpEmail } from '../../../lib/emailTemplates';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -22,7 +23,7 @@ export default function RfpsPage() {
     const [{ data: rfpData }, { data: jobData }, { data: companyData }] = await Promise.all([
       supabase.from('rfps').select('*, jobs(job_number, project_address), rfp_recipients(id, status)').order('created_at', { ascending: false }),
       supabase.from('jobs').select('id, job_number, project_address').order('created_at', { ascending: false }),
-      supabase.from('companies').select('id, company_name').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
+      supabase.from('companies').select('id, company_name, contact_email').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
     ]);
     if (rfpData) setRfps(rfpData);
     if (jobData) setJobs(jobData);
@@ -161,8 +162,33 @@ function NewRfpModal({ jobs, companies, session, onClose, onCreated }) {
     const { error: recipientErr } = await supabase.from('rfp_recipients').insert(
       selectedCompanyIds.map(company_id => ({ rfp_id: rfp.id, company_id }))
     );
+    if (recipientErr) { setSaving(false); setError(recipientErr.message); return; }
+
+    // Best-effort, same pattern as issuing a work order — the RFP is
+    // already created and visible in the Sub Portal regardless of
+    // whether the notification email goes through.
+    const projectAddress = jobs.find(j => j.id === jobId)?.project_address;
+    for (const companyId of selectedCompanyIds) {
+      const company = companies.find(c => c.id === companyId);
+      if (!company?.contact_email) continue;
+      try {
+        const { subject, html, text } = buildRfpEmail({
+          companyName: company.company_name,
+          title: title.trim(),
+          description: description.trim() || null,
+          projectAddress,
+        });
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: company.contact_email, subject, html, text, category: 'rfp_sent', jobId, sentBy: session?.user?.email || null }),
+        });
+      } catch {
+        // best-effort — see above
+      }
+    }
+
     setSaving(false);
-    if (recipientErr) { setError(recipientErr.message); return; }
     onCreated();
   }
 
