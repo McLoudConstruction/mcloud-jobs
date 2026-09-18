@@ -154,6 +154,11 @@ export default function SubcontractorsPage() {
   const [docViewerError, setDocViewerError] = useState('');
   const fileInputRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
+  // A thumbnail confirms the file is actually there without a click, and
+  // (for an image) previews what was uploaded — a PDF still gets a plain
+  // file-icon tile since there's no cheap way to thumbnail a PDF page
+  // client-side. Keyed by kind so W9 and COI load independently.
+  const [docThumbs, setDocThumbs] = useState({ w9: null, coi: null });
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -161,6 +166,20 @@ export default function SubcontractorsPage() {
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadThumb(kind, path) {
+      if (!path) { setDocThumbs(prev => ({ ...prev, [kind]: null })); return; }
+      const isImage = /\.(png|jpe?g|gif|webp|heic)$/i.test(path);
+      if (!isImage) { setDocThumbs(prev => ({ ...prev, [kind]: 'pdf' })); return; }
+      const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 3600);
+      if (!cancelled) setDocThumbs(prev => ({ ...prev, [kind]: data?.signedUrl || 'pdf' }));
+    }
+    loadThumb('w9', form.w9_storage_path);
+    loadThumb('coi', form.coi_storage_path);
+    return () => { cancelled = true; };
+  }, [form.w9_storage_path, form.coi_storage_path]);
 
   const [applications, setApplications] = useState([]);
   const [applyModalOpen, setApplyModalOpen] = useState(false);
@@ -599,8 +618,14 @@ export default function SubcontractorsPage() {
                       <div style={{ marginBottom: 12 }}>
                         <label>W9 on file</label>
                         {form.w9_storage_path ? (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.w9_storage_path)}>View</button>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <button type="button" className="doc-thumb-btn" onClick={() => viewDoc(form.w9_storage_path)} aria-label="View W9">
+                              {docThumbs.w9 && docThumbs.w9 !== 'pdf' ? (
+                                <img src={docThumbs.w9} alt="" className="doc-thumb-img" />
+                              ) : (
+                                <span className="doc-thumb-pdf">PDF</span>
+                              )}
+                            </button>
                             <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('w9')}>Remove</button>
                           </div>
                         ) : (
@@ -613,8 +638,14 @@ export default function SubcontractorsPage() {
                       <div>
                         <label>Certificate of Insurance</label>
                         {form.coi_storage_path ? (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button type="button" className="btn btn-sm" onClick={() => viewDoc(form.coi_storage_path)}>View</button>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <button type="button" className="doc-thumb-btn" onClick={() => viewDoc(form.coi_storage_path)} aria-label="View COI">
+                              {docThumbs.coi && docThumbs.coi !== 'pdf' ? (
+                                <img src={docThumbs.coi} alt="" className="doc-thumb-img" />
+                              ) : (
+                                <span className="doc-thumb-pdf">PDF</span>
+                              )}
+                            </button>
                             <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('coi')}>Remove</button>
                           </div>
                         ) : (

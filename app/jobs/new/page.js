@@ -205,7 +205,13 @@ function NewOpportunityPageInner() {
     }
 
     if (oppId && data) {
-      await supabase.from('opportunities').update({ stage: 'converted', job_id: data.id }).eq('id', oppId);
+      // Best-effort, but logged: the job itself was already created
+      // successfully above, so a failure here shouldn't block getting to
+      // the job page — it would just leave the source lead stuck showing
+      // as still-active. (See migration 109: this write silently failed
+      // against a stale check constraint for a long time before that.)
+      const { error: convertError } = await supabase.from('opportunities').update({ stage: 'converted', job_id: data.id }).eq('id', oppId);
+      if (convertError) console.error('Failed to mark opportunity converted:', convertError.message);
     }
 
     if (data && form.customer_email.trim()) {

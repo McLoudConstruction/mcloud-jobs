@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon, MoreIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon, MoreIcon, BellIcon, RefreshIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
 import ScrollFadeRow from './ScrollFadeRow';
 import BottomSheet from './BottomSheet';
@@ -118,6 +118,8 @@ export default function AppShell({ children }) {
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState('');
 
   useEffect(() => {
     let mounted2 = true;
@@ -152,6 +154,33 @@ export default function AppShell({ children }) {
     router.replace('/login');
   }
 
+  // Sitewide "push now" — a manual stand-in for waiting on the scheduled
+  // cron sync, available from anywhere instead of just Settings →
+  // Integrations. Reuses the same sync-now route/endpoint that page's own
+  // "Sync Now" button calls (requires an owner session; a non-owner
+  // account gets a plain failure toast rather than a confusing error).
+  async function handleRefreshNow() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMsg('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/integrations/calendar-sync-now', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Refresh failed.');
+      const pushed = (data.results || []).reduce((sum, r) => sum + (r.pushed || 0) + (r.pushedBidWalks || 0) + (r.pushedScheduleEvents || 0), 0);
+      setRefreshMsg(`Synced — ${pushed} calendar event${pushed === 1 ? '' : 's'} pushed.`);
+    } catch (err) {
+      setRefreshMsg(err.message || 'Refresh failed.');
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshMsg(''), 4000);
+    }
+  }
+
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   const sidebarWidth = isMobile ? 0 : 84;
@@ -165,6 +194,22 @@ export default function AppShell({ children }) {
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
+        </div>
+        <div className="shell-topbar-actions">
+          <button
+            type="button"
+            className={`shell-topbar-icon-btn ${refreshing ? 'spinning' : ''}`}
+            onClick={handleRefreshNow}
+            aria-label="Refresh now"
+            title="Push a sync now instead of waiting for the scheduled cron"
+          >
+            <RefreshIcon />
+            {refreshMsg && <span className="shell-topbar-toast">{refreshMsg}</span>}
+          </button>
+          <Link href="/messages" className="shell-topbar-icon-btn" aria-label="Notifications">
+            <BellIcon />
+            {unreadCount > 0 && <span className="shell-topbar-dot" />}
+          </Link>
         </div>
       </div>
 

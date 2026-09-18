@@ -163,6 +163,29 @@ export function MoreIcon(props) {
   );
 }
 
+// Topbar notification bell — Facebook-style: a solid bell glyph, not the
+// thin outline used for the sidebar/bottom-nav Inbox icon, since this one
+// sits alone in the header rather than beside a text label.
+export function BellIcon(props) {
+  return (
+    <svg {...common} {...props} fill="currentColor" stroke="none">
+      <path d="M10 2.2c-.5 0-.9.4-.9.9v.6c-2.5.4-4.4 2.6-4.4 5.2v2.9l-1.3 2.1c-.3.5.1 1.1.7 1.1h11.8c.6 0 1-.6.7-1.1l-1.3-2.1V8.9c0-2.6-1.9-4.8-4.4-5.2v-.6c0-.5-.4-.9-.9-.9z" />
+      <path d="M8 15.6a2 2 0 004 0z" />
+    </svg>
+  );
+}
+
+// Topbar "refresh now" — a manual stand-in for waiting on the scheduled
+// cron sync.
+export function RefreshIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M16 10a6 6 0 10-1.8 4.3" />
+      <path d="M16 5.5V10h-4.5" />
+    </svg>
+  );
+}
+
 export function SignOutIcon(props) {
   return (
     <svg {...common} {...props}>

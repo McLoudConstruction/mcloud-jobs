@@ -354,6 +354,21 @@ a { color: inherit; text-decoration: none; }
   flex-direction: column;
   min-height: 0;
 }
+/* A document present on file gets a small clickable thumbnail — an actual
+   preview for an image upload, a plain file tile for a PDF (no cheap way
+   to render a PDF's first page client-side) — instead of just a bare
+   "View" text button, so its presence is visible without a click. */
+.doc-thumb-btn{
+  flex-shrink: 0; width: 46px; height: 46px; padding: 0; border-radius: 6px;
+  border: 1px solid var(--panel-line); background: var(--card-bg); cursor: pointer;
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+}
+.doc-thumb-img{ width: 100%; height: 100%; object-fit: cover; }
+.doc-thumb-pdf{
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; color: #a13f3f;
+  border: 1.5px solid #a13f3f; border-radius: 3px; padding: 2px 4px;
+}
+
 .sub-popup-sidebar-title{
   font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--gold); margin-bottom: 10px;
@@ -495,10 +510,25 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .card h3{ font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 3px solid var(--accent); padding-left: 10px; }
 
 .two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two-col > div{ min-width: 0; } /* a grid item's default min-width is its content's, which a native date/time input can exceed — without this it overflows its cell instead of shrinking to fit (e.g. the New Event popup's Date/Time row on mobile) */
 @media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }
 
 .two-col-3{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.two-col-3 > div{ min-width: 0; }
 @media (max-width: 700px){ .two-col-3{ grid-template-columns: 1fr; } }
+
+/* Mobile Safari/Chrome render date/time inputs with generous internal
+   padding around the native picker segments — combined with this app's
+   normal 9px/10px input padding, that's routinely wider than a popup's
+   available width. Tightening just these two types' padding/font avoids
+   the field overflowing or getting clipped, without touching every other
+   input on the page. */
+@media (max-width: 700px){
+  input[type="date"], input[type="time"]{
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+}
 
 .contact-popup-grid{ display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 @media (max-width: 800px){ .contact-popup-grid{ grid-template-columns: 1fr; } }
@@ -1010,10 +1040,35 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-line);
 }
-.shell-logo{ display: flex; justify-content: flex-start; align-items: center; margin-left: auto; }
+.shell-logo{ display: flex; justify-content: flex-start; align-items: center; }
 .shell-logo img{ display: block; max-height: 190px; } /* effectively a no-op against the logo-size slider's own 50-200px range — just a sane ceiling */
 .shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--header-text); text-transform: uppercase; font-size: 14px; }
 .shell-logo .brand span{ color: var(--gold); }
+
+/* The logo sits left now (.shell-topbar is already justify-content:
+   flex-start), so this — not the logo — is what carries margin-left: auto
+   to reach the right edge. */
+.shell-topbar-actions{ display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.shell-topbar-icon-btn{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent;
+  color: var(--header-text); cursor: pointer; text-decoration: none;
+}
+.shell-topbar-icon-btn:hover{ background: rgba(255,255,255,0.08); }
+.shell-topbar-icon-btn svg{ width: 19px; height: 19px; }
+.shell-topbar-icon-btn.spinning svg{ animation: shell-topbar-spin 0.8s linear infinite; }
+@keyframes shell-topbar-spin{ to{ transform: rotate(360deg); } }
+.shell-topbar-dot{
+  position: absolute; top: 4px; right: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #c0524f; border: 1.5px solid var(--header-bg);
+}
+.shell-topbar-toast{
+  position: absolute; top: 100%; right: 0; margin-top: 6px;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font-size: 11.5px; color: var(--ink); white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15); z-index: 60;
+}
 
 .shell-header-left{ display: flex; flex-direction: column; justify-content: center; }
 .shell-nav-dot{
@@ -1171,7 +1226,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   min-height: 50px; padding: 0 22px; font-size: 15px; font-weight: 600;
   border-radius: 10px; display: flex; align-items: center;
-  background: #ffffff; color: var(--heading); border: 1px solid var(--panel-line);
+  /* This pill's background is fixed white in both themes (see note above),
+     so its text/border must be fixed too — var(--heading) and
+     var(--panel-line) flip to near-white/dark-gray in dark mode, which
+     read as white-on-white and an invisible border against a white pill. */
+  background: #ffffff; color: #2a2722; border: 1px solid #d8d5cf;
 }
 .mobile-fab-menu-item.btn-primary{
   background: var(--fab-primary); color: #ffffff; border-color: var(--fab-primary);

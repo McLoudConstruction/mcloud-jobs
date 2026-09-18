@@ -109,7 +109,14 @@ export default function SalesDashboardPage() {
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.company.trim() && !form.project.trim()) return;
+    // This "needs a company or project name" guard exists to stop a blank
+    // New Lead from being created — it should never block saving an EDIT.
+    // A residential lead identified only by contact name (no company, no
+    // project name entered) already exists as a row; requiring Company or
+    // Project here made every edit to that lead silently no-op on Save,
+    // with no error shown, since the form just returned before touching
+    // Supabase at all.
+    if (!editingId && !form.company.trim() && !form.project.trim() && !form.contact_name.trim()) return;
     setSaving(true);
     setSaveError('');
     let mutationError;
@@ -380,18 +387,11 @@ export default function SalesDashboardPage() {
                     <span className={`opp-card-chevron ${expanded ? 'open' : ''}`} aria-hidden="true">›</span>
                   </button>
 
-                  {!expanded && (
-                    <div className="opp-card-primary">
-                      {o.stage === 'converted' ? (
-                        o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>
-                      ) : (
-                        ACTIVE_STAGES.includes(o.stage) && (
-                          <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
-                        )
-                      )}
-                    </div>
-                  )}
-
+                  {/* Convert to Opportunity (and View Job, for a converted
+                      lead) only appear once the card is expanded — a
+                      collapsed row is just the header, so these primary
+                      actions can't be tapped by accident while scanning
+                      the list. */}
                   {expanded && (
                     <div className="opp-card-details">
                       {o.stage === 'lost' && o.loss_reason && (
