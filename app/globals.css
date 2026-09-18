@@ -231,26 +231,26 @@ a { color: inherit; text-decoration: none; }
 .hide-scrollbar::-webkit-scrollbar{
   display: none;
 }
-.dash-stage-strip{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+/* The Snapshot panel — Cash / Pipeline & Backlog / Profitability /
+   Schedule as four bordered quadrants inside one card, instead of a bare
+   flex row of numbers with nothing to anchor the eye. Real dividers
+   between quadrants (not just gap spacing) are what actually reads as
+   "structured panel" rather than "numbers that happened to wrap here" —
+   giving it the same card treatment as the Notifications rail is what
+   ties the two columns of the page together instead of one floating
+   free and the other boxed. Border logic is index-driven, not nth-child,
+   since a quadrant is skipped entirely when its widget is toggled off in
+   Settings and nth-child would then put dividers in the wrong places. */
+.dash-stat-panel{ padding: 0; }
+.dash-stat-quadrants{ display: grid; grid-template-columns: 1fr 1fr; }
+.dash-stat-quadrant{ padding: 18px 24px; }
+.dash-stat-quadrant.div-right{ border-right: 1px solid var(--line); }
+.dash-stat-quadrant.div-bottom{ border-bottom: 1px solid var(--line); }
+@media (max-width: 700px){
+  .dash-stat-quadrants{ display: flex; flex-direction: column; }
+  .dash-stat-quadrant{ padding: 16px 4px; border-right: none !important; }
+  .dash-stat-quadrant.div-bottom, .dash-stat-quadrant:not(:last-child){ border-bottom: 1px solid var(--line); }
 }
-.dash-stage-item{
-  flex: 1;
-  min-width: 100px;
-  text-align: center;
-  padding: 12px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-}
-.dash-stage-total{
-  background: var(--panel);
-  font-weight: 700;
-}
-.dash-stage-count{ font-size: 20px; font-weight: 700; color: var(--heading); }
-.dash-stage-label{ font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin-top: 4px; }
 
 .portal-info-grid{
   display: grid;

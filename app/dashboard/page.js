@@ -303,61 +303,73 @@ export default function DashboardPage() {
               <WeatherRibbon forecast={companyForecast} loading={weatherLoading} error={weatherError} />
             )}
 
-            {(show('cash') || show('pipeline_backlog') || show('profitability') || show('schedule_health')) && (
-              <div className="dash-section">
-                <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 18, width: '100%', minWidth: 0 } : { display: 'flex', flexWrap: 'wrap', gap: '20px 48px' }}>
-                  {show('cash') && (
-                    <StatGroup
-                      isMobile={isMobile}
-                      label="Cash"
-                      tiles={[
-                        { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
-                        { label: 'Total AR', value: fmtMoney(stats.totalAR), href: '/financials/receivable' },
-                        { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
-                        { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid), href: '/financials' },
-                      ]}
-                    />
-                  )}
-                  {show('pipeline_backlog') && (
-                    <StatGroup
-                      isMobile={isMobile}
-                      label="Pipeline & Backlog"
-                      tiles={[
-                        { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
-                        { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue), href: '/jobs' },
-                        { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`, href: '/jobs' },
-                        { label: 'Sold jobs', value: stats.soldCount, href: '/jobs' },
-                      ]}
-                    />
-                  )}
-                  {show('profitability') && (
-                    <StatGroup
-                      isMobile={isMobile}
-                      label="Profitability"
-                      tiles={[
-                        { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
-                        { label: 'Income MTD', value: fmtMoney(stats.revenueMTD), href: '/financials' },
-                        { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`, href: '/financials' },
-                        { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0, href: '/financials' },
-                      ]}
-                    />
-                  )}
-                  {show('schedule_health') && (
-                    <StatGroup
-                      isMobile={isMobile}
-                      label="Schedule"
-                      tiles={[
-                        { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
-                        { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
-                      ]}
-                    />
-                  )}
+            {(() => {
+              // Four fixed quadrants in a card, not a bare wrapped flex
+              // row — real dividers between them are what makes this read
+              // as one structured panel instead of loose numbers. A
+              // quadrant only exists when its widget is on, so the
+              // divider logic is computed from the visible list's actual
+              // shape rather than nth-child (which would misplace borders
+              // whenever one quadrant is toggled off in Settings).
+              const quadrants = [
+                show('cash') && {
+                  key: 'cash', label: 'Cash', tiles: [
+                    { label: 'Net cash (AR − AP)', value: `${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}`, warn: net < 0 },
+                    { label: 'Total AR', value: fmtMoney(stats.totalAR), href: '/financials/receivable' },
+                    { label: 'Total AP', value: fmtMoney(totalAP), href: '/financials/payable' },
+                    { label: 'Total paid (all-time)', value: fmtMoney(stats.totalPaid), href: '/financials' },
+                  ],
+                },
+                show('pipeline_backlog') && {
+                  key: 'pipeline_backlog', label: 'Pipeline & Backlog', tiles: [
+                    { label: 'Backlog value', value: fmtMoney(stats.backlogValue), href: '/jobs' },
+                    { label: 'Pipeline value', value: fmtMoney(stats.pipelineValue), href: '/jobs' },
+                    { label: 'Win rate', value: stats.winRatePercent == null ? '—' : `${Math.round(stats.winRatePercent)}%`, href: '/jobs' },
+                    { label: 'Sold jobs', value: stats.soldCount, href: '/jobs' },
+                  ],
+                },
+                show('profitability') && {
+                  key: 'profitability', label: 'Profitability', tiles: [
+                    { label: 'Income YTD', value: fmtMoney(stats.revenueYTD), href: '/financials' },
+                    { label: 'Income MTD', value: fmtMoney(stats.revenueMTD), href: '/financials' },
+                    { label: 'Avg. gross margin', value: stats.avgMarginPercent == null ? '—' : `${Math.round(stats.avgMarginPercent)}%`, href: '/financials' },
+                    { label: `Below ${TARGET_MARGIN_PERCENT}% margin`, value: stats.jobsBelowTargetMarginCount, warn: stats.jobsBelowTargetMarginCount > 0, href: '/financials' },
+                  ],
+                },
+                show('schedule_health') && {
+                  key: 'schedule_health', label: 'Schedule', tiles: [
+                    { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
+                    { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
+                  ],
+                },
+              ].filter(Boolean);
+
+              if (quadrants.length === 0) return null;
+              const cols = 2;
+              const lastRow = Math.floor((quadrants.length - 1) / cols);
+
+              return (
+                <div className="card dash-stat-panel">
+                  <div className="dash-stat-quadrants">
+                    {quadrants.map((q, i) => {
+                      const divRight = i % cols !== cols - 1 && i + 1 < quadrants.length;
+                      const divBottom = Math.floor(i / cols) < lastRow;
+                      return (
+                        <div
+                          key={q.key}
+                          className={['dash-stat-quadrant', divRight ? 'div-right' : '', divBottom ? 'div-bottom' : ''].filter(Boolean).join(' ')}
+                        >
+                          <StatGroup isMobile={isMobile} label={q.label} tiles={q.tiles} />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {show('job_counts_by_stage') && (
-              <div className="dash-section">
+              <div className="card">
                 <h3>Job counts by stage</h3>
                 {isMobile ? (
                   <div
@@ -396,7 +408,7 @@ export default function DashboardPage() {
             )}
 
             {show('overdue_opportunities') && (
-              <div className="dash-section" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+              <div className="card" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
                 <h3>Overdue opportunities</h3>
                 {stats.overdue.length === 0 && <div className="dash-empty-state">Nothing overdue.</div>}
                 {stats.overdue.length > 0 && isMobile && (
