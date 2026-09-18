@@ -724,7 +724,10 @@ export default function JobCalendarPage() {
         const dayItems = week.map(day => timedItemsForDay(day.date));
         const MAX_VISIBLE = 3;
         const maxLines = Math.max(1, ...dayItems.map(items => Math.min(items.length, MAX_VISIBLE) + (items.length > MAX_VISIBLE ? 1 : 0)));
-        const headerHeight = 22 + maxLines * 15 + 6;
+        // A minimum row height even for an empty week — Google's grid
+        // gives every day real room to breathe rather than shrink-wrapping
+        // to whatever content happens to be there that week.
+        const headerHeight = Math.max(92, 28 + maxLines * 17 + 10);
         // No job bars this week → no reserved lane row at all, so weeks
         // with nothing scheduled don't carry a blank 30px band that reads
         // as padding between rows. Weeks butt right up against each other.
