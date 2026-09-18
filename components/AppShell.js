@@ -284,7 +284,14 @@ export default function AppShell({ children }) {
         </BottomSheet>
 
         <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
-          {showSubnav && (
+          {/* Messages' only child is Notifications, which the mobile Inbox
+              page now merges into its own All/Messages/System chip row —
+              showing this strip too on mobile would duplicate that filter
+              with a redundant "Notifications" tab. Every other section still
+              relies on this strip as its own mobile chip nav (Sales'
+              People/Properties/Companies, Projects' Estimating/Invoicing/
+              Material Selections), so it's suppressed for Messages alone. */}
+          {showSubnav && !(isMobile && currentSection?.href === '/messages') && (
             <ScrollFadeRow trackClassName="section-subnav">
               <Link href={currentSection.href} className={`stage-tab ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
               {currentSection.children.map(child => (
