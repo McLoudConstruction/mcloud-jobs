@@ -13,7 +13,7 @@ import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
-import JobRfpsCard from '../../../components/JobRfpsCard';
+import JobRfpsPanel from '../../../components/JobRfpsCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
@@ -90,9 +90,6 @@ const TABS = [
       { key: 'budget', label: 'Budget' },
       { key: 'change_orders', label: 'Change Orders' },
       { key: 'work_orders', label: 'Work Orders' },
-      // Owner/Estimator only — matches the RLS on rfps/rfp_recipients, so
-      // this filters out for anyone who'd see empty data anyway.
-      { key: 'rfps', label: 'RFPs', roles: ['owner', 'estimator'] },
       { key: 'invoicing', label: 'Invoices' },
       { key: 'receipts', label: 'Job Costs' },
     ],
@@ -131,6 +128,7 @@ export default function JobDetailPage() {
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const [isMobile, setIsMobile] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  const [rfpPanelOpen, setRfpPanelOpen] = useState(false);
 
   useEffect(() => {
     function goOnline() { setIsOnline(true); }
@@ -201,16 +199,10 @@ export default function JobDetailPage() {
     const current = visible.find(t => t.key === tab);
     if (!current) {
       goToTab(visible[0]?.key || 'Overview');
-    } else if (current.sections) {
-      // A section can also be role-gated (e.g. RFPs, Owner/Estimator
-      // only) — treat one the current role can't see as not there,
-      // same as if it had disappeared entirely.
-      const visibleSections = current.sections.filter(s => !s.roles || s.roles.includes(role));
-      if (!visibleSections.some(s => s.key === section)) {
-        setSection(visibleSections[0]?.key || null);
-      }
+    } else if (current.sections && !current.sections.some(s => s.key === section)) {
+      setSection(current.sections[0].key);
     }
-  }, [job, tab, section, role, goToTab]);
+  }, [job, tab, section, goToTab]);
 
   // Financial fields (contract_price, invoice_amount, invoice_status) live
   // in job_financials, not on jobs itself — split out so RLS can hide them
@@ -511,6 +503,9 @@ export default function JobDetailPage() {
                 <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
                   <MessagesIcon width={16} height={16} />
                 </button>
+                {(role === 'owner' || role === 'estimator') && (
+                  <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
+                )}
                 <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
                   <ProjectFeedIcon width={16} height={16} /> Project Updates
                 </button>
@@ -555,6 +550,12 @@ export default function JobDetailPage() {
                 <MessagesIcon className="more-sheet-icon" />
                 Messages
               </button>
+              {(role === 'owner' || role === 'estimator') && (
+                <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); setRfpPanelOpen(true); }}>
+                  <ProjectFeedIcon className="more-sheet-icon" />
+                  RFP
+                </button>
+              )}
               <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Project Updates'); }}>
                 <ProjectFeedIcon className="more-sheet-icon" />
                 Project Updates
@@ -566,6 +567,11 @@ export default function JobDetailPage() {
             </BottomSheet>
           </>
         )}
+
+        {(role === 'owner' || role === 'estimator') && (
+          <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} />
+        )}
+
         {inviteResult && (
           <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
             {inviteResult}
@@ -599,7 +605,7 @@ export default function JobDetailPage() {
         {activeTabDef?.sections && (
           <div className="tab-sections">
             <div className="tab-sections-pills">
-              {activeTabDef.sections.filter(s => !s.roles || s.roles.includes(role)).map(s => (
+              {activeTabDef.sections.map(s => (
                 <button
                   key={s.key}
                   className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
@@ -686,10 +692,6 @@ export default function JobDetailPage() {
 
         {tab === 'Financials' && section === 'work_orders' && (
           <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
-        )}
-
-        {tab === 'Financials' && section === 'rfps' && (role === 'owner' || role === 'estimator') && (
-          <JobRfpsCard jobId={id} session={session} />
         )}
 
         {tab === 'Financials' && section === 'invoicing' && (
