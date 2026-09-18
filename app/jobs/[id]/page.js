@@ -13,6 +13,7 @@ import JobCostSummary from '../../../components/JobCostSummary';
 import DrawsCard from '../../../components/DrawsCard';
 import ReceiptsCard from '../../../components/ReceiptsCard';
 import WorkOrdersCard from '../../../components/WorkOrdersCard';
+import JobRfpsCard from '../../../components/JobRfpsCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextJobNumber } from '../../../lib/assignJobNumber';
@@ -89,6 +90,9 @@ const TABS = [
       { key: 'budget', label: 'Budget' },
       { key: 'change_orders', label: 'Change Orders' },
       { key: 'work_orders', label: 'Work Orders' },
+      // Owner/Estimator only — matches the RLS on rfps/rfp_recipients, so
+      // this filters out for anyone who'd see empty data anyway.
+      { key: 'rfps', label: 'RFPs', roles: ['owner', 'estimator'] },
       { key: 'invoicing', label: 'Invoices' },
       { key: 'receipts', label: 'Job Costs' },
     ],
@@ -110,7 +114,7 @@ const TABS = [
 ];
 
 export default function JobDetailPage() {
-  const { session, loading } = useRequireAuth();
+  const { session, loading, role } = useRequireAuth();
   const { id } = useParams();
   const router = useRouter();
 
@@ -197,10 +201,16 @@ export default function JobDetailPage() {
     const current = visible.find(t => t.key === tab);
     if (!current) {
       goToTab(visible[0]?.key || 'Overview');
-    } else if (current.sections && !current.sections.some(s => s.key === section)) {
-      setSection(current.sections[0].key);
+    } else if (current.sections) {
+      // A section can also be role-gated (e.g. RFPs, Owner/Estimator
+      // only) — treat one the current role can't see as not there,
+      // same as if it had disappeared entirely.
+      const visibleSections = current.sections.filter(s => !s.roles || s.roles.includes(role));
+      if (!visibleSections.some(s => s.key === section)) {
+        setSection(visibleSections[0]?.key || null);
+      }
     }
-  }, [job, tab, section, goToTab]);
+  }, [job, tab, section, role, goToTab]);
 
   // Financial fields (contract_price, invoice_amount, invoice_status) live
   // in job_financials, not on jobs itself — split out so RLS can hide them
@@ -589,7 +599,7 @@ export default function JobDetailPage() {
         {activeTabDef?.sections && (
           <div className="tab-sections">
             <div className="tab-sections-pills">
-              {activeTabDef.sections.map(s => (
+              {activeTabDef.sections.filter(s => !s.roles || s.roles.includes(role)).map(s => (
                 <button
                   key={s.key}
                   className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
@@ -676,6 +686,10 @@ export default function JobDetailPage() {
 
         {tab === 'Financials' && section === 'work_orders' && (
           <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
+        )}
+
+        {tab === 'Financials' && section === 'rfps' && (role === 'owner' || role === 'estimator') && (
+          <JobRfpsCard jobId={id} session={session} />
         )}
 
         {tab === 'Financials' && section === 'invoicing' && (
