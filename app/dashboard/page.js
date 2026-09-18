@@ -391,16 +391,22 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px 28px' }}>
+                  // A CSS grid, not a wrapped flex row — flex's
+                  // space-between orphans a lone last item at the far
+                  // left when the row runs one item too wide to fit
+                  // (exactly what was happening to "Total" here). Grid
+                  // columns shrink to fit instead of wrapping, so this
+                  // never breaks onto a second, misaligned row.
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGE_ORDER.length}, minmax(0, 1fr)) auto`, columnGap: 20 }}>
                     {STAGE_ORDER.map(s => (
-                      <div key={s} style={{ minWidth: 60 }}>
+                      <div key={s} style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{stats.byStage[s] || 0}</div>
-                        <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
+                        <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3, whiteSpace: 'nowrap' }}>{STAGE_LABELS[s]}</div>
                       </div>
                     ))}
-                    <div style={{ minWidth: 60, borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
+                    <div style={{ borderLeft: '1px solid var(--line)', paddingLeft: 20 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--heading)' }}>{jobs.length}</div>
-                      <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3 }}>Total</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginTop: 3, whiteSpace: 'nowrap' }}>Total</div>
                     </div>
                   </div>
                 )}
