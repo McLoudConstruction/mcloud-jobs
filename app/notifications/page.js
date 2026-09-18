@@ -1,14 +1,9 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
-
-function fmtDate(v) {
-  if (!v) return '—';
-  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
+import NotificationRow from '../../components/NotificationRow';
 
 export default function NotificationsPage() {
   const { session, loading } = useRequireAuth();
@@ -67,7 +62,14 @@ export default function NotificationsPage() {
       <div className="container">
         <div className="card">
           <div className="top-actions" style={{ marginBottom: 0 }}>
-            <h3 style={{ margin: 0 }}>System Notifications {unreadCount > 0 ? `(${unreadCount} new)` : ''}</h3>
+            <h3 style={{ margin: 0 }}>
+              System Notifications {unreadCount > 0 ? `(${unreadCount} new)` : ''}
+              <span
+                className="info-tip"
+                title="Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages."
+                aria-label="Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages."
+              >?</span>
+            </h3>
             <div style={{ display: 'flex', gap: 8 }}>
               {unreadCount > 0 && <button className="btn btn-sm" onClick={markAllNotificationsRead}>Mark all read</button>}
               {readCount > 0 && <button className="btn btn-sm" onClick={dismissAllRead}>Dismiss all read</button>}
@@ -78,24 +80,9 @@ export default function NotificationsPage() {
               )}
             </div>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, marginBottom: 4 }}>
-            Automatic alerts — a contract signed, a work order accepted, and similar. For customer conversations, see Messages.
-          </div>
           {visible.length === 0 && <div className="empty-state">{showDismissed ? 'No notifications yet.' : 'Nothing to show — try "Show dismissed" to see cleared notifications.'}</div>}
           {visible.map(n => (
-            <div key={n.id} className="update-entry notification-row" style={{ opacity: n.read || n.dismissed ? 0.6 : 1 }}>
-              <div className="notification-row-main">
-                <div className="update-date">{fmtDate(n.created_at)}{n.dismissed ? ' — Dismissed' : ''}</div>
-                <p>{n.message}</p>
-                {(n.job_id || (!n.read && !n.dismissed)) && (
-                  <div className="section-actions">
-                    {n.job_id && <Link href={`/jobs/${n.job_id}`} className="btn btn-sm">View job</Link>}
-                    {!n.read && !n.dismissed && <button className="btn btn-sm" onClick={() => markNotificationRead(n.id)}>Mark read</button>}
-                  </div>
-                )}
-              </div>
-              {!n.dismissed && <button className="btn btn-sm notification-dismiss" onClick={() => dismissNotification(n.id)}>Dismiss</button>}
-            </div>
+            <NotificationRow key={n.id} notification={n} onMarkRead={markNotificationRead} onDismiss={dismissNotification} />
           ))}
         </div>
       </div>

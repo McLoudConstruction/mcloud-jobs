@@ -241,7 +241,14 @@ export default function SalesDashboardPage() {
     <AppShell>
       <div className="container">
         <div className="top-actions">
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sales</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>
+            Sales
+            <span
+              className="info-tip"
+              title={'"New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it\'s worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.'}
+              aria-label={'"New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it\'s worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.'}
+            >?</span>
+          </h2>
           {!isMobile && (
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn" onClick={() => setManualRouteModalOpen(true)}>Create Sales Route</button>
@@ -252,11 +259,6 @@ export default function SalesDashboardPage() {
             </div>
           )}
         </div>
-        {!isMobile && (
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-            "New Lead" tracks an early-stage prospect below — convert it to a real opportunity once it's worth pricing out. "New Opportunity" skips the pipeline and starts pricing a project directly.
-          </div>
-        )}
 
         {isMobile && (
           <MobileFab
@@ -269,8 +271,8 @@ export default function SalesDashboardPage() {
           />
         )}
 
-        <div className="card" style={isMobile ? { padding: '16px 14px' } : undefined}>
-          <h3>Pipeline overview</h3>
+        <div className="dash-section" style={{ paddingTop: isMobile ? 12 : 20 }}>
+          <h3 style={{ fontSize: 12.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', margin: '0 0 10px', fontWeight: 700 }}>Pipeline overview</h3>
           {isMobile ? (
             // Only 4 stages — a compact 4-column grid fits all of them on
             // screen at once, rather than a horizontal scroll strip that
@@ -286,11 +288,15 @@ export default function SalesDashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="two-col">
+            // One continuous horizontal strip, same treatment as the
+            // Dashboard's stat groups — a single row of equal segments
+            // rather than a bordered two-column list using a quarter of
+            // the available width for four numbers.
+            <div style={{ display: 'flex', gap: 40 }}>
               {STAGES.map(s => (
-                <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5 }}>
-                  <span>{STAGE_LABELS[s]}</span>
-                  <span style={{ fontWeight: 700 }}>{stats[s] || 0}</span>
+                <div key={s}>
+                  <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.15 }}>{stats[s] || 0}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 3 }}>{STAGE_LABELS[s]}</div>
                 </div>
               ))}
             </div>
@@ -394,7 +400,14 @@ export default function SalesDashboardPage() {
 
         {filtered.length === 0 && <div className="empty-state">No opportunities here yet.</div>}
 
-        {isMobile && filtered.length > 0 && (
+        {/* One list, one row style, at every width — collapsed by default,
+            same idea as the mobile card list this used to be limited to.
+            Desktop used to render a second, parallel version of this list
+            as bordered/shadowed .job-row cards with Edit and Delete exposed
+            on every row; that's now just this list, so there's one place to
+            keep this behavior right instead of two drifting in and out of
+            sync. */}
+        {filtered.length > 0 && (
           <div className="opp-mobile-list">
             {filtered.map(o => {
               const expanded = expandedIds.has(o.id);
@@ -457,43 +470,6 @@ export default function SalesDashboardPage() {
           </div>
         )}
 
-        {!isMobile && filtered.map(o => (
-          <div className="job-row" key={o.id} style={{ flexWrap: 'wrap', gap: 10 }}>
-            <div className="job-main">
-              <span className="job-customer">{o.company || o.contact_name || 'Unnamed'} {o.project ? `— ${o.project}` : ''}</span>
-              <span className="job-address">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
-              {o.stage === 'lost' && o.loss_reason && <span className="job-address" style={{ color: '#a13f3f' }}>Loss reason: {o.loss_reason}</span>}
-              {o.bid_walk_scheduled_at && (
-                <span className="job-address">Bid walk scheduled: {new Date(o.bid_walk_scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {o.stage === 'converted' ? (
-                <>
-                  <span className="badge badge-approved">Converted</span>
-                  {o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>}
-                </>
-              ) : (
-                <>
-                  <select value={o.stage} onChange={e => setStage(o.id, e.target.value)} style={{ width: 'auto' }}>
-                    {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                  </select>
-                  {ACTIVE_STAGES.includes(o.stage) && (
-                    <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
-                  )}
-                  {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
-                    <button className="btn btn-sm" onClick={() => setSchedulingId(o.id)}>
-                      Schedule Bid Walk
-                    </button>
-                  )}
-                </>
-              )}
-              <button className="btn btn-sm" onClick={() => startEdit(o)}>Edit</button>
-              <button className="btn btn-sm btn-danger" onClick={() => removeOpp(o.id)}>Delete</button>
-            </div>
-          </div>
-        ))}
-
         <style jsx>{`
           .opp-mobile-list{ display: flex; flex-direction: column; }
           .opp-card{ border-bottom: 1px solid var(--line); }
@@ -503,7 +479,7 @@ export default function SalesDashboardPage() {
             padding: 14px 4px; border: none; background: transparent;
             text-align: left; cursor: pointer; font-family: inherit;
           }
-          .opp-card-head:active{ background: var(--panel); }
+          .opp-card-head:active, .opp-card-head:hover{ background: var(--panel); }
           .opp-card-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
           .opp-card-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
           .opp-card-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }

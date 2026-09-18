@@ -2,25 +2,24 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
-
-function fmtDate(v) {
-  if (!v) return '—';
-  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
+import NotificationRow from '../NotificationRow';
 
 // A running log of the same `notifications` table the Inbox > System
 // Notifications page reads — this is a compact live feed of it pinned to
 // the dashboard, not a separate notification system. More triggers will
 // start writing into this same table over time (the Completion category
 // on internal updates is the first), and they'll all show up here
-// automatically since this just reads the table.
+// automatically since this just reads the table. Rows render with
+// NotificationRow — the same compact Type/Job/Customer/date + expander
+// design as the full Notifications page, so this rail reads as a preview
+// of that page rather than a different UI for the same data.
 export default function NotificationsCard() {
   const [notifications, setNotifications] = useState([]);
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
-      .select('*')
+      .select('*, jobs(job_number, customer_name)')
       .eq('dismissed', false)
       .order('created_at', { ascending: false })
       .limit(30);
@@ -55,15 +54,7 @@ export default function NotificationsCard() {
       <div className="dash-notifications-scroll">
         {notifications.length === 0 && <div className="empty-state">Nothing yet.</div>}
         {notifications.map(n => (
-          <div key={n.id} className="dash-notification-row" style={{ opacity: n.read ? 0.6 : 1 }}>
-            <div className="dash-notification-date">{fmtDate(n.created_at)}</div>
-            <p>{n.message}</p>
-            <div className="dash-notification-actions">
-              {n.job_id && <Link href={`/jobs/${n.job_id}`} className="btn btn-sm">View job</Link>}
-              {!n.read && <button className="btn btn-sm" onClick={() => markRead(n.id)}>Mark read</button>}
-              <button className="btn btn-sm" onClick={() => dismiss(n.id)}>Dismiss</button>
-            </div>
-          </div>
+          <NotificationRow key={n.id} notification={n} onMarkRead={markRead} onDismiss={dismiss} />
         ))}
       </div>
     </div>

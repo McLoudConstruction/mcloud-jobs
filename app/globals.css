@@ -509,6 +509,19 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .card h2{ font-size: 16px; letter-spacing: 0.03em; }
 .card h3{ font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 3px solid var(--accent); padding-left: 10px; }
 
+/* A one-time explainer that used to sit as a permanent line of body text
+   under a heading (e.g. "New Lead vs New Opportunity", "what counts as a
+   System Notification") — now a small "?" that reveals the same text as a
+   native title tooltip on hover/focus, so it doesn't cost vertical space
+   for someone who already knows the workflow. */
+.info-tip{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-left: 7px; border-radius: 50%;
+  background: var(--panel); color: var(--ink-soft); font-size: 10px;
+  font-weight: 700; text-transform: none; letter-spacing: 0; vertical-align: middle;
+  cursor: help;
+}
+
 .two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .two-col > div{ min-width: 0; } /* a grid item's default min-width is its content's, which a native date/time input can exceed — without this it overflows its cell instead of shrinking to fit (e.g. the New Event popup's Date/Time row on mobile) */
 @media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }

@@ -343,7 +343,13 @@ export default function AppShell({ children }) {
           </button>
         </BottomSheet>
 
-        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
+        {/* No marginLeft here: .shell-body is already a flex row with
+            .shell-sidebar as a properly-sized flex item ahead of this div,
+            so content starts right where the sidebar ends. An extra
+            marginLeft equal to the sidebar width used to double that offset,
+            leaving a dead strip of page between the icon rail and the real
+            content that belonged to neither — unscrollable, unclickable. */}
+        <div className="shell-content">
           {subnavStrip}
           {children}
         </div>
