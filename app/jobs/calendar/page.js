@@ -975,7 +975,13 @@ export default function JobCalendarPage() {
           cursor: pointer; margin: 0 2px;
         }
 
-        .tg-scroll{ max-height: 620px; overflow-y: auto; }
+        /* Scrolls, but stays invisible — a visible scrollbar here eats into
+           this element's width without eating into .tg-header's (a
+           separate sibling above it), so the day columns below drift out
+           of alignment with the day columns in the header. Hiding the
+           scrollbar keeps both the same width and looks cleaner besides. */
+        .tg-scroll{ max-height: 620px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .tg-scroll::-webkit-scrollbar{ width: 0; height: 0; display: none; }
         .tg-grid{ display: grid; position: relative; }
         .tg-hours{ position: relative; border-right: 1px solid var(--line); }
         .tg-hour-label{ font-size: 10px; color: var(--ink-soft); text-align: right; padding-right: 8px; transform: translateY(-6px); }
