@@ -9,6 +9,9 @@ import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
+import MobileFab from '../../components/MobileFab';
+import MobileOverflowMenu from '../../components/MobileOverflowMenu';
+import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
@@ -82,6 +85,14 @@ export default function CustomersPage() {
   const vcardInputRef = useRef(null);
   const [importingVcard, setImportingVcard] = useState(false);
   const { customColumns, addColumn } = useCustomColumns('contacts');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadContacts = useCallback(async () => {
     const { data } = await supabase.from('contacts').select('*').order('name', { ascending: true });
@@ -268,17 +279,41 @@ export default function CustomersPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Contact Database</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleImportFile}
-              style={{ display: 'none' }}
-            />
-            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing…' : '↑ Import from Excel'}
-            </button>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+                style={{ display: 'none' }}
+              />
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <input
+                ref={vcardInputRef}
+                type="file"
+                accept=".vcf"
+                onChange={handleVCardImport}
+                style={{ display: 'none' }}
+              />
+              <button className="btn" onClick={() => vcardInputRef.current?.click()} disabled={importingVcard}>
+                {importingVcard ? 'Importing…' : '↑ Import Contact (.vcf)'}
+              </button>
+              <AddColumnButton addColumn={addColumn} />
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add new contact</button>
+            </div>
+          )}
+          {isMobile && (
+            <MobileOverflowMenu>
+              <AddColumnButton addColumn={addColumn} />
+            </MobileOverflowMenu>
+          )}
+        </div>
+
+        {isMobile && (
+          <>
             <input
               ref={vcardInputRef}
               type="file"
@@ -286,12 +321,24 @@ export default function CustomersPage() {
               onChange={handleVCardImport}
               style={{ display: 'none' }}
             />
-            <button className="btn" onClick={() => vcardInputRef.current?.click()} disabled={importingVcard}>
-              {importingVcard ? 'Importing…' : '↑ Import from iPhone (.vcf)'}
-            </button>
-            <AddColumnButton addColumn={addColumn} />
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add new contact</button>
-          </div>
+            <MobileFab
+              label="Add contact"
+              items={[
+                { label: '+ Add new contact', primary: true, onClick: () => setShowForm(true) },
+                { label: importingVcard ? 'Importing…' : '+ Import Contact (.vcf)', onClick: () => vcardInputRef.current?.click() },
+              ]}
+            />
+          </>
+        )}
+
+        {/* This isn't a native contacts picker — iOS/Android browsers don't
+            expose one to a plain web file input — so a tap here always
+            opens the Files app, which is empty until a .vcf actually
+            exists there. This note is the fix: it tells people to export
+            the contact into Files first, rather than leaving them to
+            wonder why "Import from iPhone" dead-ends on an empty folder. */}
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
+          To import a contact from your phone: open Contacts, select the contact, choose Share Contact → Save to Files, then use "Import Contact (.vcf)" here to pick that file.
         </div>
 
         {importResult && (
@@ -395,17 +442,33 @@ export default function CustomersPage() {
           <input placeholder="Search by name or company…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
-        <div className="stage-tabs">
+        <ScrollFadeRow trackClassName="stage-tabs">
           <button className={`stage-tab ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All ({contacts.length})</button>
           {CONTACT_TYPES.map(t => {
             const count = contacts.filter(c => c.contact_type === t).length;
             if (!count) return null;
             return <button key={t} className={`stage-tab ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>{t} ({count})</button>;
           })}
-        </div>
+        </ScrollFadeRow>
 
         {filtered.length === 0 && <div className="empty-state">No contacts yet.</div>}
-        {filtered.length > 0 && (
+
+        {filtered.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {filtered.map(c => (
+              <button key={c.id} className="entity-mobile-row" onClick={() => startEdit(c)}>
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{c.name}</span>
+                  <span className="entity-mobile-row-sub">
+                    {[c.management_company, c.position].filter(Boolean).join(' · ') || c.contact_type || 'No company on file'}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={c => c.id}
             onRowClick={startEdit}

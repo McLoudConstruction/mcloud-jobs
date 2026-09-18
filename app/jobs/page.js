@@ -1,9 +1,12 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import MobileFab from '../../components/MobileFab';
+import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
 const STAGES = ['all', ...STAGE_ORDER];
@@ -16,10 +19,19 @@ function fmtDate(v) {
 
 export default function JobTrackerPage() {
   const { session, loading } = useRequireAuth();
+  const router = useRouter();
   const [jobs, setJobs] = useState([]);
   const [view, setView] = useState('active'); // 'active' | 'lost'
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -68,8 +80,15 @@ export default function JobTrackerPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Jobs</h2>
-          <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>
+          {!isMobile && <Link href="/jobs/new" className="btn btn-primary">+ New Opportunity</Link>}
         </div>
+
+        {isMobile && (
+          <MobileFab
+            label="New Opportunity"
+            items={[{ label: '+ New Opportunity', primary: true, onClick: () => router.push('/jobs/new') }]}
+          />
+        )}
 
         <div className="stage-tabs" style={{ marginBottom: 14 }}>
           <button className={`stage-tab ${view === 'active' ? 'active' : ''}`} onClick={() => setView('active')}>
@@ -80,44 +99,84 @@ export default function JobTrackerPage() {
           </button>
         </div>
 
-        <div className="search-bar">
-          <input
-            placeholder={view === 'lost' ? 'Search by estimate #, customer, address, or loss reason…' : 'Search by job #, customer, or address…'}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
+        {isMobile ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18, minWidth: 0 }}>
+            <div className="search-bar" style={{ margin: 0, flex: view === 'active' ? '0 1 130px' : '1 1 auto', minWidth: 0 }}>
+              <input
+                placeholder={view === 'lost' ? 'Search…' : 'Search…'}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            {view === 'active' && (
+              <ScrollFadeRow trackClassName="stage-tabs" wrapClassName="jobs-phase-chips">
+                {STAGES.map(s => (
+                  <button key={s} className={`stage-tab ${stage === s ? 'active' : ''}`} onClick={() => setStage(s)}>
+                    {TAB_LABELS[s]} ({s !== 'all' ? activeJobs.filter(j => j.stage === s).length : activeJobs.length})
+                  </button>
+                ))}
+              </ScrollFadeRow>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="search-bar">
+              <input
+                placeholder={view === 'lost' ? 'Search by estimate #, customer, address, or loss reason…' : 'Search by job #, customer, or address…'}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
 
-        {view === 'active' && (
-          <select value={stage} onChange={e => setStage(e.target.value)} style={{ marginBottom: 18 }}>
-            {STAGES.map(s => (
-              <option key={s} value={s}>
-                {TAB_LABELS[s]} ({s !== 'all' ? activeJobs.filter(j => j.stage === s).length : activeJobs.length})
-              </option>
-            ))}
-          </select>
+            {view === 'active' && (
+              <select value={stage} onChange={e => setStage(e.target.value)} style={{ marginBottom: 18 }}>
+                {STAGES.map(s => (
+                  <option key={s} value={s}>
+                    {TAB_LABELS[s]} ({s !== 'all' ? activeJobs.filter(j => j.stage === s).length : activeJobs.length})
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
         )}
 
         {filtered.length === 0 && <div className="empty-state">{view === 'lost' ? 'Nothing here yet.' : 'No jobs here yet.'}</div>}
 
-        {filtered.map(job => (
-          <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
-            <div className="job-main">
-              <span className="job-number">{formattedProjectNumber(job)}</span>
-              <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
-              <span className="job-address">{job.project_address || 'No address yet'}</span>
-              {view === 'lost' && job.loss_reason && (
-                <span className="job-address" style={{ color: 'var(--ink-soft)' }}>Loss reason: {job.loss_reason}</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              {view === 'active' && job.job_type && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{job.job_type}</span>}
-              {view === 'active' && job.over_budget_notified && <span className="badge badge-declined" style={{ fontSize: 10 }}>Over Budget</span>}
-              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              {view === 'lost' && <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{fmtDate(job.lost_at)}</span>}
-            </div>
-          </Link>
-        ))}
+        {isMobile ? (
+          <div className="entity-mobile-list">
+            {filtered.map(job => (
+              <Link key={job.id} href={`/jobs/${job.id}`} className="entity-mobile-row">
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{job.customer_name || 'Unnamed customer'}</span>
+                  <span className="entity-mobile-row-sub">
+                    {formattedProjectNumber(job)}{job.project_address ? ` · ${job.project_address}` : ''}
+                  </span>
+                </span>
+                <span className={`badge badge-${job.stage}`} style={{ flexShrink: 0 }}>{STAGE_LABELS[job.stage]}</span>
+                <span className="jobs-row-chevron" aria-hidden="true">›</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          filtered.map(job => (
+            <Link key={job.id} href={`/jobs/${job.id}`} className="job-row">
+              <div className="job-main">
+                <span className="job-number">{formattedProjectNumber(job)}</span>
+                <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
+                <span className="job-address">{job.project_address || 'No address yet'}</span>
+                {view === 'lost' && job.loss_reason && (
+                  <span className="job-address" style={{ color: 'var(--ink-soft)' }}>Loss reason: {job.loss_reason}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                {view === 'active' && job.job_type && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{job.job_type}</span>}
+                {view === 'active' && job.over_budget_notified && <span className="badge badge-declined" style={{ fontSize: 10 }}>Over Budget</span>}
+                <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+                {view === 'lost' && <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{fmtDate(job.lost_at)}</span>}
+              </div>
+            </Link>
+          ))
+        )}
       </div>
     </AppShell>
   );

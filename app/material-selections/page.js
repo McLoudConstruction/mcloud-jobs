@@ -7,6 +7,9 @@ import DataTable from '../../components/DataTable';
 
 const STATUS_LABELS = { draft: 'Draft', sent: 'Awaiting Customer', approved: 'Approved' };
 const STATUS_URGENCY = { sent: 2, draft: 1, approved: 0 }; // awaiting-customer sheets surface first
+// Reuses the site's existing badge palette (see globals.css) rather than
+// inventing new colors just for this page's mobile cards.
+const STATUS_BADGE_CLASS = { draft: 'badge-draft', sent: 'badge-active', approved: 'badge-approved' };
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -17,6 +20,14 @@ export default function MaterialSelectionsDashboardPage() {
   const { session, loading } = useRequireAuth();
   const [selections, setSelections] = useState([]);
   const [optionCounts, setOptionCounts] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const { data } = await supabase
@@ -67,7 +78,29 @@ export default function MaterialSelectionsDashboardPage() {
         </div>
 
         {rows.length === 0 && <div className="empty-state">No material selections yet.</div>}
-        {rows.length > 0 && (
+
+        {rows.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {rows.map(r => (
+              <button
+                key={r.id}
+                className={`entity-mobile-row ${r.status === 'approved' ? 'row-settled' : ''}`}
+                onClick={() => window.location.href = `/jobs/${r.job_id}/material-selections/${r.id}`}
+              >
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{r.customer_name}</span>
+                  <span className="entity-mobile-row-sub">
+                    {r.title}{r.job_number ? ` · #${r.job_number}` : ''}
+                  </span>
+                </span>
+                <span className={`badge ${STATUS_BADGE_CLASS[r.status] || 'badge-draft'}`} style={{ flexShrink: 0 }}>{STATUS_LABELS[r.status] || r.status}</span>
+                <span className="jobs-row-chevron" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {rows.length > 0 && !isMobile && (
           <DataTable
             getRowKey={r => r.id}
             onRowClick={r => window.location.href = `/jobs/${r.job_id}/material-selections/${r.id}`}

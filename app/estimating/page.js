@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
+import { STAGE_LABELS } from '../../lib/constants';
 
 const NEEDS_PRICING_STAGES = ['new', 'inspected', 'proposal_delivered'];
 
@@ -11,6 +12,14 @@ export default function EstimatingWorklistPage() {
   const { session, loading } = useRequireAuth();
   const [jobs, setJobs] = useState([]);
   const [search, setSearch] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -50,7 +59,29 @@ export default function EstimatingWorklistPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">Nothing needs pricing right now — nice.</div>}
-        {filtered.length > 0 && (
+
+        {filtered.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {filtered.map(j => (
+              <button
+                key={j.id}
+                className="entity-mobile-row"
+                onClick={() => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
+              >
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
+                  <span className="entity-mobile-row-sub">
+                    {j.estimate_number ? `#${j.estimate_number}` : 'No estimate #'}{j.project_address ? ` · ${j.project_address}` : ''}
+                  </span>
+                </span>
+                <span className={`badge badge-${j.stage}`} style={{ flexShrink: 0 }}>{STAGE_LABELS[j.stage] || j.stage}</span>
+                <span className="jobs-row-chevron" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={j => j.id}
             onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}

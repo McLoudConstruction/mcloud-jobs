@@ -822,6 +822,40 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
    like a single flat list row, keeps it grounded under the heading. */
 .dash-empty-state{ color: var(--ink-soft); font-size: 13px; padding: 4px 0 0; text-align: left; }
 
+/* Generic tappable mobile row list — the same flat, hairline-divided
+   pattern as .sub-mobile-row / .overdue-mobile-row, promoted to a shared
+   class since People, Properties, and Companies (and any future simple
+   list) all need the identical two-line "name + subtitle" row rather than
+   a desktop table squeezed into a phone width. An optional leading dot
+   (.entity-mobile-row-dot) and trailing tag (.entity-mobile-row-tag) cover
+   the COI-style status marker and the "(inactive)" style annotation
+   without each page inventing its own variant. */
+.entity-mobile-list{ display: flex; flex-direction: column; }
+.entity-mobile-row{
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 16px 4px; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; text-align: left; cursor: pointer; font-family: inherit;
+}
+.entity-mobile-row:last-child{ border-bottom: none; }
+.entity-mobile-row:active{ background: var(--panel); }
+.entity-mobile-row-dot{ flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; }
+.entity-mobile-row-dot.ok{ background: #3a6b45; }
+.entity-mobile-row-dot.warn{ background: #a13f3f; }
+.entity-mobile-row-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.entity-mobile-row-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
+.entity-mobile-row-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
+.entity-mobile-row-tag{ flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+/* A plain navigation affordance (this row always links straight to a
+   detail page — there's nothing to expand in place), so unlike
+   .opp-card-chevron on Sales this one never rotates. */
+.jobs-row-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); }
+
+/* Projects list on mobile: search bar shrinks to make room for the phase
+   chip row beside it on the same line, rather than each getting its own
+   full-width row and costing an extra ~50px of vertical space. */
+.jobs-phase-chips{ flex: 1 1 auto; min-width: 0; }
+.jobs-phase-chips .stage-tabs{ margin-bottom: 0; border-bottom: none; }
+
 .list-row{ display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
 .list-row textarea{ flex: 1; min-height: 44px; }
 .list-row input.amount{ width: 110px; flex: none; }

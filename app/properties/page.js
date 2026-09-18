@@ -11,6 +11,9 @@ import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
+import MobileFab from '../../components/MobileFab';
+import MobileOverflowMenu from '../../components/MobileOverflowMenu';
+import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
@@ -72,6 +75,14 @@ export default function PropertiesPage() {
   const [contactNote, setContactNote] = useState('');
   const [propertyContacts, setPropertyContacts] = useState([]);
   const { customColumns, addColumn } = useCustomColumns('properties');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadProperties = useCallback(async () => {
     const { data } = await supabase.from('properties').select('*').order('property_name', { ascending: true });
@@ -282,17 +293,31 @@ export default function PropertiesPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Property Database</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
-            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing…' : '↑ Import from Excel'}
-            </button>
-            <AddColumnButton addColumn={addColumn} />
-            <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
-              {showForm ? 'Cancel' : '+ Add property'}
-            </button>
-          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <AddColumnButton addColumn={addColumn} />
+              <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
+                {showForm ? 'Cancel' : '+ Add property'}
+              </button>
+            </div>
+          )}
+          {isMobile && (
+            <MobileOverflowMenu>
+              <AddColumnButton addColumn={addColumn} />
+            </MobileOverflowMenu>
+          )}
         </div>
+
+        {isMobile && (
+          <MobileFab
+            label="Add property"
+            items={[{ label: '+ Add property', primary: true, onClick: () => setShowForm(true) }]}
+          />
+        )}
 
         {importResult && (
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
@@ -415,18 +440,34 @@ export default function PropertiesPage() {
           <input placeholder="Search by property or management company…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
-        <div className="stage-tabs">
+        <ScrollFadeRow trackClassName="stage-tabs">
           <button className={`stage-tab ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All ({properties.length})</button>
           {PROPERTY_TYPES.map(t => {
             const count = properties.filter(p => p.property_type === t).length;
             if (!count) return null;
             return <button key={t} className={`stage-tab ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>{t} ({count})</button>;
           })}
-        </div>
+        </ScrollFadeRow>
 
         {filtered.length === 0 && <div className="empty-state">No properties yet.</div>}
 
-        {filtered.length > 0 && (
+        {filtered.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {filtered.map(p => (
+              <button key={p.id} className="entity-mobile-row" onClick={() => startEdit(p)}>
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{p.property_name}</span>
+                  <span className="entity-mobile-row-sub">
+                    {[p.management_company, p.property_city].filter(Boolean).join(' · ') || p.property_type || 'No details on file'}
+                  </span>
+                </span>
+                {!p.active && <span className="entity-mobile-row-tag">Inactive</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={p => p.id}
             onRowClick={startEdit}

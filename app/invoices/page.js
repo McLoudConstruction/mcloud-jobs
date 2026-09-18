@@ -19,6 +19,14 @@ export default function InvoicesDashboardPage() {
   const { session, loading } = useRequireAuth();
   const [jobs, setJobs] = useState([]);
   const [draws, setDraws] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: d }] = await Promise.all([
@@ -87,7 +95,30 @@ export default function InvoicesDashboardPage() {
         </div>
 
         {rows.length === 0 && <div className="empty-state">No jobs with billing set up yet.</div>}
-        {rows.length > 0 && (
+
+        {rows.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {rows.map(r => (
+              <button
+                key={r.id}
+                className={`entity-mobile-row ${r.urgency === 0 ? 'row-settled' : ''}`}
+                onClick={() => window.location.href = `/jobs/${r.id}?tab=Financials`}
+              >
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{r.customer_name || 'Unnamed'}</span>
+                  <span className="entity-mobile-row-sub">{r.status}</span>
+                </span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--heading)' }}>{fmtMoney(r.outstanding)}</span>
+                  {r.flaggedReady && <span className="entity-mobile-row-tag">Ready to Invoice</span>}
+                </span>
+                <span className="jobs-row-chevron" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {rows.length > 0 && !isMobile && (
           <DataTable
             getRowKey={r => r.id}
             onRowClick={r => window.location.href = `/jobs/${r.id}?tab=Financials`}

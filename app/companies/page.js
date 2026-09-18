@@ -9,6 +9,8 @@ import PopupModal from '../../components/PopupModal';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
+import MobileFab from '../../components/MobileFab';
+import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import { formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncCompanyContact } from '../../lib/contactSync';
@@ -58,6 +60,14 @@ export default function CompaniesPage() {
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
   const { customColumns, addColumn } = useCustomColumns('companies');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkSize() { setIsMobile(window.innerWidth < 900); }
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const loadCompanies = useCallback(async () => {
     const { data } = await supabase.from('companies').select('*').or('company_type.is.null,company_type.neq.Subcontractor').order('company_name', { ascending: true });
@@ -187,15 +197,29 @@ export default function CompaniesPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Company Database</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
-            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing…' : '↑ Import from Excel'}
-            </button>
-            <AddColumnButton addColumn={addColumn} />
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add company</button>
-          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <AddColumnButton addColumn={addColumn} />
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add company</button>
+            </div>
+          )}
+          {isMobile && (
+            <MobileOverflowMenu>
+              <AddColumnButton addColumn={addColumn} />
+            </MobileOverflowMenu>
+          )}
         </div>
+
+        {isMobile && (
+          <MobileFab
+            label="Add company"
+            items={[{ label: '+ Add company', primary: true, onClick: () => setShowForm(true) }]}
+          />
+        )}
 
         {importResult && (
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
@@ -240,7 +264,23 @@ export default function CompaniesPage() {
         </div>
 
         {filtered.length === 0 && <div className="empty-state">No companies yet.</div>}
-        {filtered.length > 0 && (
+
+        {filtered.length > 0 && isMobile && (
+          <div className="entity-mobile-list">
+            {filtered.map(c => (
+              <button key={c.id} className="entity-mobile-row" onClick={() => startEdit(c)}>
+                <span className="entity-mobile-row-text">
+                  <span className="entity-mobile-row-title">{c.company_name}</span>
+                  <span className="entity-mobile-row-sub">
+                    {[c.contact_name, c.city].filter(Boolean).join(' · ') || c.company_type || 'No details on file'}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={c => c.id}
             onRowClick={startEdit}
