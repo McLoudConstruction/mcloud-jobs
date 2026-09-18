@@ -8,6 +8,7 @@ import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
 import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 import CameraCapture from './CameraCapture';
 import PolishTextButton from './PolishTextButton';
+import PopupModal from './PopupModal';
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -40,7 +41,10 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const [category, setCategory] = useState('');
   const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
   const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const [checklist, setChecklist] = useState([]);
   const [syncedUpdates, setSyncedUpdates] = useState([]);
@@ -150,30 +154,50 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     const hasText = noteText.trim() || workCompleted.trim() || upcomingWork.trim() || nextSteps.trim();
     if (!hasText && stagedPhotos.length === 0) return;
     setPosting(true);
+    setPostError('');
 
     const updateId = crypto.randomUUID();
-    await queueInternalUpdate({
-      id: updateId, jobId,
-      text: noteText.trim() || null,
-      workCompleted: workCompleted.trim() || null,
-      upcomingWork: upcomingWork.trim() || null,
-      nextSteps: nextSteps.trim() || null,
-      category: category || null,
-      createdByEmail,
-    });
+    try {
+      await queueInternalUpdate({
+        id: updateId, jobId,
+        text: noteText.trim() || null,
+        workCompleted: workCompleted.trim() || null,
+        upcomingWork: upcomingWork.trim() || null,
+        nextSteps: nextSteps.trim() || null,
+        category: category || null,
+        createdByEmail,
+      });
 
-    for (const { file } of stagedPhotos) {
-      const compressed = await compressImage(file);
-      await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
+      // Each photo queues independently — one photo that fails to
+      // compress (corrupt file, unsupported format) no longer aborts the
+      // whole batch. Previously an uncaught error here left every photo
+      // after it (and the "Posting…" button) stuck, since nothing below
+      // this loop ever ran.
+      const failedPhotos = [];
+      for (const { file } of stagedPhotos) {
+        try {
+          const compressed = await compressImage(file);
+          await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
+        } catch (err) {
+          failedPhotos.push(err.message || String(err));
+        }
+      }
+      if (failedPhotos.length > 0) {
+        setPostError(`Update posted, but ${failedPhotos.length} photo${failedPhotos.length === 1 ? '' : 's'} couldn't be attached: ${failedPhotos[0]}`);
+      }
+
+      setNoteText('');
+      setWorkCompleted('');
+      setUpcomingWork('');
+      setNextSteps('');
+      setCategory('');
+      setStagedPhotos([]);
+      setFormOpen(false);
+    } catch (err) {
+      setPostError(err.message || 'Failed to post update.');
+    } finally {
+      setPosting(false);
     }
-
-    setNoteText('');
-    setWorkCompleted('');
-    setUpcomingWork('');
-    setNextSteps('');
-    setCategory('');
-    setStagedPhotos([]);
-    setPosting(false);
   }
 
   async function handleToggleChecklistItem(item) {
@@ -205,7 +229,13 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       )}
 
       <section className="field-log-section">
-        <h3>Post an internal update</h3>
+        <div className="section-actions" style={{ marginTop: 0 }}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>Create new Internal Update</button>
+        </div>
+      </section>
+
+      <PopupModal open={formOpen} onClose={() => setFormOpen(false)} maxWidth={560}>
+        <h3 style={{ margin: '0 0 12px', color: 'var(--heading)' }}>Post an internal update</h3>
         <form onSubmit={handlePost} className="field-log-form">
           <select value={category} onChange={e => setCategory(e.target.value)} style={{ marginBottom: 8 }}>
             <option value="">Category (optional)</option>
@@ -242,35 +272,56 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             </label>
           </div>
 
+          {postError && <div className="error-text">{postError}</div>}
+
           <button type="submit" disabled={posting || (!noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && stagedPhotos.length === 0)}>
             {posting ? 'Posting…' : 'Post update'}
           </button>
         </form>
         <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Internal Update Photos" />
-      </section>
+      </PopupModal>
 
       <section className="field-log-section">
         <h3>Recent internal updates</h3>
         {feed.length === 0 && <div className="empty-state">No internal updates yet.</div>}
         {feed.map(u => {
           const photos = u._pending ? u._photos : (syncedPhotosByUpdate[u.id] || []);
+          const isExpanded = expandedId === u.id;
           return (
             <div className="update-entry" key={u.id}>
-              <div className="update-date">
-                {fmtTimestamp(u.created_at)}
-                {u.category && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{u.category}</span>}
-                {u._pending && <span className="pending-tag"> · syncing…</span>}
+              <div
+                className="update-date"
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedId(isExpanded ? null : u.id)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedId(isExpanded ? null : u.id); } }}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <span>
+                  {fmtTimestamp(u.created_at)}
+                  {u.category && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{u.category}</span>}
+                  {u._pending && <span className="pending-tag"> · syncing…</span>}
+                  {photos.length > 0 && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>· {photos.length} photo{photos.length === 1 ? '' : 's'}</span>}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{isExpanded ? '▲ collapse' : '▼ expand'}</span>
               </div>
-              {u.issues_notes && <p>{u.issues_notes}</p>}
-              {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
-              {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
-              {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
-              {photos.length > 0 && (
-                <div className="update-photo-strip">
-                  {photos.map(p => (
-                    <img key={p.id} src={p._localUrl || signedUrls[p.id]} alt="" />
-                  ))}
-                </div>
+              {!isExpanded && u.issues_notes && (
+                <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.issues_notes}</p>
+              )}
+              {isExpanded && (
+                <>
+                  {u.issues_notes && <p>{u.issues_notes}</p>}
+                  {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
+                  {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
+                  {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
+                  {photos.length > 0 && (
+                    <div className="update-photo-strip">
+                      {photos.map(p => (
+                        <img key={p.id} src={p._localUrl || signedUrls[p.id]} alt="" />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );
