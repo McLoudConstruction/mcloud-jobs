@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
@@ -38,6 +38,25 @@ function formatEventTime(t) {
 // is just the day-of-week index with no weekend clamping needed.
 function weekdayIndex(date) {
   return date.getDay();
+}
+
+// --- Hourly timeline grid (desktop Week/Day views) ---------------------
+// Modeled on Google Calendar's own Day/Week layout: a fixed-height hour
+// row, events positioned by real clock time instead of listed in an
+// agenda, and a live red "now" line on today's column.
+const HOUR_HEIGHT = 48; // px per hour
+function minutesSinceMidnight(d) { return d.getHours() * 60 + d.getMinutes(); }
+function topPxForTime(d) { return (minutesSinceMidnight(d) / 60) * HOUR_HEIGHT; }
+function topPxForTimeStr(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return ((h * 60 + (m || 0)) / 60) * HOUR_HEIGHT;
+}
+const HOUR_ROWS = Array.from({ length: 24 }, (_, i) => i);
+function formatHourLabel(h) {
+  if (h === 0) return '';
+  const d = new Date(2000, 0, 1, h, 0);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric' });
 }
 
 // Builds a full 7-column (Sun-Sat) grid of weeks covering the given month.
@@ -182,6 +201,18 @@ export default function JobCalendarPage() {
   const [showBidWalks, setShowBidWalks] = useState(true);
   const [showScheduleEvents, setShowScheduleEvents] = useState(true);
   const [showPersonal, setShowPersonal] = useState(true);
+
+  // Ticks once a minute to move the live current-time indicator on the
+  // desktop Week/Day timeline grid without needing a full page refresh.
+  const [nowTick, setNowTick] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const gmtLabel = useMemo(() => {
+    const offsetHours = -new Date().getTimezoneOffset() / 60;
+    return `GMT${offsetHours >= 0 ? '+' : ''}${offsetHours}`;
+  }, []);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -391,6 +422,148 @@ export default function JobCalendarPage() {
     );
   }
 
+  // Desktop Week/Day view: a real hourly timeline grid (Google Calendar
+  // style) instead of the agenda card-list — an all-day row across the
+  // top for job bars, then a scrollable hour grid with time-positioned
+  // events and a live current-time line on today's column. `days` is the
+  // 7 days of the week for Week view, or a single day for Day view.
+  function DesktopTimeGrid({ days }) {
+    const scrollRef = useRef(null);
+    const isSingleDay = days.length === 1;
+
+    useEffect(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = Math.max(0, topPxForTime(new Date()) - HOUR_HEIGHT * 3);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [days[0]?.toDateString()]);
+
+    // All-day bars (job schedules) laid out with the same lane logic used
+    // on the Month grid, scoped to just these visible days.
+    const rangeStart = days[0];
+    const rangeEnd = days[days.length - 1];
+    const overlapping = showJobs
+      ? jobBars
+        .filter(j => j.start <= rangeEnd && j.end >= rangeStart)
+        .map(j => {
+          const startCol = j.start < rangeStart ? 0 : days.findIndex(d => sameDay(d, j.start));
+          const endCol = j.end > rangeEnd ? days.length - 1 : days.findIndex(d => sameDay(d, j.end));
+          return { ...j, startCol: startCol === -1 ? 0 : startCol, endCol: endCol === -1 ? days.length - 1 : endCol };
+        })
+      : [];
+    const { placed: allDayBars, laneCount: allDayLanes } = assignLanes(overlapping);
+
+    return (
+      <div className="tg">
+        <div className="tg-header" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
+          <div className="tg-gmt">{gmtLabel}</div>
+          {days.map(d => (
+            <div
+              key={d.toISOString()}
+              className={`tg-header-day ${sameDay(d, today) ? 'today' : ''}`}
+              onClick={() => { setCursorDate(d); setView('day'); }}
+            >
+              <span className="tg-header-dow">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+              <span className="tg-header-num">{d.getDate()}</span>
+            </div>
+          ))}
+        </div>
+
+        {(allDayBars.length > 0 || !isSingleDay) && (
+          <div
+            className="tg-allday"
+            style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minHeight: Math.max(allDayLanes, 1) * 24 + 8 }}
+          >
+            <div className="tg-allday-label">All day</div>
+            <div className="tg-allday-cells" style={{ gridColumn: `2 / ${days.length + 2}`, position: 'relative' }}>
+              {allDayBars.map(job => (
+                <div
+                  key={job.id}
+                  className={`tg-allday-bar badge-${job.stage}`}
+                  style={{
+                    left: `${(job.startCol / days.length) * 100}%`,
+                    width: `${((job.endCol - job.startCol + 1) / days.length) * 100}%`,
+                    top: job.lane * 22,
+                  }}
+                  onClick={e => { e.stopPropagation(); isMobile ? setPreviewJob(job) : router.push(`/jobs/${job.id}`); }}
+                  title={`${formattedProjectNumber(job)} — ${job.customer_name || 'Unnamed'} (${STAGE_LABELS[job.stage]})`}
+                >
+                  {formattedProjectNumber(job)} {job.customer_name || ''}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="tg-scroll" ref={scrollRef}>
+          <div className="tg-grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, height: HOUR_HEIGHT * 24 }}>
+            <div className="tg-hours">
+              {HOUR_ROWS.map(h => (
+                <div key={h} className="tg-hour-label" style={{ height: HOUR_HEIGHT }}>{formatHourLabel(h)}</div>
+              ))}
+            </div>
+            {days.map(d => {
+              const walksToday = showBidWalks ? bidWalksForDay(d) : [];
+              const eventsToday = showScheduleEvents ? scheduleEventsForDay(d) : [];
+              const busyToday = showPersonal ? busyForDay(d) : [];
+              const isToday = sameDay(d, today);
+              return (
+                <div key={d.toISOString()} className="tg-day-col">
+                  {HOUR_ROWS.map(h => <div key={h} className="tg-hour-line" style={{ top: h * HOUR_HEIGHT }} />)}
+
+                  {eventsToday.map(ev => (
+                    <div
+                      key={`ev-${ev.id}`}
+                      className="tg-event tg-event-schedule"
+                      style={{ top: topPxForTimeStr(ev.event_time), height: 40 }}
+                      onClick={() => setPreviewEvent(ev)}
+                    >
+                      <span className="tg-event-title">📌 {ev.description || EVENT_TYPE_LABELS[ev.event_type]}</span>
+                      <span className="tg-event-time">{formatEventTime(ev.event_time)}</span>
+                    </div>
+                  ))}
+
+                  {walksToday.map(b => (
+                    <div
+                      key={`bw-${b.id}`}
+                      className="tg-event tg-event-bidwalk"
+                      style={{ top: topPxForTime(new Date(b.bid_walk_scheduled_at)), height: 40 }}
+                    >
+                      <span className="tg-event-title">🔨 Bid walk — {b.contact_name || 'Lead'}</span>
+                      <span className="tg-event-time">{new Date(b.bid_walk_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                    </div>
+                  ))}
+
+                  {busyToday.map((b, i) => {
+                    const start = new Date(b.start_at);
+                    const end = new Date(b.end_at);
+                    const top = sameDay(start, d) ? topPxForTime(start) : 0;
+                    const bottom = sameDay(end, d) ? topPxForTime(end) : HOUR_HEIGHT * 24;
+                    return (
+                      <div
+                        key={`busy-${i}`}
+                        className="tg-event tg-event-personal"
+                        style={{ top, height: Math.max(bottom - top, 20) }}
+                      >
+                        <span className="tg-event-title">📅 {b.title} (personal)</span>
+                      </div>
+                    );
+                  })}
+
+                  {isToday && (
+                    <div className="tg-now-line" style={{ top: topPxForTime(nowTick) }}>
+                      <span className="tg-now-dot" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const viewPicker = (
     <div className="tab-sections-pills" style={{ margin: 0 }}>
       <button type="button" className={`tab-section-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
@@ -545,18 +718,26 @@ export default function JobCalendarPage() {
       )}
 
       {view === 'week' && (
-        <div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-            Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        isMobile ? (
+          <div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+              Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+            {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
           </div>
-          {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
-        </div>
+        ) : (
+          <DesktopTimeGrid days={cursorWeekDays} />
+        )
       )}
 
       {view === 'day' && (
-        <div>
-          <AgendaDay date={cursorDate} />
-        </div>
+        isMobile ? (
+          <div>
+            <AgendaDay date={cursorDate} />
+          </div>
+        ) : (
+          <DesktopTimeGrid days={[cursorDate]} />
+        )
       )}
     </div>
   );
@@ -686,6 +867,49 @@ export default function JobCalendarPage() {
         @media (max-width: 900px){
           .cal-sidebar{ display: none; }
         }
+
+        /* --- Desktop Week/Day hourly timeline grid --- */
+        .tg{ border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+        .tg-header{ display: grid; border-bottom: 1px solid var(--line); }
+        .tg-gmt{ font-size: 9.5px; color: var(--ink-soft); display: flex; align-items: flex-end; justify-content: center; padding: 4px 0; }
+        .tg-header-day{
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          padding: 8px 0; cursor: pointer; border-left: 1px solid var(--line);
+        }
+        .tg-header-day:hover{ background: var(--panel); }
+        .tg-header-dow{ font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
+        .tg-header-num{ font-size: 16px; font-weight: 700; color: var(--heading); margin-top: 2px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+        .tg-header-day.today .tg-header-num{ background: var(--accent); color: #fff; }
+
+        .tg-allday{ display: grid; border-bottom: 1px solid var(--line); position: relative; padding: 4px 0; }
+        .tg-allday-label{ font-size: 9.5px; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; }
+        .tg-allday-cells{ min-height: 20px; }
+        .tg-allday-bar{
+          position: absolute; height: 20px; border-radius: 4px; font-size: 10.5px; font-weight: 600;
+          color: #fff; padding: 2px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+          cursor: pointer; margin: 0 2px;
+        }
+
+        .tg-scroll{ max-height: 620px; overflow-y: auto; }
+        .tg-grid{ display: grid; position: relative; }
+        .tg-hours{ position: relative; border-right: 1px solid var(--line); }
+        .tg-hour-label{ font-size: 10px; color: var(--ink-soft); text-align: right; padding-right: 8px; transform: translateY(-6px); }
+        .tg-day-col{ position: relative; border-left: 1px solid var(--line); }
+        .tg-hour-line{ position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); opacity: 0.6; }
+
+        .tg-event{
+          position: absolute; left: 3px; right: 3px; border-radius: 5px; padding: 3px 6px;
+          font-size: 10.5px; overflow: hidden; cursor: default; display: flex; flex-direction: column;
+          line-height: 1.25; border-left: 3px solid var(--accent); background: var(--panel);
+        }
+        .tg-event-title{ font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tg-event-time{ color: var(--ink-soft); font-size: 9.5px; }
+        .tg-event-schedule{ cursor: pointer; border-left-color: var(--accent); }
+        .tg-event-bidwalk{ border-left-color: #b8860b; }
+        .tg-event-personal{ border-left-color: var(--ink-soft); opacity: 0.75; }
+
+        .tg-now-line{ position: absolute; left: 0; right: 0; border-top: 2px solid #e0453c; z-index: 2; }
+        .tg-now-dot{ position: absolute; left: -4px; top: -5px; width: 9px; height: 9px; border-radius: 50%; background: #e0453c; }
       `}</style>
     </AppShell>
   );
