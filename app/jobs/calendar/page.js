@@ -7,14 +7,22 @@ import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
-import { STAGE_ORDER, STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MINI_DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// The stages a job actually gets scheduled at — the fixed key the legend
+// always shows, not just whichever ones happen to be on the calendar right
+// now. A brand-new company with two test jobs would otherwise see a legend
+// with one entry in it, which reads as broken rather than "nothing else is
+// scheduled yet."
+const SCHEDULABLE_STAGES = ['approved', 'scheduled', 'active', 'completed'];
 
 function toDateOnly(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
-function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function sameDay(a, b) { return !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 function parseDateOnly(s) {
   if (!s) return null;
   const [y, m, d] = s.split('-').map(Number);
@@ -33,6 +41,7 @@ function weekdayIndex(date) {
 }
 
 // Builds a full 7-column (Sun-Sat) grid of weeks covering the given month.
+// Shared by the main Month view and the sidebar mini month-picker.
 function buildWeeks(monthDate) {
   const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
   const firstSunday = addDays(firstOfMonth, -firstOfMonth.getDay());
@@ -67,6 +76,86 @@ function assignLanes(jobsInWeek) {
   return { placed, laneCount: lanes.length };
 }
 
+// The persistent left-rail: a "+ New Event" action, a mini month-picker for
+// fast navigation, and the filter/legend area — modeled directly on Google
+// Calendar's own left sidebar (Create button, mini calendar, calendar list).
+// This is the piece the redesign doc called for and the first pass of the
+// 7-day-grid work skipped; it's real state now (the toggles actually hide
+// their overlay), not decoration.
+function CalendarSidebar({
+  monthDate, cursorDate, today, onSelectDay, onPrevMonth, onNextMonth, onNewEvent,
+  showJobs, setShowJobs, showBidWalks, setShowBidWalks, showScheduleEvents, setShowScheduleEvents, showPersonal, setShowPersonal,
+}) {
+  const miniWeeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
+  return (
+    <div className="cal-sidebar">
+      <button type="button" className="btn btn-primary cal-sidebar-create" onClick={onNewEvent}>+ New Event</button>
+
+      <div className="cal-mini">
+        <div className="cal-mini-header">
+          <span>{monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <span className="cal-mini-nav">
+            <button type="button" onClick={onPrevMonth} aria-label="Previous month">‹</button>
+            <button type="button" onClick={onNextMonth} aria-label="Next month">›</button>
+          </span>
+        </div>
+        <div className="cal-mini-grid cal-mini-labels">
+          {MINI_DAY_LABELS.map((d, i) => <span key={i}>{d}</span>)}
+        </div>
+        {miniWeeks.map((week, wi) => (
+          <div key={wi} className="cal-mini-grid">
+            {week.map((day, di) => (
+              <button
+                key={di}
+                type="button"
+                className={[
+                  'cal-mini-day',
+                  day.inMonth ? '' : 'outside',
+                  sameDay(day.date, today) ? 'today' : '',
+                  sameDay(day.date, cursorDate) && !sameDay(day.date, today) ? 'selected' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => onSelectDay(day.date)}
+              >
+                {day.date.getDate()}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="cal-sidebar-section">
+        <div className="cal-sidebar-heading">Show on calendar</div>
+        <label className="cal-sidebar-toggle">
+          <input type="checkbox" checked={showJobs} onChange={e => setShowJobs(e.target.checked)} />
+          Jobs
+        </label>
+        <label className="cal-sidebar-toggle">
+          <input type="checkbox" checked={showBidWalks} onChange={e => setShowBidWalks(e.target.checked)} />
+          🔨 Bid walks
+        </label>
+        <label className="cal-sidebar-toggle">
+          <input type="checkbox" checked={showScheduleEvents} onChange={e => setShowScheduleEvents(e.target.checked)} />
+          📌 Events
+        </label>
+        <label className="cal-sidebar-toggle">
+          <input type="checkbox" checked={showPersonal} onChange={e => setShowPersonal(e.target.checked)} />
+          📅 Personal (synced)
+        </label>
+      </div>
+
+      <div className="cal-sidebar-section">
+        <div className="cal-sidebar-heading">Job stage colors</div>
+        {SCHEDULABLE_STAGES.map(s => (
+          <span key={s} className="cal-legend-item">
+            <span className={`cal-legend-dot badge-${s}`} />
+            {STAGE_LABELS[s]}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function JobCalendarPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
@@ -84,6 +173,15 @@ export default function JobCalendarPage() {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [previewEvent, setPreviewEvent] = useState(null);
   const [deletingEvent, setDeletingEvent] = useState(false);
+
+  // Sidebar filter toggles — what's actually plotted on the calendar today
+  // (job bars, bid walks, manually-created events, synced personal busy
+  // blocks). All on by default; unchecking one hides that overlay
+  // everywhere (Month grid day badges/bars and the Week/Day agenda list).
+  const [showJobs, setShowJobs] = useState(true);
+  const [showBidWalks, setShowBidWalks] = useState(true);
+  const [showScheduleEvents, setShowScheduleEvents] = useState(true);
+  const [showPersonal, setShowPersonal] = useState(true);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -190,15 +288,6 @@ export default function JobCalendarPage() {
     return { ...j, start, end: end < start ? start : end };
   }).filter(j => j.start), [jobs]);
 
-  // Bars are already colored by badge-${stage} (the same palette used
-  // everywhere else in the app) — this just surfaces which color means
-  // which stage, built from whatever stages actually appear on the
-  // calendar right now rather than a fixed guess at which ones matter.
-  const stagesInUse = useMemo(() => {
-    const present = new Set(jobBars.map(j => j.stage));
-    return STAGE_ORDER.filter(s => present.has(s));
-  }, [jobBars]);
-
   if (loading || !session) return null;
 
   function goToday() {
@@ -215,6 +304,13 @@ export default function JobCalendarPage() {
     setCursorDate(prev => addDays(prev, view === 'week' ? 7 : 1));
   }
   function goToMonth(d) { setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
+
+  // The mini month-picker steps by month regardless of which main view
+  // (Month/Week/Day) is active — a separate concept from the main Prev/
+  // Today/Next control, which adapts to the current view.
+  function miniPrevMonth() { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)); }
+  function miniNextMonth() { setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)); }
+  function selectMiniDay(d) { setCursorDate(toDateOnly(d)); goToMonth(d); }
 
   async function deleteScheduleEvent(id) {
     if (!confirm('Delete this event?')) return;
@@ -243,10 +339,10 @@ export default function JobCalendarPage() {
   }, []);
 
   function AgendaDay({ date }) {
-    const jobsToday = jobsForDay(date);
-    const walksToday = bidWalksForDay(date);
-    const busyToday = busyForDay(date);
-    const eventsToday = scheduleEventsForDay(date);
+    const jobsToday = showJobs ? jobsForDay(date) : [];
+    const walksToday = showBidWalks ? bidWalksForDay(date) : [];
+    const busyToday = showPersonal ? busyForDay(date) : [];
+    const eventsToday = showScheduleEvents ? scheduleEventsForDay(date) : [];
     const isEmpty = jobsToday.length === 0 && walksToday.length === 0 && busyToday.length === 0 && eventsToday.length === 0;
     return (
       <div className="card" style={{ marginBottom: 12 }}>
@@ -310,160 +406,182 @@ export default function JobCalendarPage() {
     </div>
   );
 
-  return (
-    <AppShell>
-      <div className="container container-wide">
-        {isMobile ? (
-          <>
-            <div className="top-actions" style={{ marginBottom: view === 'month' ? 18 : 10 }}>
-              <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-              {view === 'month' && viewPicker}
-            </div>
-            {view !== 'month' && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                {viewPicker}
-                {arrowGroup}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="top-actions">
+  const mainCalendar = (
+    <div style={{ minWidth: 0, flex: 1 }}>
+      {isMobile ? (
+        <>
+          <div className="top-actions" style={{ marginBottom: view === 'month' ? 18 : 10 }}>
             <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
-            {viewPicker}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowNewEvent(true)}>+ New Event</button>
+            {view === 'month' && viewPicker}
+          </div>
+          {view !== 'month' && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              {viewPicker}
               {arrowGroup}
             </div>
-          </div>
-        )}
-
-        {isMobile && view === 'month' && (
-          <div className="cal-month-chips">
-            {monthChips.map(d => (
-              <button
-                key={d.toISOString()}
-                className={`cal-month-chip ${d.getFullYear() === monthDate.getFullYear() && d.getMonth() === monthDate.getMonth() ? 'active' : ''}`}
-                onClick={() => goToMonth(d)}
-              >
-                {MONTH_ABBR[d.getMonth()]}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {view === 'month' && (
-        <>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
-          {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          )}
+        </>
+      ) : (
+        // Today/prev/next sit right next to the title (as in the Google
+        // Calendar reference), and the Month/Week/Day switcher — the
+        // equivalent of Google's view dropdown — sits on the far right.
+        // "+ New Event" now lives at the top of the sidebar in the Create
+        // button's spot, not up here.
+        <div className="top-actions">
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Calendar</h2>
+          {arrowGroup}
+          <div style={{ marginLeft: 'auto' }}>{viewPicker}</div>
         </div>
-        {!isMobile && (
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
-          </div>
-        )}
+      )}
 
-        {!isMobile && stagesInUse.length > 0 && (
-          <div className="cal-legend">
-            {stagesInUse.map(s => (
-              <span key={s} className="cal-legend-item">
-                <span className={`cal-legend-dot badge-${s}`} />
-                {STAGE_LABELS[s]}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="calendar-grid">
-          {DAY_LABELS.map(d => <div key={d} className="calendar-day-label">{d}</div>)}
+      {isMobile && view === 'month' && (
+        <div className="cal-month-chips">
+          {monthChips.map(d => (
+            <button
+              key={d.toISOString()}
+              className={`cal-month-chip ${d.getFullYear() === monthDate.getFullYear() && d.getMonth() === monthDate.getMonth() ? 'active' : ''}`}
+              onClick={() => goToMonth(d)}
+            >
+              {MONTH_ABBR[d.getMonth()]}
+            </button>
+          ))}
         </div>
+      )}
 
-        {weeks.map((week, wi) => {
-          const weekStartCol = 0;
-          const weekEndCol = 6;
-          const weekStart = week[0].date;
-          const weekEnd = week[6].date;
+      {view === 'month' && (
+      <>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
+        {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+      </div>
+      {!isMobile && (
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+          Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
+        </div>
+      )}
 
-          const overlapping = jobBars
+      <div className="calendar-grid">
+        {DAY_LABELS.map(d => <div key={d} className="calendar-day-label">{d}</div>)}
+      </div>
+
+      {weeks.map((week, wi) => {
+        const weekStartCol = 0;
+        const weekEndCol = 6;
+        const weekStart = week[0].date;
+        const weekEnd = week[6].date;
+
+        const overlapping = showJobs
+          ? jobBars
             .filter(j => j.start <= weekEnd && j.end >= weekStart)
             .map(j => {
               const startCol = j.start < weekStart ? weekStartCol : weekdayIndex(j.start);
               const endCol = j.end > weekEnd ? weekEndCol : weekdayIndex(j.end);
               return { ...j, startCol, endCol };
-            });
-          const { placed, laneCount } = assignLanes(overlapping);
+            })
+          : [];
+        const { placed, laneCount } = assignLanes(overlapping);
 
-          return (
-            <div key={wi} className="calendar-week" style={{ gridTemplateRows: `36px repeat(${Math.max(laneCount, 1)}, 30px)` }}>
-              {week.map((day, di) => (
-                <div
-                  key={di}
-                  className={`calendar-day-cell ${day.inMonth ? '' : 'calendar-day-outside'} ${sameDay(day.date, today) ? 'calendar-day-today' : ''}`}
-                  style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
-                >
-                  <span className="calendar-day-number">{day.date.getDate()}</span>
-                  <span style={{ position: 'absolute', top: 4, right: 6, display: 'flex', gap: 4 }}>
-                    {scheduleEventsForDay(day.date).length > 0 && (
-                      <span
-                        title={scheduleEventsForDay(day.date).map(ev => `${EVENT_TYPE_LABELS[ev.event_type]} — ${ev.description || 'No description'}`).join(', ')}
-                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                      >
-                        📌 {scheduleEventsForDay(day.date).length}
-                      </span>
-                    )}
-                    {bidWalksForDay(day.date).length > 0 && (
-                      <span
-                        title={bidWalksForDay(day.date).map(b => `Bid walk — ${b.contact_name || 'Lead'}`).join(', ')}
-                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                      >
-                        🔨 {bidWalksForDay(day.date).length}
-                      </span>
-                    )}
-                    {busyForDay(day.date).length > 0 && (
-                      <span
-                        title={busyForDay(day.date).map(b => b.title).join(', ')}
-                        style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
-                      >
-                        {busyForDay(day.date).length} personal
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-              {placed.map(job => (
-                <div
-                  key={job.id}
-                  className={`calendar-bar badge-${job.stage}`}
-                  style={{ gridColumn: `${job.startCol + 1} / ${job.endCol + 2}`, gridRow: job.lane + 2 }}
-                  onClick={() => (isMobile ? setPreviewJob(job) : router.push(`/jobs/${job.id}`))}
-                  title={`${formattedProjectNumber(job)} — ${job.customer_name || 'Unnamed'} (${STAGE_LABELS[job.stage]})`}
-                >
-                  {isMobile ? (job.customer_name || 'Unnamed') : `${formattedProjectNumber(job)} ${job.customer_name || ''}`}
-                </div>
-              ))}
-            </div>
-          );
-        })}
-
-        {jobBars.length === 0 && (
-          <div className="empty-state" style={{ marginTop: 16 }}>No jobs have a Scheduled Start Date set yet.</div>
-        )}
-        </>
-        )}
-
-        {view === 'week' && (
-          <div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-              Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </div>
-            {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
+        return (
+          <div key={wi} className="calendar-week" style={{ gridTemplateRows: `36px repeat(${Math.max(laneCount, 1)}, 30px)` }}>
+            {week.map((day, di) => (
+              <div
+                key={di}
+                className={[
+                  'calendar-day-cell',
+                  day.inMonth ? '' : 'calendar-day-outside',
+                  sameDay(day.date, today) ? 'calendar-day-today' : '',
+                  sameDay(day.date, cursorDate) && !sameDay(day.date, today) ? 'calendar-day-selected' : '',
+                ].filter(Boolean).join(' ')}
+                style={{ gridColumn: di + 1, gridRow: `1 / ${laneCount + 2}`, position: 'relative' }}
+                onClick={() => setCursorDate(day.date)}
+              >
+                <span className="calendar-day-number">{day.date.getDate()}</span>
+                <span style={{ position: 'absolute', top: 4, right: 6, display: 'flex', gap: 4 }}>
+                  {showScheduleEvents && scheduleEventsForDay(day.date).length > 0 && (
+                    <span
+                      title={scheduleEventsForDay(day.date).map(ev => `${EVENT_TYPE_LABELS[ev.event_type]} — ${ev.description || 'No description'}`).join(', ')}
+                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                    >
+                      📌 {scheduleEventsForDay(day.date).length}
+                    </span>
+                  )}
+                  {showBidWalks && bidWalksForDay(day.date).length > 0 && (
+                    <span
+                      title={bidWalksForDay(day.date).map(b => `Bid walk — ${b.contact_name || 'Lead'}`).join(', ')}
+                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                    >
+                      🔨 {bidWalksForDay(day.date).length}
+                    </span>
+                  )}
+                  {showPersonal && busyForDay(day.date).length > 0 && (
+                    <span
+                      title={busyForDay(day.date).map(b => b.title).join(', ')}
+                      style={{ fontSize: 9.5, color: 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px' }}
+                    >
+                      {busyForDay(day.date).length} personal
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+            {placed.map(job => (
+              <div
+                key={job.id}
+                className={`calendar-bar badge-${job.stage}`}
+                style={{ gridColumn: `${job.startCol + 1} / ${job.endCol + 2}`, gridRow: job.lane + 2 }}
+                onClick={e => { e.stopPropagation(); isMobile ? setPreviewJob(job) : router.push(`/jobs/${job.id}`); }}
+                title={`${formattedProjectNumber(job)} — ${job.customer_name || 'Unnamed'} (${STAGE_LABELS[job.stage]})`}
+              >
+                {isMobile ? (job.customer_name || 'Unnamed') : `${formattedProjectNumber(job)} ${job.customer_name || ''}`}
+              </div>
+            ))}
           </div>
-        )}
+        );
+      })}
 
-        {view === 'day' && (
-          <div>
-            <AgendaDay date={cursorDate} />
+      {jobBars.length === 0 && (
+        <div className="empty-state" style={{ marginTop: 16 }}>No jobs have a Scheduled Start Date set yet.</div>
+      )}
+      </>
+      )}
+
+      {view === 'week' && (
+        <div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
+            Week of {cursorWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {cursorWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </div>
-        )}
+          {cursorWeekDays.map(d => <AgendaDay key={d.toISOString()} date={d} />)}
+        </div>
+      )}
+
+      {view === 'day' && (
+        <div>
+          <AgendaDay date={cursorDate} />
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <AppShell>
+      <div className="container container-wide">
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          {!isMobile && (
+            <CalendarSidebar
+              monthDate={monthDate}
+              cursorDate={cursorDate}
+              today={today}
+              onSelectDay={selectMiniDay}
+              onPrevMonth={miniPrevMonth}
+              onNextMonth={miniNextMonth}
+              onNewEvent={() => setShowNewEvent(true)}
+              showJobs={showJobs} setShowJobs={setShowJobs}
+              showBidWalks={showBidWalks} setShowBidWalks={setShowBidWalks}
+              showScheduleEvents={showScheduleEvents} setShowScheduleEvents={setShowScheduleEvents}
+              showPersonal={showPersonal} setShowPersonal={setShowPersonal}
+            />
+          )}
+          {mainCalendar}
+        </div>
       </div>
 
       {isMobile && (
@@ -523,7 +641,7 @@ export default function JobCalendarPage() {
         )}
       </PopupModal>
 
-      <style jsx>{`
+      <style jsx global>{`
         .cal-month-chips{
           display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch;
           scrollbar-width: none; padding-bottom: 4px; margin-bottom: 14px;
@@ -535,9 +653,39 @@ export default function JobCalendarPage() {
           cursor: pointer;
         }
         .cal-month-chip.active{ background: var(--accent); border-color: var(--accent); color: #fff; }
-        .cal-legend{ display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; }
-        .cal-legend-item{ display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); }
+
+        .calendar-day-selected{ box-shadow: inset 0 0 0 2px var(--accent); }
+
+        /* --- Sidebar: Create button, mini month-picker, filter/legend --- */
+        .cal-sidebar{ width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; }
+        .cal-sidebar-create{ width: 100%; text-align: center; }
+
+        .cal-mini{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+        .cal-mini-header{ display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--heading); margin-bottom: 8px; }
+        .cal-mini-nav{ display: flex; gap: 4px; }
+        .cal-mini-nav button{ border: none; background: transparent; color: var(--ink-soft); font-size: 14px; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .cal-mini-nav button:hover{ color: var(--heading); }
+        .cal-mini-grid{ display: grid; grid-template-columns: repeat(7, 1fr); }
+        .cal-mini-labels span{ text-align: center; font-size: 9.5px; font-weight: 700; color: var(--ink-soft); padding-bottom: 4px; }
+        .cal-mini-day{
+          border: none; background: transparent; color: var(--ink); font-size: 11px; padding: 4px 0;
+          border-radius: 50%; cursor: pointer; font-family: inherit;
+        }
+        .cal-mini-day:hover{ background: var(--panel); }
+        .cal-mini-day.outside{ color: var(--ink-soft); opacity: 0.5; }
+        .cal-mini-day.today{ background: var(--accent); color: #fff; font-weight: 700; }
+        .cal-mini-day.selected{ box-shadow: inset 0 0 0 1.5px var(--accent); font-weight: 700; }
+
+        .cal-sidebar-section{ display: flex; flex-direction: column; gap: 8px; }
+        .cal-sidebar-heading{ font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+        .cal-sidebar-toggle{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+        .cal-sidebar-toggle input{ margin: 0; }
+        .cal-legend-item{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); }
         .cal-legend-dot{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        @media (max-width: 900px){
+          .cal-sidebar{ display: none; }
+        }
       `}</style>
     </AppShell>
   );
