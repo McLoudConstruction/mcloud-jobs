@@ -59,21 +59,23 @@ function formatHourLabel(h) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric' });
 }
 
-// Builds a full 7-column (Sun-Sat) grid of weeks covering the given month.
+// Builds a 7-column (Sun-Sat) grid of weeks covering the given month —
+// only the weeks that actually contain a day inside that month (4, 5, or
+// 6 depending on the month/year), never a trailing all-outside week.
 // Shared by the main Month view and the sidebar mini month-picker.
 function buildWeeks(monthDate) {
   const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const lastOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
   const firstSunday = addDays(firstOfMonth, -firstOfMonth.getDay());
   const weeks = [];
   let cursor = firstSunday;
-  for (let w = 0; w < 6; w++) {
+  while (cursor <= lastOfMonth) {
     const week = [];
     for (let d = 0; d < 7; d++) {
       week.push({ date: addDays(cursor, d), inMonth: addDays(cursor, d).getMonth() === monthDate.getMonth() });
     }
     weeks.push(week);
     cursor = addDays(cursor, 7);
-    if (cursor.getMonth() !== monthDate.getMonth() && cursor > addDays(firstOfMonth, 34)) break;
   }
   return weeks;
 }
@@ -509,7 +511,7 @@ export default function JobCalendarPage() {
     return (
       <div className="tg">
         <div className="tg-header" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
-          <div className="tg-gmt">{gmtLabel}</div>
+          <div className="tg-header-corner" />
           {days.map(d => (
             <div
               key={d.toISOString()}
@@ -552,7 +554,7 @@ export default function JobCalendarPage() {
           <div className="tg-grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, height: HOUR_HEIGHT * 24 }}>
             <div className="tg-hours">
               {HOUR_ROWS.map(h => (
-                <div key={h} className="tg-hour-label" style={{ height: HOUR_HEIGHT }}>{formatHourLabel(h)}</div>
+                <div key={h} className="tg-hour-label" style={{ height: HOUR_HEIGHT }}>{h === 0 ? gmtLabel : formatHourLabel(h)}</div>
               ))}
             </div>
             {days.map(d => {
@@ -683,12 +685,14 @@ export default function JobCalendarPage() {
 
       {view === 'month' && (
       <>
-      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
-        {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-      </div>
-      {!isMobile && (
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 16 }}>
-          Bars run from a job's Scheduled Start Date to its Scheduled End Date — set both on a job's Project tab. 🔨 marks a scheduled bid walk. Click any bar to open that job.
+      {/* Desktop drops the month/year heading and the explanatory blurb —
+          the nav bar's "September" button and the sidebar mini-calendar's
+          own "September 2026" header already say what month this is, and
+          the inline per-day event lines now speak for themselves. Mobile,
+          which has neither of those, keeps its heading. */}
+      {isMobile && (
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--heading)', marginBottom: 4 }}>
+          {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </div>
       )}
 
@@ -721,9 +725,13 @@ export default function JobCalendarPage() {
         const MAX_VISIBLE = 3;
         const maxLines = Math.max(1, ...dayItems.map(items => Math.min(items.length, MAX_VISIBLE) + (items.length > MAX_VISIBLE ? 1 : 0)));
         const headerHeight = 22 + maxLines * 15 + 6;
+        // No job bars this week → no reserved lane row at all, so weeks
+        // with nothing scheduled don't carry a blank 30px band that reads
+        // as padding between rows. Weeks butt right up against each other.
+        const weekRows = laneCount > 0 ? `${headerHeight}px repeat(${laneCount}, 30px)` : `${headerHeight}px`;
 
         return (
-          <div key={wi} className="calendar-week" style={{ gridTemplateRows: `${headerHeight}px repeat(${Math.max(laneCount, 1)}, 30px)` }}>
+          <div key={wi} className="calendar-week" style={{ gridTemplateRows: weekRows }}>
             {week.map((day, di) => {
               const items = dayItems[di];
               const isToday = sameDay(day.date, today);
@@ -945,7 +953,7 @@ export default function JobCalendarPage() {
         /* --- Desktop Week/Day hourly timeline grid --- */
         .tg{ border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
         .tg-header{ display: grid; border-bottom: 1px solid var(--line); }
-        .tg-gmt{ font-size: 9.5px; color: var(--ink-soft); display: flex; align-items: flex-end; justify-content: center; padding: 4px 0; }
+        .tg-header-corner{ border-right: 1px solid transparent; }
         .tg-header-day{
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           padding: 8px 0; cursor: pointer; border-left: 1px solid var(--line);
