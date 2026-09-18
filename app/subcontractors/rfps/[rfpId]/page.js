@@ -5,7 +5,15 @@ import Link from 'next/link';
 import { useRequireAuth } from '../../../../lib/useAuth';
 import { supabase } from '../../../../lib/supabaseClient';
 import AppShell from '../../../../components/AppShell';
-import { RFP_STATUS_LABELS, RFP_RECIPIENT_STATUS_LABELS } from '../../../../lib/constants';
+import { RFP_STATUS_LABELS, RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../../lib/constants';
+
+// Same convention as the RFP list page — RFPs go out pre-approval,
+// while the project is still an Estimate (job_number is null then).
+function projectLabel(job) {
+  if (!job) return '';
+  const num = projectNumber(job);
+  return num && num !== '—' ? `${projectNumberLabel(job)} #${num} — ` : '';
+}
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -22,7 +30,7 @@ export default function RfpDetailPage() {
   const [acting, setActing] = useState(false);
 
   const load = useCallback(async () => {
-    const { data: rfpData } = await supabase.from('rfps').select('*, jobs(job_number, project_address)').eq('id', rfpId).single();
+    const { data: rfpData } = await supabase.from('rfps').select('*, jobs(job_number, estimate_number, stage, project_address)').eq('id', rfpId).single();
     if (!rfpData) return;
     setRfp(rfpData);
 
@@ -85,7 +93,7 @@ export default function RfpDetailPage() {
         <div className="card">
           <h3>{rfp.title}</h3>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            {rfp.jobs?.job_number ? `#${rfp.jobs.job_number} — ` : ''}{rfp.jobs?.project_address}
+            {projectLabel(rfp.jobs)}{rfp.jobs?.project_address}
           </div>
           {rfp.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
           {rfp.source_folder && (

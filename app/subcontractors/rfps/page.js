@@ -4,7 +4,19 @@ import Link from 'next/link';
 import { useRequireAuth } from '../../../lib/useAuth';
 import { supabase } from '../../../lib/supabaseClient';
 import AppShell from '../../../components/AppShell';
-import { RFP_STATUS_LABELS } from '../../../lib/constants';
+import { RFP_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../lib/constants';
+
+// RFPs are meant to go out before a project is approved, while it's
+// still an Estimate/Opportunity (job_number is null at that stage —
+// only estimate_number is set). projectLabel() uses the same
+// isOpportunity()/projectNumber()/projectNumberLabel() convention as
+// the rest of the app so this never drifts from how job numbers are
+// shown everywhere else.
+function projectLabel(job) {
+  if (!job) return '';
+  const num = projectNumber(job);
+  return num && num !== '—' ? `${projectNumberLabel(job)} #${num} — ` : '';
+}
 import { buildRfpEmail } from '../../../lib/emailTemplates';
 
 function fmtDate(v) {
@@ -21,8 +33,8 @@ export default function RfpsPage() {
 
   const load = useCallback(async () => {
     const [{ data: rfpData }, { data: jobData }, { data: companyData }] = await Promise.all([
-      supabase.from('rfps').select('*, jobs(job_number, project_address), rfp_recipients(id, status)').order('created_at', { ascending: false }),
-      supabase.from('jobs').select('id, job_number, project_address').order('created_at', { ascending: false }),
+      supabase.from('rfps').select('*, jobs(job_number, estimate_number, stage, project_address), rfp_recipients(id, status)').order('created_at', { ascending: false }),
+      supabase.from('jobs').select('id, job_number, estimate_number, stage, project_address').order('created_at', { ascending: false }),
       supabase.from('companies').select('id, company_name, contact_email').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
     ]);
     if (rfpData) setRfps(rfpData);
@@ -64,7 +76,7 @@ export default function RfpsPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{r.title}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {r.jobs?.job_number ? `#${r.jobs.job_number} — ` : ''}{r.jobs?.project_address || 'No project linked'} · Sent {fmtDate(r.created_at)}
+                    {projectLabel(r.jobs)}{r.jobs?.project_address || 'No project linked'} · Sent {fmtDate(r.created_at)}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
                     {recipients.length} sub{recipients.length === 1 ? '' : 's'} · {responded} responded
@@ -201,7 +213,7 @@ function NewRfpModal({ jobs, companies, session, onClose, onCreated }) {
         <label>Project</label>
         <select value={jobId} onChange={e => handleJobChange(e.target.value)}>
           <option value="">Select a project…</option>
-          {jobs.map(j => <option key={j.id} value={j.id}>{j.job_number ? `#${j.job_number} — ` : ''}{j.project_address}</option>)}
+          {jobs.map(j => <option key={j.id} value={j.id}>{projectLabel(j)}{j.project_address}</option>)}
         </select>
 
         <label style={{ marginTop: 12 }}>Title</label>
