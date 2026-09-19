@@ -1,14 +1,35 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { compressImage } from '../lib/imageCompress';
-import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
+import { useSettings } from '../lib/useSettings';
+import { watermarkImage } from '../lib/watermark';
+import { queueInternalUpdate, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
-import { cacheJobPatch, getCachedJob, getQueueForJob, getAllQueueItems } from '../lib/offlineDb';
-import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
+import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
+import { INTERNAL_UPDATE_CATEGORIES, categoryPhotoFolder } from '../lib/constants';
 import CameraCapture from './CameraCapture';
 import PolishTextButton from './PolishTextButton';
 import PopupModal from './PopupModal';
+
+// Photos on an Internal Update now go through the exact same path as the
+// Photos tab's "Take Photos" / "Upload from library" buttons (see
+// uploadOnePhoto in PhotoGallery.js): watermark, upload to Storage, insert
+// the job_photos row — immediately, one photo at a time, no offline queue
+// in between. That path has never lost a photo. The previous design routed
+// internal-update photos through IndexedDB + a promise-chained sync queue
+// instead (to support offline capture), and across several rounds of fixes
+// that queue kept stranding photos in ways that were genuinely hard to see
+// from the client (see the sync queue's own history) — right down to items
+// getting stuck in a 'syncing' limbo state invisible to every diagnostic.
+// Rather than keep chasing that, this drops the queue for photos entirely
+// and copies the mechanism that's actually proven reliable. The one
+// difference from the Photos tab: each photo is tagged with a folder named
+// after the update's category (see categoryPhotoFolder) instead of landing
+// in General, and linked to this update via update_id from the moment it's
+// inserted. This does mean taking a photo on an Internal Update now
+// requires a connection, same as the Photos tab always has — the note text
+// itself still queues offline via queueInternalUpdate below when no photos
+// are involved.
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -33,18 +54,32 @@ function fmtTimestamp(iso) {
 export default function InternalUpdatesPanel({ jobId, session }) {
   const createdByEmail = session?.user?.email || null;
   const { isOnline, pendingCount, failedCount, pending, sync } = useOfflineSync(jobId);
+  const { settings } = useSettings();
 
   const [noteText, setNoteText] = useState('');
   const [workCompleted, setWorkCompleted] = useState('');
   const [upcomingWork, setUpcomingWork] = useState('');
   const [nextSteps, setNextSteps] = useState('');
   const [category, setCategory] = useState('');
-  const [stagedPhotos, setStagedPhotos] = useState([]); // [{ file, previewUrl }]
+  // Photos taken/picked for the update currently being drafted. Each entry
+  // is already a real job_photos row by the time it's in this array — see
+  // uploadDraftPhoto below — not a File waiting to be queued.
+  // { id, url, uploading: bool }
+  const [draftPhotos, setDraftPhotos] = useState([]);
+  const [photoError, setPhotoError] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+
+  // The id this draft's job_updates row will have. draftRowExistsRef tracks
+  // whether that row has actually been inserted yet — it's created lazily,
+  // the moment the first photo is taken (photos need a real update_id to
+  // insert against, same FK relationship the rest of the app already
+  // relies on), or at Post time if the update turned out to be text-only.
+  const draftIdRef = useRef(crypto.randomUUID());
+  const draftRowExistsRef = useRef(false);
 
   const [checklist, setChecklist] = useState([]);
   const [syncedUpdates, setSyncedUpdates] = useState([]);
@@ -151,139 +186,142 @@ export default function InternalUpdatesPanel({ jobId, session }) {
 
   const feed = [...pendingEntries, ...syncedUpdates];
 
+  // Creates this draft's job_updates row the first time it's actually
+  // needed (the first photo), using whatever text fields are filled in at
+  // that moment — Post later fills in the rest with an UPDATE rather than
+  // a second insert. If the update turns out to be text-only, this never
+  // runs; handlePost does a normal queued insert instead, same as before.
+  async function ensureDraftRow() {
+    if (draftRowExistsRef.current) return;
+    const { error } = await supabase.from('job_updates').insert({
+      id: draftIdRef.current,
+      job_id: jobId,
+      issues_notes: noteText.trim() || null,
+      work_completed: workCompleted.trim() || null,
+      upcoming_work: upcomingWork.trim() || null,
+      next_steps: nextSteps.trim() || null,
+      category: category || null,
+      created_by_email: createdByEmail,
+      is_internal: true,
+    });
+    if (error) throw error;
+    draftRowExistsRef.current = true;
+  }
+
+  // The direct mechanism the Photos tab already uses successfully (see
+  // uploadOnePhoto in PhotoGallery.js) — watermark, upload to Storage,
+  // insert the row, all in one immediate round trip per photo. No staging,
+  // no offline queue: this is called the instant a photo is taken or
+  // picked, exactly like "Take Photos" on the Photos tab, just tagged with
+  // this update's id and a category-named folder instead of landing in
+  // General.
+  async function uploadDraftPhoto(file) {
+    const localId = crypto.randomUUID();
+    const previewUrl = URL.createObjectURL(file);
+    setDraftPhotos(prev => [...prev, { id: localId, url: previewUrl, uploading: true }]);
+    try {
+      await ensureDraftRow();
+      const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
+      const folder = category ? categoryPhotoFolder(category, new Date().toISOString().slice(0, 10)) : null;
+      const path = `${jobId}/${crypto.randomUUID()}-field-photo.jpg`;
+      const { error: uploadErr } = await supabase.storage.from('job-photos').upload(path, watermarked, { contentType: 'image/jpeg' });
+      if (uploadErr) throw uploadErr;
+      const { data: inserted, error: insertErr } = await supabase
+        .from('job_photos')
+        .insert({
+          job_id: jobId,
+          update_id: draftIdRef.current,
+          storage_path: path,
+          folder: folder || null,
+          created_by_email: createdByEmail,
+        })
+        .select('id')
+        .single();
+      if (insertErr) throw insertErr;
+      setDraftPhotos(prev => prev.map(p => (p.id === localId ? { ...p, dbId: inserted.id, uploading: false } : p)));
+    } catch (err) {
+      setPhotoError(`A photo didn't upload: ${err.message || err}`);
+      setDraftPhotos(prev => prev.filter(p => p.id !== localId));
+      URL.revokeObjectURL(previewUrl);
+    }
+  }
+
   function handleAddPhotos(e) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (files.length === 0) return;
-    setStagedPhotos(prev => [...prev, ...files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))]);
+    files.forEach(uploadDraftPhoto);
   }
 
-  // Same camera component the Photos tab uses — staged locally rather
-  // than uploaded immediately, since a photo taken offline still needs
-  // to go through the sync queue like everything else on this panel.
+  // Same camera component the Photos tab uses. Each shot uploads as soon
+  // as it's accepted (retake/use flow) while the camera stays open for the
+  // next one — matching "Take Photos" on the Photos tab exactly.
   function handleCameraPhoto(file) {
-    setStagedPhotos(prev => [...prev, { file, previewUrl: URL.createObjectURL(file) }]);
+    uploadDraftPhoto(file);
   }
 
-  function removeStagedPhoto(index) {
-    setStagedPhotos(prev => prev.filter((_, i) => i !== index));
+  // The photo is already a real row by the time it's in draftPhotos, so
+  // removing it here deletes it for real (storage + row), same as the
+  // Delete button on the Photos tab.
+  async function removeDraftPhoto(photo) {
+    setDraftPhotos(prev => prev.filter(p => p.id !== photo.id));
+    if (!photo.dbId) return; // still uploading or never made it in — nothing to delete
+    const { data: row } = await supabase.from('job_photos').select('storage_path').eq('id', photo.dbId).maybeSingle();
+    if (row?.storage_path) await supabase.storage.from('job-photos').remove([row.storage_path]);
+    await supabase.from('job_photos').delete().eq('id', photo.dbId);
+  }
+
+  function resetDraft() {
+    setNoteText('');
+    setWorkCompleted('');
+    setUpcomingWork('');
+    setNextSteps('');
+    setCategory('');
+    setDraftPhotos([]);
+    setPhotoError('');
+    draftIdRef.current = crypto.randomUUID();
+    draftRowExistsRef.current = false;
+    setFormOpen(false);
   }
 
   async function handlePost(e) {
     e.preventDefault();
     const hasText = noteText.trim() || workCompleted.trim() || upcomingWork.trim() || nextSteps.trim();
-    if (!hasText && stagedPhotos.length === 0) return;
+    if (!hasText && draftPhotos.length === 0) return;
     setPosting(true);
     setPostError('');
-
-    const updateId = crypto.randomUUID();
     try {
-      await queueInternalUpdate({
-        id: updateId, jobId,
-        text: noteText.trim() || null,
-        workCompleted: workCompleted.trim() || null,
-        upcomingWork: upcomingWork.trim() || null,
-        nextSteps: nextSteps.trim() || null,
-        category: category || null,
-        createdByEmail,
-      });
-
-      // Each photo queues independently — one photo that fails to
-      // compress (corrupt file, unsupported format) no longer aborts the
-      // whole batch. Previously an uncaught error here left every photo
-      // after it (and the "Posting…" button) stuck, since nothing below
-      // this loop ever ran.
-      // eslint-disable-next-line no-console
-      console.log(`[internal-update] submitting ${stagedPhotos.length} staged photo(s) for update ${updateId}`);
-      const failedPhotos = [];
-      let queuedCount = 0;
-      for (const { file } of stagedPhotos) {
-        try {
-          const compressed = await compressImage(file);
-          const queued = await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
-          queuedCount += 1;
-          // eslint-disable-next-line no-console
-          console.log(`[internal-update] queued photo ${queuedCount}/${stagedPhotos.length}, queue item id ${queued?.id}`);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error(`[internal-update] photo ${queuedCount + 1}/${stagedPhotos.length} failed to queue`, err);
-          failedPhotos.push(err.message || String(err));
-        }
+      if (draftRowExistsRef.current) {
+        // A photo was taken first, so the row already exists (with
+        // whatever text was filled in at that moment) — bring it up to
+        // date with the final field values instead of inserting again.
+        const { error } = await supabase
+          .from('job_updates')
+          .update({
+            issues_notes: noteText.trim() || null,
+            work_completed: workCompleted.trim() || null,
+            upcoming_work: upcomingWork.trim() || null,
+            next_steps: nextSteps.trim() || null,
+            category: category || null,
+          })
+          .eq('id', draftIdRef.current);
+        if (error) throw error;
+        await loadUpdates();
+      } else {
+        // No photos this time — a plain text note, still safe to queue
+        // offline since there's no photo upload depending on it.
+        await queueInternalUpdate({
+          id: draftIdRef.current, jobId,
+          text: noteText.trim() || null,
+          workCompleted: workCompleted.trim() || null,
+          upcomingWork: upcomingWork.trim() || null,
+          nextSteps: nextSteps.trim() || null,
+          category: category || null,
+          createdByEmail,
+        });
+        await sync();
+        await loadUpdates();
       }
-      // Wait for every write just queued (the note, then each photo) to
-      // have its sync attempt, then pull the feed fresh — rather than
-      // trusting the job_photos realtime subscription above to notice
-      // each photo as it lands. That subscription can miss events (see
-      // the note on the effect below), so without this, a five-photo
-      // update could show only whichever photo happened to trigger the
-      // one realtime event that got through, even though all five made
-      // it into the database. sync() awaits the whole flush chain
-      // (every queuePhoto() call above chained its own flush onto it),
-      // so this doesn't return until all five have actually been tried.
-      await sync();
-
-      // failedPhotos above only catches an error thrown while staging a
-      // photo (compress/enqueue) — the actual upload+insert happens
-      // later, inside the flush chain, and a failure there is recorded
-      // on the queue item (syncStatus/lastError), not thrown back here.
-      // That gap is exactly how a real sync-time failure (RLS, storage
-      // policy, network) could fail silently: the enqueue step succeeds
-      // for every photo, so failedPhotos stays empty and nothing told
-      // the person anything was wrong beyond the easy-to-miss sync
-      // badge. Checking the queue directly after the flush above
-      // catches anything still stuck against *this* update and surfaces
-      // its real error.
-      // getQueueForJob() excludes items mid-'syncing' by design (so a live
-      // upload never gets double-synced) — which is also exactly how a
-      // stranded item type of issue: it never shows up as 'pending' (no
-      // retry), never 'failed' (no error), it's just gone from this check
-      // too, matching the "no sync error recorded" gap seen in earlier
-      // rounds. Reading the unfiltered queue here as well so a genuinely
-      // stuck-in-flight item is reported instead of silently passing this
-      // check.
-      const allItemsForJob = await getAllQueueItems();
-      const wholeQueueForJob = allItemsForJob.filter(i => i.jobId === jobId);
-      const stillQueued = wholeQueueForJob.filter(
-        i => i.table === 'job_photos' && i.payload?.updateId === updateId
-      );
-      // eslint-disable-next-line no-console
-      console.log('[internal-update] full queue for this job after sync() (including syncing/stranded):', wholeQueueForJob);
-
-      // Direct read-after-write against job_photos, bypassing every layer
-      // above (the offline queue, the sync chain, loadUpdates' grouping)
-      // — the most ground-truth check available client-side of exactly
-      // how many rows exist in the database for this update right now.
-      const { data: verifyPhotos, error: verifyErr } = await supabase
-        .from('job_photos')
-        .select('id, storage_path')
-        .eq('update_id', updateId);
-      // eslint-disable-next-line no-console
-      console.log(`[internal-update] verify query: ${verifyPhotos?.length ?? 'error'} row(s) in job_photos for update ${updateId}`, { verifyErr, verifyPhotos });
-
-      const messages = [...failedPhotos];
-      if (stillQueued.length > 0) {
-        const stuckSyncing = stillQueued.filter(i => i.syncStatus === 'syncing').length;
-        const detail = stuckSyncing > 0
-          ? `${stuckSyncing} photo${stuckSyncing === 1 ? '' : 's'} stuck mid-upload (connection likely dropped) — will retry automatically on the next sync.`
-          : (stillQueued[0].lastError || `${stillQueued.length} photo${stillQueued.length === 1 ? '' : 's'} still syncing or stuck — see the sync banner above.`);
-        messages.push(detail);
-      }
-      const dbCount = verifyPhotos?.length ?? null;
-      if (dbCount !== null && dbCount < queuedCount) {
-        messages.push(`only ${dbCount} of ${queuedCount} queued photo(s) actually landed in the database, with no sync error recorded — see the browser console for the full trace.`);
-      }
-      if (messages.length > 0) {
-        setPostError(`Update posted. Queued ${queuedCount} of ${stagedPhotos.length} photo(s); ${dbCount ?? '?'} confirmed in the database. ${messages[0]}`);
-      }
-      await loadUpdates();
-
-      setNoteText('');
-      setWorkCompleted('');
-      setUpcomingWork('');
-      setNextSteps('');
-      setCategory('');
-      setStagedPhotos([]);
-      setFormOpen(false);
+      resetDraft();
     } catch (err) {
       setPostError(err.message || 'Failed to post update.');
     } finally {
@@ -321,7 +359,25 @@ export default function InternalUpdatesPanel({ jobId, session }) {
 
       <section className="field-log-section">
         <div className="section-actions" style={{ marginTop: 0 }}>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>Create new Internal Update</button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              // Only hand out a fresh draft id if nothing's been captured
+              // yet under the current one — if the modal was closed with
+              // photos or text already in progress, reopening should
+              // continue that same draft, not orphan the photos already
+              // uploaded under its id.
+              const hasDraftInProgress = draftPhotos.length > 0 || noteText.trim() || workCompleted.trim() || upcomingWork.trim() || nextSteps.trim();
+              if (!hasDraftInProgress) {
+                draftIdRef.current = crypto.randomUUID();
+                draftRowExistsRef.current = false;
+              }
+              setFormOpen(true);
+            }}
+          >
+            Create new Internal Update
+          </button>
         </div>
       </section>
 
@@ -344,12 +400,13 @@ export default function InternalUpdatesPanel({ jobId, session }) {
           <textarea value={nextSteps} onChange={e => setNextSteps(e.target.value)} rows={2} />
           <div style={{ marginBottom: 8 }}><PolishTextButton value={nextSteps} onPolished={setNextSteps} /></div>
 
-          {stagedPhotos.length > 0 && (
+          {draftPhotos.length > 0 && (
             <div className="staged-photo-strip">
-              {stagedPhotos.map((p, i) => (
-                <div key={i} className="staged-photo-thumb">
-                  <img src={p.previewUrl} alt="" />
-                  <button type="button" onClick={() => removeStagedPhoto(i)}>×</button>
+              {draftPhotos.map(p => (
+                <div key={p.id} className="staged-photo-thumb">
+                  <img src={p.url} alt="" style={p.uploading ? { opacity: 0.5 } : undefined} />
+                  {p.uploading && <span className="photo-tile-loading" style={{ position: 'absolute', inset: 0 }} />}
+                  <button type="button" onClick={() => removeDraftPhoto(p)}>×</button>
                 </div>
               ))}
             </div>
@@ -363,10 +420,18 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             </label>
           </div>
 
+          {photoError && <div className="error-text">{photoError}</div>}
           {postError && <div className="error-text">{postError}</div>}
 
-          <button type="submit" disabled={posting || (!noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && stagedPhotos.length === 0)}>
-            {posting ? 'Posting…' : 'Post update'}
+          <button
+            type="submit"
+            disabled={
+              posting ||
+              draftPhotos.some(p => p.uploading) ||
+              (!noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && draftPhotos.length === 0)
+            }
+          >
+            {posting ? 'Posting…' : draftPhotos.some(p => p.uploading) ? 'Photo uploading…' : 'Post update'}
           </button>
         </form>
         <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Internal Update Photos" />
