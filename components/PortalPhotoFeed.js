@@ -2,11 +2,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-// Photo updates feed for Home — reads customer_visible_work_order_photos
-// (migration 123), which only surfaces photos staff have explicitly
-// marked shareable (is_internal = false). Renders nothing at all when
-// there's nothing shared yet, same "don't show an empty section" approach
-// as PortalFieldProgress.
+// Photo updates feed for Home — merges customer_visible_work_order_photos
+// (migration 123, sub progress photos) with customer_visible_job_photos
+// (migration 124, any other job photo staff shared — "Share with
+// customer" now applies to every photo in the job, not just work-order
+// ones). Both only surface photos staff have explicitly marked shareable
+// (is_internal = false). Renders nothing at all when there's nothing
+// shared yet, same "don't show an empty section" approach as
+// PortalFieldProgress.
 function fmtDate(v) {
   if (!v) return '';
   return new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -19,16 +22,21 @@ export default function PortalPhotoFeed({ jobId }) {
 
   const load = useCallback(async () => {
     if (!jobId) return;
-    const { data } = await supabase
-      .from('customer_visible_work_order_photos')
-      .select('*')
-      .eq('job_id', jobId)
-      .order('created_at', { ascending: false });
-    setPhotos(data || []);
+    const [workOrderRes, jobRes] = await Promise.all([
+      supabase.from('customer_visible_work_order_photos').select('*').eq('job_id', jobId),
+      supabase.from('customer_visible_job_photos').select('*').eq('job_id', jobId),
+    ]);
+    const merged = [
+      ...(workOrderRes.data || []).map(p => ({ ...p, bucket: 'subcontractor-docs' })),
+      // job_photos rows carry their own source_bucket (job-photos, or
+      // subcontractor-docs for a mirrored sub upload).
+      ...(jobRes.data || []).map(p => ({ ...p, bucket: p.source_bucket || 'job-photos' })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    setPhotos(merged);
     setLoaded(true);
-    if (data && data.length > 0) {
-      const entries = await Promise.all(data.map(async p => {
-        const { data: signed } = await supabase.storage.from('subcontractor-docs').createSignedUrl(p.storage_path, 3600);
+    if (merged.length > 0) {
+      const entries = await Promise.all(merged.map(async p => {
+        const { data: signed } = await supabase.storage.from(p.bucket).createSignedUrl(p.storage_path, 3600);
         return [p.id, signed?.signedUrl];
       }));
       setUrls(Object.fromEntries(entries));
@@ -40,6 +48,7 @@ export default function PortalPhotoFeed({ jobId }) {
     load();
     const channel = supabase.channel(`portal-photos-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'work_order_photos' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_photos' }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
@@ -58,7 +67,7 @@ export default function PortalPhotoFeed({ jobId }) {
               <div style={{ width: 140, height: 140, background: 'var(--panel)', borderRadius: 6 }} />
             )}
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
-              {p.trade && <span style={{ color: 'var(--heading)', fontWeight: 600 }}>{p.trade} · </span>}
+              {(p.trade || p.folder) && <span style={{ color: 'var(--heading)', fontWeight: 600 }}>{p.trade || p.folder} · </span>}
               {fmtDate(p.created_at)}
             </div>
             {p.caption && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{p.caption}</div>}

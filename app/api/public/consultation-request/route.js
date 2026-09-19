@@ -8,6 +8,8 @@ const ALLOWED_ORIGINS = [
   'https://mcloudconstruction.com',
 ];
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function corsHeaders(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -33,7 +35,25 @@ export async function POST(request) {
       return Response.json({ error: 'Server not configured.' }, { status: 500, headers });
     }
 
-    const body = await request.json();
+    // The site's Consultation form now sends multipart/form-data (so it can
+    // attach photo files) instead of JSON. Support both — form-data because
+    // that's what the current form sends, JSON kept for any other caller
+    // still posting plain fields.
+    const contentType = request.headers.get('content-type') || '';
+    let body = {};
+    let files = [];
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      for (const [key, value] of formData.entries()) {
+        if (key === 'photos') {
+          if (value instanceof File && value.size > 0) files.push(value);
+        } else {
+          body[key] = value;
+        }
+      }
+    } else {
+      body = await request.json();
+    }
 
     // Honeypot — a field real visitors never see or fill, but bots
     // filling every input often do. Silently accept and do nothing real,
@@ -53,6 +73,16 @@ export async function POST(request) {
     if (!name || !email) {
       return Response.json({ error: 'Name and email are required.' }, { status: 400, headers });
     }
+    if (!EMAIL_PATTERN.test(email)) {
+      return Response.json({ error: 'Enter a valid email address.' }, { status: 400, headers });
+    }
+    // Same 10-digit requirement as the form's own client-side check —
+    // enforced again here since this endpoint is public and callable
+    // directly, not just from the form.
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!phoneDigits || phoneDigits.length !== 10) {
+      return Response.json({ error: 'Enter a valid 10-digit phone number.' }, { status: 400, headers });
+    }
 
     const supabase = serviceClient();
 
@@ -71,9 +101,31 @@ export async function POST(request) {
       return Response.json({ error: leadError.message }, { status: 500, headers });
     }
 
+    // Upload any attached photos to their own private bucket, keyed by
+    // this lead's id (there's no job yet for this to live under
+    // job_photos). Best-effort — a photo upload failure shouldn't lose
+    // the lead itself, which is the important part.
+    let uploadedCount = 0;
+    for (const file of files) {
+      try {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        const path = `${lead.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const arrayBuffer = await file.arrayBuffer();
+        const { error: uploadError } = await supabase.storage
+          .from('consultation-photos')
+          .upload(path, arrayBuffer, { contentType: file.type || 'image/jpeg' });
+        if (!uploadError) {
+          await supabase.from('opportunity_photos').insert({ opportunity_id: lead.id, storage_path: path });
+          uploadedCount += 1;
+        }
+      } catch {
+        // Skip this file, keep going — one bad file shouldn't fail the rest.
+      }
+    }
+
     await supabase.from('notifications').insert({
       job_id: null,
-      message: `New website consultation request from ${name}${company ? ` (${company})` : ''} — ${projectType} project. Reply to ${email}${phone ? ` or call ${phone}` : ''}.`,
+      message: `New website consultation request from ${name}${company ? ` (${company})` : ''} — ${projectType} project. Reply to ${email}${phone ? ` or call ${phone}` : ''}.${uploadedCount ? ` (${uploadedCount} photo${uploadedCount === 1 ? '' : 's'} attached)` : ''}`,
     });
 
     return Response.json({ ok: true, leadId: lead.id }, { headers });

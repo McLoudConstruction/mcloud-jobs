@@ -299,6 +299,20 @@ function WorkOrderPhotosSection({ workOrderId }) {
           caption_in: null,
         });
         if (rpcErr) throw rpcErr;
+
+        // Auto-file this progress photo into the job's own Photos tab,
+        // grouped into a trade-named folder, so staff see it there
+        // without having to re-upload or manually sort it. Best-effort —
+        // a failure here shouldn't block or roll back the upload itself.
+        const { data: newRow } = await supabase
+          .from('work_order_photos')
+          .select('id')
+          .eq('work_order_id', workOrderId)
+          .eq('storage_path', path)
+          .maybeSingle();
+        if (newRow?.id) {
+          await supabase.rpc('mirror_work_order_photo_to_job_photos', { work_order_photo_id_in: newRow.id }).catch(() => {});
+        }
       }
     } catch (err) {
       setError(err.message || 'Upload failed — try again.');

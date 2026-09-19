@@ -10,7 +10,7 @@ export async function GET(request, { params }) {
   try {
     const [jobRes, phasesRes, rulesRes] = await Promise.all([
       admin.from('jobs').select('id, project_street, project_city, project_state, project_zip, site_lat, site_lng').eq('id', jobId).single(),
-      admin.from('job_phases').select('id, trade, work_location, start_date, end_date').eq('job_id', jobId),
+      admin.from('job_phases').select('id, trade, work_location, start_date, end_date').eq('job_id', jobId).eq('status', 'published'),
       admin.from('trade_weather_rules').select('*'),
     ]);
     if (jobRes.error || !jobRes.data) return NextResponse.json({ error: 'Job not found.', detail: jobRes.error?.message }, { status: 404 });
@@ -25,7 +25,9 @@ export async function GET(request, { params }) {
     const phases = phasesRes.data || [];
     const rules = rulesRes.data || [];
 
-    const outdoorPhases = phases.filter(p => p.work_location === 'outdoor' && p.trade);
+    // 'mixed' phases carry real outdoor exposure too, so they're checked
+    // alongside 'outdoor' ones — only pure 'indoor' phases are excluded.
+    const outdoorPhases = phases.filter(p => (p.work_location === 'outdoor' || p.work_location === 'mixed') && p.trade);
     if (outdoorPhases.length === 0) {
       // Debug field is temporary — shows exactly what this query saw for
       // this job's phases, since "no outdoor phases" and "the query

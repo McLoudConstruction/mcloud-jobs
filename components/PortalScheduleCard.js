@@ -89,7 +89,9 @@ export default function PortalScheduleCard({ jobId }) {
 
   const loadPhases = useCallback(async () => {
     if (!jobId) return;
-    const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
+    // status='published' only — a staff-side draft schedule (generated but
+    // not yet published) must never be visible to the customer.
+    const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).eq('status', 'published').order('sort_order', { ascending: true });
     setPhases(data || []);
     setLoaded(true);
   }, [jobId]);
@@ -126,7 +128,7 @@ export default function PortalScheduleCard({ jobId }) {
     return (
       <div className="dash-section">
         <h3>Project Schedule</h3>
-        <div className="empty-state">We haven't posted a schedule for this project yet — check back once your start date is set.</div>
+        <div className="empty-state">We haven't posted a schedule for this project yet — you'll receive an email notification when this schedule is posted.</div>
       </div>
     );
   }

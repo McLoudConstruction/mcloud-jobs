@@ -22,7 +22,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [selectedFolder, setSelectedFolder] = useState(''); // folder new uploads go into; '' = General
   const [newFolderName, setNewFolderName] = useState('');
   const [addingFolder, setAddingFolder] = useState(false);
-  const [filterFolder, setFilterFolder] = useState('__all__'); // which folder's photos to display
+  const [filterFolder, setFilterFolder] = useState(''); // '' = top level (general photos + folder tiles); otherwise a folder name
   const fileInputRef = useRef(null);
 
   const loadPhotos = useCallback(async () => {
@@ -41,6 +41,20 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     }
   }, [jobId, updateId]);
 
+  // Share-with-customer is per-photo, off by default (is_internal: true).
+  // A photo mirrored in from a subcontractor's progress-photo upload
+  // (source_work_order_photo_id set) has its actual file access gated by
+  // work_order_photos.is_internal, not this row's — so toggling one keeps
+  // the other in sync rather than silently doing nothing.
+  async function toggleShared(photo) {
+    const nextInternal = !photo.is_internal;
+    setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, is_internal: nextInternal } : p));
+    await supabase.from('job_photos').update({ is_internal: nextInternal }).eq('id', photo.id);
+    if (photo.source_work_order_photo_id) {
+      await supabase.from('work_order_photos').update({ is_internal: nextInternal }).eq('id', photo.source_work_order_photo_id);
+    }
+  }
+
   useEffect(() => {
     loadPhotos();
     const channel = supabase
@@ -54,7 +68,10 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     async function loadUrls() {
       const entries = await Promise.all(
         photos.map(async p => {
-          const { data } = await supabase.storage.from('job-photos').createSignedUrl(p.storage_path, 3600);
+          // Mirrored sub-uploaded photos live in the subcontractor-docs
+          // bucket under their original path — source_bucket says which
+          // bucket to sign against instead of assuming job-photos.
+          const { data } = await supabase.storage.from(p.source_bucket || 'job-photos').createSignedUrl(p.storage_path, 3600);
           return [p.id, data?.signedUrl];
         })
       );
@@ -129,7 +146,12 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
   async function removePhoto(photo) {
     if (!confirm('Delete this photo?')) return;
-    await supabase.storage.from('job-photos').remove([photo.storage_path]);
+    // A mirrored sub-uploaded photo doesn't own its file — that file is
+    // work_order_photos' original upload, so only the mirror row here
+    // gets removed, never the underlying subcontractor-docs object.
+    if (!photo.source_work_order_photo_id) {
+      await supabase.storage.from(photo.source_bucket || 'job-photos').remove([photo.storage_path]);
+    }
     const { error } = await supabase.from('job_photos').delete().eq('id', photo.id);
     if (error) {
       alert('Failed to delete photo: ' + error.message);
@@ -274,20 +296,39 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
 
       {photos.length === 0 && !bare && <div className="empty-state">No photos yet.</div>}
 
-      {folders.length > 0 && photos.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button className={`btn btn-sm ${filterFolder === '__all__' ? 'btn-primary' : ''}`} onClick={() => setFilterFolder('__all__')} type="button">All</button>
-          <button className={`btn btn-sm ${filterFolder === '__general__' ? 'btn-primary' : ''}`} onClick={() => setFilterFolder('__general__')} type="button">General</button>
-          {folders.map(f => (
-            <button key={f} className={`btn btn-sm ${filterFolder === f ? 'btn-primary' : ''}`} onClick={() => setFilterFolder(f)} type="button">{f}</button>
-          ))}
+      {/* Top level: folders as clickable visual tiles (cover photo + name
+          + count), with only the general/no-folder photos shown directly
+          below — a folder's own photos only appear once you click into
+          it, instead of everything being mixed into one flat grid. */}
+      {filterFolder === '' && folders.length > 0 && (
+        <div className="photo-grid" style={{ marginBottom: 18 }}>
+          {folders.map(f => {
+            const folderPhotos = photos.filter(p => p.folder === f);
+            const cover = folderPhotos.find(p => urls[p.id]);
+            return (
+              <div className="photo-tile" key={f} style={{ cursor: 'pointer' }} onClick={() => setFilterFolder(f)}>
+                {cover ? <img src={urls[cover.id]} alt="" /> : <div className="photo-tile-loading" />}
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '6px 8px', fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {f}</div>
+                  <div style={{ fontSize: 10.5, opacity: 0.85 }}>{folderPhotos.length} photo{folderPhotos.length === 1 ? '' : 's'}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {filterFolder !== '' && (
+        <div className="section-actions" style={{ marginTop: 0, marginBottom: 10 }}>
+          <button className="btn btn-sm" onClick={() => setFilterFolder('')} type="button">← All Photos</button>
+          <span style={{ fontSize: 12.5, fontWeight: 600, alignSelf: 'center' }}>📁 {filterFolder}</span>
         </div>
       )}
 
       {photos.length > 0 && (
         <div className="photo-grid">
           {photos
-            .filter(p => filterFolder === '__all__' || (filterFolder === '__general__' ? !p.folder : p.folder === filterFolder))
+            .filter(p => filterFolder === '' ? !p.folder : p.folder === filterFolder)
             .map(p => (
             <div className="photo-tile" key={p.id}>
               {urls[p.id] ? (
@@ -297,15 +338,26 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
               ) : (
                 <div className="photo-tile-loading" />
               )}
-              {p.folder && <span className="photo-markup-badge" style={{ left: 6, right: 'auto' }}>{p.folder}</span>}
               {p.derived_from_photo_id && <span className="photo-markup-badge">Marked up</span>}
               <div className="photo-tile-actions">
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  onClick={() => toggleShared(p)}
+                  title={p.is_internal ? 'Not visible to the customer yet' : 'Visible to the customer'}
+                  style={!p.is_internal ? { background: 'var(--money, #3a6b45)', color: '#fff', borderColor: 'var(--money, #3a6b45)' } : undefined}
+                >
+                  {p.is_internal ? 'Share' : 'Shared ✓'}
+                </button>
                 {urls[p.id] && <button className="btn btn-sm" onClick={() => openMarkup(p)} type="button">Markup</button>}
                 {urls[p.id] && <a href={urls[p.id]} download className="btn btn-sm">Download</a>}
                 <button className="btn btn-sm btn-danger" onClick={() => removePhoto(p)}>Delete</button>
               </div>
             </div>
           ))}
+          {photos.filter(p => filterFolder === '' ? !p.folder : p.folder === filterFolder).length === 0 && (
+            <div className="empty-state">No photos in this folder yet.</div>
+          )}
         </div>
       )}
     </>

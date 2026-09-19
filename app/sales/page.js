@@ -9,6 +9,7 @@ import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import MobileFab from '../../components/MobileFab';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
 import BidWalkScheduler from '../../components/BidWalkScheduler';
+import OpportunityPhotosPanel from '../../components/OpportunityPhotosPanel';
 import { formatPhone } from '../../lib/constants';
 
 // Stage -> badge color, reusing the site's existing badge palette rather
@@ -350,6 +351,7 @@ export default function SalesDashboardPage() {
             {autofillNote && <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 6 }}>{autofillNote}</div>}
             <label>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+            {editingId && <OpportunityPhotosPanel opportunityId={editingId} />}
             {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Create lead')}</button>

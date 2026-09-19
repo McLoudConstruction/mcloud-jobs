@@ -9,6 +9,7 @@ import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES } from '../lib/constants';
 const WORK_LOCATION_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
   { value: 'outdoor', label: 'Outdoor' },
+  { value: 'mixed', label: 'Mixed' },
 ];
 
 function fmtDate(v) {
@@ -145,9 +146,29 @@ export default function ScheduleCard({ jobId, job }) {
   const [weatherCheckedThrough, setWeatherCheckedThrough] = useState(null); // last date the forecast covers
   const [weatherNoRuleIds, setWeatherNoRuleIds] = useState([]); // phase ids whose trade has no threshold row at all
 
+  // A draft (generated but not yet published) now lives as its own real
+  // job_phases rows, status: 'draft', persisted the moment Generate
+  // Schedule runs — not just in local state — so it survives navigating
+  // away. This one query loads both: published rows become `phases`,
+  // draft rows (if any are waiting) become `draft`, which means a staff
+  // member who left mid-review sees their draft again on return instead
+  // of it being gone.
   const loadPhases = useCallback(async () => {
     const { data } = await supabase.from('job_phases').select('*').eq('job_id', jobId).order('sort_order', { ascending: true });
-    if (data) setPhases(data);
+    if (!data) return;
+    setPhases(data.filter(p => p.status !== 'draft'));
+    const draftRows = data.filter(p => p.status === 'draft');
+    setDraft(prev => {
+      if (draftRows.length === 0) return null;
+      // Don't stomp mid-edit local state (e.g. a duration field mid-
+      // keystroke, not yet blurred/persisted) with a realtime-triggered
+      // reload of the same rows — only replace when the set of ids
+      // actually changed (a fresh generate, a remove, a different tab).
+      if (prev && prev.length === draftRows.length && prev.every(p => draftRows.some(d => d.id === p.id))) {
+        return prev;
+      }
+      return draftRows;
+    });
   }, [jobId]);
 
   const loadScopeActions = useCallback(async () => {
@@ -206,7 +227,19 @@ export default function ScheduleCard({ jobId, job }) {
       // lib/tradeWeather.js) so Stachys only has to correct exceptions,
       // not set all of them by hand.
       const withDefaults = data.phases.map(p => ({ ...p, work_location: defaultWorkLocationForPhase(p, job?.work_location) }));
-      setDraft(phases.length > 0 ? mergeWithExisting(withDefaults, phases, startDate) : withDefaults);
+      const computed = phases.length > 0 ? mergeWithExisting(withDefaults, phases, startDate) : withDefaults;
+
+      // Persist the draft immediately as status:'draft' rows, rather than
+      // holding it only in local component state — that's what used to
+      // make it vanish if you navigated away before clicking Confirm.
+      // Replaces any earlier unpublished draft for this job first.
+      await supabase.from('job_phases').delete().eq('job_id', jobId).eq('status', 'draft');
+      const { data: inserted, error: insertError } = await supabase
+        .from('job_phases')
+        .insert(computed.map(p => ({ ...p, job_id: jobId, status: 'draft' })))
+        .select();
+      if (insertError) throw insertError;
+      setDraft(inserted.sort((a, b) => a.sort_order - b.sort_order));
       if (data.warning) setWarning(data.warning);
     } catch (err) {
       setError(err.message);
@@ -262,48 +295,89 @@ export default function ScheduleCard({ jobId, job }) {
     setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
   }
 
+  // Persists every row in a just-edited draft back to its already-inserted
+  // job_phases row (draft rows get a real id the moment Generate Schedule
+  // runs — see generate() above), so a duration/day/location tweak isn't
+  // lost either, same as the draft itself no longer being lost.
+  async function persistDraftRows(rows) {
+    await Promise.all(rows.filter(p => p.id).map(p => supabase.from('job_phases').update({
+      duration_days: p.duration_days,
+      start_date: p.start_date,
+      end_date: p.end_date,
+      preferred_start_day: p.preferred_start_day || null,
+      allow_weekend_work: p.allow_weekend_work,
+      work_location: p.work_location,
+    }).eq('id', p.id)));
+  }
+
   // Clamps to a valid integer once the field loses focus, so it never
   // stays blank or invalid after you click away.
   function finalizeDraftDuration(index) {
     const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
-    setDraft(recomputeSequentialDates(updated, startDate));
+    const recomputed = recomputeSequentialDates(updated, startDate);
+    setDraft(recomputed);
+    persistDraftRows(recomputed);
   }
 
   function updateDraftPreferredStartDay(index, value) {
     const updated = draft.map((p, i) => i === index ? { ...p, preferred_start_day: value || null } : p);
-    setDraft(recomputeSequentialDates(updated, startDate));
+    const recomputed = recomputeSequentialDates(updated, startDate);
+    setDraft(recomputed);
+    persistDraftRows(recomputed);
   }
 
   function updateDraftAllowWeekend(index, allow) {
     const updated = draft.map((p, i) => i === index ? { ...p, allow_weekend_work: allow } : p);
-    setDraft(recomputeSequentialDates(updated, startDate));
+    const recomputed = recomputeSequentialDates(updated, startDate);
+    setDraft(recomputed);
+    persistDraftRows(recomputed);
   }
 
   function updateDraftWorkLocation(index, value) {
-    setDraft(draft.map((p, i) => i === index ? { ...p, work_location: value } : p));
+    const updated = draft.map((p, i) => i === index ? { ...p, work_location: value } : p);
+    setDraft(updated);
+    persistDraftRows(updated);
   }
 
-  async function confirmDraft() {
+  // Lets a phase representing one trade in a concurrent group (e.g.
+  // Framing / Concrete & Foundation / Masonry, which now schedule as
+  // separate bars in the same window — see lib/scheduleTemplate.js) be
+  // dropped individually when this job doesn't actually need it, without
+  // losing the other phases in that group.
+  async function removeDraftPhase(index) {
+    const removed = draft[index];
+    const remaining = draft.filter((_, i) => i !== index);
+    setDraft(remaining.length > 0 ? remaining : null);
+    if (removed.id) {
+      await supabase.from('job_phases').delete().eq('id', removed.id);
+    }
+  }
+
+  // The draft's rows are already persisted (status: 'draft', see
+  // generate() and the row-level editors above) — publishing just means
+  // making them the live schedule: clear whatever was published before,
+  // flip the draft rows over to status: 'published'.
+  async function publishDraft() {
     setSaving(true);
     setError('');
     try {
-      // Belt-and-suspenders: normalize durations even if Confirm was
+      // Belt-and-suspenders: normalize durations even if Publish was
       // clicked while a field was still mid-edit (e.g. via Enter key
       // without a blur), so an empty/invalid value never reaches the DB.
       const cleanDraft = recomputeSequentialDates(
         draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
         startDate
       );
-      // Replacing an existing schedule — clear the old phases first so
-      // regenerating never leaves stale rows behind.
-      if (phases.length > 0) {
-        await supabase.from('job_phases').delete().eq('job_id', jobId);
-      }
-      const { error: insertError } = await supabase.from('job_phases').insert(
-        cleanDraft.map(({ orphaned, ...p }) => ({ job_id: jobId, ...p }))
-      );
-      if (insertError) throw insertError;
+      await persistDraftRows(cleanDraft);
+
+      await supabase.from('job_phases').delete().eq('job_id', jobId).eq('status', 'published');
+      const { error: publishError } = await supabase
+        .from('job_phases')
+        .update({ status: 'published' })
+        .eq('job_id', jobId)
+        .eq('status', 'draft');
+      if (publishError) throw publishError;
       await supabase.from('jobs').update({ schedule_stale_at: null }).eq('id', jobId);
       setDraft(null);
       await loadPhases();
@@ -312,6 +386,15 @@ export default function ScheduleCard({ jobId, job }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Discarding the draft means actually deleting its rows too — otherwise
+  // "Cancel" would leave an orphaned draft sitting in the table that
+  // reappears (via loadPhases) the next time this page loads.
+  async function cancelDraft() {
+    await supabase.from('job_phases').delete().eq('job_id', jobId).eq('status', 'draft');
+    setDraft(null);
+    setWarning('');
   }
 
   async function dismissStale() {
@@ -457,17 +540,25 @@ export default function ScheduleCard({ jobId, job }) {
 
       {draft && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Review before confirming</div>
-          <Legend phases={draft} />
-          {draft.map((p, i) => (
-            <div key={p.phase_key + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, gap: 10, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Review before publishing — saved as a draft, safe to leave and come back</div>
+
+          <div className="section-actions" style={{ marginTop: 0, marginBottom: 12 }}>
+            <button className={`btn btn-sm ${view === 'list' ? 'btn-primary' : ''}`} onClick={() => setView('list')}>List</button>
+            <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+          </div>
+
+          {view === 'timeline' && <TimelineView phases={draft} onPhaseUpdate={updatePhaseDates} />}
+
+          {view === 'list' && <Legend phases={draft} />}
+          {view === 'list' && draft.map((p, i) => (
+            <div key={p.id || p.phase_key + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13, gap: 10, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ marginTop: 3 }}><PhaseSwatch phase={p} /></div>
                 <div>
                   <b>{p.label}</b>
                   {p.needs_review && <span style={{ fontSize: 10, color: '#8a6d1d' }}> · {p.orphaned ? 'trade no longer in breakdown' : 'duration kept from your edit — review'}</span>}
                   <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(p.start_date)} – {fmtDate(p.end_date)}</div>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 5 }}>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: 'var(--ink-soft)' }}>
                       Preferred start day
                       <select value={p.preferred_start_day || ''} onChange={e => updateDraftPreferredStartDay(i, e.target.value)} style={{ fontSize: 10.5, padding: '2px 4px' }}>
@@ -493,12 +584,20 @@ export default function ScheduleCard({ jobId, job }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 <input type="number" min="1" value={p.duration_days} onChange={e => updateDraftDuration(i, e.target.value)} onBlur={() => finalizeDraftDuration(i)} style={{ width: 56 }} />
                 <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  title="Remove this phase — e.g. a trade this job doesn't actually need"
+                  onClick={() => removeDraftPhase(i)}
+                >
+                  Remove
+                </button>
               </div>
             </div>
           ))}
           <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={confirmDraft} disabled={saving}>{saving ? 'Saving…' : 'Confirm schedule'}</button>
-            <button className="btn btn-sm" onClick={() => { setDraft(null); setWarning(''); }}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={publishDraft} disabled={saving}>{saving ? 'Publishing…' : 'Publish Schedule'}</button>
+            <button className="btn btn-sm" onClick={cancelDraft}>Cancel</button>
           </div>
         </div>
       )}
@@ -574,14 +673,14 @@ export default function ScheduleCard({ jobId, job }) {
                         {p.needs_review && <span style={{ fontSize: 11, color: '#8a6d1d' }}> · please review</span>}
                         {p.preferred_start_day && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · starts {dayLabel(p.preferred_start_day)}</span>}
                         {p.allow_weekend_work && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · weekend OK</span>}
-                        {p.work_location && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>}
+                        {p.work_location && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · {p.work_location === 'outdoor' ? 'Outdoor' : p.work_location === 'mixed' ? 'Mixed' : 'Indoor'}</span>}
                         <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{p.duration_days} days</div>
                       </div>
                     </div>
                     <div>{fmtDate(p.start_date)}</div>
                     <div>{fmtDate(p.end_date)}</div>
                     <div>
-                      {p.work_location === 'outdoor' ? (
+                      {p.work_location === 'outdoor' || p.work_location === 'mixed' ? (
                         <WeatherStatusLine
                           phase={p}
                           flag={weatherFlags[p.id]}

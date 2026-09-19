@@ -42,7 +42,7 @@ export default function CustomerSelectionsPage() {
           <>
             <div className="dash-section" style={{ paddingTop: 0 }}>
               <h3 className={pending.length > 0 ? 'dash-section-heading-rust' : ''}>Needs a Decision</h3>
-              {pending.length === 0 && <div className="empty-state">Nothing waiting on you right now.</div>}
+              {pending.length === 0 && <div className="empty-state">Nothing here yet, go kick your feet up!</div>}
               {pending.map(s => (
                 <a key={s.id} href={`/jobs/${job.id}/material-selections/${s.id}`} target="_blank" rel="noopener noreferrer" className="portal-feed-item portal-feed-item-new portal-feed-item-action">
                   <span className="portal-feed-tag">Choose Now</span>

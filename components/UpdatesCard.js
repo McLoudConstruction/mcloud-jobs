@@ -35,7 +35,9 @@ export default function UpdatesCard({ jobId, updates, onChanged, session }) {
   // pre-filled from the Schedule — the last scheduled day, and whatever
   // trades are due in the next 7 days — both still fully editable.
   async function openForm() {
-    const { data: phases } = await supabase.from('job_phases').select('*').eq('job_id', jobId);
+    // Only the live/published schedule — a draft sitting unpublished
+    // shouldn't be quoted as the plan in a customer-facing update.
+    const { data: phases } = await supabase.from('job_phases').select('*').eq('job_id', jobId).eq('status', 'published');
     if (phases && phases.length > 0) {
       const lastEnd = phases.reduce((max, p) => (!max || p.end_date > max ? p.end_date : max), null);
       const weekOut = new Date();

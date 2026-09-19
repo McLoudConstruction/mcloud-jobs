@@ -17,7 +17,8 @@ export async function GET() {
       admin
         .from('job_phases')
         .select('id, label, trade, work_location, start_date, end_date, job_id, jobs(id, job_number, customer_name, stage, project_street, project_city, project_state, project_zip, site_lat, site_lng)')
-        .eq('work_location', 'outdoor')
+        .eq('status', 'published')
+        .in('work_location', ['outdoor', 'mixed'])
         .not('trade', 'is', null)
         .lte('start_date', weekOut)
         .gte('end_date', today),

@@ -297,6 +297,7 @@ function NewOpportunityPageInner() {
                 <option value="">Not sure yet</option>
                 <option value="indoor">Indoor</option>
                 <option value="outdoor">Outdoor</option>
+                <option value="mixed">Mixed</option>
               </select>
             </div>
 
