@@ -188,6 +188,13 @@ a { color: inherit; text-decoration: none; }
 .container-wide{
   max-width: 1400px;
 }
+/* Sub Portal Overview — most of what lives there (job names, a title, a
+   status badge) doesn't need 1400px to read comfortably, and letting it
+   run that wide just spreads sparse content across the whole screen.
+   Capped well under half a typical desktop width instead. */
+.container-narrow{
+  max-width: 680px;
+}
 
 /* The dashboard as a flowing page, not a grid of boxed cards — each
    .dash-section is a plain content block separated by a hairline rather
@@ -504,6 +511,19 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 700px){
   .overview-row{ flex-direction: column; align-items: flex-start; gap: 4px; }
 }
+
+/* Compact single-line entries for the Overview's "check when you need
+   to" categories (Invoices, Messages) — a name and a one-line status,
+   not an itemized preview list like the sections above. */
+.overview-quicklinks{ display: flex; flex-direction: column; }
+.overview-quicklink{
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+  text-decoration: none; color: var(--heading); font-weight: 700; font-size: 13.5px;
+}
+.overview-quicklink:last-child{ border-bottom: none; }
+.overview-quicklink-detail{ font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.overview-quicklink-detail.attn{ color: var(--gold); }
 
 .markup-overlay{
   position: fixed; inset: 0; background: #1a1812; z-index: 200;
@@ -1378,6 +1398,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   margin: 0 10px 10px;
   border-bottom: 1px solid var(--panel-line);
 }
+.pnav-identity-row{ display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .pnav-identity-name{ font-weight: 700; font-size: 14px; color: var(--heading); line-height: 1.3; }
 .pnav-identity-sub{ font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
 .pnav-links{ display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
@@ -1413,11 +1434,25 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   flex-shrink: 0;
 }
 
-/* Header notification bell (SubPortalShell) — same shell-topbar-icon-btn/
-   shell-topbar-dot the staff AppShell bell uses, plus an actual dropdown
-   panel since the Sub Portal has no single "everything that needs
-   attention" page the way /messages is on the staff side. */
-.pnav-bell-wrap{ position: relative; }
+/* Sub Portal notification bell — lives in the sidebar next to the company
+   name now (and in the mobile identity strip), not the top corner, plus
+   an actual dropdown panel since the Sub Portal has no single "everything
+   that needs attention" page the way /messages is on the staff side.
+   Styled for a light background (sidebar/strip), unlike the staff
+   AppShell's dark-header version. */
+.pnav-bell-wrap{ position: relative; flex-shrink: 0; }
+.pnav-bell-btn{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; border: none; background: transparent;
+  color: var(--ink-soft); cursor: pointer; flex-shrink: 0;
+}
+.pnav-bell-btn:hover{ background: var(--panel); color: var(--ink); }
+.pnav-bell-btn svg{ width: 17px; height: 17px; }
+.pnav-bell-dot{
+  position: absolute; top: 4px; right: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #a13f3f; border: 1.5px solid var(--card-bg);
+}
 .pnav-bell-panel{
   position: absolute;
   top: calc(100% + 8px);
@@ -1433,6 +1468,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   z-index: 1000;
   padding: 6px 0;
 }
+.pnav-bell-panel-left{ right: auto; left: 0; }
 .pnav-bell-panel-header{
   font-size: 11px;
   font-weight: 700;
@@ -1460,6 +1496,31 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 [data-theme="dark"] .pnav-bell-row-compliance .pnav-bell-row-label{ color: #e08a8a; }
 .pnav-bell-divider{ height: 1px; background: var(--panel-line); margin: 4px 0; }
 
+/* Certificate-of-insurance banner — spans the full width under the
+   topbar on every Sub Portal page (not just Overview) since it's a
+   compliance issue that matters no matter where the person navigates.
+   "urgent" (expired/missing) reads red; "expires soon" reads amber. */
+.pnav-coi-banner{
+  display: block;
+  padding: 10px 24px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  background: rgba(201,166,80,0.14);
+  color: #8a6d1e;
+  border-bottom: 1px solid rgba(201,166,80,0.3);
+}
+.pnav-coi-banner:hover{ background: rgba(201,166,80,0.22); }
+.pnav-coi-banner.urgent{
+  background: rgba(161,63,63,0.12);
+  color: #a13f3f;
+  border-bottom-color: rgba(161,63,63,0.28);
+}
+.pnav-coi-banner.urgent:hover{ background: rgba(161,63,63,0.2); }
+[data-theme="dark"] .pnav-coi-banner{ color: #d9b85c; }
+[data-theme="dark"] .pnav-coi-banner.urgent{ color: #e08a8a; }
+
 /* Sidebar (and the company block inside it) is hidden below 900px along
    with the rest of .shell-sidebar, so mobile gets this compact strip
    under the header instead of losing company context entirely. */
@@ -1469,7 +1530,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 @media (max-width: 899px){
   .pnav-mobile-identity-strip{
     display: flex;
-    align-items: baseline;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 10px 16px;
     background: var(--panel);

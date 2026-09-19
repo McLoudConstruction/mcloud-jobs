@@ -19,13 +19,48 @@ const NAV_ITEMS = [
   { href: '/sub-portal/settings', label: 'Settings' },
 ];
 
-function IdentityBlock({ company, role }) {
+// isMobile gates the bell here rather than relying on the sidebar's own
+// CSS display:none below 900px — that only hides it visually, and this
+// component (and the fetch/realtime-subscribe effects inside its bell)
+// stays mounted underneath. Skipping it outright avoids running the
+// same attention query and channel subscription twice at once, since
+// the mobile identity strip renders its own bell in parallel.
+function IdentityBlock({ company, role, isMobile }) {
   if (!company) return null;
   return (
     <div className="pnav-identity-block">
-      <div className="pnav-identity-name">{company.company_name}</div>
-      <div className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}</div>
+      <div className="pnav-identity-row">
+        <div>
+          <div className="pnav-identity-name">{company.company_name}</div>
+          <div className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager access' : 'Crew access — view only'}</div>
+        </div>
+        {!isMobile && <NotificationBell company={company} role={role} align="left" />}
+      </div>
     </div>
+  );
+}
+
+// Certificate of Insurance is the one compliance item that can quietly
+// block a company from being put on new work, so it gets its own banner
+// across the top of every page — not just a bell badge someone has to
+// think to click. Stays up (no dismiss) for as long as the condition is
+// true; it clears itself the moment a current COI is on file.
+function ComplianceBanner({ company, role }) {
+  if (!company || role !== 'admin') return null;
+  const coiDays = company.coi_expires_at ? Math.floor((new Date(company.coi_expires_at) - new Date()) / 86400000) : null;
+  if (company.coi_expires_at && coiDays >= 30) return null;
+
+  const expired = !company.coi_expires_at || coiDays < 0;
+  const message = !company.coi_expires_at
+    ? 'No Certificate of Insurance on file.'
+    : coiDays < 0
+      ? 'Your Certificate of Insurance has expired.'
+      : `Your Certificate of Insurance expires in ${coiDays} day${coiDays === 1 ? '' : 's'}.`;
+
+  return (
+    <a href="/sub-portal/settings" className={`pnav-coi-banner ${expired ? 'urgent' : ''}`}>
+      {message} Upload a current one to keep working with McLoud Construction. →
+    </a>
   );
 }
 
@@ -83,20 +118,24 @@ export default function SubPortalShell({ company, role, children }) {
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 96, width: 'auto' }} />
             : <span className="brand">McLoud <span>Subcontractor</span></span>}
         </div>
-        <div className="shell-topbar-actions">
-          <NotificationBell company={company} role={role} />
-        </div>
       </div>
 
-      {/* The sidebar (and the identity block inside it) is hidden below
-          900px along with the rest of shell-sidebar, so mobile gets its
-          own compact strip here instead of losing company context. */}
+      {/* The sidebar (and the identity block inside it, including the
+          notification bell) is hidden below 900px along with the rest of
+          shell-sidebar, so mobile gets its own compact strip here instead
+          of losing company context — and its own copy of the bell, since
+          that's otherwise only reachable from the desktop sidebar now. */}
       {isMobile && company && (
         <div className="pnav-mobile-identity-strip">
-          <span className="pnav-identity-name">{company.company_name}</span>
-          <span className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager' : 'Crew — view only'}</span>
+          <div>
+            <span className="pnav-identity-name">{company.company_name}</span>
+            <span className="pnav-identity-sub">{role === 'admin' ? 'Owner/Manager' : 'Crew — view only'}</span>
+          </div>
+          <NotificationBell company={company} role={role} align="right" />
         </div>
       )}
+
+      <ComplianceBanner company={company} role={role} />
 
       <div className="shell-body">
         <div
@@ -105,7 +144,7 @@ export default function SubPortalShell({ company, role, children }) {
         >
           <div className="pnav-sidebar-inner">
             <div>
-              <IdentityBlock company={company} role={role} />
+              <IdentityBlock company={company} role={role} isMobile={isMobile} />
               <div className="pnav-links">
                 {NAV_ITEMS.map(item => (
                   <a
@@ -179,7 +218,7 @@ function fmtProjectLabel(job) {
 // the destination. Compliance/COI items are kept visually distinct (their
 // own red-tinted row, separated by a divider) from the plain "don't
 // forget about this" reminders, per the redesign brief.
-function NotificationBell({ company, role }) {
+function NotificationBell({ company, role, align = 'right' }) {
   const [open, setOpen] = useState(false);
   const [needsSignature, setNeedsSignature] = useState([]);
   const [needsProposal, setNeedsProposal] = useState([]);
@@ -233,16 +272,16 @@ function NotificationBell({ company, role }) {
     <div className="pnav-bell-wrap" ref={panelRef}>
       <button
         type="button"
-        className="shell-topbar-icon-btn"
+        className="pnav-bell-btn"
         onClick={() => setOpen(o => !o)}
         aria-label="Needs your attention"
       >
         <BellIcon />
-        {attentionCount > 0 && <span className="shell-topbar-dot" />}
+        {attentionCount > 0 && <span className="pnav-bell-dot" />}
       </button>
 
       {open && (
-        <div className="pnav-bell-panel">
+        <div className={`pnav-bell-panel ${align === 'left' ? 'pnav-bell-panel-left' : ''}`}>
           <div className="pnav-bell-panel-header">Needs Your Attention</div>
 
           {attentionCount === 0 && (

@@ -9,11 +9,6 @@ import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
 
-function fmtDateTime(v) {
-  if (!v) return '';
-  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -122,18 +117,21 @@ export default function SubPortalDashboard() {
     scopeItems: scopeByJob[jobId] || [],
   }));
 
-  // Previews for the other sections — open ones first (needs a proposal,
-  // needs a signature, not yet invoiced), capped short since the full
-  // list is one click away on each section's own page.
+  // RFP preview — open ones first (needs a proposal), capped short since
+  // the full list is one click away on the RFPs page. Work Orders isn't
+  // previewed here at all — Active Projects above already surfaces every
+  // active work order (via its "N work orders →" row), so a second list
+  // of the same work orders was pure duplication. Invoices and Messages
+  // are "check when you need to" pages, not ones worth a full preview —
+  // they get a single quick-link line each instead, further down.
   const openRfps = rfpRecipients.filter(rr => !rr.responded_at);
   const rfpPreview = [...openRfps, ...rfpRecipients.filter(rr => rr.responded_at)].slice(0, 5);
-  const recentWorkOrders = workOrders.slice(0, 5);
-  const invoicePreview = workOrders.filter(wo => ['invoiced', 'paid'].includes(wo.status)).slice(0, 5);
-  const messagePreview = messages.slice(0, 4);
+  const invoiceAwaitingCount = workOrders.filter(wo => wo.status === 'invoiced').length;
+  const unreadMessageCount = messages.filter(m => m.sender === 'staff' && !m.read_at).length;
 
   return (
     <SubPortalShell company={company} role={role}>
-      <div className="container container-wide" style={{ paddingTop: 24 }}>
+      <div className="container container-narrow" style={{ paddingTop: 24 }}>
         {/* "Needs Your Attention" now lives in the header bell (every
             page, not just this one) rather than as a section here — see
             SubPortalShell's NotificationBell. */}
@@ -176,42 +174,25 @@ export default function SubPortalDashboard() {
           ))}
         </OverviewSection>
 
-        <OverviewSection title="Work Orders" href="/sub-portal/work-orders" empty="Nothing here yet.">
-          {recentWorkOrders.map(wo => (
-            <WorkOrderRow key={wo.id} wo={wo} job={jobsById[wo.job_id]} role={role} />
-          ))}
-        </OverviewSection>
-
-        <OverviewSection title="Invoices" href="/sub-portal/invoices" empty="Nothing invoiced yet.">
-          {invoicePreview.map(wo => {
-            const job = jobsById[wo.job_id];
-            return (
-              <Link key={wo.id} href={`/sub-portal/work-orders/${wo.id}`} className="overview-row" style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job ? subPortalJobHeading(job) : 'Job details unavailable'}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{wo.description}</div>
-                </div>
-                <span style={{ fontSize: 11.5, color: wo.status === 'paid' ? '#3a6b45' : 'var(--ink-soft)', fontWeight: 600 }}>
-                  {wo.status === 'paid' ? `Paid ${fmtDate(wo.paid_at)}` : 'Awaiting payment'}
-                </span>
-              </Link>
-            );
-          })}
-        </OverviewSection>
-
-        <OverviewSection title="Messages" href="/sub-portal/messages" empty="No messages yet.">
-          {messagePreview.map(m => (
-            <div key={m.id} className="overview-row" style={{ alignItems: 'flex-start' }}>
-              <div>
-                <span style={{ fontWeight: 700, fontSize: 12, color: m.sender === 'staff' ? 'var(--gold)' : 'var(--ink)' }}>
-                  {m.sender === 'staff' ? 'McLoud Construction' : 'You'}
-                </span>
-                <p style={{ fontSize: 13, lineHeight: 1.45, margin: '2px 0 0' }}>{m.message}</p>
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--ink-soft)', flexShrink: 0 }}>{fmtDateTime(m.created_at)}</span>
-            </div>
-          ))}
-        </OverviewSection>
+        {/* Invoices and Messages are "check when you need to" pages, not
+            ones that earn a full preview list — one quick-link line each,
+            with just enough to say whether anything's waiting. */}
+        <div className="dash-section" style={{ paddingTop: 20 }}>
+          <div className="overview-quicklinks">
+            <Link href="/sub-portal/invoices" className="overview-quicklink">
+              <span>Invoices</span>
+              <span className={`overview-quicklink-detail ${invoiceAwaitingCount > 0 ? 'attn' : ''}`}>
+                {invoiceAwaitingCount > 0 ? `${invoiceAwaitingCount} awaiting payment` : 'Up to date'} →
+              </span>
+            </Link>
+            <Link href="/sub-portal/messages" className="overview-quicklink">
+              <span>Messages</span>
+              <span className={`overview-quicklink-detail ${unreadMessageCount > 0 ? 'attn' : ''}`}>
+                {unreadMessageCount > 0 ? `${unreadMessageCount} unread` : 'No new messages'} →
+              </span>
+            </Link>
+          </div>
+        </div>
       </div>
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </SubPortalShell>
