@@ -79,6 +79,7 @@ export default function SubPortalCalendarPage() {
   const [phases, setPhases] = useState([]);
   const [events, setEvents] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
+  const [rfpJobs, setRfpJobs] = useState([]);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const today = useMemo(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }, []);
 
@@ -93,14 +94,19 @@ export default function SubPortalCalendarPage() {
   const { company, role, workOrders, jobsById, ready } = useSubPortalData(session);
 
   const load = useCallback(async (companyId) => {
-    const [{ data: phaseData }, { data: eventData }, { data: reqData }] = await Promise.all([
+    const [{ data: phaseData }, { data: eventData }, { data: reqData }, { data: rfpData }] = await Promise.all([
       supabase.from('sub_visible_phases').select('*'),
       supabase.from('schedule_events').select('*'),
       supabase.from('schedule_requests').select('*').eq('company_id', companyId).order('requested_date', { ascending: false }),
+      // Jobs visible only through an RFP (no work order yet) — pulled in
+      // so "Request Schedule Event" can offer a Meeting/Site Visit on a
+      // job a sub is only bidding on, not just ones they've already won.
+      supabase.from('sub_visible_rfps').select('job_id, job_number, estimate_number, customer_name, stage, project_address').eq('company_id', companyId),
     ]);
     if (phaseData) setPhases(phaseData);
     if (eventData) setEvents(eventData);
     if (reqData) setMyRequests(reqData);
+    if (rfpData) setRfpJobs(rfpData);
   }, []);
 
   useEffect(() => {
@@ -110,18 +116,29 @@ export default function SubPortalCalendarPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_events' }, () => load(company.id))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_requests', filter: `company_id=eq.${company.id}` }, () => load(company.id))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_phases' }, () => load(company.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfp_recipients', filter: `company_id=eq.${company.id}` }, () => load(company.id))
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [company, load]);
 
-  // Jobs the company can actually request a schedule event for — awarded
-  // (accepted-or-further) work orders only, same bar the calendar's own
-  // phase bars use, so "request an event" never offers a project they
-  // haven't been given anything on yet.
+  // Jobs the company can request a schedule event for. Awarded — accepted-
+  // or-further work orders, same bar the calendar's own phase bars use —
+  // is required for most event types. All-visible adds in jobs the
+  // company only knows about through an RFP (bidding, not yet won), for
+  // the event types (Meeting, Site Visit) that don't require an award.
   const awardedJobs = useMemo(() => {
     const ids = [...new Set(workOrders.filter(wo => AWARDED_STATUSES.includes(wo.status)).map(wo => wo.job_id))];
     return ids.map(id => jobsById[id]).filter(Boolean);
   }, [workOrders, jobsById]);
+
+  const allJobs = useMemo(() => {
+    const byId = { ...jobsById };
+    rfpJobs.forEach(r => {
+      if (!r.job_id || byId[r.job_id]) return;
+      byId[r.job_id] = { id: r.job_id, job_number: r.job_number, estimate_number: r.estimate_number, customer_name: r.customer_name, stage: r.stage, project_address: r.project_address };
+    });
+    return Object.values(byId);
+  }, [jobsById, rfpJobs]);
 
   const phaseBars = useMemo(() => phases.map(p => ({
     id: p.id, job_id: p.job_id, label: p.label, trade: p.trade, phase_key: p.phase_key,
@@ -333,7 +350,8 @@ export default function SubPortalCalendarPage() {
         onClose={() => setRequestModalOpen(false)}
         onCreated={() => load(company.id)}
         companyId={company.id}
-        jobs={awardedJobs}
+        awardedJobs={awardedJobs}
+        allJobs={allJobs}
         defaultDate={toISODate(cursorDate)}
       />
 
