@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
 import SubPortalShell from '../../../components/SubPortalShell';
-import { RFP_RECIPIENT_STATUS_LABELS, projectLabel } from '../../../lib/constants';
+import { RFP_RECIPIENT_STATUS_LABELS, subPortalJobHeading } from '../../../lib/constants';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -31,7 +31,7 @@ export default function SubPortalRfpsPage() {
   const load = useCallback(async (companyId) => {
     const { data } = await supabase
       .from('rfp_recipients')
-      .select('*, rfps(id, title, description, job_id, jobs(job_number, estimate_number, stage, project_address))')
+      .select('*, rfps(id, title, description, job_id, jobs(job_number, estimate_number, customer_name, stage, project_address))')
       .eq('company_id', companyId)
       .order('sent_at', { ascending: false });
     if (data) setRecipients(data);
@@ -59,11 +59,10 @@ export default function SubPortalRfpsPage() {
           </div>
           {recipients.length === 0 && <div className="empty-state">Nothing here yet.</div>}
           {recipients.map(rr => {
-            // Falls back to Estimate #/Job # when the project has no
-            // address yet — same convention the staff side already uses,
-            // so this never renders a dangling "· Sent …" with nothing
-            // in front of it.
-            const jobMeta = `${projectLabel(rr.rfps?.jobs)}${rr.rfps?.jobs?.project_address || ''}`.trim();
+            // "Smith — Job #204 · 123 Main St" — same customer/job#
+            // heading the rest of the sub portal uses, so an RFP reads
+            // as the same job a sub sees on their dashboard.
+            const jobMeta = [rr.rfps?.jobs ? subPortalJobHeading(rr.rfps.jobs) : '', rr.rfps?.jobs?.project_address].filter(Boolean).join(' · ');
             return (
               <Link key={rr.id} href={`/sub-portal/rfps/${rr.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
                 <div>

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
-import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, formattedProjectNumber, subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
@@ -14,14 +14,12 @@ function fmtDate(v) {
   return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-const TABS = ['Active Projects', 'Scope of Work'];
 const ACTIVE_STATUSES = ['draft', 'issued', 'accepted', 'completed'];
 
 export default function SubPortalDashboard() {
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('Active Projects');
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
 
   useEffect(() => {
@@ -74,12 +72,6 @@ export default function SubPortalDashboard() {
     .sort((a, b) => new Date(a.scheduled_start_date) - new Date(b.scheduled_start_date));
 
   const activeJobIds = [...new Set(workOrders.filter(wo => ACTIVE_STATUSES.includes(wo.status)).map(wo => wo.job_id))];
-  const activeProjects = activeJobIds.map(jobId => ({
-    job: jobsById[jobId],
-    jobId,
-    count: workOrders.filter(wo => wo.job_id === jobId && ACTIVE_STATUSES.includes(wo.status)).length,
-  }));
-
   const scopeByJob = {};
   workOrders.filter(wo => ACTIVE_STATUSES.includes(wo.status)).forEach(wo => {
     const items = Array.isArray(wo.included_scope_items) ? wo.included_scope_items : [];
@@ -87,6 +79,13 @@ export default function SubPortalDashboard() {
     if (!scopeByJob[wo.job_id]) scopeByJob[wo.job_id] = [];
     scopeByJob[wo.job_id].push(...items);
   });
+
+  const activeProjects = activeJobIds.map(jobId => ({
+    job: jobsById[jobId],
+    jobId,
+    count: workOrders.filter(wo => wo.job_id === jobId && ACTIVE_STATUSES.includes(wo.status)).length,
+    scopeItems: scopeByJob[jobId] || [],
+  }));
 
   return (
     <SubPortalShell company={company} role={role}>
@@ -102,8 +101,8 @@ export default function SubPortalDashboard() {
                 <Link key={job.id} href={`/sub-portal/projects/${job.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job.project_address || formattedProjectNumber(job)}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job.job_type}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{subPortalJobHeading(job)}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job.project_address || job.job_type}</div>
                     </div>
                     <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--gold)' }}>Starts {fmtDate(job.scheduled_start_date)}</span>
                   </div>
@@ -113,55 +112,64 @@ export default function SubPortalDashboard() {
           </div>
         )}
 
-        <div className="card" style={{ padding: '4px 24px' }}>
-          <div className="dash-section" style={{ paddingTop: 18 }}>
-            <div className="sub-portal-tabs" style={{ margin: '0 0 16px' }}>
-              {TABS.map(t => (
-                <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
-              ))}
-            </div>
-
-            {tab === 'Active Projects' && (
-              <>
-                {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
-                {activeProjects.map(({ job, jobId, count }) => (
-                  <Link key={jobId} href={`/sub-portal/projects/${jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job?.project_address || (job ? formattedProjectNumber(job) : 'Job details unavailable')}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job?.job_type} · Est. completion {fmtDate(job?.expected_close_date)}</div>
-                      </div>
-                      <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{count} work order{count === 1 ? '' : 's'} →</span>
-                    </div>
-                  </Link>
-                ))}
-              </>
-            )}
-
-            {tab === 'Scope of Work' && (
-              <>
-                {Object.keys(scopeByJob).length === 0 && <div className="empty-state">Nothing active right now.</div>}
-                {Object.entries(scopeByJob).map(([jobId, items]) => (
-                  <div key={jobId} style={{ marginBottom: 18 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
-                      {jobsById[jobId]?.project_address || (jobsById[jobId] ? formattedProjectNumber(jobsById[jobId]) : '')}
-                    </div>
-                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                      {items.map((item, i) => (
-                        <li key={i} style={{ fontSize: 13, lineHeight: 1.6, paddingLeft: 18, position: 'relative', marginBottom: 4 }}>
-                          <span style={{ position: 'absolute', left: 0, color: 'var(--gold)' }}>—</span>{item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </>
-            )}
+        <div className="dash-section" style={{ paddingTop: upcoming.length > 0 ? 24 : 0 }}>
+          <h3 style={{ color: 'var(--gold)', fontSize: '12.5px', letterSpacing: '0.08em', textTransform: 'uppercase', borderLeft: '3px solid var(--accent)', paddingLeft: 10, marginBottom: 16 }}>Active Projects</h3>
+          {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
+          <div className="subjob-card-list">
+            {activeProjects.map(({ job, jobId, count, scopeItems }) => (
+              <JobCard key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
+            ))}
           </div>
         </div>
       </div>
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </SubPortalShell>
+  );
+}
+
+// One job, one card: heading is "Lastname — Job #204" (subs know a
+// customer by name, not by address), the card opens the full job detail
+// page, and Scope of Work nests inside the card as an expand/collapse
+// section instead of living on its own tab — expanding it is a separate
+// click target (stopPropagation) so it doesn't also navigate away.
+function JobCard({ job, jobId, count, scopeItems, router }) {
+  const [scopeOpen, setScopeOpen] = useState(false);
+
+  function openJob() {
+    router.push(`/sub-portal/projects/${jobId}`);
+  }
+  function toggleScope(e) {
+    e.stopPropagation();
+    setScopeOpen(v => !v);
+  }
+
+  return (
+    <div className="subjob-card">
+      <div className="subjob-card-main" onClick={openJob} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') openJob(); }}>
+        <div className="subjob-card-text">
+          <div className="subjob-card-title">{subPortalJobHeading(job)}</div>
+          <div className="subjob-card-sub">
+            {[job?.project_address, job?.job_type].filter(Boolean).join(' · ')}
+            {job?.expected_close_date && ` · Est. completion ${fmtDate(job.expected_close_date)}`}
+          </div>
+        </div>
+        <span className="subjob-card-count">{count} work order{count === 1 ? '' : 's'} →</span>
+      </div>
+
+      {scopeItems.length > 0 && (
+        <div className="subjob-card-scope">
+          <button type="button" className="subjob-scope-toggle" onClick={toggleScope} aria-expanded={scopeOpen}>
+            <span className={`subjob-scope-chevron${scopeOpen ? ' open' : ''}`}>›</span>
+            Scope of Work ({scopeItems.length})
+          </button>
+          {scopeOpen && (
+            <ul className="subjob-scope-list">
+              {scopeItems.map((item, i) => <li key={i}>{item}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

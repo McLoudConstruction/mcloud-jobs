@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import SubPortalShell from '../../../../components/SubPortalShell';
 import RfpMessageThread from '../../../../components/RfpMessageThread';
-import { RFP_RECIPIENT_STATUS_LABELS, projectLabel } from '../../../../lib/constants';
+import PhotoLightbox from '../../../../components/PhotoLightbox';
+import { RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -20,6 +21,7 @@ export default function SubPortalRfpDetailPage() {
   const [role, setRole] = useState(null);
   const [recipient, setRecipient] = useState(null);
   const [photoUrls, setPhotoUrls] = useState([]);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Structured proposal fields — replaces the old single free-text box.
   // "Upload Proposal" is the actual bid document; amount/duration/
@@ -45,7 +47,7 @@ export default function SubPortalRfpDetailPage() {
   const load = useCallback(async (email) => {
     const { data: rrData } = await supabase
       .from('rfp_recipients')
-      .select('*, companies(id, company_name, contact_email), rfps(*, jobs(job_number, estimate_number, stage, project_address))')
+      .select('*, companies(id, company_name, contact_email), rfps(*, jobs(job_number, estimate_number, customer_name, stage, project_address))')
       .eq('id', recipientId)
       .single();
     if (!rrData) return;
@@ -134,167 +136,197 @@ export default function SubPortalRfpDetailPage() {
   if (loading || !session || !recipient) return null;
 
   const rfp = recipient.rfps;
+  const job = rfp?.jobs;
   const resolved = recipient.status === 'awarded' || recipient.status === 'not_awarded';
+  const num = job ? projectNumber(job) : '—';
+  const numLabel = job ? projectNumberLabel(job) : 'Job';
 
   return (
     <SubPortalShell company={recipient.companies} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between', display: 'flex' }}>
+        <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
           <Link href="/sub-portal/rfps" className="btn btn-sm">← Back</Link>
-          <span className={`badge badge-${recipient.status}`}>{RFP_RECIPIENT_STATUS_LABELS[recipient.status]}</span>
         </div>
 
-        {/* One card, hairline-divided dash-sections inside — matches
-            the GC-side "one structured panel" pattern instead of a
-            separate .card per subsection. */}
-        <div className="card" style={{ padding: '4px 24px' }}>
-          <div className="dash-section" style={{ paddingTop: 18 }}>
-            <h3>{rfp?.title}</h3>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
-              {projectLabel(rfp?.jobs)}{rfp?.jobs?.project_address}
+        {/* Header bar, not another stacked mobile-style card — the job
+            a sub needs to identify at a glance (who, what number,
+            where) sits up top instead of buried in a description line. */}
+        <div className="rfp-detail-header">
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ margin: '0 0 10px', color: 'var(--heading)', fontSize: 19 }}>{rfp?.title}</h2>
+            <div className="portal-info-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+              <div>
+                <div className="portal-info-label">Customer</div>
+                <div className="portal-info-value">{job?.customer_name || '—'}</div>
+              </div>
+              <div>
+                <div className="portal-info-label">{numLabel} #</div>
+                <div className="portal-info-value">{num}</div>
+              </div>
+              <div>
+                <div className="portal-info-label">Address</div>
+                <div className="portal-info-value">{job?.project_address || '—'}</div>
+              </div>
             </div>
-            {rfp?.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
           </div>
+          <span className={`badge badge-${recipient.status}`} style={{ flexShrink: 0 }}>{RFP_RECIPIENT_STATUS_LABELS[recipient.status]}</span>
+        </div>
 
-          {photoUrls.length > 0 && (
-            <div className="dash-section">
-              <h3>Photos</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
-                {photoUrls.map((url, i) => (
-                  <img key={i} src={url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 4 }} />
-                ))}
+        <div className="rfp-detail-layout">
+          <div className="rfp-detail-main">
+            {rfp?.description && (
+              <div className="rfp-detail-panel">
+                <h3>Description</h3>
+                <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: 0 }}>{rfp.description}</p>
               </div>
-            </div>
-          )}
+            )}
 
-          {recipient.status === 'not_awarded' && (
-            <div className="dash-section">
-              <h3>Not Awarded</h3>
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request is closed and wasn't awarded to your company. Your submitted proposal is kept below for your records.</p>
-            </div>
-          )}
-          {recipient.status === 'awarded' && (
-            <div className="dash-section">
-              <h3>Awarded</h3>
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>This request was awarded to your company. Look for the Work Order in Work Orders once it's issued.</p>
-            </div>
-          )}
-
-          {role === 'admin' && (
-            <div className="dash-section">
-              <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-                Upload your proposal document, then fill in the details below.
-              </div>
-
-              <label>Upload Proposal</label>
-              {files.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 10px' }}>
-                  {files.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button className="btn btn-sm" type="button" onClick={() => viewFile(f)}>{f.name}</button>
-                      {!resolved && <button className="btn btn-sm btn-danger" type="button" onClick={() => removeFile(i)}>×</button>}
-                    </div>
+            {photoUrls.length > 0 && (
+              <div className="rfp-detail-panel">
+                <h3>Photos</h3>
+                <div className="photo-thumb-grid">
+                  {photoUrls.map((url, i) => (
+                    <button key={i} type="button" className="photo-thumb-btn" onClick={() => setLightboxIndex(i)} aria-label={`Expand photo ${i + 1}`}>
+                      <img src={url} alt="" />
+                    </button>
                   ))}
                 </div>
-              )}
-              {!resolved && (
-                <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginBottom: 16 }}>
-                  {uploading ? 'Uploading…' : files.length > 0 ? 'Upload Another File' : 'Upload Proposal'}
-                  <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
-                </label>
-              )}
-
-              <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: files.length > 0 ? 0 : 16 }}>
-                <div>
-                  <label htmlFor="rfpAmount">Bid Amount</label>
-                  <input
-                    id="rfpAmount"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={proposalAmount}
-                    onChange={e => setProposalAmount(e.target.value)}
-                    placeholder="$"
-                    disabled={resolved}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="rfpDuration">Expected Project Duration</label>
-                  <input
-                    id="rfpDuration"
-                    type="text"
-                    value={proposalDuration}
-                    onChange={e => setProposalDuration(e.target.value)}
-                    placeholder="e.g. 3 weeks"
-                    disabled={resolved}
-                  />
-                </div>
               </div>
+            )}
 
-              <label htmlFor="rfpExclusions" style={{ marginTop: 14 }}>Exclusions / Inclusions</label>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>
-                Anything out of the norm you're including or leaving out of this bid.
+            {recipient.status === 'not_awarded' && (
+              <div className="rfp-detail-panel">
+                <h3>Not Awarded</h3>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>This request is closed and wasn't awarded to your company. Your submitted proposal is kept below for your records.</p>
               </div>
-              <textarea
-                id="rfpExclusions"
-                value={proposalExclusions}
-                onChange={e => setProposalExclusions(e.target.value)}
-                rows={3}
-                placeholder="e.g. Excludes permit fees. Includes dumpster rental."
-                disabled={resolved}
+            )}
+            {recipient.status === 'awarded' && (
+              <div className="rfp-detail-panel">
+                <h3>Awarded</h3>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>This request was awarded to your company. Look for the Work Order in Work Orders once it's issued.</p>
+              </div>
+            )}
+
+            {/* Coded to this specific request — a question asked here shows
+                up tagged to this RFP on the staff side, not just dropped
+                into the general company thread. */}
+            <div className="rfp-detail-panel">
+              <h3>Messages</h3>
+              <RfpMessageThread
+                recipientId={recipientId}
+                companyId={recipient.company_id}
+                jobId={rfp?.job_id}
+                viewer="sub"
               />
+            </div>
+          </div>
 
-              <label htmlFor="rfpNotes" style={{ marginTop: 14 }}>Additional Notes (optional)</label>
-              <textarea
-                id="rfpNotes"
-                value={proposalNotes}
-                onChange={e => setProposalNotes(e.target.value)}
-                rows={3}
-                placeholder="Anything else they should know…"
-                disabled={resolved}
-              />
+          {role === 'admin' && (
+            <div className="rfp-detail-sidebar">
+              <div className="rfp-detail-panel">
+                <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                  Upload your proposal document, then fill in the details below.
+                </div>
 
-              {error && <div className="error-text" style={{ marginTop: 10 }}>{error}</div>}
-
-              {!resolved && (
-                <>
-                  <div className="section-actions">
-                    <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
-                      {saving ? 'Submitting…' : recipient.responded_at ? 'Update Proposal' : 'Submit Proposal'}
-                    </button>
+                <label>Upload Proposal</label>
+                {files.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 10px' }}>
+                    {files.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <button className="btn btn-sm" type="button" onClick={() => viewFile(f)}>{f.name}</button>
+                        {!resolved && <button className="btn btn-sm btn-danger" type="button" onClick={() => removeFile(i)}>×</button>}
+                      </div>
+                    ))}
                   </div>
-                  {recipient.responded_at && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
-                      Last submitted {fmtDateTime(recipient.responded_at)} — you can update this until the request is awarded or closed.
-                    </div>
-                  )}
-                </>
-              )}
+                )}
+                {!resolved && (
+                  <label className="btn btn-sm" style={{ display: 'inline-block', cursor: 'pointer', marginBottom: 16 }}>
+                    {uploading ? 'Uploading…' : files.length > 0 ? 'Upload Another File' : 'Upload Proposal'}
+                    <input type="file" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+                  </label>
+                )}
 
-              {resolved && (proposalAmount !== '' || proposalDuration || proposalExclusions || proposalNotes) && (
-                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
-                  Submitted {fmtDateTime(recipient.responded_at)}
+                <label htmlFor="rfpAmount">Bid Amount</label>
+                <input
+                  id="rfpAmount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={proposalAmount}
+                  onChange={e => setProposalAmount(e.target.value)}
+                  placeholder="$"
+                  disabled={resolved}
+                />
+
+                <label htmlFor="rfpDuration">Expected Project Duration</label>
+                <input
+                  id="rfpDuration"
+                  type="text"
+                  value={proposalDuration}
+                  onChange={e => setProposalDuration(e.target.value)}
+                  placeholder="e.g. 3 weeks"
+                  disabled={resolved}
+                />
+
+                <label htmlFor="rfpExclusions">Exclusions / Inclusions</label>
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>
+                  Anything out of the norm you're including or leaving out of this bid.
                 </div>
-              )}
+                <textarea
+                  id="rfpExclusions"
+                  value={proposalExclusions}
+                  onChange={e => setProposalExclusions(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Excludes permit fees. Includes dumpster rental."
+                  disabled={resolved}
+                />
+
+                <label htmlFor="rfpNotes">Additional Notes (optional)</label>
+                <textarea
+                  id="rfpNotes"
+                  value={proposalNotes}
+                  onChange={e => setProposalNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Anything else they should know…"
+                  disabled={resolved}
+                />
+
+                {error && <div className="error-text" style={{ marginTop: 10 }}>{error}</div>}
+
+                {!resolved && (
+                  <>
+                    <div className="section-actions">
+                      <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
+                        {saving ? 'Submitting…' : recipient.responded_at ? 'Update Proposal' : 'Submit Proposal'}
+                      </button>
+                    </div>
+                    {recipient.responded_at && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                        Last submitted {fmtDateTime(recipient.responded_at)} — you can update this until the request is awarded or closed.
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {resolved && (proposalAmount !== '' || proposalDuration || proposalExclusions || proposalNotes) && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' }}>
+                    Submitted {fmtDateTime(recipient.responded_at)}
+                  </div>
+                )}
+              </div>
             </div>
           )}
-
-          {/* Coded to this specific request — a question asked here shows
-              up tagged to this RFP on the staff side, not just dropped
-              into the general company thread. */}
-          <div className="dash-section">
-            <h3>Messages</h3>
-            <RfpMessageThread
-              recipientId={recipientId}
-              companyId={recipient.company_id}
-              jobId={rfp?.job_id}
-              viewer="sub"
-            />
-          </div>
         </div>
       </div>
+
+      <PhotoLightbox
+        photos={photoUrls}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={setLightboxIndex}
+      />
     </SubPortalShell>
   );
 }

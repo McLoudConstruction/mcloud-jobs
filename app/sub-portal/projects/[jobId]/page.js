@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
-import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS } from '../../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS, subPortalJobHeading } from '../../../../lib/constants';
 import SubPortalShell from '../../../../components/SubPortalShell';
 
 function fmtMoney(v) {
@@ -64,7 +64,12 @@ export default function SubPortalProjectPage() {
             two separate boxes with a gap between them. */}
         <div className="card" style={{ padding: '4px 24px' }}>
           <div className="dash-section" style={{ paddingTop: 18 }}>
-            <h3>{job.project_address || `Job #${job.job_number}`}</h3>
+            <h3>{subPortalJobHeading(job)}</h3>
+            {(job.customer_name || job.project_address) && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: -8, marginBottom: 18 }}>
+                {[job.customer_name, job.project_address].filter(Boolean).join(' · ')}
+              </div>
+            )}
             <div className="portal-info-grid">
               <div>
                 <div className="portal-info-label">Job Type</div>
