@@ -105,7 +105,7 @@ export default function SubScheduleRequestModal({ open, onClose, onCreated, comp
           </div>
           <div>
             <label>Time (optional)</label>
-            <input type="time" value={eventTime} onChange={e => setEventTime(e.target.value)} />
+            <input type="time" step={900} value={eventTime} onChange={e => setEventTime(e.target.value)} />
           </div>
         </div>
 

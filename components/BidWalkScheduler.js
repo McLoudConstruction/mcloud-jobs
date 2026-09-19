@@ -4,10 +4,10 @@ import PopupModal from './PopupModal';
 
 const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-// 5-minute increments rather than Apple's every-minute wheel — a bid walk
-// doesn't need minute-level precision, and it keeps the wheel short enough
-// to reach any value in a swipe or two.
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+// 15-minute increments rather than Apple's every-minute wheel — a bid
+// walk doesn't need minute-level precision, and it keeps the wheel short
+// enough to reach any value in a swipe or two.
+const MINUTES = [0, 15, 30, 45];
 const MERIDIEMS = ['AM', 'PM'];
 
 const ITEM_HEIGHT = 40;

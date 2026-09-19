@@ -172,7 +172,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
           </div>
           <div>
             <label>Time</label>
-            <input type="time" value={eventTime} onChange={e => setEventTime(e.target.value)} />
+            <input type="time" step={900} value={eventTime} onChange={e => setEventTime(e.target.value)} />
           </div>
         </div>
 
