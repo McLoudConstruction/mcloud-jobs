@@ -7,6 +7,12 @@ import { contractPathFor } from '../../../lib/constants';
 import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 
+// Material selections used to surface here too (a "Needs Your Attention"
+// block), but now that Selections is its own persistent nav tab — see
+// /customerportal/selections — showing it in both places just duplicated
+// the same open item. Documents stays focused on Estimate/Contract,
+// Change Orders, and Progress Updates.
+
 function fmtDate(v) {
   if (!v) return '—';
   const d = new Date((v || '').length === 10 ? v + 'T00:00:00' : v);
@@ -17,7 +23,6 @@ export default function CustomerDocumentsPage() {
   const { session, loading } = usePortalAuth();
   const { jobs, selectedJobId, setSelectedJobId, job } = useCustomerPortalJobs(session);
   const [updates, setUpdates] = useState([]);
-  const [selections, setSelections] = useState([]);
   const [changeOrders, setChangeOrders] = useState([]);
 
   useEffect(() => {
@@ -26,16 +31,6 @@ export default function CustomerDocumentsPage() {
     load();
     const channel = supabase.channel(`portal-doc-updates-${selectedJobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${selectedJobId}` }, load)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [selectedJobId]);
-
-  useEffect(() => {
-    if (!selectedJobId) return;
-    const load = () => supabase.from('material_selections').select('*').eq('job_id', selectedJobId).not('sent_at', 'is', null).order('created_at', { ascending: false }).then(({ data }) => { if (data) setSelections(data); });
-    load();
-    const channel = supabase.channel(`portal-doc-selections-${selectedJobId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `job_id=eq.${selectedJobId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [selectedJobId]);
@@ -52,11 +47,6 @@ export default function CustomerDocumentsPage() {
 
   if (loading || !session) return null;
 
-  // Once a customer has made their choice, the selection sheet has done its
-  // job — showing it here again as an open item would be confusing, so only
-  // ones still awaiting a decision stay visible.
-  const pendingSelections = selections.filter(s => s.status !== 'approved');
-
   return (
     <CustomerPortalShell customerName={job?.customer_name}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
@@ -64,20 +54,7 @@ export default function CustomerDocumentsPage() {
 
         {job && (
           <>
-            {pendingSelections.length > 0 && (
-              <div className="dash-section" style={{ paddingTop: 0 }}>
-                <h3 className="dash-section-heading-rust">Needs Your Attention</h3>
-                <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
-                  {pendingSelections.map(s => (
-                    <a key={s.id} href={`/jobs/${job.id}/material-selections/${s.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                      {s.title} — Choose Now ↗
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="dash-section" style={{ paddingTop: pendingSelections.length > 0 ? undefined : 0 }}>
+            <div className="dash-section" style={{ paddingTop: 0 }}>
               <h3>Estimate &amp; Contract</h3>
               <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
                 {job.proposal_sent_at && (
@@ -100,15 +77,23 @@ export default function CustomerDocumentsPage() {
             {changeOrders.length > 0 && (
               <div className="dash-section">
                 <h3>Change Orders</h3>
-                {changeOrders.map(co => (
-                  <div className="update-entry" key={co.id}>
-                    <div className="update-date">{fmtDate(co.co_date)}</div>
-                    <p style={{ margin: 0 }}>{co.description}</p>
-                    <div className="section-actions">
-                      <a href={`/jobs/${job.id}/change-orders/${co.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Change Order ↗</a>
+                {changeOrders.map(co => {
+                  const signed = !!(co.co_signatures || {}).owner;
+                  const declined = !!co.declined_at;
+                  return (
+                    <div className="update-entry" key={co.id}>
+                      <div className="update-date">
+                        {fmtDate(co.co_date)}
+                        {signed && <span style={{ color: 'var(--money)', fontWeight: 600 }}> · Signed</span>}
+                        {declined && <span style={{ color: 'var(--rust)', fontWeight: 600 }}> · Declined</span>}
+                      </div>
+                      <p style={{ margin: 0 }}>{co.description}</p>
+                      <div className="section-actions">
+                        <a href={`/jobs/${job.id}/change-orders/${co.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View Change Order ↗</a>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

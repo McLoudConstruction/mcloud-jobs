@@ -8,7 +8,7 @@ import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
 import PortalFeed from '../../../components/PortalFeed';
-import PortalScheduleCard from '../../../components/PortalScheduleCard';
+import PortalFieldProgress from '../../../components/PortalFieldProgress';
 import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtDate(v) {
@@ -92,7 +92,7 @@ export default function CustomerHomePage() {
               )}
             </div>
 
-            <PortalScheduleCard jobId={job.id} />
+            <PortalFieldProgress jobId={job.id} />
 
             <PortalFeed job={job} />
           </>

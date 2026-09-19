@@ -37,6 +37,10 @@ export default function ChangeOrderDocumentPage() {
   const [justSent, setJustSent] = useState(false); // locks the Send button to "Sent" for this page visit
   const [signing, setSigning] = useState(false);
   const [signFlash, setSignFlash] = useState('');
+  const [declining, setDeclining] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [declineError, setDeclineError] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: jobData }, { data: coData }] = await Promise.all([
@@ -93,9 +97,21 @@ export default function ChangeOrderDocumentPage() {
     }
   }
 
+  async function submitDecline() {
+    setDeclining(true);
+    setDeclineError('');
+    const { error } = await supabase.rpc('decline_change_order', { target_co_id: changeOrderId, reason_in: declineReason.trim() || null });
+    setDeclining(false);
+    if (error) { setDeclineError(error.message); return; }
+    setShowDeclineForm(false);
+    load();
+  }
+
   if (loading || !session || !job || !co) return null;
 
   const recipientEmail = job.billing_email || job.customer_email || '';
+  const isSigned = !!(co.co_signatures || {}).owner;
+  const isDeclined = !!co.declined_at;
 
   return (
     <div>
@@ -149,6 +165,13 @@ export default function ChangeOrderDocumentPage() {
             <div className="section">
               <h3>Signatures</h3>
               {signFlash && <div style={{ fontSize: 11.5, color: '#3a6b45', marginBottom: 8 }}>{signFlash}</div>}
+              {isDeclined && (
+                <div style={{ background: '#fbeae7', border: '1px solid #e3b5ab', borderRadius: 6, padding: '12px 16px', marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#a13f3f' }}>Declined by customer</div>
+                  {co.decline_reason && <p style={{ fontSize: 12.5, margin: '4px 0 0', color: '#6b6350' }}>{co.decline_reason}</p>}
+                  <div style={{ fontSize: 11, color: '#6b6350', marginTop: 4 }}>{fmtDate((co.declined_at || '').slice(0, 10))}</div>
+                </div>
+              )}
               <div className="sig-block">
                 <SignaturePad
                   label="Contractor"
@@ -159,16 +182,43 @@ export default function ChangeOrderDocumentPage() {
                   defaultTitle="Owner, McLoud Construction"
                   requireName
                 />
-                <SignaturePad
-                  label="Owner"
-                  saved={(co.co_signatures || {}).owner}
-                  onSave={(payload) => saveSignature('owner', payload)}
-                  saving={signing}
-                  defaultName={job.customer_contact || ''}
-                  defaultTitle=""
-                  note="Customer signs here (touch or mouse)"
-                />
+                {!isDeclined && (
+                  <SignaturePad
+                    label="Owner"
+                    saved={(co.co_signatures || {}).owner}
+                    onSave={(payload) => saveSignature('owner', payload)}
+                    saving={signing}
+                    defaultName={job.customer_contact || ''}
+                    defaultTitle=""
+                    note="Customer signs here (touch or mouse)"
+                  />
+                )}
               </div>
+
+              {/* Decline is customer-only, and only while it's still an
+                  open decision — once signed, declining no longer makes
+                  sense, and it's already off the table once declined. */}
+              {!isAdmin && !isSigned && !isDeclined && (
+                <div className="no-print" style={{ marginTop: 16 }}>
+                  {!showDeclineForm ? (
+                    <button type="button" className="btn btn-sm" onClick={() => setShowDeclineForm(true)}>
+                      Decline this change order
+                    </button>
+                  ) : (
+                    <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600 }}>Let us know why (optional)</label>
+                      <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} rows={3} placeholder="Anything that would help us revise this…" />
+                      {declineError && <div className="error-text" style={{ marginTop: 6 }}>{declineError}</div>}
+                      <div className="section-actions">
+                        <button type="button" className="btn btn-sm btn-danger" onClick={submitDecline} disabled={declining}>
+                          {declining ? 'Sending…' : 'Confirm decline'}
+                        </button>
+                        <button type="button" className="btn btn-sm" onClick={() => { setShowDeclineForm(false); setDeclineError(''); }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="doc-footer">

@@ -84,13 +84,15 @@ export default function PortalFeed({ job }) {
   }
   changeOrders.forEach(co => {
     const signed = !!(co.co_signatures && co.co_signatures.owner);
+    const declined = !!co.declined_at;
+    const statusSuffix = signed ? ' (signed)' : declined ? ' (declined)' : '';
     entries.push({
       id: `co-${co.id}`,
       at: co.sent_at,
-      label: `Change order — ${fmtDate(co.co_date)}`,
+      label: `Change order — ${fmtDate(co.co_date)}${statusSuffix}`,
       sub: co.description,
       href: `/jobs/${job.id}/change-orders/${co.id}`,
-      isNew: !signed && !co.viewed_at,
+      isNew: !signed && !declined && !co.viewed_at,
     });
   });
   updates.forEach(u => {

@@ -10,7 +10,9 @@ import { SignOutIcon } from './icons';
 // (shell-sidebar-inner/shell-nav-link), which stays untouched.
 const NAV_ITEMS = [
   { href: '/customerportal/projects', label: 'Home' },
+  { href: '/customerportal/schedule', label: 'Schedule' },
   { href: '/customerportal/documents', label: 'Documents' },
+  { href: '/customerportal/selections', label: 'Selections' },
   { href: '/customerportal/invoices', label: 'Invoices' },
   { href: '/customerportal/inbox', label: 'Inbox' },
 ];
