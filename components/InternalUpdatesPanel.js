@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { compressImage } from '../lib/imageCompress';
 import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
@@ -107,6 +107,26 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     return () => supabase.removeChannel(channel);
   }, [jobId, loadChecklist, loadUpdates]);
 
+  // Don't rely solely on the realtime subscription above to pick up
+  // photos as they finish syncing — job_photos' postgres_changes events
+  // aren't reliably delivered (same known gap PhotoGallery.js works
+  // around for its own delete button). Posting an update with several
+  // photos queues them individually; each syncs on its own network
+  // round trip, so the note (and maybe the first photo) can land, fire
+  // one realtime event, and the feed never gets nudged to re-fetch again
+  // as the remaining photos finish afterward — they're in the database,
+  // just never pulled into this feed. Re-fetching directly whenever the
+  // offline queue for this job drains to zero doesn't depend on
+  // realtime at all, so every photo that actually synced ends up
+  // visible once its work is done.
+  const prevPendingRef = useRef(0);
+  useEffect(() => {
+    if (prevPendingRef.current > 0 && pendingCount === 0) {
+      loadUpdates();
+    }
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount, loadUpdates]);
+
   // Pending (not-yet-synced) entries, built from the same offline queue
   // the sync badge already reads — so an internal update posted while
   // offline shows up in this feed immediately, note and photo together,
@@ -185,6 +205,19 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       if (failedPhotos.length > 0) {
         setPostError(`Update posted, but ${failedPhotos.length} photo${failedPhotos.length === 1 ? '' : 's'} couldn't be attached: ${failedPhotos[0]}`);
       }
+
+      // Wait for every write just queued (the note, then each photo) to
+      // have its sync attempt, then pull the feed fresh — rather than
+      // trusting the job_photos realtime subscription above to notice
+      // each photo as it lands. That subscription can miss events (see
+      // the note on the effect below), so without this, a five-photo
+      // update could show only whichever photo happened to trigger the
+      // one realtime event that got through, even though all five made
+      // it into the database. sync() awaits the whole flush chain
+      // (every queuePhoto() call above chained its own flush onto it),
+      // so this doesn't return until all five have actually been tried.
+      await sync();
+      await loadUpdates();
 
       setNoteText('');
       setWorkCompleted('');
