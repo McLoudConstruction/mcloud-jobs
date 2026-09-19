@@ -10,7 +10,7 @@ import { SignOutIcon, BellIcon } from './icons';
 // CustomerPortalShell, deliberately different from AppShell's own 84px
 // icon rail (shell-sidebar-inner/shell-nav-link), which stays untouched.
 const NAV_ITEMS = [
-  { href: '/sub-portal/dashboard', label: 'Dashboard' },
+  { href: '/sub-portal/dashboard', label: 'Overview' },
   { href: '/sub-portal/rfps', label: 'Requests for Proposal' },
   { href: '/sub-portal/work-orders', label: 'Work Orders' },
   { href: '/sub-portal/calendar', label: 'Calendar' },

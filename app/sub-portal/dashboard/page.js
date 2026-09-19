@@ -1,13 +1,18 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
-import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, subPortalJobHeading } from '../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, RFP_RECIPIENT_STATUS_LABELS, subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
+
+function fmtDateTime(v) {
+  if (!v) return '';
+  return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -44,6 +49,36 @@ export default function SubPortalDashboard() {
   }
 
   const { company, role, workOrders, jobsById, ready } = useSubPortalData(session);
+
+  // Overview pulls a light preview of RFPs and Messages too — the same
+  // sources their own full pages read from — so the whole sub portal is
+  // visible from one screen without duplicating those pages' full logic.
+  const [rfpRecipients, setRfpRecipients] = useState([]);
+  const [messages, setMessages] = useState([]);
+
+  const loadRfps = useCallback(async (companyId) => {
+    const { data } = await supabase
+      .from('sub_visible_rfps')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('sent_at', { ascending: false });
+    if (data) setRfpRecipients(data);
+  }, []);
+  const loadMessages = useCallback(async (companyId) => {
+    const { data } = await supabase.from('sub_messages').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (data) setMessages(data);
+  }, []);
+
+  useEffect(() => {
+    if (!company) return;
+    loadRfps(company.id);
+    loadMessages(company.id);
+    const channel = supabase.channel('sub-portal-overview')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfp_recipients', filter: `company_id=eq.${company.id}` }, () => loadRfps(company.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_messages', filter: `company_id=eq.${company.id}` }, () => loadMessages(company.id))
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [company, loadRfps, loadMessages]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -87,6 +122,15 @@ export default function SubPortalDashboard() {
     scopeItems: scopeByJob[jobId] || [],
   }));
 
+  // Previews for the other sections — open ones first (needs a proposal,
+  // needs a signature, not yet invoiced), capped short since the full
+  // list is one click away on each section's own page.
+  const openRfps = rfpRecipients.filter(rr => !rr.responded_at);
+  const rfpPreview = [...openRfps, ...rfpRecipients.filter(rr => rr.responded_at)].slice(0, 5);
+  const recentWorkOrders = workOrders.slice(0, 5);
+  const invoicePreview = workOrders.filter(wo => ['invoiced', 'paid'].includes(wo.status)).slice(0, 5);
+  const messagePreview = messages.slice(0, 4);
+
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
@@ -117,9 +161,78 @@ export default function SubPortalDashboard() {
             <JobRow key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
           ))}
         </div>
+
+        <OverviewSection title="Requests for Proposal" href="/sub-portal/rfps" empty="Nothing here yet.">
+          {rfpPreview.map(rr => (
+            <Link key={rr.id} href={`/sub-portal/rfps/${rr.id}`} className="overview-row" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{rr.title}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
+                  {[subPortalJobHeading(rr), rr.project_address].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <span className={`badge badge-${rr.status}`}>{RFP_RECIPIENT_STATUS_LABELS[rr.status]}</span>
+            </Link>
+          ))}
+        </OverviewSection>
+
+        <OverviewSection title="Work Orders" href="/sub-portal/work-orders" empty="Nothing here yet.">
+          {recentWorkOrders.map(wo => (
+            <WorkOrderRow key={wo.id} wo={wo} job={jobsById[wo.job_id]} role={role} />
+          ))}
+        </OverviewSection>
+
+        <OverviewSection title="Invoices" href="/sub-portal/invoices" empty="Nothing invoiced yet.">
+          {invoicePreview.map(wo => {
+            const job = jobsById[wo.job_id];
+            return (
+              <Link key={wo.id} href={`/sub-portal/work-orders/${wo.id}`} className="overview-row" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job ? subPortalJobHeading(job) : 'Job details unavailable'}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{wo.description}</div>
+                </div>
+                <span style={{ fontSize: 11.5, color: wo.status === 'paid' ? '#3a6b45' : 'var(--ink-soft)', fontWeight: 600 }}>
+                  {wo.status === 'paid' ? `Paid ${fmtDate(wo.paid_at)}` : 'Awaiting payment'}
+                </span>
+              </Link>
+            );
+          })}
+        </OverviewSection>
+
+        <OverviewSection title="Messages" href="/sub-portal/messages" empty="No messages yet.">
+          {messagePreview.map(m => (
+            <div key={m.id} className="overview-row" style={{ alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 12, color: m.sender === 'staff' ? 'var(--gold)' : 'var(--ink)' }}>
+                  {m.sender === 'staff' ? 'McLoud Construction' : 'You'}
+                </span>
+                <p style={{ fontSize: 13, lineHeight: 1.45, margin: '2px 0 0' }}>{m.message}</p>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--ink-soft)', flexShrink: 0 }}>{fmtDateTime(m.created_at)}</span>
+            </div>
+          ))}
+        </OverviewSection>
       </div>
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
     </SubPortalShell>
+  );
+}
+
+// Shared shape for every Overview section below Active Projects: a
+// heading with a "View all" link out to that category's own full page
+// (kept fully intact — this is only a preview), and up to a handful of
+// rows the caller supplies, each already wired to its own detail page.
+function OverviewSection({ title, href, empty, children }) {
+  const hasContent = Array.isArray(children) ? children.length > 0 : !!children;
+  return (
+    <div className="dash-section" style={{ paddingTop: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <h3 style={{ marginBottom: 0 }}>{title}</h3>
+        <Link href={href} style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)', textDecoration: 'none' }}>View all →</Link>
+      </div>
+      {!hasContent && <div className="empty-state">{empty}</div>}
+      {children}
+    </div>
   );
 }
 

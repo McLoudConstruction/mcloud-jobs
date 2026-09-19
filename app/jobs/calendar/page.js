@@ -7,7 +7,7 @@ import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
-import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber } from '../../../lib/constants';
+import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber, subPortalJobHeading, SCHEDULE_REQUEST_STATUS_LABELS } from '../../../lib/constants';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MINI_DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -106,6 +106,7 @@ function assignLanes(jobsInWeek) {
 function CalendarSidebar({
   monthDate, cursorDate, today, onSelectDay, onPrevMonth, onNextMonth, onNewEvent,
   showJobs, setShowJobs, showBidWalks, setShowBidWalks, showScheduleEvents, setShowScheduleEvents, showPersonal, setShowPersonal,
+  scheduleRequests, resolveRequest, resolvingRequestId,
 }) {
   const miniWeeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
   return (
@@ -173,6 +174,43 @@ function CalendarSidebar({
           </span>
         ))}
       </div>
+
+      {scheduleRequests && scheduleRequests.length > 0 && (
+        <div className="cal-sidebar-section">
+          <div className="cal-sidebar-heading">Sub Requests ({scheduleRequests.length})</div>
+          <div className="cal-sub-requests">
+            {scheduleRequests.map(r => (
+              <div key={r.id} className="cal-sub-request">
+                <div className="cal-sub-request-company">{r.companies?.company_name || 'Unknown company'}</div>
+                <div className="cal-sub-request-job">{r.jobs ? subPortalJobHeading(r.jobs) : ''}</div>
+                <div className="cal-sub-request-meta">
+                  {EVENT_TYPE_LABELS[r.event_type] || r.event_type} · {parseDateOnly(r.requested_date)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {r.requested_time ? ` · ${formatEventTime(r.requested_time)}` : ''}
+                </div>
+                {r.description && <div className="cal-sub-request-desc">{r.description}</div>}
+                <div className="cal-sub-request-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    disabled={resolvingRequestId === r.id}
+                    onClick={() => resolveRequest(r.id, true)}
+                  >
+                    {resolvingRequestId === r.id ? '…' : 'Approve'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={resolvingRequestId === r.id}
+                    onClick={() => resolveRequest(r.id, false)}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -191,6 +229,8 @@ export default function JobCalendarPage() {
   const [previewJob, setPreviewJob] = useState(null);
   const [scheduleEvents, setScheduleEvents] = useState([]);
   const [staffById, setStaffById] = useState({});
+  const [scheduleRequests, setScheduleRequests] = useState([]);
+  const [resolvingRequestId, setResolvingRequestId] = useState(null);
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [previewEvent, setPreviewEvent] = useState(null);
   const [deletingEvent, setDeletingEvent] = useState(false);
@@ -292,6 +332,34 @@ export default function JobCalendarPage() {
     const channel = supabase.channel('schedule-events-calendar').on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_events' }, loadScheduleEvents).subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, loadScheduleEvents]);
+
+  // Pending schedule requests from the Sub Portal — subs can't write
+  // straight onto the calendar, so this is the office's queue for
+  // turning "need a walkthrough Tuesday" into a real schedule_events row
+  // (or declining it) via resolve_schedule_request.
+  const loadScheduleRequests = useCallback(async () => {
+    const { data } = await supabase
+      .from('schedule_requests')
+      .select('*, companies(company_name), jobs(job_number, estimate_number, customer_name, stage, project_address)')
+      .eq('status', 'pending')
+      .order('requested_date', { ascending: true });
+    if (data) setScheduleRequests(data);
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    loadScheduleRequests();
+    const channel = supabase.channel('schedule-requests-calendar').on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_requests' }, loadScheduleRequests).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session, loadScheduleRequests]);
+
+  async function resolveRequest(id, approve) {
+    setResolvingRequestId(id);
+    const { error } = await supabase.rpc('resolve_schedule_request', { target_request_id: id, approve });
+    setResolvingRequestId(null);
+    if (error) { alert(error.message); return; }
+    loadScheduleRequests();
+    if (approve) loadScheduleEvents();
+  }
 
   const weeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
 
@@ -888,6 +956,9 @@ export default function JobCalendarPage() {
               showBidWalks={showBidWalks} setShowBidWalks={setShowBidWalks}
               showScheduleEvents={showScheduleEvents} setShowScheduleEvents={setShowScheduleEvents}
               showPersonal={showPersonal} setShowPersonal={setShowPersonal}
+              scheduleRequests={scheduleRequests}
+              resolveRequest={resolveRequest}
+              resolvingRequestId={resolvingRequestId}
             />
           )}
           {mainCalendar}
@@ -1006,6 +1077,15 @@ export default function JobCalendarPage() {
         .cal-sidebar-toggle input{ margin: 0; width: 14px; height: 14px; flex: 0 0 auto; }
         .cal-legend-item{ display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); }
         .cal-legend-dot{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        .cal-sub-requests{ display: flex; flex-direction: column; gap: 10px; }
+        .cal-sub-request{ border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--card-bg); }
+        .cal-sub-request-company{ font-size: 12.5px; font-weight: 700; color: var(--heading); }
+        .cal-sub-request-job{ font-size: 11.5px; color: var(--ink); margin-top: 1px; }
+        .cal-sub-request-meta{ font-size: 10.5px; color: var(--ink-soft); margin-top: 3px; }
+        .cal-sub-request-desc{ font-size: 11px; color: var(--ink); margin-top: 4px; line-height: 1.35; }
+        .cal-sub-request-actions{ display: flex; gap: 6px; margin-top: 8px; }
+        .cal-sub-request-actions .btn{ flex: 1; }
 
         @media (max-width: 900px){
           .cal-sidebar{ display: none; }

@@ -492,6 +492,19 @@ a { color: inherit; text-decoration: none; }
   .subjob-row-main{ flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
+/* Sub Portal Overview page — each category section (RFPs, Work Orders,
+   Invoices, Messages) reuses this same hairline-divided row shape for
+   its preview items, so the whole page keeps the one flat "sections on
+   a solid background" look rather than looking like distinct widgets. */
+.overview-row{
+  display: flex; justify-content: space-between; align-items: center; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.overview-row:last-child{ border-bottom: none; }
+@media (max-width: 700px){
+  .overview-row{ flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
 .markup-overlay{
   position: fixed; inset: 0; background: #1a1812; z-index: 200;
   display: flex; flex-direction: column;
