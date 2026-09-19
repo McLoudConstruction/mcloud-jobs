@@ -522,12 +522,6 @@ export default function JobDetailPage() {
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
               </button>
             )}
-            {['new', 'inspected', 'proposal_delivered'].includes(job.stage) && (
-              <button className="btn btn-sm" onClick={() => { setClosingLost(true); setLossReasonText(''); }}>Close Lost</button>
-            )}
-            {job.stage === 'lost' && (
-              <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
-            )}
           </div>
         </div>
 
@@ -577,22 +571,6 @@ export default function JobDetailPage() {
             {inviteResult}
           </div>
         )}
-        {closingLost && (
-          <div className="card">
-            <h3>Reason for loss</h3>
-            <textarea
-              value={lossReasonText}
-              onChange={e => setLossReasonText(e.target.value)}
-              placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…"
-            />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
-              <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
-
-
         <div className="stage-tabs">
           {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
             <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
@@ -636,6 +614,34 @@ export default function JobDetailPage() {
               <ProjectInfoCard job={job} onSave={saveJob} onTabChange={goToTab} />
               <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
             </div>
+            {(['new', 'inspected', 'proposal_delivered'].includes(job.stage) || job.stage === 'lost') && (
+              <div className="card" style={{ marginTop: 20 }}>
+                <h3>Job Status</h3>
+                {closingLost ? (
+                  <>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>Reason for loss</div>
+                    <textarea
+                      value={lossReasonText}
+                      onChange={e => setLossReasonText(e.target.value)}
+                      placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…"
+                    />
+                    <div className="section-actions">
+                      <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
+                      <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {['new', 'inspected', 'proposal_delivered'].includes(job.stage) && (
+                      <button className="btn btn-sm" onClick={() => { setClosingLost(true); setLossReasonText(''); }}>Close Lost</button>
+                    )}
+                    {job.stage === 'lost' && (
+                      <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             <div className="card" style={{ marginTop: 20 }}>
               <h3>Danger Zone</h3>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>

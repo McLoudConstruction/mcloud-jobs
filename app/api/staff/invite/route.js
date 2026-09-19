@@ -91,7 +91,7 @@ export async function POST(request) {
         actionLink: linkData.properties.action_link,
       });
       try {
-        const { provider } = await sendMail({ to: email, subject, html, text });
+        const { provider } = await sendMail({ to: email, subject, html, text, sentBy: caller.email });
         await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'sent', provider });
       } catch (sendErr) {
         await logCommunication({ category: 'staff_invite', toEmail: email, subject, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });

@@ -73,6 +73,15 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const [formOpen, setFormOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
 
+  // Editing an already-posted update. Kept separate from the draft state
+  // above (which is only for composing a brand-new update) so opening an
+  // edit can't clobber an in-progress "Create new Internal Update" draft.
+  const [editingId, setEditingId] = useState(null);
+  const [editFields, setEditFields] = useState({ issues_notes: '', work_completed: '', upcoming_work: '', next_steps: '', category: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
   // The id this draft's job_updates row will have. draftRowExistsRef tracks
   // whether that row has actually been inserted yet — it's created lazily,
   // the moment the first photo is taken (photos need a real update_id to
@@ -329,6 +338,71 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     }
   }
 
+  function startEdit(u) {
+    setEditingId(u.id);
+    setEditError('');
+    setEditFields({
+      issues_notes: u.issues_notes || '',
+      work_completed: u.work_completed || '',
+      upcoming_work: u.upcoming_work || '',
+      next_steps: u.next_steps || '',
+      category: u.category || '',
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditError('');
+  }
+
+  async function saveEdit(updateId) {
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const { error } = await supabase
+        .from('job_updates')
+        .update({
+          issues_notes: editFields.issues_notes.trim() || null,
+          work_completed: editFields.work_completed.trim() || null,
+          upcoming_work: editFields.upcoming_work.trim() || null,
+          next_steps: editFields.next_steps.trim() || null,
+          category: editFields.category || null,
+        })
+        .eq('id', updateId);
+      if (error) throw error;
+      await loadUpdates();
+      setEditingId(null);
+    } catch (err) {
+      setEditError(err.message || 'Failed to save changes.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  // Deletes the update itself along with any photos attached to it — same
+  // storage-then-row order removeDraftPhoto and the Photos tab's delete
+  // button already use, so nothing gets orphaned in Storage.
+  async function deleteUpdate(u) {
+    if (!confirm('Delete this internal update? This cannot be undone.')) return;
+    setDeletingId(u.id);
+    try {
+      const photos = syncedPhotosByUpdate[u.id] || [];
+      if (photos.length > 0) {
+        const paths = photos.map(p => p.storage_path).filter(Boolean);
+        if (paths.length > 0) await supabase.storage.from('job-photos').remove(paths);
+        await supabase.from('job_photos').delete().eq('update_id', u.id);
+      }
+      const { error } = await supabase.from('job_updates').delete().eq('id', u.id);
+      if (error) throw error;
+      if (editingId === u.id) setEditingId(null);
+      await loadUpdates();
+    } catch (err) {
+      alert(`Failed to delete update: ${err.message || err}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function handleToggleChecklistItem(item) {
     const nextComplete = !item.is_complete;
     const updated = checklist.map(i => (i.id === item.id ? { ...i, is_complete: nextComplete } : i));
@@ -464,7 +538,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
               {!isExpanded && u.issues_notes && (
                 <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.issues_notes}</p>
               )}
-              {isExpanded && (
+              {isExpanded && editingId !== u.id && (
                 <>
                   {u.issues_notes && <p>{u.issues_notes}</p>}
                   {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
@@ -477,7 +551,42 @@ export default function InternalUpdatesPanel({ jobId, session }) {
                       ))}
                     </div>
                   )}
+                  {!u._pending && (
+                    <div className="section-actions" style={{ marginTop: 8 }}>
+                      <button type="button" className="btn btn-sm" onClick={() => startEdit(u)}>Edit</button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => deleteUpdate(u)}
+                        disabled={deletingId === u.id}
+                      >
+                        {deletingId === u.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
                 </>
+              )}
+              {isExpanded && editingId === u.id && (
+                <div className="field-log-form" style={{ marginTop: 8 }}>
+                  <select value={editFields.category} onChange={e => setEditFields(f => ({ ...f, category: e.target.value }))} style={{ marginBottom: 8 }}>
+                    <option value="">Category (optional)</option>
+                    {INTERNAL_UPDATE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <textarea placeholder="What's happening on site?" value={editFields.issues_notes} onChange={e => setEditFields(f => ({ ...f, issues_notes: e.target.value }))} rows={3} />
+                  <label>Work completed</label>
+                  <textarea value={editFields.work_completed} onChange={e => setEditFields(f => ({ ...f, work_completed: e.target.value }))} rows={2} />
+                  <label>Upcoming work</label>
+                  <textarea value={editFields.upcoming_work} onChange={e => setEditFields(f => ({ ...f, upcoming_work: e.target.value }))} rows={2} />
+                  <label>Next steps</label>
+                  <textarea value={editFields.next_steps} onChange={e => setEditFields(f => ({ ...f, next_steps: e.target.value }))} rows={2} />
+                  {editError && <div className="error-text">{editError}</div>}
+                  <div className="section-actions" style={{ marginTop: 0 }}>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={editSaving} onClick={() => saveEdit(u.id)}>
+                      {editSaving ? 'Saving…' : 'Save changes'}
+                    </button>
+                    <button type="button" className="btn btn-sm" onClick={cancelEdit}>Cancel</button>
+                  </div>
+                </div>
               )}
             </div>
           );

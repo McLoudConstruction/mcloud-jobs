@@ -19,6 +19,7 @@ function fmtDate(v) {
 export default function JobRfpsPanel({ open, onClose, jobId, session, projectAddress }) {
   const [view, setView] = useState('list'); // 'list' | 'new'
   const [rfps, setRfps] = useState([]);
+  const [removingId, setRemovingId] = useState(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -39,6 +40,23 @@ export default function JobRfpsPanel({ open, onClose, jobId, session, projectAdd
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [open, jobId, load]);
+
+  // Cascades to rfp_recipients (and any sub_messages tied to those
+  // recipients) at the database level — see migration 113/115 — so a
+  // plain delete on the RFP row is enough to clean up everything under it.
+  async function handleRemove(e, rfpId) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Remove this RFP? Subs who were sent it will lose access, and this cannot be undone.')) return;
+    setRemovingId(rfpId);
+    const { error } = await supabase.from('rfps').delete().eq('id', rfpId);
+    setRemovingId(null);
+    if (error) {
+      alert(`Failed to remove RFP: ${error.message}`);
+      return;
+    }
+    load();
+  }
 
   return (
     <PopupModal open={open} onClose={onClose} maxWidth={680}>
@@ -64,7 +82,17 @@ export default function JobRfpsPanel({ open, onClose, jobId, session, projectAdd
                     Sent {fmtDate(r.created_at)} · {recipients.length} sub{recipients.length === 1 ? '' : 's'} · {responded} responded
                   </div>
                 </div>
-                <span className={`badge badge-${r.status}`}>{RFP_STATUS_LABELS[r.status]}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`badge badge-${r.status}`}>{RFP_STATUS_LABELS[r.status]}</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={e => handleRemove(e, r.id)}
+                    disabled={removingId === r.id}
+                  >
+                    {removingId === r.id ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
               </a>
             );
           })}

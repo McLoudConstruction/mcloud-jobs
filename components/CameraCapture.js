@@ -20,11 +20,24 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
   const [snapNotice, setSnapNotice] = useState(''); // transient "that shot didn't register" message
   const snappingRef = useRef(false); // guards a double-tap firing two snaps before the first resolves
 
+  // Flashlight (torch) and zoom, driven by the active video track's own
+  // capabilities — support is spotty (mainly Chrome/Android rear camera;
+  // desktop and most front cameras report neither), so both controls only
+  // render once the current stream actually says it supports them.
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [zoomCaps, setZoomCaps] = useState(null); // { min, max, step } or null
+  const [zoomValue, setZoomValue] = useState(null);
+
   const stopStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    setTorchOn(false);
+    setTorchSupported(false);
+    setZoomCaps(null);
+    setZoomValue(null);
   }, []);
 
   const startStream = useCallback(async () => {
@@ -40,6 +53,17 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+      }
+      // Torch and zoom are properties of the track, not the constraints
+      // above — read what this particular camera/browser combo actually
+      // exposes rather than assuming either is there.
+      const track = stream.getVideoTracks()[0];
+      const caps = track?.getCapabilities ? track.getCapabilities() : {};
+      setTorchSupported(!!caps.torch);
+      if (caps.zoom && caps.zoom.min !== caps.zoom.max) {
+        const settings = track.getSettings ? track.getSettings() : {};
+        setZoomCaps({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 });
+        setZoomValue(settings.zoom || caps.zoom.min);
       }
     } catch (err) {
       setError(
@@ -110,6 +134,31 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
       'image/jpeg',
       0.9
     );
+  }
+
+  async function toggleTorch() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next }] });
+      setTorchOn(next);
+    } catch {
+      setSnapNotice("Couldn't toggle the flashlight on this device.");
+    }
+  }
+
+  async function handleZoomChange(e) {
+    const value = Number(e.target.value);
+    setZoomValue(value);
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: value }] });
+    } catch {
+      // Ignore — slider still reflects the requested value even if the
+      // browser declines it mid-session.
+    }
   }
 
   function handleRetake() {
@@ -186,11 +235,40 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
         )}
       </div>
 
+      {!reviewFile && zoomCaps && (
+        <div className="camera-zoom-control" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 20px', marginBottom: 8 }}>
+          <span style={{ color: '#fff', fontSize: 12 }}>🔍</span>
+          <input
+            type="range"
+            min={zoomCaps.min}
+            max={zoomCaps.max}
+            step={zoomCaps.step}
+            value={zoomValue ?? zoomCaps.min}
+            onChange={handleZoomChange}
+            style={{ flex: 1 }}
+            aria-label="Zoom"
+          />
+          <span style={{ color: '#fff', fontSize: 12, minWidth: 28, textAlign: 'right' }}>{Number(zoomValue ?? zoomCaps.min).toFixed(1)}x</span>
+        </div>
+      )}
+
       {!reviewFile && (
         <div className="camera-controls">
           <button className="camera-flip-btn" onClick={() => setFacingMode(m => (m === 'environment' ? 'user' : 'environment'))} type="button" aria-label="Flip camera">⟳</button>
           <button className="camera-shutter-btn" onClick={handleSnap} disabled={!!error || starting} type="button" aria-label="Take photo" />
-          <span style={{ width: 44 }} />
+          {torchSupported ? (
+            <button
+              className="camera-icon-btn"
+              onClick={toggleTorch}
+              type="button"
+              aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+              style={{ width: 44, background: torchOn ? 'rgba(255,255,255,0.25)' : undefined }}
+            >
+              {torchOn ? '🔦' : '⚡'}
+            </button>
+          ) : (
+            <span style={{ width: 44 }} />
+          )}
         </div>
       )}
 

@@ -65,7 +65,7 @@ export async function POST(request) {
     // subject with a job number would be wrong/confusing for what's an
     // account-access email, not a job-thread email.
     try {
-      const { provider } = await sendMail({ to: email, subject, html, text });
+      const { provider } = await sendMail({ to: email, subject, html, text, sentBy: caller.email });
       await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
     } catch (sendErr) {
       await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });
