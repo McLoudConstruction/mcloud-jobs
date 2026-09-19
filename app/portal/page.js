@@ -23,13 +23,28 @@ export default function PortalLoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/portal/dashboard` },
-    });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    // Not supabase.auth.signInWithOtp() — see app/api/portal/magic-link's
+    // comment: that sends through Supabase Auth's own rate-limited
+    // built-in mailer, can silently drop sends, and never logs to
+    // Communications Log. This is the legacy pre-/customerportal login
+    // page; portalType: 'customer' lands the link on /customerportal/projects
+    // rather than this page's own /portal/dashboard — the same customer
+    // account, just forwarded onto the current portal instead of the one
+    // this page belongs to.
+    try {
+      const res = await fetch('/api/portal/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, portalType: 'customer' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send sign-in link.');
+      setSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handlePasswordSubmit(e) {
