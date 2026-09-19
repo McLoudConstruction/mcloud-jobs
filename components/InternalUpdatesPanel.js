@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { compressImage } from '../lib/imageCompress';
 import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
-import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
+import { cacheJobPatch, getCachedJob, getQueueForJob } from '../lib/offlineDb';
 import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 import CameraCapture from './CameraCapture';
 import PolishTextButton from './PolishTextButton';
@@ -193,19 +193,23 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       // whole batch. Previously an uncaught error here left every photo
       // after it (and the "Posting…" button) stuck, since nothing below
       // this loop ever ran.
+      // eslint-disable-next-line no-console
+      console.log(`[internal-update] submitting ${stagedPhotos.length} staged photo(s) for update ${updateId}`);
       const failedPhotos = [];
+      let queuedCount = 0;
       for (const { file } of stagedPhotos) {
         try {
           const compressed = await compressImage(file);
-          await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
+          const queued = await queuePhoto({ jobId, file: compressed, createdByEmail, updateId, category: category || null });
+          queuedCount += 1;
+          // eslint-disable-next-line no-console
+          console.log(`[internal-update] queued photo ${queuedCount}/${stagedPhotos.length}, queue item id ${queued?.id}`);
         } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error(`[internal-update] photo ${queuedCount + 1}/${stagedPhotos.length} failed to queue`, err);
           failedPhotos.push(err.message || String(err));
         }
       }
-      if (failedPhotos.length > 0) {
-        setPostError(`Update posted, but ${failedPhotos.length} photo${failedPhotos.length === 1 ? '' : 's'} couldn't be attached: ${failedPhotos[0]}`);
-      }
-
       // Wait for every write just queued (the note, then each photo) to
       // have its sync attempt, then pull the feed fresh — rather than
       // trusting the job_photos realtime subscription above to notice
@@ -217,6 +221,47 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       // (every queuePhoto() call above chained its own flush onto it),
       // so this doesn't return until all five have actually been tried.
       await sync();
+
+      // failedPhotos above only catches an error thrown while staging a
+      // photo (compress/enqueue) — the actual upload+insert happens
+      // later, inside the flush chain, and a failure there is recorded
+      // on the queue item (syncStatus/lastError), not thrown back here.
+      // That gap is exactly how a real sync-time failure (RLS, storage
+      // policy, network) could fail silently: the enqueue step succeeds
+      // for every photo, so failedPhotos stays empty and nothing told
+      // the person anything was wrong beyond the easy-to-miss sync
+      // badge. Checking the queue directly after the flush above
+      // catches anything still stuck against *this* update and surfaces
+      // its real error.
+      const wholeQueueForJob = await getQueueForJob(jobId);
+      const stillQueued = wholeQueueForJob.filter(
+        i => i.table === 'job_photos' && i.payload?.updateId === updateId
+      );
+      // eslint-disable-next-line no-console
+      console.log('[internal-update] full queue for this job after sync():', wholeQueueForJob);
+
+      // Direct read-after-write against job_photos, bypassing every layer
+      // above (the offline queue, the sync chain, loadUpdates' grouping)
+      // — the most ground-truth check available client-side of exactly
+      // how many rows exist in the database for this update right now.
+      const { data: verifyPhotos, error: verifyErr } = await supabase
+        .from('job_photos')
+        .select('id, storage_path')
+        .eq('update_id', updateId);
+      // eslint-disable-next-line no-console
+      console.log(`[internal-update] verify query: ${verifyPhotos?.length ?? 'error'} row(s) in job_photos for update ${updateId}`, { verifyErr, verifyPhotos });
+
+      const messages = [...failedPhotos];
+      if (stillQueued.length > 0) {
+        messages.push(stillQueued[0].lastError || `${stillQueued.length} photo${stillQueued.length === 1 ? '' : 's'} still syncing or stuck — see the sync banner above.`);
+      }
+      const dbCount = verifyPhotos?.length ?? null;
+      if (dbCount !== null && dbCount < queuedCount) {
+        messages.push(`only ${dbCount} of ${queuedCount} queued photo(s) actually landed in the database, with no sync error recorded — see the browser console for the full trace.`);
+      }
+      if (messages.length > 0) {
+        setPostError(`Update posted. Queued ${queuedCount} of ${stagedPhotos.length} photo(s); ${dbCount ?? '?'} confirmed in the database. ${messages[0]}`);
+      }
       await loadUpdates();
 
       setNoteText('');

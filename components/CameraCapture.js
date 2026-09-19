@@ -17,6 +17,8 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
   const [count, setCount] = useState(0);
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
+  const [snapNotice, setSnapNotice] = useState(''); // transient "that shot didn't register" message
+  const snappingRef = useRef(false); // guards a double-tap firing two snaps before the first resolves
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -54,23 +56,55 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
     if (!open) return;
     setCount(0);
     setReviewFile(null);
+    setSnapNotice('');
     startStream();
     return () => stopStream();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, facingMode]);
 
+  // Auto-clears so it doesn't sit on screen forever if the next tap
+  // succeeds — but it's on screen long enough (4s) to actually be seen
+  // before it goes, unlike the silent failure it replaces.
+  useEffect(() => {
+    if (!snapNotice) return;
+    const t = setTimeout(() => setSnapNotice(''), 4000);
+    return () => clearTimeout(t);
+  }, [snapNotice]);
+
   if (!open) return null;
 
+  // Previously this could fail two ways with zero visible sign: if the
+  // video frame wasn't ready (video.videoWidth still 0 — seen on iOS
+  // WebKit when the camera stream stalls under memory/resource pressure
+  // during a multi-shot session) or canvas.toBlob() produced no blob, the
+  // function just returned and the live view stayed put. Someone tapping
+  // the shutter for shot 3 of 5 had no way to tell that tap did nothing —
+  // they'd move on assuming it worked, and only find out later that
+  // photos were missing with no error anywhere. Both failure paths now
+  // surface a message instead of failing silently, and a ref-based guard
+  // (state updates aren't synchronous, so a second tap can land before
+  // React re-renders with the shutter disabled) stops a double-tap from
+  // capturing two frames back to back and silently discarding the first.
   function handleSnap() {
+    if (snappingRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || !video.videoWidth) return;
+    if (!video || !canvas || !video.videoWidth) {
+      setSnapNotice("That shot didn't register — camera wasn't ready. Try again.");
+      return;
+    }
+    snappingRef.current = true;
+    setSnapNotice('');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(
       blob => {
-        if (!blob) return;
+        snappingRef.current = false;
+        if (!blob) {
+          setSnapNotice("That shot didn't come through. Try again.");
+          return;
+        }
         setReviewFile({ blob, previewUrl: URL.createObjectURL(blob) });
       },
       'image/jpeg',
@@ -87,6 +121,7 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
     const file = new File([reviewFile.blob], `${Date.now()}-camera.jpg`, { type: 'image/jpeg' });
     onPhotoAccepted(file);
     setCount(c => c + 1);
+    setSnapNotice('');
     if (reviewFile?.previewUrl) URL.revokeObjectURL(reviewFile.previewUrl);
     setReviewFile(null);
     // Straight back to the live view — no need to reopen the camera.
@@ -96,6 +131,7 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
     stopStream();
     if (reviewFile?.previewUrl) URL.revokeObjectURL(reviewFile.previewUrl);
     setReviewFile(null);
+    setSnapNotice('');
     onClose();
   }
 
@@ -135,6 +171,18 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, title })
         )}
         {reviewFile && (
           <img src={reviewFile.previewUrl} alt="Captured preview" className="camera-review-image" />
+        )}
+        {snapNotice && !reviewFile && (
+          <div
+            role="status"
+            style={{
+              position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(0,0,0,0.75)', color: '#fff', fontSize: 13,
+              padding: '8px 14px', borderRadius: 6, textAlign: 'center', maxWidth: '85%',
+            }}
+          >
+            {snapNotice}
+          </div>
         )}
       </div>
 
