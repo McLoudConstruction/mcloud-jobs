@@ -28,10 +28,14 @@ export default function SubPortalRfpsPage() {
 
   const { company, role, ready } = useSubPortalData(session);
 
+  // Reads from sub_visible_rfps, not a nested rfps(jobs(...)) embed —
+  // jobs has no RLS policy for the sub portal, so that embed always
+  // came back null for every job field. The view flattens job fields in
+  // already filtered to this company, so there's nothing left to join.
   const load = useCallback(async (companyId) => {
     const { data } = await supabase
-      .from('rfp_recipients')
-      .select('*, rfps(id, title, description, job_id, jobs(job_number, estimate_number, customer_name, stage, project_address))')
+      .from('sub_visible_rfps')
+      .select('*')
       .eq('company_id', companyId)
       .order('sent_at', { ascending: false });
     if (data) setRecipients(data);
@@ -52,21 +56,20 @@ export default function SubPortalRfpsPage() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        <div className="card">
+        <div className="dash-section">
           <h3>Requests for Proposal</h3>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
             These are requests to bid, not assigned jobs — nothing here is a Work Order until it's awarded.
           </div>
           {recipients.length === 0 && <div className="empty-state">Nothing here yet.</div>}
           {recipients.map(rr => {
-            // "Smith — Job #204 · 123 Main St" — same customer/job#
-            // heading the rest of the sub portal uses, so an RFP reads
-            // as the same job a sub sees on their dashboard.
-            const jobMeta = [rr.rfps?.jobs ? subPortalJobHeading(rr.rfps.jobs) : '', rr.rfps?.jobs?.project_address].filter(Boolean).join(' · ');
+            // "Smith — Estimate #204 · 123 Main St" — same customer/
+            // number heading the rest of the sub portal uses.
+            const jobMeta = [subPortalJobHeading(rr), rr.project_address].filter(Boolean).join(' · ');
             return (
               <Link key={rr.id} href={`/sub-portal/rfps/${rr.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{rr.rfps?.title}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{rr.title}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
                     {jobMeta && `${jobMeta} · `}Sent {fmtDate(rr.sent_at)}
                   </div>

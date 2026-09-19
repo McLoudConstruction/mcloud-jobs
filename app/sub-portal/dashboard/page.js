@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
-import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, formattedProjectNumber, subPortalJobHeading } from '../../../lib/constants';
+import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS, subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubPortalAuthLayout from '../../../components/SubPortalAuthLayout';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
@@ -91,35 +91,31 @@ export default function SubPortalDashboard() {
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
         {/* "Needs Your Attention" now lives in the header bell (every
-            page, not just this one) rather than as a card here — see
+            page, not just this one) rather than as a section here — see
             SubPortalShell's NotificationBell. */}
         {upcoming.length > 0 && (
-          <div className="card" style={{ padding: '4px 24px' }}>
-            <div className="dash-section" style={{ paddingTop: 18 }}>
-              <h3>Upcoming Schedule</h3>
-              {upcoming.map(job => (
-                <Link key={job.id} href={`/sub-portal/projects/${job.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{subPortalJobHeading(job)}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job.project_address || job.job_type}</div>
-                    </div>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--gold)' }}>Starts {fmtDate(job.scheduled_start_date)}</span>
+          <div className="dash-section" style={{ paddingTop: 0 }}>
+            <h3>Upcoming Schedule</h3>
+            {upcoming.map(job => (
+              <Link key={job.id} href={`/sub-portal/projects/${job.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{subPortalJobHeading(job)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{job.project_address || job.job_type}</div>
                   </div>
-                </Link>
-              ))}
-            </div>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--gold)' }}>Starts {fmtDate(job.scheduled_start_date)}</span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
 
-        <div className="dash-section" style={{ paddingTop: upcoming.length > 0 ? 24 : 0 }}>
-          <h3 style={{ color: 'var(--gold)', fontSize: '12.5px', letterSpacing: '0.08em', textTransform: 'uppercase', borderLeft: '3px solid var(--accent)', paddingLeft: 10, marginBottom: 16 }}>Active Projects</h3>
+        <div className="dash-section" style={{ paddingTop: upcoming.length > 0 ? 20 : 0 }}>
+          <h3>Active Projects</h3>
           {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
-          <div className="subjob-card-list">
-            {activeProjects.map(({ job, jobId, count, scopeItems }) => (
-              <JobCard key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
-            ))}
-          </div>
+          {activeProjects.map(({ job, jobId, count, scopeItems }) => (
+            <JobRow key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
+          ))}
         </div>
       </div>
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
@@ -127,12 +123,12 @@ export default function SubPortalDashboard() {
   );
 }
 
-// One job, one card: heading is "Lastname — Job #204" (subs know a
-// customer by name, not by address), the card opens the full job detail
-// page, and Scope of Work nests inside the card as an expand/collapse
-// section instead of living on its own tab — expanding it is a separate
-// click target (stopPropagation) so it doesn't also navigate away.
-function JobCard({ job, jobId, count, scopeItems, router }) {
+// One job, one row: heading is "Lastname — Job #204" (subs know a
+// customer by name, not by address), the row opens the full job detail
+// page, and Scope of Work nests inside it as an expand/collapse block
+// instead of living on its own tab — expanding it is a separate click
+// target (stopPropagation) so it doesn't also navigate away.
+function JobRow({ job, jobId, count, scopeItems, router }) {
   const [scopeOpen, setScopeOpen] = useState(false);
 
   function openJob() {
@@ -144,26 +140,26 @@ function JobCard({ job, jobId, count, scopeItems, router }) {
   }
 
   return (
-    <div className="subjob-card">
-      <div className="subjob-card-main" onClick={openJob} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') openJob(); }}>
-        <div className="subjob-card-text">
-          <div className="subjob-card-title">{subPortalJobHeading(job)}</div>
-          <div className="subjob-card-sub">
+    <div className="subjob-row">
+      <div className="subjob-row-main" onClick={openJob} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') openJob(); }}>
+        <div className="subjob-row-text">
+          <div className="subjob-row-title">{subPortalJobHeading(job)}</div>
+          <div className="subjob-row-sub">
             {[job?.project_address, job?.job_type].filter(Boolean).join(' · ')}
             {job?.expected_close_date && ` · Est. completion ${fmtDate(job.expected_close_date)}`}
           </div>
         </div>
-        <span className="subjob-card-count">{count} work order{count === 1 ? '' : 's'} →</span>
+        <span className="subjob-row-count">{count} work order{count === 1 ? '' : 's'} →</span>
       </div>
 
       {scopeItems.length > 0 && (
-        <div className="subjob-card-scope">
+        <div style={{ paddingBottom: 14 }}>
           <button type="button" className="subjob-scope-toggle" onClick={toggleScope} aria-expanded={scopeOpen}>
             <span className={`subjob-scope-chevron${scopeOpen ? ' open' : ''}`}>›</span>
             Scope of Work ({scopeItems.length})
           </button>
           {scopeOpen && (
-            <ul className="subjob-scope-list">
+            <ul className="subjob-scope-list" style={{ paddingBottom: 0 }}>
               {scopeItems.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           )}
@@ -178,7 +174,7 @@ export function WorkOrderRow({ wo, job, role }) {
     <Link href={`/sub-portal/work-orders/${wo.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job ? job.project_address || formattedProjectNumber(job) : 'Job details unavailable'}</div>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>{job ? subPortalJobHeading(job) : 'Job details unavailable'}</div>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{wo.description}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

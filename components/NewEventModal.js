@@ -18,10 +18,12 @@ function todayISO() {
 export default function NewEventModal({ open, onClose, onCreated, defaultDate }) {
   const [projects, setProjects] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [projectId, setProjectId] = useState('');
   const [eventType, setEventType] = useState('meeting');
   const [description, setDescription] = useState('');
   const [assignedStaffIds, setAssignedStaffIds] = useState([]);
+  const [invitedCompanyIds, setInvitedCompanyIds] = useState([]);
   const [eventDate, setEventDate] = useState(defaultDate || todayISO());
   const [eventTime, setEventTime] = useState('');
   const [saving, setSaving] = useState(false);
@@ -34,7 +36,8 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
       supabase.from('opportunities').select('id, project, contact_name, company').order('created_at', { ascending: false }).limit(200),
       supabase.from('jobs').select('id, job_number, estimate_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
       supabase.from('staff_users').select('id, full_name, role').eq('status', 'active').order('full_name'),
-    ]).then(([oppRes, jobRes, staffRes]) => {
+      supabase.from('companies').select('id, company_name').order('company_name'),
+    ]).then(([oppRes, jobRes, staffRes, companyRes]) => {
       const oppOptions = (oppRes.data || []).map(o => ({
         id: `opportunity:${o.id}`, label: o.project || o.contact_name || 'Untitled lead',
         sublabel: o.contact_name || o.company || '', group: 'Lead / Opportunity',
@@ -50,16 +53,20 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
       }));
       setProjects([...jobOptions, ...oppOptions]);
       setStaff(staffRes.data || []);
+      setCompanies(companyRes.data || []);
     });
   }, [open, defaultDate]);
 
   function toggleStaff(id) {
     setAssignedStaffIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   }
+  function toggleCompany(id) {
+    setInvitedCompanyIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  }
 
   function reset() {
     setProjectId(''); setEventType('meeting'); setDescription('');
-    setAssignedStaffIds([]); setEventTime(''); setError('');
+    setAssignedStaffIds([]); setInvitedCompanyIds([]); setEventTime(''); setError('');
   }
 
   async function submit(e) {
@@ -76,6 +83,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
       opportunity_id: projKind === 'opportunity' ? projId : null,
       job_id: projKind === 'job' ? projId : null,
       assigned_staff_ids: assignedStaffIds,
+      invited_company_ids: invitedCompanyIds,
     };
     const { data, error: insertError } = await supabase.from('schedule_events').insert(payload).select().single();
     setSaving(false);
@@ -127,6 +135,35 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
             );
           })}
         </div>
+
+        {projectId.startsWith('job:') && companies.length > 0 && (
+          <>
+            <label style={{ marginTop: 12 }}>Invite Subcontractors (optional)</label>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>
+              Shows this event on the invited company's own Sub Portal calendar.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+              {companies.map(c => {
+                const active = invitedCompanyIds.includes(c.id);
+                return (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => toggleCompany(c.id)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 16, fontSize: 12.5, cursor: 'pointer',
+                      border: `1px solid ${active ? 'var(--accent)' : 'var(--panel-line)'}`,
+                      background: active ? 'var(--accent)' : 'transparent',
+                      color: active ? '#fff' : 'var(--ink)',
+                    }}
+                  >
+                    {c.company_name}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         <div className="two-col" style={{ marginTop: 12 }}>
           <div>

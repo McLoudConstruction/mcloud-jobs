@@ -60,53 +60,49 @@ export default function SubPortalProjectPage() {
       <div className="container container-wide" style={{ paddingTop: 24 }}>
         <Link href="/sub-portal/dashboard" className="btn btn-sm">← Back</Link>
 
-        {/* One card, hairline-divided dash-sections inside, rather than
-            two separate boxes with a gap between them. */}
-        <div className="card" style={{ padding: '4px 24px' }}>
-          <div className="dash-section" style={{ paddingTop: 18 }}>
-            <h3>{subPortalJobHeading(job)}</h3>
-            {(job.customer_name || job.project_address) && (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: -8, marginBottom: 18 }}>
-                {[job.customer_name, job.project_address].filter(Boolean).join(' · ')}
-              </div>
-            )}
-            <div className="portal-info-grid">
-              <div>
-                <div className="portal-info-label">Job Type</div>
-                <div className="portal-info-value">{job.job_type || '—'}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Stage</div>
-                <div className="portal-info-value">{job.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Scheduled Start</div>
-                <div className="portal-info-value">{fmtDate(job.scheduled_start_date)}</div>
-              </div>
-              <div>
-                <div className="portal-info-label">Est. Completion</div>
-                <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
-              </div>
+        <div className="dash-section" style={{ paddingTop: 20 }}>
+          <h3>{subPortalJobHeading(job)}</h3>
+          {(job.customer_name || job.project_address) && (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: -8, marginBottom: 18 }}>
+              {[job.customer_name, job.project_address].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          <div className="portal-info-grid">
+            <div>
+              <div className="portal-info-label">Job Type</div>
+              <div className="portal-info-value">{job.job_type || '—'}</div>
+            </div>
+            <div>
+              <div className="portal-info-label">Stage</div>
+              <div className="portal-info-value">{job.stage ? (STAGE_LABELS[job.stage] || job.stage) : '—'}</div>
+            </div>
+            <div>
+              <div className="portal-info-label">Scheduled Start</div>
+              <div className="portal-info-value">{fmtDate(job.scheduled_start_date)}</div>
+            </div>
+            <div>
+              <div className="portal-info-label">Est. Completion</div>
+              <div className="portal-info-value">{fmtDate(job.expected_close_date)}</div>
             </div>
           </div>
+        </div>
 
-          <div className="dash-section">
-            <h3>Work Orders on This Job</h3>
-            {workOrders.length === 0 && <div className="empty-state">Nothing here yet.</div>}
-            {workOrders.map(wo => (
-              <Link key={wo.id} href={`/sub-portal/work-orders/${wo.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{wo.description}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {role === 'admin' && <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoney(wo.amount)}</span>}
-                    <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
-                  </div>
+        <div className="dash-section">
+          <h3>Work Orders on This Job</h3>
+          {workOrders.length === 0 && <div className="empty-state">Nothing here yet.</div>}
+          {workOrders.map(wo => (
+            <Link key={wo.id} href={`/sub-portal/work-orders/${wo.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{wo.description}</div>
                 </div>
-              </Link>
-            ))}
-          </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {role === 'admin' && <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoney(wo.amount)}</span>}
+                  <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
     </SubPortalShell>

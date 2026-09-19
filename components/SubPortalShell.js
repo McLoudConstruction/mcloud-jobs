@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/sub-portal/dashboard', label: 'Dashboard' },
   { href: '/sub-portal/rfps', label: 'Requests for Proposal' },
   { href: '/sub-portal/work-orders', label: 'Work Orders' },
+  { href: '/sub-portal/calendar', label: 'Calendar' },
   { href: '/sub-portal/invoices', label: 'Invoices' },
   { href: '/sub-portal/messages', label: 'Messages' },
   { href: '/sub-portal/settings', label: 'Settings' },

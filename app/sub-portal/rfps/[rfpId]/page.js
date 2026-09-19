@@ -3,10 +3,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
+import { useSubPortalData } from '../../../../lib/useSubPortalData';
 import SubPortalShell from '../../../../components/SubPortalShell';
 import RfpMessageThread from '../../../../components/RfpMessageThread';
 import PhotoLightbox from '../../../../components/PhotoLightbox';
-import { RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel } from '../../../../lib/constants';
+import { RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel, customerLastName } from '../../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -18,10 +19,10 @@ export default function SubPortalRfpDetailPage() {
   const { rfpId: recipientId } = useParams();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState(null);
-  const [recipient, setRecipient] = useState(null);
+  const [recipient, setRecipient] = useState(null); // row from sub_visible_rfps
   const [photoUrls, setPhotoUrls] = useState([]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
 
   // Structured proposal fields — replaces the old single free-text box.
   // "Upload Proposal" is the actual bid document; amount/duration/
@@ -44,15 +45,22 @@ export default function SubPortalRfpDetailPage() {
     });
   }, [router]);
 
-  const load = useCallback(async (email) => {
+  // Company/role come from the same shared hook every other sub-portal
+  // page uses, instead of this page re-deriving them from its own
+  // companies(...) embed — one fewer place that logic can drift.
+  const { company, role } = useSubPortalData(session);
+
+  // sub_visible_rfps has job fields already flattened in — see migration
+  // 117 for why the old rfp_recipients(*, rfps(*, jobs(...))) embed came
+  // back with every job field blank (jobs has no RLS policy for subs).
+  const load = useCallback(async () => {
     const { data: rrData } = await supabase
-      .from('rfp_recipients')
-      .select('*, companies(id, company_name, contact_email), rfps(*, jobs(job_number, estimate_number, customer_name, stage, project_address))')
+      .from('sub_visible_rfps')
+      .select('*')
       .eq('id', recipientId)
-      .single();
+      .maybeSingle();
     if (!rrData) return;
     setRecipient(rrData);
-    setRole(rrData.companies?.contact_email === email ? 'admin' : 'crew');
     setProposalAmount(rrData.proposal_amount ?? '');
     setProposalDuration(rrData.proposal_duration || '');
     setProposalExclusions(rrData.proposal_exclusions || '');
@@ -63,7 +71,7 @@ export default function SubPortalRfpDetailPage() {
       supabase.rpc('mark_rfp_viewed', { target_recipient_id: recipientId }).then(() => {});
     }
 
-    const photoIds = rrData.rfps?.photo_ids || [];
+    const photoIds = rrData.photo_ids || [];
     if (photoIds.length) {
       const { data: photos } = await supabase.from('job_photos').select('*').in('id', photoIds);
       if (photos) {
@@ -80,9 +88,9 @@ export default function SubPortalRfpDetailPage() {
 
   useEffect(() => {
     if (!session) return;
-    load(session.user.email);
+    load();
     const channel = supabase.channel(`sub-rfp-${recipientId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfp_recipients', filter: `id=eq.${recipientId}` }, () => load(session.user.email))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfp_recipients', filter: `id=eq.${recipientId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, recipientId, load]);
@@ -135,29 +143,27 @@ export default function SubPortalRfpDetailPage() {
 
   if (loading || !session || !recipient) return null;
 
-  const rfp = recipient.rfps;
-  const job = rfp?.jobs;
   const resolved = recipient.status === 'awarded' || recipient.status === 'not_awarded';
-  const num = job ? projectNumber(job) : '—';
-  const numLabel = job ? projectNumberLabel(job) : 'Job';
+  const num = projectNumber(recipient);
+  const numLabel = projectNumberLabel(recipient);
 
   return (
-    <SubPortalShell company={recipient.companies} role={role}>
+    <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
         <div className="section-actions" style={{ marginTop: 0, marginBottom: 14 }}>
           <Link href="/sub-portal/rfps" className="btn btn-sm">← Back</Link>
         </div>
 
-        {/* Header bar, not another stacked mobile-style card — the job
-            a sub needs to identify at a glance (who, what number,
-            where) sits up top instead of buried in a description line. */}
+        {/* Flat header, not another card — the job a sub needs to
+            identify at a glance (who, what number, where) sits up top
+            instead of buried in a description line. */}
         <div className="rfp-detail-header">
           <div style={{ minWidth: 0 }}>
-            <h2 style={{ margin: '0 0 10px', color: 'var(--heading)', fontSize: 19 }}>{rfp?.title}</h2>
+            <h2 style={{ margin: '0 0 10px', color: 'var(--heading)', fontSize: 19 }}>{recipient.title}</h2>
             <div className="portal-info-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
               <div>
                 <div className="portal-info-label">Customer</div>
-                <div className="portal-info-value">{job?.customer_name || '—'}</div>
+                <div className="portal-info-value">{customerLastName(recipient) || '—'}</div>
               </div>
               <div>
                 <div className="portal-info-label">{numLabel} #</div>
@@ -165,7 +171,7 @@ export default function SubPortalRfpDetailPage() {
               </div>
               <div>
                 <div className="portal-info-label">Address</div>
-                <div className="portal-info-value">{job?.project_address || '—'}</div>
+                <div className="portal-info-value">{recipient.project_address || '—'}</div>
               </div>
             </div>
           </div>
@@ -174,15 +180,15 @@ export default function SubPortalRfpDetailPage() {
 
         <div className="rfp-detail-layout">
           <div className="rfp-detail-main">
-            {rfp?.description && (
-              <div className="rfp-detail-panel">
+            {recipient.description && (
+              <div className="dash-section">
                 <h3>Description</h3>
-                <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: 0 }}>{rfp.description}</p>
+                <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: 0 }}>{recipient.description}</p>
               </div>
             )}
 
             {photoUrls.length > 0 && (
-              <div className="rfp-detail-panel">
+              <div className="dash-section">
                 <h3>Photos</h3>
                 <div className="photo-thumb-grid">
                   {photoUrls.map((url, i) => (
@@ -195,35 +201,44 @@ export default function SubPortalRfpDetailPage() {
             )}
 
             {recipient.status === 'not_awarded' && (
-              <div className="rfp-detail-panel">
+              <div className="dash-section">
                 <h3>Not Awarded</h3>
                 <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>This request is closed and wasn't awarded to your company. Your submitted proposal is kept below for your records.</p>
               </div>
             )}
             {recipient.status === 'awarded' && (
-              <div className="rfp-detail-panel">
+              <div className="dash-section">
                 <h3>Awarded</h3>
                 <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>This request was awarded to your company. Look for the Work Order in Work Orders once it's issued.</p>
               </div>
             )}
 
-            {/* Coded to this specific request — a question asked here shows
-                up tagged to this RFP on the staff side, not just dropped
-                into the general company thread. */}
-            <div className="rfp-detail-panel">
-              <h3>Messages</h3>
-              <RfpMessageThread
-                recipientId={recipientId}
-                companyId={recipient.company_id}
-                jobId={rfp?.job_id}
-                viewer="sub"
-              />
+            {/* Gated behind a button rather than always showing the
+                thread inline — most RFPs never need a back-and-forth,
+                so this keeps the page short until someone actually has
+                a question. Coded to this specific request either way. */}
+            <div className="dash-section">
+              {!messagesOpen ? (
+                <button type="button" className="btn btn-sm" onClick={() => setMessagesOpen(true)}>
+                  Have a question about this request? Send us a Message
+                </button>
+              ) : (
+                <>
+                  <h3>Messages</h3>
+                  <RfpMessageThread
+                    recipientId={recipientId}
+                    companyId={recipient.company_id}
+                    jobId={recipient.job_id}
+                    viewer="sub"
+                  />
+                </>
+              )}
             </div>
           </div>
 
           {role === 'admin' && (
             <div className="rfp-detail-sidebar">
-              <div className="rfp-detail-panel">
+              <div className="dash-section">
                 <h3>{resolved ? 'Your Proposal' : 'Submit Your Proposal'}</h3>
                 <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
                   Upload your proposal document, then fill in the details below.

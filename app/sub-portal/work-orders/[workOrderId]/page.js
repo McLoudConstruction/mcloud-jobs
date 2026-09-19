@@ -85,11 +85,7 @@ export default function SubPortalWorkOrderPage() {
           <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
         </div>
 
-        {/* One card, hairline-divided dash-sections inside — the GC
-            dashboard's own "one structured panel, not loose boxes"
-            pattern, in place of a separate .card per subsection. */}
-        <div className="card" style={{ padding: '4px 24px' }}>
-          <div className="dash-section" style={{ paddingTop: 18 }}>
+        <div className="dash-section" style={{ paddingTop: 20 }}>
             <h3>Job Information</h3>
             <div className="portal-info-grid">
               <div>
@@ -207,13 +203,12 @@ export default function SubPortalWorkOrderPage() {
             <InvoiceUploadSection wo={wo} />
           )}
 
-          {wo.status === 'declined' && (
-            <div className="dash-section">
-              <h3>Declined</h3>
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{wo.decline_reason || 'No reason given.'}</p>
-            </div>
-          )}
-        </div>
+        {wo.status === 'declined' && (
+          <div className="dash-section">
+            <h3>Declined</h3>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{wo.decline_reason || 'No reason given.'}</p>
+          </div>
+        )}
       </div>
     </SubPortalShell>
   );

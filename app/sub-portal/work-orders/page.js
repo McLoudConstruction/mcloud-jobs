@@ -27,7 +27,7 @@ export default function SubPortalWorkOrdersPage() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        <div className="card">
+        <div className="dash-section" style={{ paddingTop: 20 }}>
           <h3>All Work Orders</h3>
           {workOrders.length === 0 && <div className="empty-state">Nothing here yet.</div>}
           {workOrders.map(wo => (

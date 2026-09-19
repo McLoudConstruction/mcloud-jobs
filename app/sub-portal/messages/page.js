@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
 import SubPortalShell from '../../../components/SubPortalShell';
+import { subPortalJobHeading } from '../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '';
@@ -68,52 +69,50 @@ export default function SubPortalMessagesPage() {
   return (
     <SubPortalShell company={company} role={role}>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
-        <div className="card" style={{ padding: '4px 24px' }}>
-          <div className="dash-section" style={{ paddingTop: 18 }}>
-            <h3>Send a Message</h3>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-              Questions about a work order, scheduling, anything — this goes straight to the office.
+        <div className="dash-section" style={{ paddingTop: 20 }}>
+          <h3>Send a Message</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Questions about a work order, scheduling, anything — this goes straight to the office.
+          </div>
+          <form onSubmit={submitMessage}>
+            {jobOptions.length > 0 && (
+              <>
+                <label htmlFor="msgJob">Which project is this about? (optional)</label>
+                <select id="msgJob" value={jobId} onChange={e => setJobId(e.target.value)} style={{ marginBottom: 10 }}>
+                  <option value="">General question</option>
+                  {jobOptions.map(j => (
+                    <option key={j.id} value={j.id}>{subPortalJobHeading(j)}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Type your message…" />
+            {error && <div className="error-text" style={{ marginTop: 6 }}>{error}</div>}
+            <div className="section-actions">
+              <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
             </div>
-            <form onSubmit={submitMessage}>
-              {jobOptions.length > 0 && (
-                <>
-                  <label htmlFor="msgJob">Which project is this about? (optional)</label>
-                  <select id="msgJob" value={jobId} onChange={e => setJobId(e.target.value)} style={{ marginBottom: 10 }}>
-                    <option value="">General question</option>
-                    {jobOptions.map(j => (
-                      <option key={j.id} value={j.id}>{j.project_address || `Job #${j.job_number}`}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-              <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Type your message…" />
-              {error && <div className="error-text" style={{ marginTop: 6 }}>{error}</div>}
-              <div className="section-actions">
-                <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
-              </div>
-            </form>
-          </div>
+          </form>
+        </div>
 
-          <div className="dash-section">
-            <h3>Conversation</h3>
-            {messages.length === 0 && <div className="empty-state">No messages yet.</div>}
-            {messages.map(m => (
-              <div key={m.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                  <span style={{ fontWeight: 700, fontSize: 12.5, color: m.sender === 'staff' ? 'var(--gold)' : 'var(--ink)' }}>
-                    {m.sender === 'staff' ? 'McLoud Construction' : 'You'}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--ink-soft)', flexShrink: 0 }}>{fmtDateTime(m.created_at)}</span>
-                </div>
-                {m.job_id && jobsById[m.job_id] && (
-                  <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    Re: {jobsById[m.job_id].project_address || `Job #${jobsById[m.job_id].job_number}`}
-                  </div>
-                )}
-                <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{m.message}</p>
+        <div className="dash-section">
+          <h3>Conversation</h3>
+          {messages.length === 0 && <div className="empty-state">No messages yet.</div>}
+          {messages.map(m => (
+            <div key={m.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 12.5, color: m.sender === 'staff' ? 'var(--gold)' : 'var(--ink)' }}>
+                  {m.sender === 'staff' ? 'McLoud Construction' : 'You'}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--ink-soft)', flexShrink: 0 }}>{fmtDateTime(m.created_at)}</span>
               </div>
-            ))}
-          </div>
+              {m.job_id && jobsById[m.job_id] && (
+                <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                  Re: {subPortalJobHeading(jobsById[m.job_id])}
+                </div>
+              )}
+              <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{m.message}</p>
+            </div>
+          ))}
         </div>
       </div>
     </SubPortalShell>
