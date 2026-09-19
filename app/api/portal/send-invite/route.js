@@ -32,7 +32,12 @@ export async function POST(request) {
       return Response.json({ error: 'Server not configured (missing SUPABASE_SERVICE_ROLE_KEY).' }, { status: 500 });
     }
 
-    const { accessToken, email, customerName, redirectTo, jobId } = await request.json();
+    // portalLabel/category default to the customer portal's original
+    // wording — subcontractors/page.js's invitePortal() passes
+    // 'subcontractor portal' / 'subcontractor_invite' so a sub's invite
+    // email reads correctly and files under its own existing
+    // Communications Log category instead of "Portal Invite".
+    const { accessToken, email, customerName, redirectTo, jobId, portalLabel, category } = await request.json();
     if (!accessToken || !email || !redirectTo) {
       return Response.json({ error: 'Missing required fields.' }, { status: 400 });
     }
@@ -58,7 +63,8 @@ export async function POST(request) {
       return Response.json({ error: linkError.message }, { status: 500 });
     }
 
-    const { subject, html, text } = buildPortalInviteEmail({ customerName, actionLink: linkData.properties.action_link });
+    const { subject, html, text } = buildPortalInviteEmail({ customerName, actionLink: linkData.properties.action_link, portalLabel: portalLabel || 'project portal' });
+    const logCategory = category || 'portal_invite';
 
     // jobId isn't passed into sendMail() here (only into logCommunication
     // below) — this invite isn't scoped to one job, and tagging the
@@ -66,9 +72,9 @@ export async function POST(request) {
     // account-access email, not a job-thread email.
     try {
       const { provider } = await sendMail({ to: email, subject, html, text, sentBy: caller.email });
-      await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
+      await logCommunication({ category: logCategory, toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
     } catch (sendErr) {
-      await logCommunication({ category: 'portal_invite', toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });
+      await logCommunication({ category: logCategory, toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });
       throw sendErr;
     }
 

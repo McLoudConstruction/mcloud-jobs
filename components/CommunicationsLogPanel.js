@@ -17,6 +17,7 @@ const CATEGORY_LABELS = {
   subcontractor_work_order: 'Work Order (Subcontractor)',
   review_request: 'Review Request',
   portal_invite: 'Portal Invite',
+  portal_magic_link: 'Portal Sign-In Link',
   staff_invite: 'Staff Invite',
   subcontractor_invite: 'Subcontractor Invite',
   subcontractor_application_approved: 'Application Approved',

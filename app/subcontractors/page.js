@@ -559,12 +559,31 @@ export default function SubcontractorsPage() {
     setInviteResult('');
     const emails = [c.contact_email];
     if (c.crew_email && c.crew_email !== c.contact_email) emails.push(c.crew_email);
+    // Not supabase.auth.signInWithOtp() — that sends through Supabase
+    // Auth's own built-in mailer, separate infrastructure from every
+    // other email in this app, heavily rate-limited, and known to
+    // silently drop sends without an error — the "says it worked, never
+    // arrives" symptom, and it never showed up in Communications Log
+    // either since it bypassed sendMail()/logCommunication() entirely.
+    // /api/portal/send-invite (originally built for the customer-side
+    // invite, see page.js's invitePortal) generates the link server-side
+    // and sends it the same way every other email in the app does.
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
     for (const email of emails) {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${window.location.origin}/sub-portal/dashboard` },
+      const res = await fetch('/api/portal/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: adminSession?.access_token,
+          email,
+          customerName: c.company_name,
+          redirectTo: `${window.location.origin}/sub-portal/dashboard`,
+          portalLabel: 'subcontractor portal',
+          category: 'subcontractor_invite',
+        }),
       });
-      if (error) { setInviting(false); setInviteResult(`Failed to invite ${email}: ${error.message}`); return; }
+      const data = await res.json();
+      if (!res.ok) { setInviting(false); setInviteResult(`Failed to invite ${email}: ${data.error || 'unknown error'}`); return; }
     }
     const now = new Date().toISOString();
     const { error: upsertError } = await supabase.from('sub_portal_users').upsert(
