@@ -158,17 +158,12 @@ export default function ScheduleCard({ jobId, job }) {
     if (!data) return;
     setPhases(data.filter(p => p.status !== 'draft'));
     const draftRows = data.filter(p => p.status === 'draft');
-    setDraft(prev => {
-      if (draftRows.length === 0) return null;
-      // Don't stomp mid-edit local state (e.g. a duration field mid-
-      // keystroke, not yet blurred/persisted) with a realtime-triggered
-      // reload of the same rows — only replace when the set of ids
-      // actually changed (a fresh generate, a remove, a different tab).
-      if (prev && prev.length === draftRows.length && prev.every(p => draftRows.some(d => d.id === p.id))) {
-        return prev;
-      }
-      return draftRows;
-    });
+    // Always take the fresh rows — a Timeline drag/resize persists by id
+    // via updatePhaseDates() and then calls this to pick the new dates
+    // back up, so skipping the reload here (as an earlier version of this
+    // did, to avoid clobbering a mid-keystroke duration edit) meant a
+    // dragged bar only moved after a manual page refresh.
+    setDraft(draftRows.length > 0 ? draftRows : null);
   }, [jobId]);
 
   const loadScopeActions = useCallback(async () => {
