@@ -8,6 +8,7 @@ import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
 import PortalFeed from '../../../components/PortalFeed';
+import PortalScheduleCard from '../../../components/PortalScheduleCard';
 import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtDate(v) {
@@ -90,6 +91,8 @@ export default function CustomerHomePage() {
                 <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
               )}
             </div>
+
+            <PortalScheduleCard jobId={job.id} />
 
             <PortalFeed job={job} />
           </>
