@@ -84,7 +84,9 @@ const TABS = [
     // one long stacked page — that's still true here: each section swaps
     // the whole view instead of stacking, so nothing's lost, but the top
     // tab row isn't carrying five finance-related entries side by side.
-    hideWhen: (job) => isOpportunity(job),
+    // Always visible regardless of job stage — no longer gated behind
+    // the opportunity-to-job transition (was `hideWhen: (job) =>
+    // isOpportunity(job)`).
     sections: [
       { key: 'overview', label: 'Overview' },
       { key: 'budget', label: 'Budget' },
