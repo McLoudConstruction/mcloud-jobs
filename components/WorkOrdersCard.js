@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../lib/constants';
 import { buildNewWorkOrderEmail } from '../lib/emailTemplates';
+import WorkOrderPhotosPanel from './WorkOrderPhotosPanel';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -28,6 +29,7 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [invoicingId, setInvoicingId] = useState(null);
+  const [photosOpenId, setPhotosOpenId] = useState(null);
   const [invoiceAmount, setInvoiceAmount] = useState('');
 
   const loadWorkOrders = useCallback(async () => {
@@ -267,6 +269,11 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
               <button className="btn btn-sm" onClick={() => startInvoicing(wo)}>Mark Invoiced</button>
             )}
             {wo.status === 'invoiced' && <button className="btn btn-sm" onClick={() => markPaid(wo)}>Mark Paid</button>}
+            {(wo.status === 'accepted' || wo.status === 'completed' || wo.status === 'invoiced' || wo.status === 'paid') && (
+              <button className="btn btn-sm" onClick={() => setPhotosOpenId(photosOpenId === wo.id ? null : wo.id)}>
+                {photosOpenId === wo.id ? 'Hide Photos' : 'Photos'}
+              </button>
+            )}
             <button className="btn btn-sm btn-danger" onClick={() => deleteWorkOrder(wo)}>Delete</button>
           </div>
 
@@ -277,6 +284,8 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
               <button className="btn btn-sm" onClick={() => setInvoicingId(null)}>Cancel</button>
             </div>
           )}
+
+          {photosOpenId === wo.id && <WorkOrderPhotosPanel workOrderId={wo.id} />}
         </div>
       ))}
     </div>

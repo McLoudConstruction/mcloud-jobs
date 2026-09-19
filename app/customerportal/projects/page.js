@@ -9,6 +9,7 @@ import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PasswordPromptModal from '../../../components/PasswordPromptModal';
 import PortalFeed from '../../../components/PortalFeed';
 import PortalFieldProgress from '../../../components/PortalFieldProgress';
+import PortalPhotoFeed from '../../../components/PortalPhotoFeed';
 import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 
 function fmtDate(v) {
@@ -93,6 +94,8 @@ export default function CustomerHomePage() {
             </div>
 
             <PortalFieldProgress jobId={job.id} />
+
+            <PortalPhotoFeed jobId={job.id} />
 
             <PortalFeed job={job} />
           </>
