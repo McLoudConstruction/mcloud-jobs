@@ -131,7 +131,7 @@ export default function SubPortalDashboard() {
 
   return (
     <SubPortalShell company={company} role={role}>
-      <div className="container container-narrow" style={{ paddingTop: 24 }}>
+      <div className="container container-overview" style={{ paddingTop: 24 }}>
         {/* "Needs Your Attention" now lives in the header bell (every
             page, not just this one) rather than as a section here — see
             SubPortalShell's NotificationBell. */}
@@ -152,45 +152,56 @@ export default function SubPortalDashboard() {
           </div>
         )}
 
-        <div className="dash-section" style={{ paddingTop: upcoming.length > 0 ? 20 : 0 }}>
-          <h3>Active Projects</h3>
-          {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
-          {activeProjects.map(({ job, jobId, count, scopeItems }) => (
-            <JobRow key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
-          ))}
-        </div>
+        {/* Active Projects and the rest run side by side on desktop
+            (stacking back to one column under 800px) instead of one long
+            single-file column — each grid cell manages its own
+            padding/border directly rather than leaning on .dash-section's
+            first-child/last-child defaults, since those assume a single
+            flowing stack, not a two-column layout. */}
+        <div className="overview-grid" style={{ marginTop: upcoming.length > 0 ? 20 : 0 }}>
+          <div className="dash-section" style={{ paddingTop: 0, borderBottom: 'none' }}>
+            <h3>Active Projects</h3>
+            {activeProjects.length === 0 && <div className="empty-state">Nothing active right now.</div>}
+            {activeProjects.map(({ job, jobId, count, scopeItems }) => (
+              <JobRow key={jobId} job={job} jobId={jobId} count={count} scopeItems={scopeItems} router={router} />
+            ))}
+          </div>
 
-        <OverviewSection title="Requests for Proposal" href="/sub-portal/rfps" empty="Nothing here yet.">
-          {rfpPreview.map(rr => (
-            <Link key={rr.id} href={`/sub-portal/rfps/${rr.id}`} className="overview-row" style={{ textDecoration: 'none', color: 'inherit' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{rr.title}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
-                  {[subPortalJobHeading(rr), rr.project_address].filter(Boolean).join(' · ')}
-                </div>
+          <div>
+            <OverviewSection title="Requests for Proposal" href="/sub-portal/rfps" empty="Nothing here yet." style={{ paddingTop: 0 }}>
+              {rfpPreview.map(rr => (
+                <Link key={rr.id} href={`/sub-portal/rfps/${rr.id}`} className="overview-row" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{rr.title}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
+                      {[subPortalJobHeading(rr), rr.project_address].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <span className={`badge badge-${rr.status}`}>{RFP_RECIPIENT_STATUS_LABELS[rr.status]}</span>
+                </Link>
+              ))}
+            </OverviewSection>
+
+            {/* Invoices and Messages are "check when you need to" pages,
+                not ones that earn a full preview list — one quick-link
+                line each, with just enough to say whether anything's
+                waiting. */}
+            <div className="dash-section" style={{ paddingTop: 20, borderBottom: 'none' }}>
+              <div className="overview-quicklinks">
+                <Link href="/sub-portal/invoices" className="overview-quicklink">
+                  <span>Invoices</span>
+                  <span className={`overview-quicklink-detail ${invoiceAwaitingCount > 0 ? 'attn' : ''}`}>
+                    {invoiceAwaitingCount > 0 ? `${invoiceAwaitingCount} awaiting payment` : 'Up to date'} →
+                  </span>
+                </Link>
+                <Link href="/sub-portal/messages" className="overview-quicklink">
+                  <span>Messages</span>
+                  <span className={`overview-quicklink-detail ${unreadMessageCount > 0 ? 'attn' : ''}`}>
+                    {unreadMessageCount > 0 ? `${unreadMessageCount} unread` : 'No new messages'} →
+                  </span>
+                </Link>
               </div>
-              <span className={`badge badge-${rr.status}`}>{RFP_RECIPIENT_STATUS_LABELS[rr.status]}</span>
-            </Link>
-          ))}
-        </OverviewSection>
-
-        {/* Invoices and Messages are "check when you need to" pages, not
-            ones that earn a full preview list — one quick-link line each,
-            with just enough to say whether anything's waiting. */}
-        <div className="dash-section" style={{ paddingTop: 20 }}>
-          <div className="overview-quicklinks">
-            <Link href="/sub-portal/invoices" className="overview-quicklink">
-              <span>Invoices</span>
-              <span className={`overview-quicklink-detail ${invoiceAwaitingCount > 0 ? 'attn' : ''}`}>
-                {invoiceAwaitingCount > 0 ? `${invoiceAwaitingCount} awaiting payment` : 'Up to date'} →
-              </span>
-            </Link>
-            <Link href="/sub-portal/messages" className="overview-quicklink">
-              <span>Messages</span>
-              <span className={`overview-quicklink-detail ${unreadMessageCount > 0 ? 'attn' : ''}`}>
-                {unreadMessageCount > 0 ? `${unreadMessageCount} unread` : 'No new messages'} →
-              </span>
-            </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -199,14 +210,14 @@ export default function SubPortalDashboard() {
   );
 }
 
-// Shared shape for every Overview section below Active Projects: a
-// heading with a "View all" link out to that category's own full page
-// (kept fully intact — this is only a preview), and up to a handful of
-// rows the caller supplies, each already wired to its own detail page.
-function OverviewSection({ title, href, empty, children }) {
+// Shared shape for the preview sections in the right column: a heading
+// with a "View all" link out to that category's own full page (kept
+// fully intact — this is only a preview), and up to a handful of rows
+// the caller supplies, each already wired to its own detail page.
+function OverviewSection({ title, href, empty, children, style }) {
   const hasContent = Array.isArray(children) ? children.length > 0 : !!children;
   return (
-    <div className="dash-section" style={{ paddingTop: 20 }}>
+    <div className="dash-section" style={{ paddingTop: 20, ...style }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h3 style={{ marginBottom: 0 }}>{title}</h3>
         <Link href={href} style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)', textDecoration: 'none' }}>View all →</Link>
