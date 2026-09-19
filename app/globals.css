@@ -1453,10 +1453,13 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   width: 8px; height: 8px; border-radius: 50%;
   background: #a13f3f; border: 1.5px solid var(--card-bg);
 }
+/* position: fixed, with top/left/right set inline (computed in JS from
+   the bell button's actual on-screen position) — the sidebar it now
+   lives in scrolls (overflow-y: auto), which clips overflow-x too, so a
+   plain absolute panel got cut off at the sidebar's edge instead of
+   floating over the page. Fixed positioning escapes that clipping. */
 .pnav-bell-panel{
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   width: 340px;
   max-width: calc(100vw - 32px);
   max-height: 420px;
@@ -1468,7 +1471,6 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   z-index: 1000;
   padding: 6px 0;
 }
-.pnav-bell-panel-left{ right: auto; left: 0; }
 .pnav-bell-panel-header{
   font-size: 11px;
   font-weight: 700;

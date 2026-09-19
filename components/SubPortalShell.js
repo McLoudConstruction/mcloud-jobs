@@ -223,7 +223,32 @@ function NotificationBell({ company, role, align = 'right' }) {
   const [needsSignature, setNeedsSignature] = useState([]);
   const [needsProposal, setNeedsProposal] = useState([]);
   const [needsInvoice, setNeedsInvoice] = useState([]);
+  const [panelPos, setPanelPos] = useState(null);
   const panelRef = useRef(null);
+  const btnRef = useRef(null);
+
+  // The panel now lives in the sidebar, which scrolls (overflow-y: auto)
+  // and therefore clips overflow-x too — a plain position:absolute panel
+  // got cut off at the sidebar's right edge instead of floating over the
+  // page like it used to in the topbar. Fixed positioning, computed from
+  // the button's actual on-screen location when it opens, escapes that
+  // clipping entirely (fixed elements aren't contained by an ancestor's
+  // overflow unless that ancestor has a transform, which the sidebar
+  // doesn't).
+  function toggleOpen() {
+    setOpen(o => {
+      const next = !o;
+      if (next && btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        setPanelPos(
+          align === 'left'
+            ? { top: rect.bottom + 8, left: rect.left }
+            : { top: rect.bottom + 8, right: window.innerWidth - rect.right }
+        );
+      }
+      return next;
+    });
+  }
 
   const loadAttention = useCallback(async (companyId) => {
     const [{ data: woData }, { data: rfpData }] = await Promise.all([
@@ -273,15 +298,16 @@ function NotificationBell({ company, role, align = 'right' }) {
       <button
         type="button"
         className="pnav-bell-btn"
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={toggleOpen}
         aria-label="Needs your attention"
       >
         <BellIcon />
         {attentionCount > 0 && <span className="pnav-bell-dot" />}
       </button>
 
-      {open && (
-        <div className={`pnav-bell-panel ${align === 'left' ? 'pnav-bell-panel-left' : ''}`}>
+      {open && panelPos && (
+        <div className="pnav-bell-panel" style={{ top: panelPos.top, left: panelPos.left, right: panelPos.right }}>
           <div className="pnav-bell-panel-header">Needs Your Attention</div>
 
           {attentionCount === 0 && (
