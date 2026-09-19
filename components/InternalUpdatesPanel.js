@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { compressImage } from '../lib/imageCompress';
 import { queueInternalUpdate, queuePhoto, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
-import { cacheJobPatch, getCachedJob, getQueueForJob } from '../lib/offlineDb';
+import { cacheJobPatch, getCachedJob, getQueueForJob, getAllQueueItems } from '../lib/offlineDb';
 import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 import CameraCapture from './CameraCapture';
 import PolishTextButton from './PolishTextButton';
@@ -233,12 +233,21 @@ export default function InternalUpdatesPanel({ jobId, session }) {
       // badge. Checking the queue directly after the flush above
       // catches anything still stuck against *this* update and surfaces
       // its real error.
-      const wholeQueueForJob = await getQueueForJob(jobId);
+      // getQueueForJob() excludes items mid-'syncing' by design (so a live
+      // upload never gets double-synced) — which is also exactly how a
+      // stranded item type of issue: it never shows up as 'pending' (no
+      // retry), never 'failed' (no error), it's just gone from this check
+      // too, matching the "no sync error recorded" gap seen in earlier
+      // rounds. Reading the unfiltered queue here as well so a genuinely
+      // stuck-in-flight item is reported instead of silently passing this
+      // check.
+      const allItemsForJob = await getAllQueueItems();
+      const wholeQueueForJob = allItemsForJob.filter(i => i.jobId === jobId);
       const stillQueued = wholeQueueForJob.filter(
         i => i.table === 'job_photos' && i.payload?.updateId === updateId
       );
       // eslint-disable-next-line no-console
-      console.log('[internal-update] full queue for this job after sync():', wholeQueueForJob);
+      console.log('[internal-update] full queue for this job after sync() (including syncing/stranded):', wholeQueueForJob);
 
       // Direct read-after-write against job_photos, bypassing every layer
       // above (the offline queue, the sync chain, loadUpdates' grouping)
@@ -253,7 +262,11 @@ export default function InternalUpdatesPanel({ jobId, session }) {
 
       const messages = [...failedPhotos];
       if (stillQueued.length > 0) {
-        messages.push(stillQueued[0].lastError || `${stillQueued.length} photo${stillQueued.length === 1 ? '' : 's'} still syncing or stuck — see the sync banner above.`);
+        const stuckSyncing = stillQueued.filter(i => i.syncStatus === 'syncing').length;
+        const detail = stuckSyncing > 0
+          ? `${stuckSyncing} photo${stuckSyncing === 1 ? '' : 's'} stuck mid-upload (connection likely dropped) — will retry automatically on the next sync.`
+          : (stillQueued[0].lastError || `${stillQueued.length} photo${stillQueued.length === 1 ? '' : 's'} still syncing or stuck — see the sync banner above.`);
+        messages.push(detail);
       }
       const dbCount = verifyPhotos?.length ?? null;
       if (dbCount !== null && dbCount < queuedCount) {
