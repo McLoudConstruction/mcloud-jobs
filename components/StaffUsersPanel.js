@@ -25,6 +25,12 @@ export default function StaffUsersPanel({ session }) {
   const [nameTargetId, setNameTargetId] = useState(null);
   const [nameValue, setNameValue] = useState('');
 
+  const [signatureTargetId, setSignatureTargetId] = useState(null);
+  const [signatureValue, setSignatureValue] = useState('');
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureUploading, setSignatureUploading] = useState(false);
+  const [signatureDragOver, setSignatureDragOver] = useState(false);
+
   const load = useCallback(async () => {
     const { data } = await supabase.from('staff_users').select('*').order('created_at', { ascending: true });
     if (data) setStaff(data);
@@ -131,6 +137,46 @@ export default function StaffUsersPanel({ session }) {
     }
   }
 
+  async function handleSaveSignature(e) {
+    e.preventDefault();
+    setError('');
+    setSignatureSaving(true);
+    try {
+      await callApi('/api/staff/update', { targetUserId: signatureTargetId, action: 'set_signature', signatureHtml: signatureValue });
+      setSignatureTargetId(null);
+      setSignatureValue('');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSignatureSaving(false);
+    }
+  }
+
+  // Drops an uploaded image straight into the signature HTML as an <img>
+  // tag — same "branding" bucket the logo upload already uses (public
+  // bucket, so the image actually loads for a customer reading the
+  // email, not just inside the app). Appended rather than replacing
+  // anything already pasted in, so a signature copied from Gmail/Outlook
+  // plus a dropped-in logo both survive.
+  async function handleSignatureImageFile(file) {
+    if (!file || !signatureTargetId) return;
+    setError('');
+    setSignatureUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `signature-${signatureTargetId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('branding').upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('branding').getPublicUrl(path);
+      setSignatureValue(prev => `${prev}${prev.trim() ? '\n' : ''}<img src="${urlData.publicUrl}" alt="" style="max-width: 320px; display: block; margin-top: 8px;" />`);
+    } catch (err) {
+      setError(err.message || 'Image upload failed.');
+    } finally {
+      setSignatureUploading(false);
+    }
+  }
+
   return (
     <div className="card">
       <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between' }}>
@@ -213,6 +259,13 @@ export default function StaffUsersPanel({ session }) {
                 <button className="btn btn-sm" type="button" onClick={() => { setNameTargetId(member.id); setNameValue(member.full_name || ''); }}>
                   Edit
                 </button>
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  onClick={() => { setSignatureTargetId(member.id); setSignatureValue(member.signature_html || ''); }}
+                >
+                  {member.signature_html ? 'Edit signature' : 'Add signature'}
+                </button>
                 {member.status === 'invited' && (
                   <button className="btn btn-sm" type="button" onClick={() => handleResendInvite(member)}>Resend invite</button>
                 )}
@@ -245,6 +298,66 @@ export default function StaffUsersPanel({ session }) {
                   />
                   <button className="btn btn-primary btn-sm" type="submit">Save</button>
                   <button className="btn btn-sm" type="button" onClick={() => setPasswordTargetId(null)}>Cancel</button>
+                </form>
+              )}
+
+              {signatureTargetId === member.id && (
+                <form onSubmit={handleSaveSignature} style={{ width: '100%', marginTop: 8, border: '1px solid var(--line)', borderRadius: 6, padding: 12, background: 'var(--panel)' }}>
+                  <label>Signature for {member.full_name}</label>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
+                    Paste the HTML from their existing Gmail/Outlook signature, type plain text, or drop an image below (logo, handwritten signature, etc.) to add it in.
+                  </div>
+                  <textarea
+                    value={signatureValue}
+                    onChange={e => setSignatureValue(e.target.value)}
+                    rows={5}
+                    placeholder="e.g. Stachys McLoud&#10;McLoud Construction&#10;(555) 555-0100"
+                  />
+                  <div
+                    onDragOver={e => { e.preventDefault(); setSignatureDragOver(true); }}
+                    onDragLeave={() => setSignatureDragOver(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setSignatureDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleSignatureImageFile(file);
+                    }}
+                    style={{
+                      marginTop: 8, padding: '14px 10px', textAlign: 'center', borderRadius: 6,
+                      border: `2px dashed ${signatureDragOver ? 'var(--rust, #9b773d)' : 'var(--line)'}`,
+                      background: signatureDragOver ? 'rgba(155,119,61,0.08)' : 'transparent',
+                      fontSize: 12, color: 'var(--ink-soft)',
+                    }}
+                  >
+                    {signatureUploading ? (
+                      'Uploading…'
+                    ) : (
+                      <>
+                        Drag an image here, or{' '}
+                        <label style={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                          browse
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleSignatureImageFile(f); }}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  {signatureValue.trim() && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 4 }}>PREVIEW</div>
+                      <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 10, fontSize: 13 }} dangerouslySetInnerHTML={{ __html: signatureValue }} />
+                    </div>
+                  )}
+                  <div className="section-actions" style={{ marginTop: 10, marginBottom: 0 }}>
+                    <button className="btn btn-primary btn-sm" type="submit" disabled={signatureSaving || signatureUploading}>
+                      {signatureSaving ? 'Saving…' : 'Save signature'}
+                    </button>
+                    <button className="btn btn-sm" type="button" onClick={() => { setSignatureTargetId(null); setSignatureValue(''); }}>Cancel</button>
+                  </div>
                 </form>
               )}
             </div>

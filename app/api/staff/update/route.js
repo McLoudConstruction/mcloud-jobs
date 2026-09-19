@@ -19,7 +19,7 @@ export async function POST(request) {
       return Response.json({ error: 'Server not configured (missing SUPABASE_SERVICE_ROLE_KEY).' }, { status: 500 });
     }
 
-    const { accessToken, targetUserId, action, role, newPassword, fullName } = await request.json();
+    const { accessToken, targetUserId, action, role, newPassword, fullName, signatureHtml } = await request.json();
     if (!accessToken || !targetUserId || !action) {
       return Response.json({ error: 'Missing required fields.' }, { status: 400 });
     }
@@ -77,6 +77,11 @@ export async function POST(request) {
         return Response.json({ error: 'Full name is required.' }, { status: 400 });
       }
       const { error } = await service.from('staff_users').update({ full_name: fullName.trim() }).eq('id', targetUserId);
+      if (error) return Response.json({ error: error.message }, { status: 500 });
+    } else if (action === 'set_signature') {
+      // Empty string clears the signature — a staff member can be set
+      // back to "no signature" without a separate delete action.
+      const { error } = await service.from('staff_users').update({ signature_html: (signatureHtml || '').trim() || null }).eq('id', targetUserId);
       if (error) return Response.json({ error: error.message }, { status: 500 });
     } else if (action === 'resend_invite') {
       const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://jobs.mcloudconstruction.com'}/login`;
