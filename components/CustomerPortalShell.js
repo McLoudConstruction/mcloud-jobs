@@ -10,6 +10,7 @@ import { SignOutIcon } from './icons';
 // (shell-sidebar-inner/shell-nav-link), which stays untouched.
 const NAV_ITEMS = [
   { href: '/customerportal/projects', label: 'Home' },
+  { href: '/customerportal/documents', label: 'Documents' },
   { href: '/customerportal/invoices', label: 'Invoices' },
   { href: '/customerportal/inbox', label: 'Inbox' },
 ];
@@ -124,7 +125,14 @@ export default function CustomerPortalShell({ customerName, children }) {
           </nav>
         )}
 
-        <div className="shell-content" style={{ marginLeft: mounted && !isMobile ? sidebarWidth : 0 }}>
+        {/* No marginLeft here — .shell-body is already a flex row with
+            .shell-sidebar sized by its own inline width ahead of this div,
+            so content starts right where the sidebar ends. An extra
+            marginLeft equal to the sidebar width doubled that offset,
+            leaving a dead, unclickable strip of page between the sidebar
+            and the real content that belonged to neither. Same fix as
+            SubPortalShell's and AppShell's own .shell-content already have. */}
+        <div className="shell-content">
           {children}
         </div>
       </div>

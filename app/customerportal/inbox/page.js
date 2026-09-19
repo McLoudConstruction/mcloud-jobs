@@ -52,38 +52,43 @@ export default function CustomerInboxPage() {
 
   return (
     <CustomerPortalShell customerName={job?.customer_name}>
-      <div className="container" style={{ paddingTop: 24 }}>
+      <div className="container container-wide" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
         {job && (
-          <div className="card">
-            <h3>Have a question about your project?</h3>
-            <form onSubmit={submitQuestion}>
-              <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="Fill out your message here" />
-              {flash && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 8 }}>{flash}</div>}
-              <div className="section-actions">
-                <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Submit message'}</button>
+          <>
+            <div className="dash-section" style={{ paddingTop: 0 }}>
+              <h3>Ask a Question</h3>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                Anything about your project — this goes straight to McLoud Construction.
               </div>
-            </form>
+              <form onSubmit={submitQuestion}>
+                <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="Fill out your message here" />
+                {flash && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 8 }}>{flash}</div>}
+                <div className="section-actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Submit message'}</button>
+                </div>
+              </form>
+            </div>
 
-            {questions.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                {questions.map(q => (
-                  <div className="update-entry" key={q.id}>
-                    <div className="update-date">{fmtDate((q.created_at || '').slice(0, 10))}</div>
-                    {q.sender === 'admin' ? (
-                      <>
-                        <div className="update-field-label">McLoud Construction</div>
-                        <p>{q.message}</p>
-                      </>
-                    ) : (
+            <div className="dash-section">
+              <h3>Conversation</h3>
+              {questions.length === 0 && <div className="empty-state">No messages yet.</div>}
+              {questions.map(q => (
+                <div className="update-entry" key={q.id}>
+                  <div className="update-date">{fmtDate((q.created_at || '').slice(0, 10))}</div>
+                  {q.sender === 'admin' ? (
+                    <>
+                      <div className="update-field-label">McLoud Construction</div>
                       <p>{q.message}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                    </>
+                  ) : (
+                    <p>{q.message}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </CustomerPortalShell>

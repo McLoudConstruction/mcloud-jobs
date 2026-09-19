@@ -227,6 +227,12 @@ a { color: inherit; text-decoration: none; }
   color: var(--gold); font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
   border-left: 3px solid var(--accent); padding-left: 10px;
 }
+/* A section that genuinely needs action (e.g. Documents' "Needs Your
+   Attention") gets its heading accent in rust instead of the default
+   gold — no boxed/colored card needed to signal urgency. */
+.dash-section h3.dash-section-heading-rust{
+  color: var(--rust); border-left-color: var(--rust);
+}
 .weather-ribbon{
   padding-top: 16px;
   padding-bottom: 16px;
@@ -2094,7 +2100,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .pending-tag { color: var(--rust-dim); font-style: italic; }
 .promoted-tag { color: var(--ink-soft); font-size: 12px; margin-top: 6px; }
 
-/* ─── Customer portal Feed (Home page) ──────────────────────────────── */
+/* ─── Customer portal Feed (Home page) ──────────────────────────────────
+   Flat, hairline-divided rows — same "flowing list" shape as the Sub
+   Portal's dash-section rows — rather than individual boxed/pill-badge
+   cards. An item needing attention is marked by a small colored text tag
+   and bolder label, not a colored background block. */
 .portal-feed-item {
   display: flex;
   flex-wrap: wrap;
@@ -2106,40 +2116,32 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: inherit;
 }
 .portal-feed-item:last-child { border-bottom: none; }
+.portal-feed-item:hover { opacity: 0.7; }
 .portal-feed-label { font-size: 14px; color: var(--heading); }
 .portal-feed-sub { font-size: 12.5px; color: var(--ink-soft); flex-basis: 100%; }
-.portal-feed-date { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
-.portal-feed-item-new {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: #faf4e8;
-  border-radius: 8px;
-  padding: 14px 16px;
-  border-bottom: none;
-  margin-bottom: 8px;
-  border-left: 4px solid var(--accent);
-}
-.portal-feed-item-new .portal-feed-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.portal-feed-item-new .portal-feed-label { font-weight: 700; font-size: 15px; }
-.portal-feed-item-action { border-left-color: var(--rust); background: #fbeae7; }
-.portal-feed-item-invoice { border-left-color: var(--money); background: #eaf5ec; }
-.portal-feed-badge {
+.portal-feed-date { font-size: 12px; color: var(--ink-soft); margin-left: auto; white-space: nowrap; flex: none; }
+.portal-feed-item-new .portal-feed-label { font-weight: 700; }
+.portal-feed-tag {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #fff;
-  background: var(--accent);
-  padding: 3px 9px;
-  border-radius: 20px;
+  color: var(--accent);
   flex: none;
 }
-.portal-feed-item-action .portal-feed-badge { background: var(--rust); }
-.portal-feed-item-invoice .portal-feed-badge { background: var(--money); }
-.portal-feed-item-new .portal-feed-date { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; flex: none; margin-left: auto; }
+.portal-feed-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.portal-feed-item-action .portal-feed-tag { color: var(--rust); }
+.portal-feed-item-invoice .portal-feed-tag { color: var(--money); }
 .portal-feed-divider {
   font-size: 11px;
   text-transform: uppercase;
@@ -2147,6 +2149,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: var(--ink-soft);
   margin: 14px 0 4px;
 }
+
+/* ─── Customer portal Invoices: flat hairline rows, not boxed cards ───── */
+.portal-invoice-row{ padding: 14px 0; border-bottom: 1px solid var(--line); }
+.portal-invoice-row:last-child{ border-bottom: none; }
+.portal-invoice-row-top{ display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 
 /* ─── Customer portal Home: compact summary bar + feed/visit layout ───── */
 .portal-summary-bar {

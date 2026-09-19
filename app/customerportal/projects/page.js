@@ -61,18 +61,8 @@ export default function CustomerHomePage() {
 
   return (
     <CustomerPortalShell customerName={job?.customer_name}>
-      <div className="container" style={{ paddingTop: 24 }}>
+      <div className="container container-wide" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
-
-        <div className="card portal-welcome-card">
-          <h3 style={{ marginTop: 0 }}>Welcome to your Project Portal</h3>
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-soft)' }}>
-            This is your home base for everything happening on your project with McLoud Construction — your next scheduled visit,
-            your project details, and every update, estimate, contract, and document we send, all in one place below. New items
-            are highlighted at the top of the feed so you never miss one. Use <b>Invoices</b> in the sidebar to pay a bill, and
-            <b> Inbox</b> to send us a message directly.
-          </p>
-        </div>
 
         {job && (
           <>
@@ -84,35 +74,29 @@ export default function CustomerHomePage() {
               <span className={`badge badge-${job.stage} portal-summary-badge`}>{STAGE_LABELS[job.stage]}</span>
             </div>
 
-            <div className="portal-two-col portal-feed-layout">
-              <PortalFeed job={job} />
-
-              <div className="card">
-                <h3>Next Scheduled Visit</h3>
-                {hasVisit ? (
-                  <div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
-                      {fmtDate(job.scheduled_start_date)}
-                      {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
-                        <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
+            <div className="dash-section" style={{ paddingTop: 0 }}>
+              <h3>Next Scheduled Visit</h3>
+              {hasVisit ? (
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--heading)' }}>
+                    {fmtDate(job.scheduled_start_date)}
+                    {job.scheduled_end_date && job.scheduled_end_date !== job.scheduled_start_date && (
+                      <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--ink-soft)' }}> – {fmtDate(job.scheduled_end_date)}</span>
+                    )}
                   </div>
-                ) : (
-                  <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
-                )}
-              </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>We'll be on site for this project.</div>
+                </div>
+              ) : (
+                <div className="empty-state">Nothing on the calendar yet — we'll post a date here once your visit is scheduled.</div>
+              )}
             </div>
+
+            <PortalFeed job={job} />
           </>
         )}
       </div>
 
       <PasswordPromptModal open={passwordPromptOpen} onClose={dismissPasswordPrompt} />
-
-      <style jsx global>{`
-        .portal-welcome-card{ background: var(--panel); }
-      `}</style>
     </CustomerPortalShell>
   );
 }

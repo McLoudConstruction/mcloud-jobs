@@ -59,14 +59,14 @@ export default function CustomerDocumentsPage() {
 
   return (
     <CustomerPortalShell customerName={job?.customer_name}>
-      <div className="container" style={{ paddingTop: 24 }}>
+      <div className="container container-wide" style={{ paddingTop: 24 }}>
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
         {job && (
           <>
             {pendingSelections.length > 0 && (
-              <div className="card portal-doc-priority-card">
-                <h3>Needs Your Attention</h3>
+              <div className="dash-section" style={{ paddingTop: 0 }}>
+                <h3 className="dash-section-heading-rust">Needs Your Attention</h3>
                 <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
                   {pendingSelections.map(s => (
                     <a key={s.id} href={`/jobs/${job.id}/material-selections/${s.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
@@ -77,7 +77,7 @@ export default function CustomerDocumentsPage() {
               </div>
             )}
 
-            <div className="card">
+            <div className="dash-section" style={{ paddingTop: pendingSelections.length > 0 ? undefined : 0 }}>
               <h3>Estimate &amp; Contract</h3>
               <div className="section-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-start' }}>
                 {job.proposal_sent_at && (
@@ -98,7 +98,7 @@ export default function CustomerDocumentsPage() {
             </div>
 
             {changeOrders.length > 0 && (
-              <div className="card">
+              <div className="dash-section">
                 <h3>Change Orders</h3>
                 {changeOrders.map(co => (
                   <div className="update-entry" key={co.id}>
@@ -112,7 +112,7 @@ export default function CustomerDocumentsPage() {
               </div>
             )}
 
-            <div className="card">
+            <div className="dash-section">
               <h3>Progress Updates</h3>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
                 Every update we've posted on this project, most recent first.
@@ -131,10 +131,6 @@ export default function CustomerDocumentsPage() {
           </>
         )}
       </div>
-
-      <style jsx global>{`
-        .portal-doc-priority-card{ background: var(--panel); border-color: var(--rust); }
-      `}</style>
     </CustomerPortalShell>
   );
 }

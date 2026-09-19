@@ -149,7 +149,7 @@ export default function PortalFeed({ job }) {
   const rest = entries.filter(e => !e.isNew && !e.needsAction);
 
   return (
-    <div className="card portal-feed">
+    <div className="dash-section portal-feed">
       <h3>Updates &amp; Documents</h3>
 
       {entries.length === 0 && (
@@ -158,12 +158,10 @@ export default function PortalFeed({ job }) {
 
       {highlighted.map(e => (
         <a key={e.id} href={e.href} target="_blank" rel="noopener noreferrer" className={`portal-feed-item portal-feed-item-new ${variantClass(e)}`}>
-          <div className="portal-feed-item-top">
-            <span className="portal-feed-badge">{badgeLabel(e)}</span>
-            <span className="portal-feed-label">{e.label}</span>
-            <span className="portal-feed-date">{fmtDate(e.at)}</span>
-          </div>
+          <span className="portal-feed-tag">{badgeLabel(e)}</span>
+          <span className="portal-feed-label">{e.label}</span>
           {e.sub && <span className="portal-feed-sub">{e.sub}</span>}
+          <span className="portal-feed-date">{fmtDate(e.at)}</span>
         </a>
       ))}
 
