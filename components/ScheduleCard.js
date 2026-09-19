@@ -454,19 +454,27 @@ export default function ScheduleCard({ jobId, job }) {
   // date directly rather than being slotted into the existing sequence,
   // consistent with every other date edit here being independent of the
   // rest of the schedule.
+  // Available on the live/published schedule (a living document — always
+  // addable, not just at generate time) AND while reviewing a draft
+  // before Publish, in both List and Timeline. Whichever set is currently
+  // open (draft, if there is one, otherwise the published schedule) is
+  // the one a new item joins, so it doesn't jump ahead of an unpublished
+  // draft as if it were already live.
   async function saveNewPhase() {
-    if (!newPhase.label.trim()) { setError('Give the new line item a name.'); return; }
-    if (!newPhase.start_date) { setError('Pick a start date for the new line item.'); return; }
+    if (!newPhase.label.trim()) { setError('Give the new schedule item a name.'); return; }
+    if (!newPhase.start_date) { setError('Pick a start date for the new schedule item.'); return; }
     setError('');
 
     const computed = recomputeSequentialDates(
       [{ ...newPhase, duration_days: Math.max(1, Number(newPhase.duration_days) || 1) }],
       newPhase.start_date
     )[0];
-    const maxSortOrder = phases.length > 0 ? Math.max(...phases.map(p => p.sort_order)) : -1;
+    const targetSet = draft || phases;
+    const maxSortOrder = targetSet.length > 0 ? Math.max(...targetSet.map(p => p.sort_order)) : -1;
 
     const { error: insertError } = await supabase.from('job_phases').insert({
       job_id: jobId,
+      status: draft ? 'draft' : 'published',
       phase_key: 'custom',
       label: newPhase.label.trim(),
       trade: newPhase.trade || null,
@@ -503,6 +511,68 @@ export default function ScheduleCard({ jobId, job }) {
   const totalDays = (!draft && phases.length > 0)
     ? Math.round((new Date(phases[phases.length - 1].end_date) - new Date(phases[0].start_date)) / 86400000) + 1
     : null;
+
+  // Shared between the draft view and the live/published schedule — a
+  // schedule is a living document, so adding an item (choosing its type —
+  // a trade, or a non-billable type like Punch List / Inspection — via
+  // the same Trade dropdown Generate Schedule itself uses) is available
+  // whether or not there's a draft pending, and in both List and Timeline.
+  const addPhaseButton = !addingPhase && (
+    <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add Schedule Item</button>
+  );
+  const addPhaseForm = addingPhase && (
+    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13, marginTop: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Name</label>
+          <input type="text" value={newPhase.label} onChange={e => setNewPhase({ ...newPhase, label: e.target.value })} placeholder="e.g. Fence repair" style={{ width: 180 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Type</label>
+          <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })} style={{ width: 150 }}>
+            <option value="">No specific trade</option>
+            <optgroup label="Trades">
+              {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+            </optgroup>
+            {/* Not billable trades — delays, inspections, the
+                punch list/walkthrough, admin time — but real
+                schedule phases with their own color. */}
+            <optgroup label="Other">
+              {SCHEDULE_PHASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </optgroup>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Start date</label>
+          <input type="date" value={newPhase.start_date} onChange={e => setNewPhase({ ...newPhase, start_date: e.target.value })} />
+        </div>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Duration</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="number" min="1" value={newPhase.duration_days} onChange={e => setNewPhase({ ...newPhase, duration_days: e.target.value })} style={{ width: 56 }} />
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Weekend work</label>
+          <select value={newPhase.allow_weekend_work ? 'yes' : 'no'} onChange={e => setNewPhase({ ...newPhase, allow_weekend_work: e.target.value === 'yes' })}>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Work location</label>
+          <select value={newPhase.work_location} onChange={e => setNewPhase({ ...newPhase, work_location: e.target.value })}>
+            {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        <button className="btn btn-sm btn-primary" onClick={saveNewPhase}>Add to schedule</button>
+        <button className="btn btn-sm" onClick={() => { setAddingPhase(false); setError(''); }}>Cancel</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="card">
@@ -590,7 +660,11 @@ export default function ScheduleCard({ jobId, job }) {
               </div>
             </div>
           ))}
+
+          {addPhaseForm}
+
           <div className="section-actions">
+            {addPhaseButton}
             <button className="btn btn-primary btn-sm" onClick={publishDraft} disabled={saving}>{saving ? 'Publishing…' : 'Publish Schedule'}</button>
             <button className="btn btn-sm" onClick={cancelDraft}>Cancel</button>
           </div>
@@ -693,64 +767,10 @@ export default function ScheduleCard({ jobId, job }) {
             </div>
           )}
 
-          {view === 'list' && addingPhase && (
-            <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Name</label>
-                  <input type="text" value={newPhase.label} onChange={e => setNewPhase({ ...newPhase, label: e.target.value })} placeholder="e.g. Fence repair" style={{ width: 180 }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Trade</label>
-                  <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })} style={{ width: 150 }}>
-                    <option value="">No specific trade</option>
-                    <optgroup label="Trades">
-                      {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
-                    </optgroup>
-                    {/* Not billable trades — delays, inspections, the
-                        punch list/walkthrough, admin time — but real
-                        schedule phases with their own color. */}
-                    <optgroup label="Other">
-                      {SCHEDULE_PHASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </optgroup>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Start date</label>
-                  <input type="date" value={newPhase.start_date} onChange={e => setNewPhase({ ...newPhase, start_date: e.target.value })} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Duration</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" min="1" value={newPhase.duration_days} onChange={e => setNewPhase({ ...newPhase, duration_days: e.target.value })} style={{ width: 56 }} />
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Weekend work</label>
-                  <select value={newPhase.allow_weekend_work ? 'yes' : 'no'} onChange={e => setNewPhase({ ...newPhase, allow_weekend_work: e.target.value === 'yes' })}>
-                    <option value="no">No</option>
-                    <option value="yes">Yes</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Work location</label>
-                  <select value={newPhase.work_location} onChange={e => setNewPhase({ ...newPhase, work_location: e.target.value })}>
-                    {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                <button className="btn btn-sm btn-primary" onClick={saveNewPhase}>Add to schedule</button>
-                <button className="btn btn-sm" onClick={() => { setAddingPhase(false); setError(''); }}>Cancel</button>
-              </div>
-            </div>
-          )}
+          {addPhaseForm}
 
           <div className="section-actions">
-            {view === 'list' && !addingPhase && (
-              <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add line item</button>
-            )}
+            {addPhaseButton}
             <button className="btn btn-sm" onClick={() => { setStartDate(phases[0].start_date); generate(); }}>Regenerate</button>
             <button className="btn btn-sm btn-danger" onClick={removeAllPhases}>Remove schedule</button>
           </div>
@@ -911,7 +931,13 @@ function TimelineView({ phases, onPhaseUpdate }) {
 
   const minDate = new Date(Math.min(...effectivePhases.map(p => new Date(p.start_date + 'T00:00:00'))));
   const maxDate = new Date(Math.max(...effectivePhases.map(p => new Date(p.end_date + 'T00:00:00'))));
-  const totalSpan = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
+  // Grid extends a full extra week past the last scheduled day — this is
+  // a living schedule new items get added to over time, so there's
+  // always visible empty space at the end to drag a bar into or see
+  // where a newly added item landed, rather than the chart stopping
+  // exactly at the last bar.
+  const displayMaxDate = addCalendarDays(maxDate, 7);
+  const totalSpan = Math.max(1, Math.round((displayMaxDate - minDate) / 86400000) + 1);
 
   let dayWidth = DAY_WIDTH;
   if (!isMobile && containerWidth > 0) {
