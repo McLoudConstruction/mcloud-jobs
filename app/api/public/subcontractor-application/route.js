@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendMail } from '../../../../lib/sendMail';
+import { logCommunication } from '../../../../lib/logCommunication';
+import { buildSubApplicationReceivedEmail } from '../../../../lib/emailTemplates';
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -138,6 +141,20 @@ export async function POST(request) {
       job_id: null,
       message: `${companyName} submitted their subcontractor application — review it under Subcontractors.`,
     });
+
+    // Confirms receipt to the applicant right away — separate from
+    // buildSubApplicationApprovedEmail/DeclinedEmail, which only go out
+    // once the office actually reviews it, which can take days.
+    if (contactEmail) {
+      try {
+        const { subject, html, text } = buildSubApplicationReceivedEmail({ companyName });
+        const { provider } = await sendMail({ to: contactEmail, subject, html, text });
+        await logCommunication({ category: 'sub_application_received', toEmail: contactEmail, subject, status: 'sent', provider });
+      } catch (mailErr) {
+        await logCommunication({ category: 'sub_application_received', toEmail: contactEmail, status: 'failed', errorMessage: mailErr.message });
+        console.error('Failed to send subcontractor application confirmation:', mailErr.message);
+      }
+    }
 
     return Response.json({ ok: true });
   } catch (err) {

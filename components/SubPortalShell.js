@@ -16,8 +16,112 @@ const NAV_ITEMS = [
   { href: '/sub-portal/calendar', label: 'Calendar' },
   { href: '/sub-portal/invoices', label: 'Invoices' },
   { href: '/sub-portal/messages', label: 'Messages' },
+  { href: '/sub-portal/notifications', label: 'Notifications' },
   { href: '/sub-portal/settings', label: 'Settings' },
 ];
+
+const PORTAL_NOTIFICATION_CATEGORY_LABELS = {
+  message: 'New Message',
+  rfp_awarded: 'Awarded',
+  general: 'Update',
+};
+
+function timeAgo(dateStr) {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Notification CENTER (persisted history — portal_notifications,
+// migration 126) — a distinct concept from the "Needs Your Attention"
+// to-do bell further down, which is computed on the fly and never has a
+// history to look back through.
+function PortalNotificationsBell({ company, align = 'right' }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+  const [panelPos, setPanelPos] = useState(null);
+  const panelRef = useRef(null);
+  const btnRef = useRef(null);
+
+  const load = useCallback((companyId) => {
+    supabase.from('portal_notifications').select('*').eq('recipient_kind', 'subcontractor').eq('company_id', companyId).eq('dismissed', false)
+      .order('created_at', { ascending: false }).limit(8)
+      .then(({ data }) => { if (data) setItems(data); });
+  }, []);
+
+  useEffect(() => {
+    if (!company?.id) { setItems([]); return; }
+    load(company.id);
+    const channel = supabase.channel(`sub-portal-notifications-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_notifications', filter: `company_id=eq.${company.id}` }, () => load(company.id))
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [company?.id, load]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  function toggleOpen() {
+    setOpen(o => {
+      const next = !o;
+      if (next && btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        setPanelPos(align === 'left' ? { top: rect.bottom + 8, left: rect.left } : { top: rect.bottom + 8, right: window.innerWidth - rect.right });
+      }
+      return next;
+    });
+  }
+
+  async function openItem(item) {
+    setOpen(false);
+    if (!item.read_at) await supabase.from('portal_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id);
+    router.push(item.link_path || '/sub-portal/notifications');
+  }
+
+  if (!company) return null;
+  const unreadCount = items.filter(i => !i.read_at).length;
+
+  return (
+    <div className="pnav-bell-wrap" ref={panelRef}>
+      <button type="button" className="pnav-bell-btn" ref={btnRef} onClick={toggleOpen} aria-label="Notifications">
+        <BellIcon />
+        {unreadCount > 0 && <span className="pnav-bell-dot" />}
+      </button>
+
+      {open && panelPos && (
+        <div className="pnav-bell-panel" style={{ top: panelPos.top, left: panelPos.left, right: panelPos.right }}>
+          <div className="pnav-bell-panel-header">Notifications</div>
+          {items.length === 0 && <div className="pnav-bell-empty">Nothing yet.</div>}
+          {items.map(item => (
+            <button key={item.id} type="button" className="pnav-bell-row" onClick={() => openItem(item)} style={{ width: '100%', textAlign: 'left', borderLeft: 0, borderRight: 0, borderBottom: 0, borderRadius: 0, font: 'inherit', background: 'none', cursor: 'pointer' }}>
+              <div className="pnav-bell-row-label">
+                {!item.read_at && <span className="pnav-bell-dot" style={{ position: 'static', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />}
+                {PORTAL_NOTIFICATION_CATEGORY_LABELS[item.category] || 'Update'}
+              </div>
+              <div className="pnav-bell-row-detail">{item.message} · {timeAgo(item.created_at)}</div>
+            </button>
+          ))}
+          <div className="pnav-bell-divider" />
+          <a href="/sub-portal/notifications" className="pnav-bell-row" style={{ display: 'block', textAlign: 'center', fontWeight: 600 }} onClick={() => setOpen(false)}>
+            View all
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // isMobile gates the bell here rather than relying on the sidebar's own
 // CSS display:none below 900px — that only hides it visually, and this
@@ -71,6 +175,7 @@ export default function SubPortalShell({ company, role, children }) {
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
   useEffect(() => {
@@ -98,6 +203,23 @@ export default function SubPortalShell({ company, role, children }) {
     return () => { active = false; supabase.removeChannel(channel); };
   }, [company?.id]);
 
+  // Same pattern, for the persisted notification log's own badge on the
+  // Notifications nav item.
+  useEffect(() => {
+    if (!company?.id) return;
+    let active = true;
+    function loadUnread() {
+      supabase.from('portal_notifications').select('*', { count: 'exact', head: true })
+        .eq('recipient_kind', 'subcontractor').eq('company_id', company.id).eq('dismissed', false).is('read_at', null)
+        .then(({ count }) => { if (active) setUnreadNotifications(count || 0); });
+    }
+    loadUnread();
+    const channel = supabase.channel(`sub-portal-notifications-badge-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_notifications', filter: `company_id=eq.${company.id}` }, loadUnread)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [company?.id]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/sub-portal');
@@ -110,13 +232,16 @@ export default function SubPortalShell({ company, role, children }) {
   return (
     <div className="shell">
       <div className="shell-topbar">
-        {/* No shell-header-left block here — with nothing else in the
-            topbar, the flex-start layout puts the logo at the far left
-            on its own. Company identity now lives in the sidebar. */}
+        {/* Company identity lives in the sidebar; the topbar just carries
+            the logo and the persisted-notification bell (shell-topbar-actions
+            pushes it to the far right via margin-left: auto). */}
         <div className="shell-logo">
           {settings.logo_url
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 96, width: 'auto' }} />
             : <span className="brand">McLoud <span>Subcontractor</span></span>}
+        </div>
+        <div className="shell-topbar-actions">
+          <PortalNotificationsBell company={company} align="right" />
         </div>
       </div>
 
@@ -156,6 +281,9 @@ export default function SubPortalShell({ company, role, children }) {
                     {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
                       <span className="pnav-badge">{unreadMessages}</span>
                     )}
+                    {item.href === '/sub-portal/notifications' && unreadNotifications > 0 && (
+                      <span className="pnav-badge">{unreadNotifications}</span>
+                    )}
                   </a>
                 ))}
               </div>
@@ -184,6 +312,9 @@ export default function SubPortalShell({ company, role, children }) {
                 {item.label}
                 {item.href === '/sub-portal/messages' && unreadMessages > 0 && (
                   <span className="pnav-badge">{unreadMessages}</span>
+                )}
+                {item.href === '/sub-portal/notifications' && unreadNotifications > 0 && (
+                  <span className="pnav-badge">{unreadNotifications}</span>
                 )}
               </a>
             ))}

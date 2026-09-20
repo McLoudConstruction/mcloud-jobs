@@ -42,7 +42,32 @@ export async function POST(request) {
 
   if (event.type === 'payment_intent.payment_failed') {
     const intent = event.data.object;
-    await supabase.from('payments').update({ status: 'failed' }).eq('stripe_payment_intent_id', intent.id);
+    const declineReason = intent.last_payment_error?.message || null;
+    const { data: payment } = await supabase.from('payments').select('*').eq('stripe_payment_intent_id', intent.id).single();
+    if (payment) {
+      await supabase.from('payments').update({ status: 'failed', failure_reason: declineReason }).eq('id', payment.id);
+
+      // Staff bell (+ owner email, same as a successful payment already
+      // does) — the office needs to know a payment didn't go through
+      // just as much as they need to know one did.
+      await supabase.from('notifications').insert({
+        job_id: payment.job_id,
+        message: `Payment failed: $${payment.total_charged.toFixed(2)} via ${payment.payment_method.replace('_', ' ')}${declineReason ? ` — ${declineReason}` : ''}.`,
+      });
+
+      // Customer-facing: portal_notifications' own AFTER INSERT trigger
+      // (migration 126) emails the customer immediately — this is what
+      // "shows to the customer immediately" instead of them only
+      // noticing days later that the invoice never cleared.
+      await supabase.from('portal_notifications').insert({
+        recipient_kind: 'customer',
+        job_id: payment.job_id,
+        category: 'payment_failed',
+        message: `A payment attempt of $${payment.total_charged.toFixed(2)} could not be processed${declineReason ? ` — ${declineReason}` : ''}.`,
+        link_path: '/customerportal/invoices',
+        meta: declineReason ? { decline_reason: declineReason } : {},
+      });
+    }
   }
 
   return Response.json({ received: true });

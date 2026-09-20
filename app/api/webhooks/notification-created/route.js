@@ -1,5 +1,6 @@
 import { getAdminClient } from '../../../../lib/supabaseAdmin';
 import { sendMail } from '../../../../lib/sendMail';
+import { logCommunication } from '../../../../lib/logCommunication';
 import { buildOwnerNotificationEmail } from '../../../../lib/emailTemplates';
 
 // Fired by a Postgres trigger (migration 111) the instant a row lands in
@@ -42,10 +43,17 @@ export async function POST(request) {
 
   try {
     const { subject, html, text } = buildOwnerNotificationEmail({ message, jobNumber });
-    await sendMail({ to, subject, html, text, jobId: jobId || undefined });
+    const { provider } = await sendMail({ to, subject, html, text, jobId: jobId || undefined });
+    // This was the one email in the app that never showed up in
+    // Communications Log — every other send (docs, invites, cron
+    // follow-ups, sub approve/decline) already logs on both success and
+    // failure. Closing that gap here rather than leaving the owner's own
+    // copy-email as the one unaudited channel.
+    await logCommunication({ category: 'owner_notification', toEmail: to, subject, jobId: jobId || null, sentBy: 'system (notification trigger)', status: 'sent', provider });
     return Response.json({ sent: true });
   } catch (err) {
     console.error('Failed to email owner about notification:', err.message);
+    await logCommunication({ category: 'owner_notification', toEmail: to, jobId: jobId || null, sentBy: 'system (notification trigger)', status: 'failed', errorMessage: err.message });
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
