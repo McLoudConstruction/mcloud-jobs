@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import PopupModal from './PopupModal';
 import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
@@ -517,61 +518,73 @@ export default function ScheduleCard({ jobId, job }) {
   // a trade, or a non-billable type like Punch List / Inspection — via
   // the same Trade dropdown Generate Schedule itself uses) is available
   // whether or not there's a draft pending, and in both List and Timeline.
-  const addPhaseButton = !addingPhase && (
+  const addPhaseButton = (
     <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add Schedule Item</button>
   );
-  const addPhaseForm = addingPhase && (
-    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13, marginTop: 8 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+
+  function closeAddPhase() {
+    setAddingPhase(false);
+    setError('');
+    setNewPhase({ label: '', trade: '', start_date: '', duration_days: 1, preferred_start_day: '', allow_weekend_work: false, work_location: 'indoor' });
+  }
+
+  const addPhaseModal = (
+    <PopupModal open={addingPhase} onClose={closeAddPhase} maxWidth={440}>
+      <h3>Add Schedule Item</h3>
+      <label>Name</label>
+      <input type="text" value={newPhase.label} onChange={e => setNewPhase({ ...newPhase, label: e.target.value })} placeholder="e.g. Fence repair" />
+
+      <label style={{ marginTop: 12 }}>Type</label>
+      <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })}>
+        <option value="">No specific trade</option>
+        <optgroup label="Trades">
+          {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+        </optgroup>
+        {/* Not billable trades — delays, inspections, the
+            punch list/walkthrough, admin time — but real
+            schedule phases with their own color. */}
+        <optgroup label="Other">
+          {SCHEDULE_PHASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </optgroup>
+      </select>
+
+      <div className="two-col" style={{ marginTop: 12 }}>
         <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Name</label>
-          <input type="text" value={newPhase.label} onChange={e => setNewPhase({ ...newPhase, label: e.target.value })} placeholder="e.g. Fence repair" style={{ width: 180 }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Type</label>
-          <select value={newPhase.trade} onChange={e => setNewPhase({ ...newPhase, trade: e.target.value })} style={{ width: 150 }}>
-            <option value="">No specific trade</option>
-            <optgroup label="Trades">
-              {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
-            </optgroup>
-            {/* Not billable trades — delays, inspections, the
-                punch list/walkthrough, admin time — but real
-                schedule phases with their own color. */}
-            <optgroup label="Other">
-              {SCHEDULE_PHASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </optgroup>
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Start date</label>
+          <label>Start date</label>
           <input type="date" value={newPhase.start_date} onChange={e => setNewPhase({ ...newPhase, start_date: e.target.value })} />
         </div>
         <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Duration</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="number" min="1" value={newPhase.duration_days} onChange={e => setNewPhase({ ...newPhase, duration_days: e.target.value })} style={{ width: 56 }} />
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
+          <label>Duration</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="number" min="1" value={newPhase.duration_days} onChange={e => setNewPhase({ ...newPhase, duration_days: e.target.value })} style={{ width: 64 }} />
+            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>days</span>
           </div>
         </div>
+      </div>
+
+      <div className="two-col" style={{ marginTop: 12 }}>
         <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Weekend work</label>
+          <label>Weekend work</label>
           <select value={newPhase.allow_weekend_work ? 'yes' : 'no'} onChange={e => setNewPhase({ ...newPhase, allow_weekend_work: e.target.value === 'yes' })}>
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
         </div>
         <div>
-          <label style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Work location</label>
+          <label>Work location</label>
           <select value={newPhase.work_location} onChange={e => setNewPhase({ ...newPhase, work_location: e.target.value })}>
             {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-        <button className="btn btn-sm btn-primary" onClick={saveNewPhase}>Add to schedule</button>
-        <button className="btn btn-sm" onClick={() => { setAddingPhase(false); setError(''); }}>Cancel</button>
+
+      {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 10 }}>{error}</div>}
+
+      <div className="section-actions" style={{ marginTop: 18 }}>
+        <button className="btn btn-sm" onClick={closeAddPhase}>Cancel</button>
+        <button className="btn btn-sm btn-primary" onClick={async () => { await saveNewPhase(); }}>Add to schedule</button>
       </div>
-    </div>
+    </PopupModal>
   );
 
   return (
@@ -663,8 +676,6 @@ export default function ScheduleCard({ jobId, job }) {
               </div>
             </div>
           ))}
-
-          {addPhaseForm}
 
           <div className="section-actions" style={{ justifyContent: 'flex-end' }}>
             <button className="btn btn-sm" onClick={cancelDraft}>Cancel</button>
@@ -772,14 +783,14 @@ export default function ScheduleCard({ jobId, job }) {
             </div>
           )}
 
-          {addPhaseForm}
-
           <div className="section-actions">
             <button className="btn btn-sm" onClick={() => { setStartDate(phases[0].start_date); generate(); }}>Regenerate</button>
             <button className="btn btn-sm btn-danger" onClick={removeAllPhases}>Remove schedule</button>
           </div>
         </div>
       )}
+
+      {addPhaseModal}
     </div>
   );
 }
