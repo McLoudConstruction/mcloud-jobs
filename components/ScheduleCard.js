@@ -607,9 +607,12 @@ export default function ScheduleCard({ jobId, job }) {
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Review before publishing — saved as a draft, safe to leave and come back</div>
 
-          <div className="section-actions" style={{ marginTop: 0, marginBottom: 12 }}>
-            <button className={`btn btn-sm ${view === 'list' ? 'btn-primary' : ''}`} onClick={() => setView('list')}>List</button>
-            <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+          <div className="section-actions" style={{ marginTop: 0, marginBottom: 12, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={`btn btn-sm ${view === 'list' ? 'btn-primary' : ''}`} onClick={() => setView('list')}>List</button>
+              <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+            </div>
+            {addPhaseButton}
           </div>
 
           {view === 'timeline' && <TimelineView phases={draft} onPhaseUpdate={updatePhaseDates} />}
@@ -663,10 +666,9 @@ export default function ScheduleCard({ jobId, job }) {
 
           {addPhaseForm}
 
-          <div className="section-actions">
-            {addPhaseButton}
-            <button className="btn btn-primary btn-sm" onClick={publishDraft} disabled={saving}>{saving ? 'Publishing…' : 'Publish Schedule'}</button>
+          <div className="section-actions" style={{ justifyContent: 'flex-end' }}>
             <button className="btn btn-sm" onClick={cancelDraft}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={publishDraft} disabled={saving}>{saving ? 'Publishing…' : 'Publish Schedule'}</button>
           </div>
         </div>
       )}
@@ -679,9 +681,12 @@ export default function ScheduleCard({ jobId, job }) {
             </div>
           )}
 
-          <div className="section-actions" style={{ marginTop: 0, marginBottom: 12 }}>
-            <button className={`btn btn-sm ${view === 'list' ? 'btn-primary' : ''}`} onClick={() => setView('list')}>List</button>
-            <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+          <div className="section-actions" style={{ marginTop: 0, marginBottom: 12, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={`btn btn-sm ${view === 'list' ? 'btn-primary' : ''}`} onClick={() => setView('list')}>List</button>
+              <button className={`btn btn-sm ${view === 'timeline' ? 'btn-primary' : ''}`} onClick={() => setView('timeline')}>Timeline</button>
+            </div>
+            {addPhaseButton}
           </div>
 
           {view === 'timeline' && <TimelineView phases={phases} onPhaseUpdate={updatePhaseDates} />}
@@ -770,7 +775,6 @@ export default function ScheduleCard({ jobId, job }) {
           {addPhaseForm}
 
           <div className="section-actions">
-            {addPhaseButton}
             <button className="btn btn-sm" onClick={() => { setStartDate(phases[0].start_date); generate(); }}>Regenerate</button>
             <button className="btn btn-sm btn-danger" onClick={removeAllPhases}>Remove schedule</button>
           </div>
