@@ -13,6 +13,11 @@ function fmtDateTime(v) {
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function fmtDate(v) {
+  if (!v) return '—';
+  return new Date(v + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return null;
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -94,6 +99,9 @@ export default function RfpDetailPage() {
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
             {projectLabel(rfp.jobs)}{rfp.jobs?.project_address}
           </div>
+          {rfp.expected_by && (
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 6 }}>Expected by {fmtDate(rfp.expected_by)}</div>
+          )}
           {rfp.description && <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{rfp.description}</p>}
           {rfp.source_folder && (
             <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Source: {rfp.source_folder}</div>

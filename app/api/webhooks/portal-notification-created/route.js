@@ -1,7 +1,7 @@
 import { getAdminClient } from '../../../../lib/supabaseAdmin';
 import { sendMail } from '../../../../lib/sendMail';
 import { logCommunication } from '../../../../lib/logCommunication';
-import { buildMessageReceivedEmail, buildRfpAwardedEmail, buildPaymentFailedEmail } from '../../../../lib/emailTemplates';
+import { buildMessageReceivedEmail, buildRfpAwardedEmail, buildRfpReminderEmail, buildPaymentFailedEmail } from '../../../../lib/emailTemplates';
 
 const PORTAL_URL = 'https://jobs.mcloudconstruction.com/customerportal';
 const SUB_PORTAL_URL = 'https://jobs.mcloudconstruction.com/sub-portal';
@@ -45,7 +45,7 @@ export async function POST(request) {
       to = company?.contact_email;
       if (!to) return Response.json({ skipped: true, reason: 'No email on file for this company.' });
 
-      if (category === 'rfp_awarded') {
+      if (category === 'rfp_awarded' || category === 'rfp_reminder') {
         let rfpTitle = 'a request for proposal';
         let projectAddress = null;
         if (sourceId) {
@@ -53,7 +53,9 @@ export async function POST(request) {
           if (rfp?.title) rfpTitle = rfp.title;
           projectAddress = rfp?.jobs?.project_address || null;
         }
-        payload = buildRfpAwardedEmail({ companyName: company.company_name, rfpTitle, projectAddress });
+        payload = category === 'rfp_awarded'
+          ? buildRfpAwardedEmail({ companyName: company.company_name, rfpTitle, projectAddress })
+          : buildRfpReminderEmail({ companyName: company.company_name, rfpTitle, projectAddress });
       } else {
         payload = buildMessageReceivedEmail({ recipientName: company.company_name, senderLabel: 'McLoud Construction', portalUrl: SUB_PORTAL_URL, portalLabel: 'Sub Portal' });
       }

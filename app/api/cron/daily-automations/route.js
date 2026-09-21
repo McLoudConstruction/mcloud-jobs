@@ -5,6 +5,7 @@ import { logCommunication } from '../../../../lib/logCommunication';
 import { phaseForStage } from '../../../../lib/constants';
 import { tagSubjectWithJob } from '../../../../lib/emailThreading';
 import { syncConnectionEmail } from '../../../../lib/integrations/emailSync';
+import { workdayOnOrAfter } from '../../../../lib/scheduleDates';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -36,6 +37,15 @@ function daysBetween(dateStr, today) {
   const d = new Date(dateStr.length === 10 ? dateStr + 'T00:00:00' : dateStr);
   const diffMs = new Date(today.toDateString()) - new Date(d.toDateString());
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+// Calendar-day add on a full timestamptz or YYYY-MM-DD string, returned
+// as YYYY-MM-DD — used below to turn an RFP's created_at into "2 weeks
+// from RFP entry date" for the open-ended case.
+function addCalendarDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function GET(request) {
@@ -181,6 +191,56 @@ export async function GET(request) {
     }
   } catch (err) {
     results.errors.push(`Proposal follow-up query failed: ${err.message}`);
+  }
+
+  // ── RFP proposal reminders: one nudge per recipient, on the next
+  // workday on/after the RFP's due date. Due date is the staff-set
+  // Expected By date, or 2 weeks (14 calendar days) after the RFP was
+  // created when left open-ended (migration 128). Only recipients who
+  // haven't responded yet get one, and only once ever per recipient.
+  // Sent as a portal_notifications row rather than a direct email —
+  // its own AFTER INSERT trigger both emails the recipient (via
+  // buildRfpReminderEmail, wired up in the notification-created
+  // webhook) and lights up their Sub Portal bell, same fan-out already
+  // used for "you were awarded this RFP".
+  try {
+    const { data: rfps } = await supabase
+      .from('rfps')
+      .select('id, job_id, title, expected_by, created_at, rfp_recipients(id, company_id, status, reminder_sent_at)')
+      .eq('status', 'open');
+
+    const todayStr = today.toISOString().slice(0, 10);
+    results.rfp_reminders_sent = 0;
+
+    for (const rfp of rfps || []) {
+      const dueDate = rfp.expected_by || addCalendarDays(rfp.created_at, 14);
+      const reminderDate = workdayOnOrAfter(dueDate);
+      if (todayStr < reminderDate) continue;
+
+      for (const recipient of rfp.rfp_recipients || []) {
+        if (recipient.reminder_sent_at) continue;
+        if (!['sent', 'viewed'].includes(recipient.status)) continue; // already responded, awarded, or not_awarded
+
+        try {
+          const { error: notifyError } = await supabase.from('portal_notifications').insert({
+            recipient_kind: 'subcontractor',
+            company_id: recipient.company_id,
+            job_id: rfp.job_id,
+            category: 'rfp_reminder',
+            message: `Just a quick reminder to submit your proposal for "${rfp.title}".`,
+            link_path: '/sub-portal/rfps',
+            source_id: rfp.id,
+          });
+          if (notifyError) throw notifyError;
+          await supabase.from('rfp_recipients').update({ reminder_sent_at: new Date().toISOString() }).eq('id', recipient.id);
+          results.rfp_reminders_sent++;
+        } catch (err) {
+          results.errors.push(`RFP recipient ${recipient.id}: ${err.message}`);
+        }
+      }
+    }
+  } catch (err) {
+    results.errors.push(`RFP reminder query failed: ${err.message}`);
   }
 
   // ── Inbound email sync — folded in here rather than its own cron

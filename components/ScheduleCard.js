@@ -2,10 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PopupModal from './PopupModal';
-import { recomputeSequentialDates, countWorkableDays, splitAtWeekends } from '../lib/scheduleDates';
+import { recomputeSequentialDates, countWorkableDays, splitAtWeekends, insertPhaseChronologically } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
-import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES } from '../lib/constants';
+import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES, PROJECT_COORDINATION_TYPE } from '../lib/constants';
 
 const WORK_LOCATION_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
@@ -291,12 +291,17 @@ export default function ScheduleCard({ jobId, job }) {
     setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
   }
 
-  // Persists every row in a just-edited draft back to its already-inserted
+  // Persists every row in a just-edited set back to its already-inserted
   // job_phases row (draft rows get a real id the moment Generate Schedule
   // runs — see generate() above), so a duration/day/location tweak isn't
-  // lost either, same as the draft itself no longer being lost.
-  async function persistDraftRows(rows) {
+  // lost either, same as the draft itself no longer being lost. Also used
+  // for the published set now that reordering (movePhaseUp, and a new
+  // item snapping into its date-based row — see insertPhaseChronologically)
+  // can change sort_order and downstream dates on rows that were never
+  // individually edited.
+  async function persistPhaseRows(rows) {
     await Promise.all(rows.filter(p => p.id).map(p => supabase.from('job_phases').update({
+      sort_order: p.sort_order,
       duration_days: p.duration_days,
       start_date: p.start_date,
       end_date: p.end_date,
@@ -313,27 +318,27 @@ export default function ScheduleCard({ jobId, job }) {
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
     const recomputed = recomputeSequentialDates(updated, startDate);
     setDraft(recomputed);
-    persistDraftRows(recomputed);
+    persistPhaseRows(recomputed);
   }
 
   function updateDraftPreferredStartDay(index, value) {
     const updated = draft.map((p, i) => i === index ? { ...p, preferred_start_day: value || null } : p);
     const recomputed = recomputeSequentialDates(updated, startDate);
     setDraft(recomputed);
-    persistDraftRows(recomputed);
+    persistPhaseRows(recomputed);
   }
 
   function updateDraftAllowWeekend(index, allow) {
     const updated = draft.map((p, i) => i === index ? { ...p, allow_weekend_work: allow } : p);
     const recomputed = recomputeSequentialDates(updated, startDate);
     setDraft(recomputed);
-    persistDraftRows(recomputed);
+    persistPhaseRows(recomputed);
   }
 
   function updateDraftWorkLocation(index, value) {
     const updated = draft.map((p, i) => i === index ? { ...p, work_location: value } : p);
     setDraft(updated);
-    persistDraftRows(updated);
+    persistPhaseRows(updated);
   }
 
   // Lets a phase representing one trade in a concurrent group (e.g.
@@ -365,7 +370,7 @@ export default function ScheduleCard({ jobId, job }) {
         draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
         startDate
       );
-      await persistDraftRows(cleanDraft);
+      await persistPhaseRows(cleanDraft);
 
       await supabase.from('job_phases').delete().eq('job_id', jobId).eq('status', 'published');
       const { error: publishError } = await supabase
@@ -471,7 +476,17 @@ export default function ScheduleCard({ jobId, job }) {
       newPhase.start_date
     )[0];
     const targetSet = draft || phases;
-    const maxSortOrder = targetSet.length > 0 ? Math.max(...targetSet.map(p => p.sort_order)) : -1;
+
+    // Positioned by date, not just appended at the end — a Project
+    // Coordination block also bumps everything after it forward by its
+    // own length (see PROJECT_COORDINATION_TYPE and
+    // insertPhaseChronologically), since that block represents real
+    // time nothing else happens; any other item just slots into the
+    // right row and reflows what comes after it sequentially.
+    const merged = insertPhaseChronologically(targetSet, computed, { bumpDates: newPhase.trade === PROJECT_COORDINATION_TYPE });
+    const insertedIndex = merged.findIndex(p => p === computed);
+    const insertedSortOrder = merged[insertedIndex].sort_order;
+    const shiftedExisting = merged.filter(p => p !== computed);
 
     const { error: insertError } = await supabase.from('job_phases').insert({
       job_id: jobId,
@@ -487,13 +502,33 @@ export default function ScheduleCard({ jobId, job }) {
       work_location: newPhase.work_location,
       source: 'manual',
       needs_review: false,
-      sort_order: maxSortOrder + 1,
+      sort_order: insertedSortOrder,
     });
     if (insertError) { setError(insertError.message); return; }
+
+    await persistPhaseRows(shiftedExisting);
 
     setNewPhase({ label: '', trade: '', start_date: '', duration_days: 1, preferred_start_day: '', allow_weekend_work: false, work_location: 'indoor' });
     setAddingPhase(false);
     await loadPhases();
+  }
+
+  // Swaps this phase with the one directly above it in the list, then
+  // re-sequences dates for the whole set from the first phase's own
+  // start date forward — same model Generate Schedule itself uses.
+  // Deliberately different from every other date edit on this card
+  // (duration, Timeline drag, individual Edit) which never cascade —
+  // reordering is a direct statement that the flow of the job itself
+  // changed, so the dates should follow.
+  async function movePhaseUp(index) {
+    const list = draft || phases;
+    if (index <= 0) return;
+    const reordered = [...list];
+    [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+    const recomputed = recomputeSequentialDates(reordered, reordered[0].start_date).map((p, i) => ({ ...p, sort_order: i }));
+    if (draft) setDraft(recomputed); else setPhases(recomputed);
+    await persistPhaseRows(recomputed);
+    if (!draft) await loadPhases();
   }
 
   // Persists a drag (move) or edge-resize (duration change) from the
@@ -667,6 +702,15 @@ export default function ScheduleCard({ jobId, job }) {
                 <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>days</span>
                 <button
                   type="button"
+                  className="btn btn-sm"
+                  title="Move up — re-sequences dates to match the new order"
+                  onClick={() => movePhaseUp(i)}
+                  disabled={i === 0}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
                   className="btn btn-sm btn-danger"
                   title="Remove this phase — e.g. a trade this job doesn't actually need"
                   onClick={() => removeDraftPhase(i)}
@@ -712,7 +756,7 @@ export default function ScheduleCard({ jobId, job }) {
                 <div>Weather</div>
                 <div></div>
               </div>
-              {phases.map(p => (
+              {phases.map((p, i) => (
                 editingId === p.id ? (
                   <div key={p.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 14, background: p.needs_review ? 'var(--bg-warning, #fff8e6)' : 'transparent' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -776,7 +820,18 @@ export default function ScheduleCard({ jobId, job }) {
                         <span style={{ fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'italic' }}>Indoor — not checked</span>
                       )}
                     </div>
-                    <div><button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button></div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        title="Move up — re-sequences dates to match the new order"
+                        onClick={() => movePhaseUp(i)}
+                        disabled={i === 0}
+                      >
+                        ↑
+                      </button>
+                      <button className="btn btn-sm" onClick={() => startEditPhase(p)}>Edit</button>
+                    </div>
                   </div>
                 )
               ))}

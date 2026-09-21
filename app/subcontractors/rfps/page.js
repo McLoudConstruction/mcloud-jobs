@@ -64,7 +64,7 @@ export default function RfpsPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{r.title}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {projectLabel(r.jobs)}{r.jobs?.project_address || 'No project linked'} · Sent {fmtDate(r.created_at)}
+                    {projectLabel(r.jobs)}{r.jobs?.project_address || 'No project linked'} · Sent {fmtDate(r.created_at)}{r.expected_by ? ` · Expected by ${fmtDate(r.expected_by)}` : ''}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
                     {recipients.length} sub{recipients.length === 1 ? '' : 's'} · {responded} responded
@@ -98,6 +98,7 @@ function NewRfpModal({ jobs, companies, session, onClose, onCreated }) {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [expectedBy, setExpectedBy] = useState('');
   const [selectedCompanyIds, setSelectedCompanyIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -153,6 +154,7 @@ function NewRfpModal({ jobs, companies, session, onClose, onCreated }) {
       job_id: jobId,
       title: title.trim(),
       description: description.trim() || null,
+      expected_by: expectedBy || null,
       source_folder: selectedFolder || null,
       photo_ids: selectedPhotoIds,
       created_by: session.user.id,
@@ -209,6 +211,12 @@ function NewRfpModal({ jobs, companies, session, onClose, onCreated }) {
 
         <label style={{ marginTop: 12 }}>Description (optional)</label>
         <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="Scope, timeline, anything a sub needs to bid this." />
+
+        <label style={{ marginTop: 12 }}>Expected By (optional)</label>
+        <input type="date" value={expectedBy} onChange={e => setExpectedBy(e.target.value)} />
+        <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 3 }}>
+          The sub gets an automatic "please submit your proposal" reminder the next workday after this date. Left blank, that reminder fires 2 weeks after this RFP is sent.
+        </div>
 
         {jobId && folders.length > 0 && (
           <>
