@@ -9,7 +9,9 @@ import DocBackLink from '../../../../components/DocBackLink';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 import { contractPathFor, projectNumber } from '../../../../lib/constants';
 import ProposalDocument from '../../../../components/ProposalDocument';
+import ScopeOptionsChooser from '../../../../components/ScopeOptionsChooser';
 import EstimateGroupsPicker from '../../../../components/EstimateGroupsPicker';
+import useEstimateGroupsPicker from '../../../../lib/useEstimateGroupsPicker';
 
 const STANDARD_EXCLUSIONS = [
   'A deposit of 50% of the total project investment is due up front before work begins, with the remaining balance due per the agreed payment schedule.',
@@ -72,12 +74,43 @@ export default function ProposalDocumentPage() {
     }
   }
 
+  const isAdmin = session?.user?.app_metadata?.role === 'admin';
+  const locked = !!job?.estimate_groups_submitted_at;
+  // Owned here so the scope-options chooser (inside the printable
+  // document, via scopeOptionsSlot) and the Alternates/Submit box (below
+  // the document) share one live picture of the picks and totals.
+  const picker = useEstimateGroupsPicker({
+    jobId: id,
+    isAdmin,
+    locked,
+    estimateMode: job?.estimate_mode,
+    selectedOptionId: job?.selected_scope_option_id,
+    basePrice: job?.contract_price,
+    onSubmitted: loadJob,
+  });
+
   if (loading || !session || !job) return null;
 
   const scope = job.scope_items || [];
   const extraTerms = (job.additional_terms || []).filter(t => t.text && t.text.trim());
   const allTerms = extraTerms.length ? extraTerms : STANDARD_EXCLUSIONS.map(text => ({ text, standard: true }));
   const recipientEmail = job.billing_email || job.customer_email || '';
+  const isMulti = job.estimate_mode === 'multi';
+  // Once submitted, jobs.scope_items already holds the flattened, picked
+  // scope (see submit_estimate_groups) — show that normally rather than
+  // the chooser, same as any other locked estimate.
+  const scopeOptionsSlot = isMulti && !locked
+    ? (
+      <ScopeOptionsChooser
+        options={picker.options}
+        localSelectedOptionId={picker.localSelectedOptionId}
+        isAdmin={isAdmin}
+        locked={locked}
+        picking={picker.picking}
+        onPick={picker.pickOption}
+      />
+    )
+    : null;
 
   return (
     <div>
@@ -107,16 +140,23 @@ export default function ProposalDocumentPage() {
         scope={scope}
         terms={allTerms}
         materials={materials}
+        scopeOptionsSlot={scopeOptionsSlot}
       />
 
       <EstimateGroupsPicker
-        jobId={id}
-        isAdmin={session?.user?.app_metadata?.role === 'admin'}
-        locked={!!job.estimate_groups_submitted_at}
-        estimateMode={job.estimate_mode}
-        selectedOptionId={job.selected_scope_option_id}
-        basePrice={job.contract_price}
-        onSubmitted={loadJob}
+        isAdmin={isAdmin}
+        locked={locked}
+        isMulti={isMulti}
+        groups={picker.groups}
+        alternatesTotal={picker.alternatesTotal}
+        runningTotal={picker.runningTotal}
+        optionRequirementMet={picker.optionRequirementMet}
+        selectedOption={picker.selectedOption}
+        picking={picker.picking}
+        submitting={picker.submitting}
+        error={picker.error}
+        toggle={picker.toggle}
+        submit={picker.submit}
       />
 
       <SendDocModal

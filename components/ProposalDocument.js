@@ -20,7 +20,7 @@ const LOGO_SRC = '/mcloud-logo.png';
 // individual saved proposal). Both wrap this in their own toolbar,
 // SendDocModal, and sent/viewed tracking — only the markup and print
 // styling live here, so the two documents can never visually drift.
-export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms, materials }) {
+export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms, materials, scopeOptionsSlot }) {
   const { settings } = useSettings();
   const logoUrl = settings.logo_url || LOGO_SRC;
   const showContact = customerContact && customerContact.trim().toLowerCase() !== (customerName || '').trim().toLowerCase();
@@ -65,10 +65,12 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
 
           <div className="section">
             <h3>Scope of work</h3>
-            {(!scope || scope.length === 0) ? (
-              <ul className="doc-list"><li className="empty">No scope items added yet.</li></ul>
-            ) : (
-              <ul className="doc-list">{scope.map((s, i) => <li key={i}>{s.text}</li>)}</ul>
+            {scopeOptionsSlot ? scopeOptionsSlot : (
+              (!scope || scope.length === 0) ? (
+                <ul className="doc-list"><li className="empty">No scope items added yet.</li></ul>
+              ) : (
+                <ul className="doc-list">{scope.map((s, i) => <li key={i}>{s.text}</li>)}</ul>
+              )
             )}
           </div>
 
