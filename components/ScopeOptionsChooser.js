@@ -17,15 +17,15 @@ export default function ScopeOptionsChooser({ options, localSelectedOptionId, is
     return <ul className="doc-list"><li className="empty">No scope options added yet.</li></ul>;
   }
 
+  // Admin preview never shows a pre-picked option — whatever's stored is
+  // for the customer's own session, not something to imply here.
+  const displaySelectedId = isAdmin ? null : localSelectedOptionId;
+
   return (
     <div>
-      <p style={{ fontSize: 12.5, fontStyle: 'italic', color: '#6b6350', marginBottom: 12 }}>
-        This project has more than one way it could go. Only one of the options below moves forward
-        {isAdmin ? ' — the customer picks on this page.' : locked ? '.' : ' — choose one, then submit your selections below.'}
-      </p>
       <div style={{ display: 'grid', gap: 10 }}>
         {options.map(o => {
-          const isChosen = localSelectedOptionId === o.id;
+          const isChosen = displaySelectedId === o.id;
           return (
             <button
               key={o.id}

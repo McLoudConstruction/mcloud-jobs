@@ -58,10 +58,12 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
             <p className={description ? '' : 'empty'}>{description || 'No description entered yet.'}</p>
           </div>
 
-          <div className="price-box">
-            <span className="price-label">Total Investment</span>
-            <span className="price-amount">{fmtMoney(price)}</span>
-          </div>
+          {!scopeOptionsSlot && (
+            <div className="price-box">
+              <span className="price-label">Total Investment</span>
+              <span className="price-amount">{fmtMoney(price)}</span>
+            </div>
+          )}
 
           <div className="section">
             <h3>Scope of work</h3>
