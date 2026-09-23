@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
 import MaterialImageChooser from './MaterialImageChooser';
@@ -11,7 +12,21 @@ function fmtMoney(v) {
 }
 function lineTotal(it) { return (Number(it.quantity) || 0) * (Number(it.unit_price) || 0); }
 
+// In multi-option mode, every cost item (material or subcontractor line)
+// belongs to one scope option — job_estimate_items.option_id — and each
+// option carries its own margin/sales-tax percent and its own computed
+// price (estimate_scope_options.price/projected_cost), same fields the
+// job itself always has for the single-scope case. The option switcher
+// below (Cost and Pricing sections both) picks which option's numbers
+// you're looking at/editing; the choice is kept in the URL (?costOption=)
+// so it survives navigating between the Cost and Pricing sub-tabs.
 export default function EstimateTab({ job, jobId, section, children }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const isMulti = job.estimate_mode === 'multi';
+
   const [actions, setActions] = useState([]);
   const [items, setItems] = useState([]);
   const [margin, setMargin] = useState(job.estimate_margin_percent != null ? String(job.estimate_margin_percent) : '');
@@ -27,15 +42,76 @@ export default function EstimateTab({ job, jobId, section, children }) {
   const materialDescRef = useRef(null);
   const laborDescRef = useRef(null);
 
+  // ─── Scope options (multi-option mode) ───────────────────────────────
+  const [scopeOptions, setScopeOptions] = useState([]);
+  const urlOptionId = searchParams.get('costOption');
+  const [selectedOptionId, setSelectedOptionId] = useState(urlOptionId || null);
+
+  const loadScopeOptions = useCallback(async () => {
+    if (!isMulti) { setScopeOptions([]); return; }
+    const { data } = await supabase.from('estimate_scope_options').select('*').eq('job_id', jobId).order('sort_order');
+    setScopeOptions(data || []);
+  }, [jobId, isMulti]);
+
+  useEffect(() => {
+    loadScopeOptions();
+    if (!isMulti) return;
+    const channel = supabase.channel(`estimate-scope-options-costing-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_scope_options', filter: `job_id=eq.${jobId}` }, loadScopeOptions)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [jobId, isMulti, loadScopeOptions]);
+
+  // Keeps the selected option valid as options load/change; defaults to
+  // the first one. Deliberately not re-running on every scopeOptions
+  // refresh once a valid selection exists, so an in-progress pick isn't
+  // second-guessed by a realtime update from something else.
+  useEffect(() => {
+    if (!isMulti) { setSelectedOptionId(null); return; }
+    if (scopeOptions.length === 0) { setSelectedOptionId(null); return; }
+    setSelectedOptionId(prev => {
+      if (prev && scopeOptions.some(o => o.id === prev)) return prev;
+      if (urlOptionId && scopeOptions.some(o => o.id === urlOptionId)) return urlOptionId;
+      return scopeOptions[0].id;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMulti, scopeOptions]);
+
+  const selectedOption = scopeOptions.find(o => o.id === selectedOptionId) || null;
+
+  function selectOption(id) {
+    setSelectedOptionId(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('costOption', id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  // Margin/sales-tax fields track whichever target (the job, or the
+  // selected option) is currently in view — reset only when the target
+  // itself changes, not on every refetch, so typing isn't clobbered.
+  useEffect(() => {
+    if (isMulti) {
+      setMargin(selectedOption?.estimate_margin_percent != null ? String(selectedOption.estimate_margin_percent) : '');
+      setSalesTax(selectedOption?.estimate_sales_tax_percent != null ? String(selectedOption.estimate_sales_tax_percent) : '');
+    } else {
+      setMargin(job.estimate_margin_percent != null ? String(job.estimate_margin_percent) : '');
+      setSalesTax(job.estimate_sales_tax_percent != null ? String(job.estimate_sales_tax_percent) : '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMulti, selectedOptionId]);
+
   const loadActions = useCallback(async () => {
     const { data } = await supabase.from('job_scope_actions').select('*').eq('job_id', jobId).order('trade');
     if (data) setActions(data);
   }, [jobId]);
 
   const loadItems = useCallback(async () => {
-    const { data } = await supabase.from('job_estimate_items').select('*').eq('job_id', jobId).order('created_at');
+    if (isMulti && !selectedOptionId) { setItems([]); return; }
+    let query = supabase.from('job_estimate_items').select('*').eq('job_id', jobId).order('created_at');
+    query = isMulti ? query.eq('option_id', selectedOptionId) : query.is('option_id', null);
+    const { data } = await query;
     if (data) setItems(data);
-  }, [jobId]);
+  }, [jobId, isMulti, selectedOptionId]);
 
   useEffect(() => {
     loadActions();
@@ -62,6 +138,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
       if (!data.materials || data.materials.length === 0) throw new Error('The AI returned no materials to add.');
       const { error: insertError } = await supabase.from('job_estimate_items').insert(data.materials.map(m => ({
         job_id: jobId,
+        option_id: isMulti ? selectedOptionId : null,
         category: 'material',
         description: m.description,
         quantity: m.quantity,
@@ -101,12 +178,15 @@ export default function EstimateTab({ job, jobId, section, children }) {
       // before inserting, rather than trusting React state — closes the
       // race where a second click (or a slow realtime update) sees a
       // stale list and re-adds a trade that was just added a moment ago.
-      const { data: currentLabor } = await supabase.from('job_estimate_items').select('unit_label').eq('job_id', jobId).eq('category', 'labor');
+      let existingQuery = supabase.from('job_estimate_items').select('unit_label').eq('job_id', jobId).eq('category', 'labor');
+      existingQuery = isMulti ? existingQuery.eq('option_id', selectedOptionId) : existingQuery.is('option_id', null);
+      const { data: currentLabor } = await existingQuery;
       const existingTrades = new Set((currentLabor || []).map(it => it.unit_label));
       const toAdd = trades.filter(t => !existingTrades.has(t));
       if (toAdd.length === 0) return;
       const { error: insertError } = await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
         job_id: jobId,
+        option_id: isMulti ? selectedOptionId : null,
         category: 'labor',
         description: `${trade} — labor/subcontractor cost`,
         quantity: 1,
@@ -223,8 +303,10 @@ export default function EstimateTab({ job, jobId, section, children }) {
   async function addManualItem(e) {
     e.preventDefault();
     if (!newItem.description.trim()) return;
+    if (isMulti && !selectedOptionId) return;
     const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
+      option_id: isMulti ? selectedOptionId : null,
       category: 'material',
       description: newItem.description.trim(),
       quantity: parseFloat(newItem.quantity) || 1,
@@ -238,8 +320,10 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   async function addLaborItem(e) {
     e.preventDefault();
+    if (isMulti && !selectedOptionId) return;
     const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
+      option_id: isMulti ? selectedOptionId : null,
       category: 'labor',
       description: newLabor.description.trim() || `${newLabor.trade} — labor/subcontractor cost`,
       quantity: 1,
@@ -256,7 +340,12 @@ export default function EstimateTab({ job, jobId, section, children }) {
     setMargin(value);
     clearTimeout(marginSaveTimer.current);
     marginSaveTimer.current = setTimeout(() => {
-      supabase.from('jobs').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', jobId);
+      if (isMulti) {
+        if (!selectedOptionId) return;
+        supabase.from('estimate_scope_options').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', selectedOptionId);
+      } else {
+        supabase.from('jobs').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', jobId);
+      }
     }, 500);
   }
 
@@ -264,7 +353,12 @@ export default function EstimateTab({ job, jobId, section, children }) {
     setSalesTax(value);
     clearTimeout(taxSaveTimer.current);
     taxSaveTimer.current = setTimeout(() => {
-      supabase.from('jobs').update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', jobId);
+      if (isMulti) {
+        if (!selectedOptionId) return;
+        supabase.from('estimate_scope_options').update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', selectedOptionId);
+      } else {
+        supabase.from('jobs').update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', jobId);
+      }
     }, 500);
   }
 
@@ -287,21 +381,51 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   async function pushToContractPrice() {
     setPushing(true);
-    await Promise.all([
-      supabase.from('job_financials').update({ contract_price: salePrice }).eq('job_id', jobId),
-      supabase.from('jobs').update({ projected_cost: subtotal }).eq('id', jobId),
-    ]);
+    if (isMulti) {
+      if (selectedOptionId) {
+        await supabase.from('estimate_scope_options').update({ price: salePrice, projected_cost: subtotal }).eq('id', selectedOptionId);
+      }
+    } else {
+      await Promise.all([
+        supabase.from('job_financials').update({ contract_price: salePrice }).eq('job_id', jobId),
+        supabase.from('jobs').update({ projected_cost: subtotal }).eq('id', jobId),
+      ]);
+    }
     setPushing(false);
-    setPushedFlash('Saved as this job\u2019s Contract Price.');
+    setPushedFlash(isMulti ? `Saved as ${selectedOption?.label || 'this option'}’s price.` : 'Saved as this job’s Contract Price.');
     setTimeout(() => setPushedFlash(''), 6000);
   }
 
+  const optionSwitcher = isMulti && (
+    <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Pricing which option:</span>
+      {scopeOptions.map(o => (
+        <button key={o.id} className={`btn btn-sm ${selectedOptionId === o.id ? 'btn-primary' : ''}`} onClick={() => selectOption(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+
   if (section === 'cost') {
+    if (isMulti && scopeOptions.length === 0) {
+      return (
+        <div className="estimate-grid-wide">
+          <div className="estimate-main">
+            <div className="card">
+              <h3>Cost Build-Up</h3>
+              <div className="empty-state">No scope options yet — add two or more on the Scope page, then come back here to price each one.</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="estimate-grid-wide">
         <div className="estimate-main">
+          {optionSwitcher}
           <div className="card">
-            <h3>Materials</h3>
+            <h3>Materials{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
 
             <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestMaterials} disabled={suggesting || actions.length === 0}>
@@ -397,7 +521,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
           </div>
 
           <div className="card">
-            <h3>Subcontractor Cost</h3>
+            <h3>Subcontractor Cost{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
 
             <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestTradesFromActions} disabled={suggestingTrades || actions.length === 0}>
@@ -472,15 +596,29 @@ export default function EstimateTab({ job, jobId, section, children }) {
   }
 
   // section === 'pricing'
+  if (isMulti && scopeOptions.length === 0) {
+    return (
+      <div className="estimate-grid">
+        <div className="estimate-main">{children}</div>
+        <div className="estimate-sidebar">
+          <div className="card">
+            <h3>Margin &amp; Sale Price</h3>
+            <div className="empty-state">No scope options yet — add two or more on the Scope page first.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="estimate-grid">
       <div className="estimate-main">
+        {optionSwitcher}
         {children}
       </div>
 
       <div className="estimate-sidebar">
         <div className="card">
-          <h3>Margin &amp; Sale Price</h3>
+          <h3>Margin &amp; Sale Price{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
           <table className="estimate-margin-table">
             <tbody>
               <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
@@ -512,8 +650,8 @@ export default function EstimateTab({ job, jobId, section, children }) {
             </tbody>
           </table>
           <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0}>
-              {pushing ? 'Saving…' : 'Save'}
+            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0 || (isMulti && !selectedOptionId)}>
+              {pushing ? 'Saving…' : isMulti ? `Save as ${selectedOption?.label || 'option'}'s price` : 'Save'}
             </button>
           </div>
           {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}
