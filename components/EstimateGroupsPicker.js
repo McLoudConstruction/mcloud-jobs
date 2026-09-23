@@ -12,28 +12,37 @@ function fmtMoneyPlain(v) {
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-// Customer-facing interactive picker for a job's Choose One / Alternate
-// groups (the flexible-estimate feature) — rendered on the live estimate
-// document below the base scope. Picks are saved immediately (tentative,
-// changeable) via RPC; the final Submit locks everything in and flattens
-// it into the job's scope/price, same pattern as Material Selections.
-// isAdmin gets the same view but read-only (preview, no picking) with a
-// note pointing back to the Estimate tab to build/edit groups there.
-export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice, onSubmitted }) {
+// Customer-facing interactive picker for a job's flexible estimate,
+// rendered on the live estimate document below the base scope. Two
+// independent pieces:
+//   - Scope options (multi-option mode only) — two or more entirely
+//     separate scopes of work; the customer picks exactly one, and its
+//     own full scope + price becomes the base of the estimate.
+//   - Alternates — independently includable/deferrable add-ons layered
+//     on top, regardless of mode.
+// Picks are saved immediately (tentative, changeable) via RPC; the final
+// Submit locks everything in and flattens it into the job's scope/price,
+// same pattern as Material Selections. isAdmin gets the same view but
+// read-only (preview, no picking) with a note pointing back to the
+// Estimate tab to build/edit options and alternates there.
+export default function EstimateGroupsPicker({ jobId, isAdmin, locked, estimateMode, selectedOptionId, basePrice, onSubmitted }) {
   const [groups, setGroups] = useState([]);
-  const [choices, setChoices] = useState([]);
+  const [options, setOptions] = useState([]);
+  const [localSelectedOptionId, setLocalSelectedOptionId] = useState(selectedOptionId || null);
   const [loaded, setLoaded] = useState(false);
-  const [picking, setPicking] = useState(null); // group id currently being written
+  const [picking, setPicking] = useState(null); // group/option id currently being written
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => { setLocalSelectedOptionId(selectedOptionId || null); }, [selectedOptionId]);
+
   const load = useCallback(async () => {
-    const [{ data: groupData }, { data: choiceData }] = await Promise.all([
+    const [{ data: groupData }, { data: optionData }] = await Promise.all([
       supabase.from('estimate_groups').select('*').eq('job_id', jobId).order('sort_order'),
-      supabase.from('estimate_group_choices').select('*').order('sort_order'),
+      supabase.from('estimate_scope_options').select('*').eq('job_id', jobId).order('sort_order'),
     ]);
     setGroups(groupData || []);
-    setChoices(choiceData || []);
+    setOptions(optionData || []);
     setLoaded(true);
   }, [jobId]);
 
@@ -41,19 +50,19 @@ export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice
     load();
     const channel = supabase.channel(`estimate-groups-picker-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_groups', filter: `job_id=eq.${jobId}` }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_group_choices' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_scope_options', filter: `job_id=eq.${jobId}` }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
 
-  async function pick(group, choiceId) {
+  async function pickOption(optionId) {
     if (isAdmin || locked) return;
-    setPicking(group.id);
+    setPicking(optionId);
     setError('');
-    const { error: rpcError } = await supabase.rpc('pick_estimate_group_choice', { target_group_id: group.id, target_choice_id: choiceId });
+    const { error: rpcError } = await supabase.rpc('pick_scope_option', { target_job_id: jobId, target_option_id: optionId });
     setPicking(null);
     if (rpcError) { setError(rpcError.message); return; }
-    setGroups(prev => prev.map(g => g.id === group.id ? { ...g, selected_choice_id: choiceId } : g));
+    setLocalSelectedOptionId(optionId);
   }
 
   async function toggle(group, include) {
@@ -67,7 +76,7 @@ export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice
   }
 
   async function submit() {
-    if (!allChooseOnePicked) return;
+    if (!optionRequirementMet) return;
     if (!window.confirm('Submit your selections? The price and scope will lock in and can no longer be changed here.')) return;
     setSubmitting(true);
     setError('');
@@ -77,25 +86,24 @@ export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice
     onSubmitted?.();
   }
 
-  if (!loaded || groups.length === 0) return null;
+  const isMulti = estimateMode === 'multi';
 
-  const chooseOneGroups = groups.filter(g => g.kind === 'choose_one');
-  const alternateGroups = groups.filter(g => g.kind === 'alternate');
-  const allChooseOnePicked = chooseOneGroups.every(g => g.selected_choice_id);
+  if (!loaded || (groups.length === 0 && (!isMulti || options.length === 0))) return null;
 
-  const selectedTotal = chooseOneGroups.reduce((sum, g) => {
-    const c = choices.find(x => x.id === g.selected_choice_id);
-    return sum + (c ? Number(c.price) || 0 : 0);
-  }, 0) + alternateGroups.filter(g => g.included).reduce((sum, g) => sum + (Number(g.price) || 0), 0);
+  const optionRequirementMet = !isMulti || !!localSelectedOptionId;
 
-  const runningTotal = (Number(basePrice) || 0) + selectedTotal;
+  const selectedOption = options.find(o => o.id === localSelectedOptionId);
+  const alternatesTotal = groups.filter(g => g.included).reduce((sum, g) => sum + (Number(g.price) || 0), 0);
+  const runningTotal = isMulti
+    ? (Number(selectedOption?.price) || 0) + alternatesTotal
+    : (Number(basePrice) || 0) + alternatesTotal;
 
   return (
     <div className="no-print" style={{ marginTop: 24, padding: '18px 24px', background: '#faf6ec', border: '1px solid #ded7c0', borderRadius: 8, maxWidth: 800, marginLeft: 'auto', marginRight: 'auto' }}>
       <h3 style={{ margin: '0 0 4px', color: '#1C1B19' }}>Options for This Project</h3>
       {isAdmin ? (
         <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-          Preview only — the customer picks these when they view this estimate. Build or edit groups from the job's Estimate tab.
+          Preview only — the customer picks these when they view this estimate. Build or edit options/alternates from the job's Estimate tab.
         </div>
       ) : locked ? (
         <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 14 }}>
@@ -103,46 +111,47 @@ export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice
         </div>
       ) : (
         <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-          Review the options below, then submit your picks — the total updates as you choose.
+          {isMulti ? 'This project has more than one way it could go — review the scopes below and choose one, then submit.' : 'Review the options below, then submit your picks — the total updates as you choose.'}
         </div>
       )}
 
-      {chooseOneGroups.map(g => {
-        const groupChoices = choices.filter(c => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
-        return (
-          <div key={g.id} style={{ marginBottom: 18 }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1C1B19' }}>{g.label}</div>
-            {g.description && <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 8 }}>{g.description}</div>}
-            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-              {groupChoices.map(c => {
-                const isChosen = g.selected_choice_id === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={isAdmin || locked || picking === g.id}
-                    onClick={() => pick(g, c.id)}
-                    style={{
-                      textAlign: 'left', padding: '12px 14px', borderRadius: 6, cursor: isAdmin || locked ? 'default' : 'pointer',
-                      border: isChosen ? '2px solid #9B773D' : '1px solid #ded7c0',
-                      background: isChosen ? '#fff' : '#fdfcf8',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-                    }}
-                  >
-                    <span>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: '#1C1B19' }}>{isChosen ? '● ' : '○ '}{c.label}</span>
-                      {c.description && <span style={{ display: 'block', fontSize: 11.5, color: '#6b6350', marginTop: 2 }}>{c.description}</span>}
-                    </span>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1C1B19', whiteSpace: 'nowrap' }}>{fmtMoneyPlain(c.price)}</span>
-                  </button>
-                );
-              })}
-            </div>
+      {isMulti && options.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1C1B19' }}>Choose your scope of work</div>
+          <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 8 }}>Only one of these moves forward.</div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
+            {options.map(o => {
+              const isChosen = localSelectedOptionId === o.id;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={isAdmin || locked || picking === o.id}
+                  onClick={() => pickOption(o.id)}
+                  style={{
+                    textAlign: 'left', padding: '14px 16px', borderRadius: 6, cursor: isAdmin || locked ? 'default' : 'pointer',
+                    border: isChosen ? '2px solid #9B773D' : '1px solid #ded7c0',
+                    background: isChosen ? '#fff' : '#fdfcf8',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13.5, color: '#1C1B19' }}>{isChosen ? '● ' : '○ '}{o.label}</span>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, color: '#1C1B19', whiteSpace: 'nowrap' }}>{fmtMoneyPlain(o.price)}</span>
+                  </div>
+                  {o.description && <div style={{ fontSize: 11.5, color: '#6b6350', marginTop: 4 }}>{o.description}</div>}
+                  {(o.scope_items || []).length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: '#3a3730' }}>
+                      {o.scope_items.map((it, i) => <li key={i} style={{ marginBottom: 2 }}>{it.text}</li>)}
+                    </ul>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      )}
 
-      {alternateGroups.map(g => (
+      {groups.map(g => (
         <div key={g.id} style={{ marginBottom: 14 }}>
           <button
             type="button"
@@ -170,8 +179,8 @@ export default function EstimateGroupsPicker({ jobId, isAdmin, locked, basePrice
             <span style={{ color: '#6b6350' }}>Estimated total with your picks: </span>
             <b style={{ fontSize: 17, color: '#1C1B19' }}>{fmtMoneyPlain(runningTotal)}</b>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={submit} disabled={!allChooseOnePicked || submitting}>
-            {submitting ? 'Submitting…' : allChooseOnePicked ? 'Submit My Selections' : 'Pick one option in every group above'}
+          <button className="btn btn-primary btn-sm" onClick={submit} disabled={!optionRequirementMet || submitting}>
+            {submitting ? 'Submitting…' : optionRequirementMet ? 'Submit My Selections' : 'Choose a scope of work above'}
           </button>
         </div>
       )}

@@ -113,6 +113,8 @@ export default function ProposalDocumentPage() {
         jobId={id}
         isAdmin={session?.user?.app_metadata?.role === 'admin'}
         locked={!!job.estimate_groups_submitted_at}
+        estimateMode={job.estimate_mode}
+        selectedOptionId={job.selected_scope_option_id}
         basePrice={job.contract_price}
         onSubmitted={loadJob}
       />
