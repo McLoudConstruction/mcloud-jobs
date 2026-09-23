@@ -116,11 +116,14 @@ export default function PortalDashboardPage() {
       message: question,
     });
     setSending(false);
-    if (!error) {
-      setQuestion('');
-      setFlash('Question sent — we\'ll get back to you soon.');
-      setTimeout(() => setFlash(''), 3000);
+    if (error) {
+      setFlash('Failed to send: ' + error.message);
+      setTimeout(() => setFlash(''), 5000);
+      return;
     }
+    setQuestion('');
+    setFlash('Question sent — we\'ll get back to you soon.');
+    setTimeout(() => setFlash(''), 3000);
   }
 
   if (loading || !session) return null;

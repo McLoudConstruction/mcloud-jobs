@@ -41,6 +41,7 @@ import NotificationSettingsCard from '../../../components/NotificationSettingsCa
 import CustomerInfoCard from '../../../components/CustomerInfoCard';
 import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
+import EstimateGroupsCard from '../../../components/EstimateGroupsCard';
 import ScheduleCard from '../../../components/ScheduleCard';
 import PriceCard from '../../../components/PriceCard';
 import TermsCard from '../../../components/TermsCard';
@@ -668,6 +669,7 @@ export default function JobDetailPage() {
         {tab === 'Estimate' && section === 'scope' && (
           <>
             <ScopeCard job={job} jobId={id} onSave={saveJob} />
+            <EstimateGroupsCard job={job} jobId={id} />
             <TermsCard job={job} onSave={saveJob} />
           </>
         )}

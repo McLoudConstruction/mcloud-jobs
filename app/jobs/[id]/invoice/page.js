@@ -46,7 +46,8 @@ export default function InvoiceDocumentPage() {
       const { error } = await supabase.from('job_financials').update({ invoice_status: 'sent' }).eq('job_id', id);
       if (error) alert("The email sent, but recording it as sent didn't save: " + error.message + ". If you reload this page, it may look unsent — that's just this tracking flag, not the email itself.");
       if (!job.invoiced_at) {
-        await supabase.from('jobs').update({ invoiced_at: new Date().toISOString() }).eq('id', id);
+        const { error: invoicedAtError } = await supabase.from('jobs').update({ invoiced_at: new Date().toISOString() }).eq('id', id);
+        if (invoicedAtError) alert("The email sent, but recording the invoiced date didn't save: " + invoicedAtError.message);
       }
       loadJob();
     }

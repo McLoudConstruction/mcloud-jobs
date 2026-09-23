@@ -9,6 +9,7 @@ import DocBackLink from '../../../../components/DocBackLink';
 import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
 import { contractPathFor, projectNumber } from '../../../../lib/constants';
 import ProposalDocument from '../../../../components/ProposalDocument';
+import EstimateGroupsPicker from '../../../../components/EstimateGroupsPicker';
 
 const STANDARD_EXCLUSIONS = [
   'A deposit of 50% of the total project investment is due up front before work begins, with the remaining balance due per the agreed payment schedule.',
@@ -106,6 +107,14 @@ export default function ProposalDocumentPage() {
         scope={scope}
         terms={allTerms}
         materials={materials}
+      />
+
+      <EstimateGroupsPicker
+        jobId={id}
+        isAdmin={session?.user?.app_metadata?.role === 'admin'}
+        locked={!!job.estimate_groups_submitted_at}
+        basePrice={job.contract_price}
+        onSubmitted={loadJob}
       />
 
       <SendDocModal

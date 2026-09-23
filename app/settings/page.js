@@ -366,7 +366,11 @@ function SettingsPageInner() {
             <button
               className="btn btn-sm"
               style={{ marginTop: 10 }}
-              onClick={async () => { await supabase.from('app_settings').update({ watermark_logo_url: null }).eq('id', 1); refresh(); }}
+              onClick={async () => {
+                const { error } = await supabase.from('app_settings').update({ watermark_logo_url: null }).eq('id', 1);
+                if (error) { setError('Failed to remove watermark logo: ' + error.message); return; }
+                refresh();
+              }}
             >
               Use main logo instead
             </button>

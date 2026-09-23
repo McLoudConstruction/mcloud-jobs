@@ -93,6 +93,7 @@ function SubMessagesPanel({ companyId }) {
   const [messages, setMessages] = useState(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('sub_messages').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
@@ -112,15 +113,20 @@ function SubMessagesPanel({ companyId }) {
     e.preventDefault();
     if (!reply.trim()) return;
     setSending(true);
+    setSendError('');
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('sub_messages').insert({
+    const { error } = await supabase.from('sub_messages').insert({
       company_id: companyId,
       sender: 'staff',
       sender_email: user?.email,
       message: reply.trim(),
     });
     setSending(false);
+    if (error) { setSendError(error.message); return; }
     setReply('');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the reply shows up immediately.
+    await load();
   }
 
   if (messages === null) return null;
@@ -130,6 +136,7 @@ function SubMessagesPanel({ companyId }) {
       <h3>Messages</h3>
       <form onSubmit={sendReply} style={{ marginBottom: 14 }}>
         <textarea value={reply} onChange={e => setReply(e.target.value)} rows={2} placeholder="Reply to this subcontractor…" />
+        {sendError && <div style={{ fontSize: 12, color: '#a13f3f', marginBottom: 8 }}>{sendError}</div>}
         <div className="section-actions">
           <button className="btn btn-primary btn-sm" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
         </div>
@@ -421,9 +428,10 @@ export default function SubcontractorsPage() {
         phone: app.contact_phone,
         email: app.contact_email,
       });
-      await supabase.from('subcontractor_applications').update({
+      const { error: statusError } = await supabase.from('subcontractor_applications').update({
         status: 'approved', reviewed_at: new Date().toISOString(), created_company_id: company.id,
       }).eq('id', app.id);
+      if (statusError) throw statusError;
 
       const toEmail = app.contact_email || app.invited_email;
       if (toEmail) {
@@ -448,9 +456,10 @@ export default function SubcontractorsPage() {
     if (!reason) return;
     setDeclining(true);
     try {
-      await supabase.from('subcontractor_applications').update({
+      const { error: statusError } = await supabase.from('subcontractor_applications').update({
         status: 'declined', reviewed_at: new Date().toISOString(), decline_reason: reason,
       }).eq('id', app.id);
+      if (statusError) throw statusError;
 
       const toEmail = app.contact_email || app.invited_email;
       if (toEmail) {

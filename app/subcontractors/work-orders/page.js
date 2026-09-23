@@ -88,6 +88,7 @@ export default function WorkOrdersHubPage() {
     const toCreate = eligibleJobs.filter(r => r.selected);
     if (toCreate.length === 0) return;
     setCreating(true);
+    setCreateResult('');
     const rows = toCreate.map(r => ({
       job_id: r.job.id,
       company_id: createSubId,
@@ -96,12 +97,16 @@ export default function WorkOrdersHubPage() {
       status: 'draft',
       included_scope_items: r.actions.map(formatAction),
     }));
-    await supabase.from('work_orders').insert(rows);
+    const { error } = await supabase.from('work_orders').insert(rows);
     setCreating(false);
-    setCreateResult(`Created ${rows.length} work order${rows.length === 1 ? '' : 's'} as drafts — issue each from its job's Financials tab, or the list below.`);
+    if (error) { setCreateResult(`Failed to create work orders: ${error.message}`); return; }
     setEligibleJobs([]);
     setCreateSubId('');
     setMode('view');
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the new work orders show up immediately.
+    await loadWorkOrders();
+    setCreateResult(`Created ${rows.length} work order${rows.length === 1 ? '' : 's'} as drafts — issue each from its job's Financials tab, or the list below.`);
   }
 
   if (loading || !session) return null;

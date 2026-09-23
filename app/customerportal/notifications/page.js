@@ -43,12 +43,15 @@ export default function CustomerNotificationsPage() {
   async function markAllRead() {
     const unreadIds = (items || []).filter(i => !i.read_at).map(i => i.id);
     if (unreadIds.length === 0) return;
-    await supabase.from('portal_notifications').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+    const { error } = await supabase.from('portal_notifications').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+    if (error) { alert('Failed to mark as read: ' + error.message); return; }
+    load();
   }
 
   async function openItem(item) {
     if (!item.read_at) {
-      await supabase.from('portal_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id);
+      const { error } = await supabase.from('portal_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id);
+      if (error) console.error('Failed to mark notification as read:', error.message);
     }
     if (item.link_path) window.location.href = item.link_path;
   }

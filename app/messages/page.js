@@ -105,21 +105,30 @@ export default function MessagesPage() {
     const thread = threadsByJob[jobId];
     const customerEmail = thread[0]?.customer_email;
 
-    await supabase.from('job_questions').insert({
+    const { error: insertError } = await supabase.from('job_questions').insert({
       job_id: jobId,
       customer_email: customerEmail,
       sender: 'admin',
       message: reply.trim(),
     });
+    if (insertError) {
+      setSending(false);
+      alert('Failed to send: ' + insertError.message);
+      return;
+    }
 
     const unanswered = thread.filter(m => m.sender === 'customer' && !m.responded_at);
     if (unanswered.length > 0) {
       const now = new Date().toISOString();
-      await supabase.from('job_questions').update({ responded_at: now, read_at: now }).in('id', unanswered.map(m => m.id));
+      const { error: updateError } = await supabase.from('job_questions').update({ responded_at: now, read_at: now }).in('id', unanswered.map(m => m.id));
+      if (updateError) alert('Reply sent, but marking the thread as responded failed: ' + updateError.message);
     }
 
     setReply('');
     setSending(false);
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the reply shows up immediately.
+    await loadQuestions();
   }
 
   async function markThreadReadFor(jobId) {
@@ -127,7 +136,9 @@ export default function MessagesPage() {
     if (!thread) return;
     const unread = thread.filter(m => m.sender === 'customer' && !m.read_at);
     if (unread.length === 0) return;
-    await supabase.from('job_questions').update({ read_at: new Date().toISOString() }).in('id', unread.map(m => m.id));
+    const { error } = await supabase.from('job_questions').update({ read_at: new Date().toISOString() }).in('id', unread.map(m => m.id));
+    if (error) { alert('Failed to mark as read: ' + error.message); return; }
+    await loadQuestions();
   }
 
   // Not every customer message needs a reply — this clears the unread
@@ -140,13 +151,17 @@ export default function MessagesPage() {
   }
 
   async function markNotificationRead(id) {
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
+    if (error) { alert('Failed to mark as read: ' + error.message); return; }
+    await loadNotifications();
   }
 
   // Dismissing clears it from the feed — always implies read, too, so it
   // can never sit there still counting toward the unread badge.
   async function dismissNotification(id) {
-    await supabase.from('notifications').update({ dismissed: true, read: true }).eq('id', id);
+    const { error } = await supabase.from('notifications').update({ dismissed: true, read: true }).eq('id', id);
+    if (error) { alert('Failed to dismiss: ' + error.message); return; }
+    await loadNotifications();
   }
 
   // --- Merged Inbox feed (mobile only) ---

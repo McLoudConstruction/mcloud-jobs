@@ -29,25 +29,33 @@ export default function NotificationsPage() {
   }, [session, loadNotifications]);
 
   async function markNotificationRead(id) {
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
+    if (error) { alert('Failed to mark as read: ' + error.message); return; }
+    await loadNotifications();
   }
 
   async function markAllNotificationsRead() {
     const unreadIds = notifications.filter(n => !n.read && !n.dismissed).map(n => n.id);
     if (unreadIds.length === 0) return;
-    await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
+    const { error } = await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
+    if (error) { alert('Failed to mark all as read: ' + error.message); return; }
+    await loadNotifications();
   }
 
   // Dismissing clears it from the list — always implies read, too, so it
   // can never sit there still counting toward the unread badge.
   async function dismissNotification(id) {
-    await supabase.from('notifications').update({ dismissed: true, read: true }).eq('id', id);
+    const { error } = await supabase.from('notifications').update({ dismissed: true, read: true }).eq('id', id);
+    if (error) { alert('Failed to dismiss: ' + error.message); return; }
+    await loadNotifications();
   }
 
   async function dismissAllRead() {
     const readIds = notifications.filter(n => n.read && !n.dismissed).map(n => n.id);
     if (readIds.length === 0) return;
-    await supabase.from('notifications').update({ dismissed: true }).in('id', readIds);
+    const { error } = await supabase.from('notifications').update({ dismissed: true }).in('id', readIds);
+    if (error) { alert('Failed to dismiss all: ' + error.message); return; }
+    await loadNotifications();
   }
 
   if (loading || !session) return null;

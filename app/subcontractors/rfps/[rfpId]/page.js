@@ -72,7 +72,10 @@ export default function RfpDetailPage() {
     setActing(true);
     const { error } = await supabase.rpc('award_rfp', { target_rfp_id: rfpId, target_company_id: companyId });
     setActing(false);
-    if (error) alert('Failed to award: ' + error.message);
+    if (error) { alert('Failed to award: ' + error.message); return; }
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the award shows up immediately.
+    await load();
   }
 
   async function handleCloseNotAwarded() {
@@ -81,7 +84,10 @@ export default function RfpDetailPage() {
     const { error } = await supabase.rpc('close_rfp_not_awarded', { target_rfp_id: rfpId });
     setActing(false);
     setClosing(false);
-    if (error) alert('Failed to close: ' + error.message);
+    if (error) { alert('Failed to close: ' + error.message); return; }
+    // Don't rely solely on the realtime subscription — refresh directly
+    // so the closed status shows up immediately.
+    await load();
   }
 
   if (loading || !session || !rfp) return null;
