@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
+import { docFilename } from '../../../../lib/docFilename';
 import DocBackLink from '../../../../components/DocBackLink';
 import { assignNextJobNumber } from '../../../../lib/assignJobNumber';
 import SignaturePad from '../../../../components/SignaturePad';
-import { generatePdfBase64, base64ToPdfUrl } from '../../../../lib/generatePdf';
+import { generatePdfBase64, downloadPdf } from '../../../../lib/generatePdf';
 import { useSettings } from '../../../../lib/useSettings';
 
 const LOGO_SRC = '/mcloud-logo.png';
@@ -60,8 +61,9 @@ export default function ContractDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `Residential-Contract-${job.job_number}.pdf`);
-      window.open(base64ToPdfUrl(base64), '_blank');
+      const filename = docFilename('Contract', job.customer_name);
+      const base64 = await generatePdfBase64('doc-preview', filename);
+      downloadPdf(base64, filename);
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
     } finally {
@@ -340,7 +342,7 @@ export default function ContractDocumentPage() {
         docElementId="doc-preview"
         jobId={id}
         projectType={job.project_type}
-        pdfFilename={`Residential-Contract-${job.job_number}.pdf`}
+        pdfFilename={docFilename('Contract', job.customer_name)}
         defaultEmail={recipientEmail}
         onSendSuccess={async () => {
           const sentAt = new Date().toISOString();

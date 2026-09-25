@@ -5,6 +5,7 @@ import { useSettings } from '../lib/useSettings';
 import { watermarkImage } from '../lib/watermark';
 import PhotoMarkupEditor from './PhotoMarkupEditor';
 import CameraCapture from './CameraCapture';
+import ShareLinkButton from './ShareLinkButton';
 
 export default function PhotoGallery({ jobId, updateId, title, allowUpload = true, bare = false }) {
   const { settings } = useSettings();
@@ -24,6 +25,12 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [addingFolder, setAddingFolder] = useState(false);
   const [filterFolder, setFilterFolder] = useState(''); // '' = top level (general photos + folder tiles); otherwise a folder name
   const fileInputRef = useRef(null);
+  const [jobInfo, setJobInfo] = useState(null); // customer + address, only used to pre-fill the share-link message
+
+  useEffect(() => {
+    supabase.from('jobs').select('customer_name, customer_contact, project_address').eq('id', jobId).maybeSingle()
+      .then(({ data }) => { if (data) setJobInfo(data); });
+  }, [jobId]);
 
   const loadPhotos = useCallback(async () => {
     let query = supabase.from('job_photos').select('*').eq('job_id', jobId).order('created_at', { ascending: false });
@@ -243,6 +250,13 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
               {folders.map(f => <option key={f} value={f}>{f}</option>)}
               <option value="__new__">+ New folder…</option>
             </select>
+            {!addingFolder && selectedFolder && folders.includes(selectedFolder) && (
+              <ShareLinkButton
+                kind="photo_folder" jobId={jobId} folder={selectedFolder}
+                customerName={jobInfo?.customer_contact || jobInfo?.customer_name} projectAddress={jobInfo?.project_address}
+                label="Share Folder"
+              />
+            )}
             {addingFolder && (
               <>
                 <input
@@ -322,6 +336,11 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
         <div className="section-actions" style={{ marginTop: 0, marginBottom: 10 }}>
           <button className="btn btn-sm" onClick={() => setFilterFolder('')} type="button">← All Photos</button>
           <span style={{ fontSize: 12.5, fontWeight: 600, alignSelf: 'center' }}>📁 {filterFolder}</span>
+          <ShareLinkButton
+            kind="photo_folder" jobId={jobId} folder={filterFolder}
+            customerName={jobInfo?.customer_contact || jobInfo?.customer_name} projectAddress={jobInfo?.project_address}
+            label="Share Folder"
+          />
         </div>
       )}
 

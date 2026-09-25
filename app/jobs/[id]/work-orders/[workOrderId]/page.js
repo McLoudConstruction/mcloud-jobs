@@ -3,8 +3,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
+import { docFilename } from '../../../../../lib/docFilename';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
-import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
+import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import { useSettings } from '../../../../../lib/useSettings';
 import DocBackLink from '../../../../../components/DocBackLink';
 
@@ -58,8 +59,9 @@ export default function WorkOrderDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `Work-Order-${job.job_number}-${wo.id.slice(0, 8)}.pdf`);
-      window.open(base64ToPdfUrl(base64), '_blank');
+      const filename = docFilename('Work-Order', company?.company_name || job.customer_name);
+      const base64 = await generatePdfBase64('doc-preview', filename);
+      downloadPdf(base64, filename);
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
     } finally {
@@ -72,7 +74,7 @@ export default function WorkOrderDocumentPage() {
     setSending(true);
     setSendResult(null);
     try {
-      const attachmentBase64 = await generatePdfBase64('doc-preview', `Work-Order-${job.job_number}-${wo.id.slice(0, 8)}.pdf`);
+      const attachmentBase64 = await generatePdfBase64('doc-preview', docFilename('Work-Order', company?.company_name || job.customer_name));
       const subject = `Work Order — McLoud Construction, Job #${job.job_number}`;
       const html = `<div style="font-family: -apple-system, sans-serif; font-size: 14px; color: #1C1B19; line-height: 1.6;">
         <p>Hi${company?.contact_name ? ' ' + company.contact_name.split(' ')[0] : ''},</p>
@@ -87,7 +89,7 @@ export default function WorkOrderDocumentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: sendEmail, subject, html, text,
-          attachmentBase64, attachmentFilename: `Work-Order-${job.job_number}.pdf`,
+          attachmentBase64, attachmentFilename: docFilename('Work-Order', company?.company_name || job.customer_name),
           category: 'work_order', jobId: id, sentBy: session?.user?.email || null,
         }),
       });

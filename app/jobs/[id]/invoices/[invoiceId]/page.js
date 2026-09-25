@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import { docFilename } from '../../../../../lib/docFilename';
 import DocBackLink from '../../../../../components/DocBackLink';
-import { generatePdfBase64, base64ToPdfUrl } from '../../../../../lib/generatePdf';
+import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import PaymentFlow from '../../../../../components/PaymentFlow';
 import { useSettings } from '../../../../../lib/useSettings';
 
@@ -77,8 +78,9 @@ export default function DrawInvoiceDocumentPage() {
   async function downloadDocument() {
     setDownloading(true);
     try {
-      const base64 = await generatePdfBase64('doc-preview', `${(draw.description || 'Draw').replace(/[^a-z0-9]+/gi, '-')}-${job.job_number}.pdf`);
-      window.open(base64ToPdfUrl(base64), '_blank');
+      const filename = docFilename(`Invoice-${draw.description || 'Draw'}`, job.customer_name);
+      const base64 = await generatePdfBase64('doc-preview', filename);
+      downloadPdf(base64, filename);
     } catch (err) {
       alert('Failed to generate PDF: ' + err.message);
     } finally {
@@ -182,7 +184,7 @@ export default function DrawInvoiceDocumentPage() {
         docElementId="doc-preview"
         jobId={id}
         projectType={job.project_type}
-        pdfFilename={`${(draw.description || 'Draw').replace(/[^a-z0-9]+/gi, '-')}-${job.job_number}.pdf`}
+        pdfFilename={docFilename(`Invoice-${draw.description || 'Draw'}`, job.customer_name)}
         defaultEmail={recipientEmail}
         onSendSuccess={markSent}
       />

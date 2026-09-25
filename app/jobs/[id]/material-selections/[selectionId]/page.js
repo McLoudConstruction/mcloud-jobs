@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
+import { docFilename } from '../../../../../lib/docFilename';
 import ImageDropzone from '../../../../../components/ImageDropzone';
 import MaterialOptionCard from '../../../../../components/MaterialOptionCard';
 import DocBackLink from '../../../../../components/DocBackLink';
@@ -309,7 +310,7 @@ export default function MaterialSelectionPage() {
           customerName={job?.customer_name}
           defaultEmail={job?.billing_email || job?.customer_email || ''}
           docElementId="doc-preview"
-          pdfFilename={`${selection.title}.pdf`}
+          pdfFilename={docFilename(`Selections-${selection.title}`, job?.customer_name)}
           jobId={id}
           projectType={job?.project_type}
           onSendSuccess={sendToCustomer}
