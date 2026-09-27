@@ -1,10 +1,30 @@
 import { getAdminClient } from '../../../../lib/supabaseAdmin';
 import { sendMail } from '../../../../lib/sendMail';
 import { logCommunication } from '../../../../lib/logCommunication';
-import { buildMessageReceivedEmail, buildRfpAwardedEmail, buildRfpReminderEmail, buildPaymentFailedEmail } from '../../../../lib/emailTemplates';
+import { buildMessageReceivedEmail, buildRfpAwardedEmail, buildRfpReminderEmail, buildPaymentFailedEmail, buildPortalAlertEmail } from '../../../../lib/emailTemplates';
 
 const PORTAL_URL = 'https://jobs.mcloudconstruction.com/customerportal';
 const SUB_PORTAL_URL = 'https://jobs.mcloudconstruction.com/sub-portal';
+
+// Short "needs your attention" categories that share one email layout. The
+// notification's own message sentence is the email body, so the bell and the
+// email always say the same thing. Anything not listed here keeps its
+// previous behaviour (the generic "you have a new message" email).
+const ALERT_CATEGORIES = {
+  subcontractor: {
+    compliance_expiring: { headline: 'Document expiring soon', ctaLabel: 'Upload renewed document', path: '/settings' },
+    compliance_expired: { headline: 'Document expired', ctaLabel: 'Upload current document', path: '/settings' },
+    compliance_reviewed: { headline: 'Compliance document reviewed', ctaLabel: 'View my documents', path: '/settings' },
+    lien_waiver_requested: { headline: 'Lien waiver requested', ctaLabel: 'Review & sign', path: '/waivers' },
+    punch_assigned: { headline: 'Punch list item assigned', ctaLabel: 'View punch list', path: '/punch' },
+    schedule_change: { headline: 'Schedule update', ctaLabel: 'View schedule', path: '/calendar' },
+  },
+  customer: {
+    punch_update: { headline: 'Punch list update', ctaLabel: 'View my project', path: '' },
+    warranty_update: { headline: 'Warranty request update', ctaLabel: 'View my project', path: '' },
+    schedule_change: { headline: 'Your project schedule was updated', ctaLabel: 'View schedule', path: '' },
+  },
+};
 
 // Mirror of /api/webhooks/notification-created (migration 111), but for
 // portal_notifications (migration 126) — the customer/sub-facing table.
@@ -24,6 +44,11 @@ export async function POST(request) {
   const { recipient_kind: recipientKind, job_id: jobId, company_id: companyId, category, message, source_id: sourceId, meta } = body;
   if (!recipientKind) return Response.json({ error: 'Missing recipient_kind.' }, { status: 400 });
 
+  // The review invitation is emailed by the daily automation with its own
+  // template (so it can be reminded and retried). The portal row exists only
+  // so the customer's bell shows it — never send the generic email for it.
+  if (category === 'review_request') return Response.json({ skipped: true, reason: 'Review invitations are emailed separately.' });
+
   const admin = getAdminClient();
   const logCategory = category || 'portal_notification';
   let to = null;
@@ -36,9 +61,12 @@ export async function POST(request) {
       to = job?.customer_email || job?.billing_email;
       if (!to) return Response.json({ skipped: true, reason: 'No email on file for this job.' });
 
+      const customerAlert = ALERT_CATEGORIES.customer[category];
       payload = category === 'payment_failed'
         ? buildPaymentFailedEmail({ customerName: job.customer_name, projectAddress: job.project_address, declineReason: meta?.decline_reason || null })
-        : buildMessageReceivedEmail({ recipientName: job.customer_name, senderLabel: 'McLoud Construction', portalUrl: PORTAL_URL, portalLabel: 'Customer Portal' });
+        : customerAlert && message
+          ? buildPortalAlertEmail({ recipientName: job.customer_name, headline: customerAlert.headline, message, ctaLabel: customerAlert.ctaLabel, ctaUrl: PORTAL_URL + customerAlert.path })
+          : buildMessageReceivedEmail({ recipientName: job.customer_name, senderLabel: 'McLoud Construction', portalUrl: PORTAL_URL, portalLabel: 'Customer Portal' });
     } else if (recipientKind === 'subcontractor') {
       if (!companyId) return Response.json({ error: 'Missing company_id for a subcontractor notification.' }, { status: 400 });
       const { data: company } = await admin.from('companies').select('contact_email, company_name').eq('id', companyId).maybeSingle();
@@ -56,6 +84,9 @@ export async function POST(request) {
         payload = category === 'rfp_awarded'
           ? buildRfpAwardedEmail({ companyName: company.company_name, rfpTitle, projectAddress })
           : buildRfpReminderEmail({ companyName: company.company_name, rfpTitle, projectAddress });
+      } else if (ALERT_CATEGORIES.subcontractor[category] && message) {
+        const alert = ALERT_CATEGORIES.subcontractor[category];
+        payload = buildPortalAlertEmail({ recipientName: company.company_name, headline: alert.headline, message, ctaLabel: alert.ctaLabel, ctaUrl: SUB_PORTAL_URL + alert.path });
       } else {
         payload = buildMessageReceivedEmail({ recipientName: company.company_name, senderLabel: 'McLoud Construction', portalUrl: SUB_PORTAL_URL, portalLabel: 'Sub Portal' });
       }

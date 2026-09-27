@@ -25,7 +25,7 @@ import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
-  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon,
+  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -43,6 +43,7 @@ import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
 import EstimateGroupsCard from '../../../components/EstimateGroupsCard';
 import ScheduleCard from '../../../components/ScheduleCard';
+import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
 import PriceCard from '../../../components/PriceCard';
 import TermsCard from '../../../components/TermsCard';
 import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
@@ -50,6 +51,10 @@ import UpdatesCard from '../../../components/UpdatesCard';
 import InvoiceCard from '../../../components/InvoiceCard';
 import ReadyToInvoiceCard from '../../../components/ReadyToInvoiceCard';
 import BudgetCard from '../../../components/BudgetCard';
+import PayAppsCard from '../../../components/PayAppsCard';
+import LienWaiversCard from '../../../components/LienWaiversCard';
+import PunchItemsPanel from '../../../components/PunchItemsPanel';
+import WarrantyCard from '../../../components/WarrantyCard';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
 // at very different altitudes (a customer contact form next to internal
@@ -94,7 +99,19 @@ const TABS = [
       { key: 'change_orders', label: 'Change Orders' },
       { key: 'work_orders', label: 'Work Orders' },
       { key: 'invoicing', label: 'Invoices' },
+      { key: 'pay_apps', label: 'Pay Apps' },
+      { key: 'waivers', label: 'Lien Waivers' },
       { key: 'receipts', label: 'Job Costs' },
+    ],
+  },
+  {
+    key: 'Closeout', label: 'Closeout', icon: WorkOrderIcon,
+    // Punch list and warranty (migration 137). Shown from Active onward — you
+    // start a punch list near the end of the work and warranty begins at completion.
+    hideWhen: (job) => !['active', 'completed', 'invoiced', 'paid'].includes(job.stage),
+    sections: [
+      { key: 'punch', label: 'Punch List' },
+      { key: 'warranty', label: 'Warranty' },
     ],
   },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon },
@@ -679,7 +696,10 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Schedule' && (
-          <ScheduleCard job={job} jobId={id} />
+          <>
+            <ScheduleCard job={job} jobId={id} />
+            <ScheduleDelayCard jobId={id} job={job} />
+          </>
         )}
 
         {tab === 'Estimate' && section === 'pricing' && (
@@ -723,8 +743,30 @@ export default function JobDetailPage() {
           </>
         )}
 
+        {tab === 'Financials' && section === 'pay_apps' && (
+          <PayAppsCard jobId={id} job={job} changeOrders={changeOrders} />
+        )}
+
+        {tab === 'Financials' && section === 'waivers' && (
+          <LienWaiversCard jobId={id} job={job} />
+        )}
+
         {tab === 'Financials' && section === 'receipts' && (
           <ReceiptsCard jobId={id} />
+        )}
+
+        {tab === 'Closeout' && section === 'punch' && (
+          <div className="card">
+            <h3>Punch List</h3>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+              Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
+            </div>
+            <PunchItemsPanel jobId={id} kind="punch" />
+          </div>
+        )}
+
+        {tab === 'Closeout' && section === 'warranty' && (
+          <WarrantyCard jobId={id} job={job} />
         )}
 
         {tab === 'Photos' && (

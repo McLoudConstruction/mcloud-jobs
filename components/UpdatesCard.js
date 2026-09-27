@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 import { compressImage } from '../lib/imageCompress';
+import { aiFetch } from '../lib/aiFetch';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -24,6 +25,10 @@ export default function UpdatesCard({ jobId, updates, onChanged, session }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [staffNames, setStaffNames] = useState({}); // email -> full_name
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiNotes, setAiNotes] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState('');
 
   useEffect(() => {
     supabase.from('staff_users').select('email, full_name').then(({ data }) => {
@@ -143,6 +148,25 @@ export default function UpdatesCard({ jobId, updates, onChanged, session }) {
     }
   }
 
+  // AI draft: turns rough notes (plus any library photos already picked for
+  // this update) into text for the four fields below. Nothing is saved — it
+  // only fills the form, and it never overwrites what's typed without asking.
+  async function draftWithAI() {
+    setAiBusy(true);
+    setAiMsg('');
+    try {
+      const { draft, photosUsed } = await aiFetch('/api/ai/draft-update', { jobId, notes: aiNotes, photoIds: selectedExisting.map(p => p.id) });
+      const fields = ['work_completed', 'upcoming_work', 'issues_notes', 'next_steps'];
+      const hasText = fields.some(f => (form[f] || '').trim());
+      if (hasText && !window.confirm('Replace what is already written in these fields with the AI draft?')) { setAiBusy(false); return; }
+      setForm(prev => ({ ...prev, ...Object.fromEntries(fields.filter(f => draft[f]).map(f => [f, draft[f]])) }));
+      setAiMsg(`Drafted${photosUsed ? ` from your notes and ${photosUsed} photo${photosUsed === 1 ? '' : 's'}` : ' from your notes'} — read it over and edit before you post.`);
+    } catch (err) {
+      setAiMsg(err.message);
+    }
+    setAiBusy(false);
+  }
+
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
   function handleStagePhotos(e) {
@@ -254,6 +278,20 @@ export default function UpdatesCard({ jobId, updates, onChanged, session }) {
             <div className="two-col">
               <div><label>Date</label><input type="date" value={form.update_date} onChange={e => update('update_date', e.target.value)} /></div>
               <div><label>Estimated completion</label><input type="date" value={form.estimated_completion} onChange={e => update('estimated_completion', e.target.value)} /></div>
+            </div>
+            <div style={{ margin: '4px 0 12px' }}>
+              <button type="button" className="btn btn-sm" onClick={() => setAiOpen(o => !o)}>✦ Draft with AI{aiOpen ? ' ▴' : ' ▾'}</button>
+              {aiOpen && (
+                <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 12, marginTop: 8 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600 }}>Rough notes — what happened, in your own words</label>
+                  <textarea rows={3} value={aiNotes} onChange={e => setAiNotes(e.target.value)} placeholder="e.g. framing done in the addition, plumber roughed in, inspector coming Thursday, window delivery slipped a week" />
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', margin: '4px 0 8px' }}>
+                    The AI also reads the internal log, this week&apos;s published schedule, and any library photos you attach below. It only writes what those say.
+                  </div>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={draftWithAI} disabled={aiBusy || (!aiNotes.trim() && selectedExisting.length === 0)}>{aiBusy ? 'Drafting…' : 'Write the update'}</button>
+                  {aiMsg && <div style={{ fontSize: 12, marginTop: 8, color: /^Drafted/.test(aiMsg) ? '#3a6b45' : '#a13f3f' }}>{aiMsg}</div>}
+                </div>
+              )}
             </div>
             <label>Work completed</label>
             <textarea value={form.work_completed} onChange={e => update('work_completed', e.target.value)} />

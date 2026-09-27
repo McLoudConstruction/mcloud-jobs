@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import { buildFollowupEmail, buildScheduleReminderEmail, buildProposalFollowupEmail } from '../../../../lib/emailTemplates';
+import { buildFollowupEmail, buildScheduleReminderEmail, buildProposalFollowupEmail, buildReviewInviteEmail } from '../../../../lib/emailTemplates';
 import { sendMail as dispatchMail } from '../../../../lib/sendMail';
 import { logCommunication } from '../../../../lib/logCommunication';
 import { phaseForStage } from '../../../../lib/constants';
 import { tagSubjectWithJob } from '../../../../lib/emailThreading';
 import { syncConnectionEmail } from '../../../../lib/integrations/emailSync';
 import { workdayOnOrAfter } from '../../../../lib/scheduleDates';
+import { reviewUrl } from '../../../../lib/reviews';
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -241,6 +242,48 @@ export async function GET(request) {
     }
   } catch (err) {
     results.errors.push(`RFP reminder query failed: ${err.message}`);
+  }
+
+  // ── Sub compliance reminders (migration 133): notifies each sub at the
+  // expiring-soon window, at 7 days, and on expiry — once per stage per
+  // document — and tells the office. The database function does the
+  // de-duplication, so running this twice in a day is harmless.
+  try {
+    const { data: remindersSent, error: complianceError } = await supabase.rpc('run_compliance_reminders');
+    if (complianceError) throw complianceError;
+    results.compliance_reminders_sent = remindersSent || 0;
+  } catch (err) {
+    results.errors.push(`Compliance reminders failed: ${err.message}`);
+  }
+
+  // ── Customer review requests (migration 138). Creates a scheduled request
+  // for each newly completed job, then emails the ones that are due and not
+  // on hold (open punch items, unanswered message, opt-out…). The claim
+  // functions mark rows sent up front so an overlapping run can't double-send;
+  // if the email itself fails the row is put back for tomorrow.
+  results.review_requests_sent = 0;
+  results.review_reminders_sent = 0;
+  try {
+    await supabase.rpc('ensure_review_requests');
+    for (const reminder of [false, true]) {
+      const { data: claimed, error: claimErr } = await supabase.rpc(reminder ? 'claim_review_reminders' : 'claim_review_sends', { max_n: 25 });
+      if (claimErr) throw new Error(claimErr.message);
+      for (const r of claimed || []) {
+        try {
+          const { data: job } = await supabase.from('jobs').select('billing_email, customer_email, job_type').eq('id', r.job_id).maybeSingle();
+          const to = job?.billing_email || job?.customer_email || r.customer_email;
+          if (!to) throw new Error('No email on file');
+          const { subject, html, text } = buildReviewInviteEmail({ customerName: r.customer_name, reviewUrl: reviewUrl(r.token), projectLabel: r.project_label || job?.job_type, reminder });
+          await sendMail({ to, subject, html, text, category: 'review_request', jobId: r.job_id, jobNumber: r.job_number });
+          if (reminder) results.review_reminders_sent++; else results.review_requests_sent++;
+        } catch (err) {
+          await supabase.rpc('unclaim_review_send', { p_review: r.review_id, p_reminder: reminder });
+          results.errors.push(`Review ${reminder ? 'reminder' : 'request'} for job ${r.job_id}: ${err.message}`);
+        }
+      }
+    }
+  } catch (err) {
+    results.errors.push(`Review requests failed: ${err.message}`);
   }
 
   // ── Inbound email sync — folded in here rather than its own cron

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS } from '../lib/constants';
 import { buildNewWorkOrderEmail } from '../lib/emailTemplates';
 import WorkOrderPhotosPanel from './WorkOrderPhotosPanel';
+import { COMPLIANCE_OVERALL, complianceGapText } from '../lib/compliance';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -31,11 +32,69 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   const [invoicingId, setInvoicingId] = useState(null);
   const [photosOpenId, setPhotosOpenId] = useState(null);
   const [invoiceAmount, setInvoiceAmount] = useState('');
+  // company_id -> { overall, summary } from the compliance vault (migration 133),
+  // plus the enforcement mode. The database is the real gate (a non-compliant
+  // sub can't be issued/paid in 'block' mode without an override reason);
+  // this is here so staff get told BEFORE they click, not just an error after.
+  const [compliance, setCompliance] = useState({});
+  const [enforcement, setEnforcement] = useState('warn');
 
   const loadWorkOrders = useCallback(async () => {
     const { data } = await supabase.from('work_orders').select('*, companies(company_name)').eq('job_id', jobId).order('created_at', { ascending: false });
     if (data) setWorkOrders(data);
   }, [jobId]);
+
+  const loadCompliance = useCallback(async () => {
+    const [{ data: overview }, { data: cfg }] = await Promise.all([
+      supabase.rpc('sub_compliance_overview'),
+      supabase.from('app_settings').select('compliance_enforcement').eq('id', 1).maybeSingle(),
+    ]);
+    setCompliance(Object.fromEntries((overview || []).map(r => [r.company_id, r])));
+    if (cfg?.compliance_enforcement) setEnforcement(cfg.compliance_enforcement);
+  }, []);
+
+  useEffect(() => { loadCompliance(); }, [loadCompliance]);
+
+  // Returns { ok, override }. 'warn' asks for a confirmation; 'block' asks for
+  // a reason that's recorded on the work order and sent to the office.
+  function complianceGate(wo, actionLabel) {
+    const row = compliance[wo.company_id];
+    if (!row || row.overall !== 'noncompliant' || enforcement === 'off') return { ok: true, override: {} };
+    const name = wo.companies?.company_name || row.company_name || 'This subcontractor';
+    const gaps = complianceGapText(row.summary) || 'documents outstanding';
+    if (enforcement === 'warn') {
+      return { ok: confirm(`${name} isn't fully compliant: ${gaps}.\n\n${actionLabel} anyway?`), override: {} };
+    }
+    const reason = window.prompt(`${name} isn't compliant (${gaps}).\n\nCompliance enforcement is set to Block. To ${actionLabel.toLowerCase()} anyway, enter a reason — it's recorded on the work order and sent to the office. Cancel to stop.`);
+    if (!reason || !reason.trim()) return { ok: false, override: {} };
+    return { ok: true, override: { compliance_override_reason: reason.trim(), compliance_override_at: new Date().toISOString() } };
+  }
+
+  // Lien waiver check before paying a sub (migration 134). Reads fresh rather
+  // than trusting cached state — a sub may have signed a minute ago. Mirrors
+  // the database rule: needs a signed/received waiver and none outstanding.
+  async function waiverGate(wo) {
+    if (!wo.company_id) return { ok: true, override: {} };
+    const [{ data: cfg }, { data: jobRow }, { data: ws }] = await Promise.all([
+      supabase.from('app_settings').select('waiver_enforcement').eq('id', 1).maybeSingle(),
+      supabase.from('jobs').select('lien_waivers_optional').eq('id', jobId).maybeSingle(),
+      supabase.from('lien_waivers').select('status, company_id, work_order_id').eq('job_id', jobId).eq('direction', 'from_sub'),
+    ]);
+    const mode = cfg?.waiver_enforcement || 'warn';
+    if (mode === 'off' || jobRow?.lien_waivers_optional) return { ok: true, override: {} };
+    const mine = (ws || []).filter(w => w.work_order_id === wo.id || w.company_id === wo.company_id);
+    const hasSigned = mine.some(w => ['signed', 'waived'].includes(w.status));
+    const hasOpen = mine.some(w => ['requested', 'rejected'].includes(w.status));
+    if (hasSigned && !hasOpen) return { ok: true, override: {} };
+    const name = wo.companies?.company_name || 'This subcontractor';
+    const why = hasOpen ? 'has a lien waiver that is still outstanding' : 'has no signed lien waiver on file';
+    if (mode === 'warn') {
+      return { ok: confirm(`${name} ${why}.\n\nMark this work order paid anyway?`), override: {} };
+    }
+    const reason = window.prompt(`${name} ${why}.\n\nLien waiver enforcement is set to Block. To mark paid anyway, enter a reason — it's recorded and sent to the office. Cancel to stop.`);
+    if (!reason || !reason.trim()) return { ok: false, override: {} };
+    return { ok: true, override: { waiver_override_reason: reason.trim(), waiver_override_at: new Date().toISOString() } };
+  }
 
   useEffect(() => {
     loadWorkOrders();
@@ -105,7 +164,9 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
 
   async function issueWorkOrder(wo) {
     if (!confirm('Issue this work order? This will log it as a committed cost on the job, and email the subcontractor.')) return;
-    const { error: woError } = await supabase.from('work_orders').update({ status: 'issued', issued_at: new Date().toISOString() }).eq('id', wo.id);
+    const gate = complianceGate(wo, 'Issue this work order');
+    if (!gate.ok) return;
+    const { error: woError } = await supabase.from('work_orders').update({ status: 'issued', issued_at: new Date().toISOString(), ...gate.override }).eq('id', wo.id);
     if (woError) { setSaveError(woError.message); return; }
     const { error: costError } = await supabase.from('job_costs').insert({
       job_id: jobId,
@@ -161,7 +222,11 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
   }
 
   async function markPaid(wo) {
-    const { error } = await supabase.from('work_orders').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', wo.id);
+    const gate = complianceGate(wo, 'Mark this work order paid');
+    if (!gate.ok) return;
+    const wGate = await waiverGate(wo);
+    if (!wGate.ok) return;
+    const { error } = await supabase.from('work_orders').update({ status: 'paid', paid_at: new Date().toISOString(), ...gate.override, ...wGate.override }).eq('id', wo.id);
     if (error) { setSaveError(error.message); return; }
     await loadWorkOrders();
   }
@@ -207,6 +272,12 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
               {subcontractors.length === 0 && (
                 <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
                   No subcontractors yet — add one under the Subcontractors tab.
+                </div>
+              )}
+              {form.company_id && compliance[form.company_id]?.overall === 'noncompliant' && (
+                <div style={{ fontSize: 11.5, color: '#a13f3f', marginTop: 4 }}>
+                  Not compliant: {complianceGapText(compliance[form.company_id].summary)}
+                  {enforcement === 'block' ? ' — you won\'t be able to issue this work order without an override reason.' : ''}
                 </div>
               )}
             </div>
@@ -255,7 +326,17 @@ export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress 
                 <div style={{ fontSize: 11.5, color: '#3a6b45', marginTop: 2 }}>📎 Sub uploaded an invoice — {wo.sub_invoice_filename}</div>
               )}
             </div>
-            <span className={`badge badge-${wo.status}`} style={{ flexShrink: 0 }}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <span className={`badge badge-${wo.status}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span>
+              {wo.company_id && ['noncompliant', 'expiring'].includes(compliance[wo.company_id]?.overall) && wo.status !== 'paid' && (
+                <span
+                  title={complianceGapText(compliance[wo.company_id].summary)}
+                  style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: COMPLIANCE_OVERALL[compliance[wo.company_id].overall].color, background: COMPLIANCE_OVERALL[compliance[wo.company_id].overall].bg }}
+                >
+                  {COMPLIANCE_OVERALL[compliance[wo.company_id].overall].label}
+                </span>
+              )}
+            </span>
           </div>
 
           <div className="section-actions" style={{ marginTop: 8 }}>

@@ -31,6 +31,7 @@ const NAV_ITEMS = [
       { href: '/estimating', label: 'Estimating' },
       { href: '/invoices', label: 'Invoicing' },
       { href: '/material-selections', label: 'Material Selections' },
+      { href: '/reviews', label: 'Reviews' },
     ],
   },
   { href: '/jobs/calendar', label: 'Schedule', icon: ScheduleIcon },

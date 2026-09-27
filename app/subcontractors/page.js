@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
@@ -12,6 +13,8 @@ import AddColumnButton from '../../components/AddColumnButton';
 import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import CustomFieldCell from '../../components/CustomFieldCell';
+import ComplianceVaultPanel from '../../components/ComplianceVaultPanel';
+import { COMPLIANCE_OVERALL } from '../../lib/compliance';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
@@ -225,18 +228,10 @@ export default function SubcontractorsPage() {
   const [importResult, setImportResult] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
-  const [uploadingW9, setUploadingW9] = useState(false);
-  const [uploadingCoi, setUploadingCoi] = useState(false);
   const [docViewerUrl, setDocViewerUrl] = useState(null); // null | 'loading' | signedUrl
   const [docViewerError, setDocViewerError] = useState('');
   const fileInputRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
-  // A thumbnail confirms the file is actually there without a click, and
-  // (for an image) previews what was uploaded — a PDF still gets a plain
-  // file-icon tile since there's no cheap way to thumbnail a PDF page
-  // client-side. Keyed by kind so W9 and COI load independently.
-  const [docThumbs, setDocThumbs] = useState({ w9: null, coi: null });
-
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
     checkSize();
@@ -244,21 +239,10 @@ export default function SubcontractorsPage() {
     return () => window.removeEventListener('resize', checkSize);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadThumb(kind, path) {
-      if (!path) { setDocThumbs(prev => ({ ...prev, [kind]: null })); return; }
-      const isImage = /\.(png|jpe?g|gif|webp|heic)$/i.test(path);
-      if (!isImage) { setDocThumbs(prev => ({ ...prev, [kind]: 'pdf' })); return; }
-      const { data } = await supabase.storage.from('subcontractor-docs').createSignedUrl(path, 3600);
-      if (!cancelled) setDocThumbs(prev => ({ ...prev, [kind]: data?.signedUrl || 'pdf' }));
-    }
-    loadThumb('w9', form.w9_storage_path);
-    loadThumb('coi', form.coi_storage_path);
-    return () => { cancelled = true; };
-  }, [form.w9_storage_path, form.coi_storage_path]);
 
   const [applications, setApplications] = useState([]);
+  // company_id -> 'compliant' | 'expiring' | 'noncompliant' | 'exempt', from the compliance vault (migration 133)
+  const [complianceMap, setComplianceMap] = useState({});
   const [applyModalOpen, setApplyModalOpen] = useState(false);
   const [applyEmail, setApplyEmail] = useState('');
   const [applyCompanyHint, setApplyCompanyHint] = useState('');
@@ -281,27 +265,6 @@ export default function SubcontractorsPage() {
     }));
   }
 
-  async function uploadDoc(file, kind) {
-    if (!file || !editingId) return;
-    const setUploading = kind === 'w9' ? setUploadingW9 : setUploadingCoi;
-    const field = kind === 'w9' ? 'w9_storage_path' : 'coi_storage_path';
-    setUploading(true);
-    try {
-      const path = `${editingId}/${kind}-${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from('subcontractor-docs').upload(path, file);
-      if (error) throw error;
-      const oldPath = form[field];
-      if (oldPath) await supabase.storage.from('subcontractor-docs').remove([oldPath]);
-      const { error: updateError } = await supabase.from('companies').update({ [field]: path }).eq('id', editingId);
-      if (updateError) throw updateError;
-      setForm(prev => ({ ...prev, [field]: path }));
-    } catch (err) {
-      alert('Upload failed: ' + err.message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function viewDoc(path) {
     setDocViewerError('');
     setDocViewerUrl('loading');
@@ -316,20 +279,13 @@ export default function SubcontractorsPage() {
     }
   }
 
-  async function removeDoc(kind) {
-    const field = kind === 'w9' ? 'w9_storage_path' : 'coi_storage_path';
-    const path = form[field];
-    if (!path || !editingId) return;
-    if (!confirm(`Remove the ${kind.toUpperCase()} on file?`)) return;
-    await supabase.storage.from('subcontractor-docs').remove([path]);
-    const { error } = await supabase.from('companies').update({ [field]: null }).eq('id', editingId);
-    if (error) { alert('Failed to remove: ' + error.message); return; }
-    setForm(prev => ({ ...prev, [field]: '' }));
-  }
-
   const loadSubs = useCallback(async () => {
-    const { data } = await supabase.from('companies').select('*').eq('company_type', SUBCONTRACTOR_TYPE).order('company_name', { ascending: true });
+    const [{ data }, { data: overview }] = await Promise.all([
+      supabase.from('companies').select('*').eq('company_type', SUBCONTRACTOR_TYPE).order('company_name', { ascending: true }),
+      supabase.rpc('sub_compliance_overview'),
+    ]);
     if (data) setSubs(data);
+    setComplianceMap(Object.fromEntries((overview || []).map(o => [o.company_id, o.overall])));
   }, []);
 
   const loadApplications = useCallback(async () => {
@@ -499,8 +455,11 @@ export default function SubcontractorsPage() {
     if (!form.company_name.trim()) return;
     setSaving(true);
     setSaveError('');
-    const { w9_storage_path, coi_storage_path, ...rest } = form;
-    const payload = { ...rest, company_type: SUBCONTRACTOR_TYPE, coi_expires_at: form.coi_expires_at || null };
+    // W-9/COI paths AND the COI date are owned by the compliance vault now
+    // (migration 133). Writing this form's copy back would overwrite a newer
+    // approved certificate with whatever was loaded when the popup opened.
+    const { w9_storage_path, coi_storage_path, coi_expires_at, ...rest } = form;
+    const payload = { ...rest, company_type: SUBCONTRACTOR_TYPE };
     let companyId = editingId;
     let mutationError;
     if (editingId) {
@@ -648,6 +607,7 @@ export default function SubcontractorsPage() {
           {!isMobile && (
             <div style={{ display: 'flex', gap: 10 }}>
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+              <Link href="/subcontractors/compliance" className="btn">Compliance</Link>
               <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                 {importing ? 'Importing…' : '↑ Import from Excel'}
               </button>
@@ -658,6 +618,7 @@ export default function SubcontractorsPage() {
           )}
           {isMobile && (
             <MobileOverflowMenu>
+              <Link href="/subcontractors/compliance" className="btn">Compliance</Link>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -712,56 +673,9 @@ export default function SubcontractorsPage() {
                 <div className="sub-popup-sidebar-block">
                   <div className="sub-popup-sidebar-title">Compliance</div>
                   {editingId ? (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <label>W9 on file</label>
-                        {form.w9_storage_path ? (
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <button type="button" className="doc-thumb-btn" onClick={() => viewDoc(form.w9_storage_path)} aria-label="View W9">
-                              {docThumbs.w9 && docThumbs.w9 !== 'pdf' ? (
-                                <img src={docThumbs.w9} alt="" className="doc-thumb-img" />
-                              ) : (
-                                <span className="doc-thumb-pdf">PDF</span>
-                              )}
-                            </button>
-                            <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('w9')}>Remove</button>
-                          </div>
-                        ) : (
-                          <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                            {uploadingW9 ? 'Uploading…' : 'Upload W9'}
-                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingW9} onChange={e => uploadDoc(e.target.files[0], 'w9')} />
-                          </label>
-                        )}
-                      </div>
-                      <div>
-                        <label>Certificate of Insurance</label>
-                        {form.coi_storage_path ? (
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <button type="button" className="doc-thumb-btn" onClick={() => viewDoc(form.coi_storage_path)} aria-label="View COI">
-                              {docThumbs.coi && docThumbs.coi !== 'pdf' ? (
-                                <img src={docThumbs.coi} alt="" className="doc-thumb-img" />
-                              ) : (
-                                <span className="doc-thumb-pdf">PDF</span>
-                              )}
-                            </button>
-                            <button type="button" className="btn btn-sm btn-danger" onClick={() => removeDoc('coi')}>Remove</button>
-                          </div>
-                        ) : (
-                          <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                            {uploadingCoi ? 'Uploading…' : 'Upload COI'}
-                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={uploadingCoi} onChange={e => uploadDoc(e.target.files[0], 'coi')} />
-                          </label>
-                        )}
-                      </div>
-                      {form.coi_storage_path && (
-                        <div style={{ marginTop: 10 }}>
-                          <label>COI expiration date</label>
-                          <input type="date" value={form.coi_expires_at || ''} onChange={e => update('coi_expires_at', e.target.value)} />
-                        </div>
-                      )}
-                    </>
+                    <ComplianceVaultPanel companyId={editingId} onViewDoc={viewDoc} onChanged={loadSubs} />
                   ) : (
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Save this subcontractor first, then W9/COI can be uploaded here.</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Save this subcontractor first, then compliance documents can be uploaded here.</div>
                   )}
                 </div>
 
@@ -958,7 +872,7 @@ export default function SubcontractorsPage() {
                 className="sub-mobile-row"
                 onClick={() => startEdit(c)}
               >
-                <span className={`sub-coi-dot ${coiCompliant(c.coi_expires_at) ? 'ok' : 'warn'}`} aria-hidden="true" />
+                <span className={`sub-coi-dot ${(complianceMap[c.id] ? ['compliant', 'exempt'].includes(complianceMap[c.id]) : coiCompliant(c.coi_expires_at)) ? 'ok' : 'warn'}`} aria-hidden="true" />
                 <span className="sub-mobile-row-text">
                   <span className="sub-mobile-row-name">{c.company_name}</span>
                   <span className="sub-mobile-row-contact">{c.contact_name || 'No contact on file'}</span>
@@ -979,7 +893,13 @@ export default function SubcontractorsPage() {
               { key: 'contact_phone', label: 'Phone', defaultWidth: 150, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 220, render: c => c.contact_email || '—' },
               { key: 'portal', label: 'Portal', defaultWidth: 110, filterable: false, render: c => c.portal_invited_at ? <span style={{ color: '#3a6b45', fontWeight: 600 }}>Invited</span> : <span style={{ color: 'var(--ink-soft)' }}>Not invited</span> },
-              { key: 'coi', label: 'COI', defaultWidth: 130, filterable: false, render: c => coiStatus(c.coi_expires_at) },
+              {
+                key: 'coi', label: 'Compliance', defaultWidth: 140, filterable: false,
+                render: c => {
+                  const def = COMPLIANCE_OVERALL[complianceMap[c.id]];
+                  return def ? <span style={{ color: def.color, fontWeight: 600 }}>{def.label}</span> : coiStatus(c.coi_expires_at);
+                },
+              },
               ...customColumns.map(col => ({
                 key: `custom:${col.column_key}`,
                 label: col.label,

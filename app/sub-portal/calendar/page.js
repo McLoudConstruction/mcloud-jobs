@@ -7,6 +7,7 @@ import { phaseBackground } from '../../../lib/tradeColors';
 import { EVENT_TYPE_LABELS, SCHEDULE_REQUEST_STATUS_LABELS, subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SubScheduleRequestModal from '../../../components/SubScheduleRequestModal';
+import SubAvailabilitySection from '../../../components/SubAvailabilitySection';
 
 // Month-view only — the GC calendar's Week/Day hourly timeline is a lot
 // of extra machinery (drag-resize, a live "now" line, a synced-personal-
@@ -342,6 +343,7 @@ export default function SubPortalCalendarPage() {
               )}
             </div>
           </div>
+          <SubAvailabilitySection company={company} role={role} />
         </div>
       </div>
 

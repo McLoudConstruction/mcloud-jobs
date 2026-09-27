@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { aiFetch } from '../lib/aiFetch';
 
 function fmtMsgDate(v) {
   if (!v) return '';
@@ -12,6 +13,7 @@ export default function JobMessagesCard({ jobId, job }) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [drafting, setDrafting] = useState(false);
 
   const load = useCallback(() => {
     supabase.from('job_questions').select('*').eq('job_id', jobId).order('created_at', { ascending: true }).then(({ data }) => { if (data) setMsgs(data); });
@@ -24,6 +26,19 @@ export default function JobMessagesCard({ jobId, job }) {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
+
+  async function draftReply() {
+    if (reply.trim() && !window.confirm('Replace what you have typed with an AI draft?')) return;
+    setDrafting(true);
+    setSendError('');
+    try {
+      const { reply: drafted } = await aiFetch('/api/ai/draft-reply', { jobId, guidance: reply.trim() });
+      setReply(drafted);
+    } catch (err) {
+      setSendError(err.message);
+    }
+    setDrafting(false);
+  }
 
   async function send(e) {
     e.preventDefault();
@@ -78,7 +93,12 @@ export default function JobMessagesCard({ jobId, job }) {
 
       <form onSubmit={send} className="messages-compose">
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder={`Message ${job.customer_name || 'the customer'}…`} rows={2} />
-        <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending…' : 'Send'}</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending…' : 'Send'}</button>
+          {msgs.some(m => m.sender === 'customer') && (
+            <button className="btn btn-sm" type="button" onClick={draftReply} disabled={drafting} title="Draft a reply from the conversation, schedule and recent updates. Anything you've typed is used as guidance.">{drafting ? 'Drafting…' : '✦ Draft'}</button>
+          )}
+        </div>
       </form>
       {sendError && <div style={{ fontSize: 12, color: '#a13f3f', padding: '0 18px 14px' }}>{sendError}</div>}
     </div>

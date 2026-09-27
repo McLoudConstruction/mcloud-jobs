@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { phaseForStage } from '../lib/constants';
+import { aiFetch } from '../lib/aiFetch';
 
 export default function ProjectInfoCard({ job, onSave, onTabChange }) {
   const [form, setForm] = useState({
@@ -14,6 +15,22 @@ export default function ProjectInfoCard({ job, onSave, onTabChange }) {
     project_type: job.project_type || 'residential',
   });
   const approvedOrLater = phaseForStage(job.stage) !== 'opportunity';
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  // Fills the description from the saved scope of work. Draft only — edit, then save.
+  async function draftDescription() {
+    if (form.description.trim() && !window.confirm('Replace the current description with an AI draft?')) return;
+    setAiBusy(true);
+    setAiError('');
+    try {
+      const { description } = await aiFetch('/api/ai/describe-project', { jobId: job.id });
+      setForm(prev => ({ ...prev, description }));
+    } catch (err) {
+      setAiError(err.message);
+    }
+    setAiBusy(false);
+  }
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
   function save() {
@@ -94,7 +111,11 @@ export default function ProjectInfoCard({ job, onSave, onTabChange }) {
         </div>
       )}
 
-      <label>Description</label>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <label style={{ margin: 0 }}>Description</label>
+        <button type="button" className="btn btn-sm" onClick={draftDescription} disabled={aiBusy} title="Write this from the saved scope of work">{aiBusy ? 'Drafting…' : '✦ Draft from scope'}</button>
+      </div>
+      {aiError && <div style={{ fontSize: 12, color: '#a13f3f', margin: '4px 0' }}>{aiError}</div>}
       <textarea value={form.description} onChange={e => update('description', e.target.value)} />
       <div className="section-actions">
         <button className="btn btn-primary btn-sm" onClick={save}>Save project overview</button>

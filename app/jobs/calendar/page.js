@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
+import Link from 'next/link';
 import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
@@ -932,6 +933,10 @@ export default function JobCalendarPage() {
   return (
     <AppShell>
       <div className="container container-wide" style={!isMobile && view !== 'month' ? { paddingBottom: 0 } : undefined}>
+        <div className="tab-sections-pills" style={{ marginBottom: 12 }}>
+          <span className="tab-section-btn active">Calendar</span>
+          <Link href="/jobs/calendar/board" className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
+        </div>
         <div
           ref={sidebarRowRef}
           style={

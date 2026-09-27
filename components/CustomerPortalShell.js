@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/customerportal/documents', label: 'Documents' },
   { href: '/customerportal/selections', label: 'Selections' },
   { href: '/customerportal/invoices', label: 'Invoices' },
+  { href: '/customerportal/warranty', label: 'Warranty' },
   { href: '/customerportal/inbox', label: 'Inbox' },
   { href: '/customerportal/notifications', label: 'Notifications' },
 ];

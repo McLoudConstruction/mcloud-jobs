@@ -9,6 +9,7 @@ import { docFilename } from '../../../../lib/docFilename';
 import DocBackLink from '../../../../components/DocBackLink';
 import { assignNextJobNumber } from '../../../../lib/assignJobNumber';
 import SignaturePad from '../../../../components/SignaturePad';
+import SignatureAuditTrail from '../../../../components/SignatureAuditTrail';
 import { generatePdfBase64, downloadPdf } from '../../../../lib/generatePdf';
 import { useSettings } from '../../../../lib/useSettings';
 
@@ -317,6 +318,7 @@ export default function ContractDocumentPage() {
                   locked={Boolean(job.contract_finalized_at)}
                 />
               </div>
+              <SignatureAuditTrail documentType="contract" documentId={id} isStaff={isAdmin} />
 
               {!job.contract_finalized_at && sigs.owner?.signature && (
                 <div className="no-print" style={{ marginTop: 14 }}>

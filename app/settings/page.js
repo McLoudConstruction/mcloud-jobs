@@ -9,6 +9,7 @@ import StaffUsersPanel from '../../components/StaffUsersPanel';
 import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
+import FeatureSettingsPanels from '../../components/FeatureSettingsPanels';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
@@ -482,6 +483,8 @@ function SettingsPageInner() {
           />
         </div>
         )}
+
+        {tab === 'Automation' && <FeatureSettingsPanels />}
 
         <div className="section-actions" style={{ marginBottom: 20 }}>
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>

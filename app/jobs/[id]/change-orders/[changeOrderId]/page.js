@@ -9,6 +9,7 @@ import { docFilename } from '../../../../../lib/docFilename';
 import DocBackLink from '../../../../../components/DocBackLink';
 import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import SignaturePad from '../../../../../components/SignaturePad';
+import SignatureAuditTrail from '../../../../../components/SignatureAuditTrail';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useStaffAuth } from '../../../../../lib/staffAuthContext';
 
@@ -183,6 +184,7 @@ export default function ChangeOrderDocumentPage() {
                   defaultName={staffFullName}
                   defaultTitle="Owner, McLoud Construction"
                   requireName
+                  locked={!isAdmin}
                 />
                 {!isDeclined && (
                   <SignaturePad
@@ -193,9 +195,14 @@ export default function ChangeOrderDocumentPage() {
                     defaultName={job.customer_contact || ''}
                     defaultTitle=""
                     note="Customer signs here (touch or mouse)"
+                    locked={!isAdmin}
                   />
                 )}
               </div>
+              {/* Once the customer has signed, that IS the approval — only
+                  staff can change it (enforced in the database, and every
+                  change is logged here). */}
+              <SignatureAuditTrail documentType="change_order" documentId={changeOrderId} isStaff={isAdmin} />
 
               {/* Decline is customer-only, and only while it's still an
                   open decision — once signed, declining no longer makes
