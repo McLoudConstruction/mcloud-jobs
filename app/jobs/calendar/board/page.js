@@ -43,7 +43,7 @@ export default function ScheduleBoardPage() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const { data: jobs, error: jobErr } = await supabase.from('jobs').select('id, job_number, customer_name, project_address, stage').in('stage', ACTIVE_STAGES);
+    const { data: jobs, error: jobErr } = await supabase.from('jobs').select('id, project_number, customer_name, project_address, stage').in('stage', ACTIVE_STAGES);
     if (jobErr) { setError(jobErr.message); return; }
     const jobIds = (jobs || []).map(j => j.id);
     if (!jobIds.length) { setData({ jobs: [], phases: [], workOrders: [], companies: {}, unavailability: [], compliance: {} }); return; }
@@ -98,7 +98,7 @@ export default function ScheduleBoardPage() {
     if (view === 'job') {
       return data.jobs.map(j => {
         const items = data.phases.filter(p => p.job_id === j.id && inWindow(p.start_date, p.end_date)).map(p => phaseItem(p));
-        return { id: j.id, title: j.job_number ? `#${j.job_number} · ${j.customer_name || ''}` : (j.customer_name || 'Job'), sub: j.project_address, href: `/jobs/${j.id}?tab=Schedule`, items };
+        return { id: j.id, title: j.project_number ? `#${j.project_number} · ${j.customer_name || ''}` : (j.customer_name || 'Job'), sub: j.project_address, href: `/jobs/${j.id}?tab=Schedule`, items };
       }).filter(r => r.items.length);
     }
     // by sub
@@ -110,7 +110,7 @@ export default function ScheduleBoardPage() {
         if (!p.trade || !inWindow(p.start_date, p.end_date)) continue;
         if (active.some(w => w.company_id === cid && w.job_id === p.job_id && w.trade === p.trade)) {
           const j = jobsById[p.job_id];
-          items.push(phaseItem(p, { suffix: '-' + cid, label: `${j?.job_number ? '#' + j.job_number + ' ' : ''}${p.label}` }));
+          items.push(phaseItem(p, { suffix: '-' + cid, label: `${j?.project_number ? '#' + j.project_number + ' ' : ''}${p.label}` }));
         }
       }
       for (const u of data.unavailability.filter(x => x.company_id === cid && inWindow(x.start_date, x.end_date))) {

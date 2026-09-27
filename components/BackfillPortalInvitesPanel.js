@@ -138,7 +138,7 @@ export default function BackfillPortalInvitesPanel() {
                   <th style={{ width: 30 }}>
                     <input type="checkbox" style={{ width: 'auto' }} checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all" />
                   </th>
-                  <th style={{ width: 90 }}>Job #</th>
+                  <th style={{ width: 90 }}>Project #</th>
                   <th style={{ width: 170 }}>Customer</th>
                   <th>Email</th>
                   <th style={{ width: 100 }}></th>

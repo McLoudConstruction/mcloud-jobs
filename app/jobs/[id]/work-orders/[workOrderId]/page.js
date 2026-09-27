@@ -75,14 +75,14 @@ export default function WorkOrderDocumentPage() {
     setSendResult(null);
     try {
       const attachmentBase64 = await generatePdfBase64('doc-preview', docFilename('Work-Order', company?.company_name || job.customer_name));
-      const subject = `Work Order — McLoud Construction, Job #${job.job_number}`;
+      const subject = `Work Order — McLoud Construction, Project #${job.project_number}`;
       const html = `<div style="font-family: -apple-system, sans-serif; font-size: 14px; color: #1C1B19; line-height: 1.6;">
         <p>Hi${company?.contact_name ? ' ' + company.contact_name.split(' ')[0] : ''},</p>
-        <p>Attached is a work order from McLoud Construction for job #${job.job_number} (${job.project_address || ''}).</p>
+        <p>Attached is a work order from McLoud Construction for project #${job.project_number} (${job.project_address || ''}).</p>
         <p>Please reach out with any questions.</p>
         <p>Kind Regards,<br>Stachys — McLoud Construction</p>
       </div>`;
-      const text = `Attached is a work order from McLoud Construction for job #${job.job_number} (${job.project_address || ''}). Please reach out with any questions.\n\nKind Regards,\nStachys — McLoud Construction`;
+      const text = `Attached is a work order from McLoud Construction for project #${job.project_number} (${job.project_address || ''}). Please reach out with any questions.\n\nKind Regards,\nStachys — McLoud Construction`;
 
       const res = await fetch('/api/send-email', {
         method: 'POST',
@@ -152,7 +152,7 @@ export default function WorkOrderDocumentPage() {
               <span><b>{company?.company_name || 'Subcontractor not selected'}</b></span>
               <span>{job.project_address || 'Project address'}</span>
               <span>Date: <b>{fmtDate(wo.issued_at || wo.created_at)}</b></span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
 
             {scopeItems.length > 0 && (
@@ -178,7 +178,7 @@ export default function WorkOrderDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
           </div>
         </div>

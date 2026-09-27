@@ -158,7 +158,7 @@ export default function PortalDashboardPage() {
           <div className="stage-tabs">
             {jobs.map(j => (
               <button key={j.id} className={`stage-tab ${j.id === selectedJobId ? 'active' : ''}`} onClick={() => setSelectedJobId(j.id)}>
-                #{j.job_number}
+                #{j.project_number}
               </button>
             ))}
           </div>

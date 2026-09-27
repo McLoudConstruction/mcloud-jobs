@@ -34,7 +34,7 @@ export default function RfpDetailPage() {
   const [openMessagesFor, setOpenMessagesFor] = useState(null);
 
   const load = useCallback(async () => {
-    const { data: rfpData } = await supabase.from('rfps').select('*, jobs(job_number, estimate_number, stage, project_address)').eq('id', rfpId).single();
+    const { data: rfpData } = await supabase.from('rfps').select('*, jobs(project_number, stage, project_address)').eq('id', rfpId).single();
     if (!rfpData) return;
     setRfp(rfpData);
 

@@ -4,10 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
-import { formatPhone, nextInSeries } from '../../../lib/constants';
+import { formatPhone, nextProjectNumber } from '../../../lib/constants';
 
 const EMPTY_FORM = {
-  estimate_number: '',
+  project_number: '',
   expected_close_date: '',
   project_type: '', // 'residential' | 'commercial'
   work_location: '', // 'indoor' | 'outdoor' — primary/expected; individual schedule phases can differ
@@ -40,25 +40,29 @@ function NewOpportunityPageInner() {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const searchTimer = useRef(null);
 
-  // Computes the next estimate number from the true numeric max across
-  // every existing estimate_number — not from "whichever row was created
-  // most recently." Estimate numbers (like job numbers) aren't always
-  // assigned in the same order rows are created, so sorting by created_at
-  // can hand back a number that's already taken. See nextInSeries for
-  // the full explanation.
-  async function computeNextEstimateNumber() {
-    const { data } = await supabase.from('jobs').select('estimate_number').not('estimate_number', 'is', null);
-    const existing = (data || []).map(row => row.estimate_number);
-    return nextInSeries(existing, `EST-${new Date().getFullYear()}-001`);
+  // Computes the next project number from the true numeric max across
+  // every existing project_number for this year — not from "whichever
+  // row was created most recently." Project numbers aren't always
+  // assigned in the same order rows are created, so sorting by
+  // created_at can hand back a number that's already taken. See
+  // nextProjectNumber in constants.js for the full explanation.
+  async function computeNextProjectNumber(projectType) {
+    const { data } = await supabase.from('jobs').select('project_number').not('project_number', 'is', null);
+    const existing = (data || []).map(row => row.project_number);
+    return nextProjectNumber(existing, projectType);
   }
 
+  // The project number's trailing letter depends on Commercial vs.
+  // Residential, so it's (re)computed whenever that selection changes,
+  // not just once on page load.
   useEffect(() => {
-    async function loadNextEstimateNumber() {
-      const next = await computeNextEstimateNumber();
-      setForm(prev => (prev.estimate_number ? prev : { ...prev, estimate_number: next }));
-    }
-    loadNextEstimateNumber();
-  }, []);
+    if (!form.project_type) return;
+    let cancelled = false;
+    computeNextProjectNumber(form.project_type).then(next => {
+      if (!cancelled) setForm(prev => ({ ...prev, project_number: next }));
+    });
+    return () => { cancelled = true; };
+  }, [form.project_type]);
 
   useEffect(() => {
     if (!oppId) return;
@@ -158,8 +162,7 @@ function NewOpportunityPageInner() {
       expected_close_date: form.expected_close_date || null,
       description: form.description || null,
       referral_name: form.referral_name.trim() || null,
-      estimate_number: form.estimate_number,
-      job_number: null,
+      project_number: form.project_number,
       stage: 'new',
       work_location: form.work_location || null,
       // customer_name is the single "who this is" field used everywhere
@@ -172,14 +175,14 @@ function NewOpportunityPageInner() {
     };
 
     // Two people opening this form at nearly the same moment can both be
-    // handed the same suggested estimate number. Rather than making
+    // handed the same suggested project number. Rather than making
     // Stachys refresh and retry by hand, catch the unique-constraint
     // rejection and recompute+resubmit automatically a couple of times.
     let data, insertError;
     for (let attempt = 0; attempt < 3; attempt++) {
       ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
       if (!insertError || insertError.code !== '23505') break;
-      payload.estimate_number = await computeNextEstimateNumber();
+      payload.project_number = await computeNextProjectNumber(form.project_type);
     }
 
     if (!insertError && !selectedContactId) {
@@ -200,7 +203,7 @@ function NewOpportunityPageInner() {
     setSaving(false);
 
     if (insertError) {
-      setError(insertError.message.includes('duplicate') ? 'That estimate number is already in use — refresh and try again.' : insertError.message);
+      setError(insertError.message.includes('duplicate') ? 'That project number is already in use — refresh and try again.' : insertError.message);
       return;
     }
 
@@ -376,7 +379,7 @@ function NewOpportunityPageInner() {
             <textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Short summary of the job…" rows={3} />
 
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
-              Estimate number: <b>{form.estimate_number || '…'}</b>
+              Project number: <b>{form.project_number || '…'}</b>
             </div>
           </div>
 

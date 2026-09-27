@@ -146,7 +146,7 @@ export default function ChangeOrderDocumentPage() {
               <span><b>{job.customer_name || 'Customer name'}</b></span>
               <span>{job.project_address || 'Project address'}</span>
               <span>Date: <b>{fmtDate(co.co_date)}</b></span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
 
             <div className="section">
@@ -232,7 +232,7 @@ export default function ChangeOrderDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
           </div>
         </div>

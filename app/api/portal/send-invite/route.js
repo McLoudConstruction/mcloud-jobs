@@ -68,7 +68,7 @@ export async function POST(request) {
 
     // jobId isn't passed into sendMail() here (only into logCommunication
     // below) — this invite isn't scoped to one job, and tagging the
-    // subject with a job number would be wrong/confusing for what's an
+    // subject with a project number would be wrong/confusing for what's an
     // account-access email, not a job-thread email.
     try {
       const { provider } = await sendMail({ to: email, subject, html, text, sentBy: caller.email });

@@ -228,7 +228,7 @@ function OverviewSection({ title, href, empty, children, style }) {
   );
 }
 
-// One job, one row: heading is "Lastname — Job #204" (subs know a
+// One job, one row: heading is "Lastname — Project #204" (subs know a
 // customer by name, not by address), the row opens the full job detail
 // page, and Scope of Work nests inside it as an expand/collapse block
 // instead of living on its own tab — expanding it is a separate click

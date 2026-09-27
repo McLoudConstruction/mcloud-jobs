@@ -63,7 +63,7 @@ export default function SubPortalRfpsPage() {
           </div>
           {recipients.length === 0 && <div className="empty-state">Nothing here yet.</div>}
           {recipients.map(rr => {
-            // "Smith — Estimate #204 · 123 Main St" — same customer/
+            // "Smith — Project #204 · 123 Main St" — same customer/
             // number heading the rest of the sub portal uses.
             const jobMeta = [subPortalJobHeading(rr), rr.project_address].filter(Boolean).join(' · ');
             return (

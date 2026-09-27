@@ -55,14 +55,14 @@ export default function MessagesPage() {
   }, []);
 
   const loadQuestions = useCallback(async () => {
-    const { data } = await supabase.from('job_questions').select('*, jobs(job_number, customer_name)').order('created_at', { ascending: true });
+    const { data } = await supabase.from('job_questions').select('*, jobs(project_number, customer_name)').order('created_at', { ascending: true });
     if (data) setQuestions(data);
   }, []);
 
   const loadNotifications = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
-      .select('*, jobs(job_number, customer_name)')
+      .select('*, jobs(project_number, customer_name)')
       .order('created_at', { ascending: false });
     if (data) setNotifications(data);
   }, []);
@@ -170,7 +170,7 @@ export default function MessagesPage() {
     kind: 'message',
     jobId: t.jobId,
     title: t.jobInfo?.customer_name || 'Unnamed',
-    jobNumber: t.jobInfo?.job_number,
+    jobNumber: t.jobInfo?.project_number,
     preview: t.last.message,
     timestamp: t.last.created_at,
     unread: t.unreadCount > 0,
@@ -180,7 +180,7 @@ export default function MessagesPage() {
     kind: 'system',
     notifId: n.id,
     jobId: n.job_id,
-    jobNumber: n.jobs?.job_number,
+    jobNumber: n.jobs?.project_number,
     preview: n.message,
     timestamp: n.created_at,
     unread: !n.read,
@@ -223,7 +223,7 @@ export default function MessagesPage() {
               <div className="messages-chat-header" style={{ padding: '10px 2px' }}>
                 <div>
                   <div style={{ fontWeight: 700 }}>{mobileThread.jobInfo?.customer_name || 'Unnamed'}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Job #{mobileThread.jobInfo?.job_number}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Project #{mobileThread.jobInfo?.project_number}</div>
                 </div>
                 <Link href={`/jobs/${mobileThreadId}`} className="btn btn-sm">View Job →</Link>
               </div>
@@ -316,7 +316,7 @@ export default function MessagesPage() {
                           onClick={() => setSelectedJobId(item.t.jobId)}
                         >
                           <div className="messages-thread-name">{item.t.jobInfo?.customer_name || 'Unnamed'}</div>
-                          <div className="messages-thread-job">#{item.t.jobInfo?.job_number}</div>
+                          <div className="messages-thread-job">#{item.t.jobInfo?.project_number}</div>
                           <div className="messages-thread-preview">{item.t.last.message}</div>
                           {item.t.unreadCount > 0 && <span className="messages-unread-badge">{item.t.unreadCount}</span>}
                         </button>
@@ -336,7 +336,7 @@ export default function MessagesPage() {
                           onClick={() => setSelectedJobId(t.jobId)}
                         >
                           <div className="messages-thread-name">{t.jobInfo?.customer_name || 'Unnamed'}</div>
-                          <div className="messages-thread-job">#{t.jobInfo?.job_number}</div>
+                          <div className="messages-thread-job">#{t.jobInfo?.project_number}</div>
                           <div className="messages-thread-preview">{t.last.message}</div>
                           {t.unreadCount > 0 && <span className="messages-unread-badge">{t.unreadCount}</span>}
                         </button>
@@ -353,7 +353,7 @@ export default function MessagesPage() {
                       <div className="messages-chat-header">
                         <div>
                           <div style={{ fontWeight: 700 }}>{selectedThread.jobInfo?.customer_name || 'Unnamed'}</div>
-                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Job #{selectedThread.jobInfo?.job_number}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Project #{selectedThread.jobInfo?.project_number}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           {selectedThread.unreadCount > 0 && (

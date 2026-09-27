@@ -165,7 +165,7 @@ function SubcontractorStats({ companyId }) {
 
   useEffect(() => {
     let active = true;
-    supabase.from('work_orders').select('*, jobs(job_number, project_address, customer_name)').eq('company_id', companyId).order('created_at', { ascending: false })
+    supabase.from('work_orders').select('*, jobs(project_number, project_address, customer_name)').eq('company_id', companyId).order('created_at', { ascending: false })
       .then(({ data }) => { if (active) setWorkOrders(data || []); });
     return () => { active = false; };
   }, [companyId]);
@@ -207,7 +207,7 @@ function SubcontractorStats({ companyId }) {
       {lastFive.length === 0 && <div className="empty-state">No completed projects yet.</div>}
       {lastFive.map(wo => (
         <div key={wo.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-          {wo.jobs ? `#${wo.jobs.job_number} — ${wo.jobs.project_address || wo.jobs.customer_name}` : 'Job details unavailable'}
+          {wo.jobs ? `#${wo.jobs.project_number} — ${wo.jobs.project_address || wo.jobs.customer_name}` : 'Job details unavailable'}
         </div>
       ))}
     </div>

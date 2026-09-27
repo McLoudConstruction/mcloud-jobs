@@ -32,7 +32,7 @@ export default function MaterialSelectionsDashboardPage() {
   const loadAll = useCallback(async () => {
     const { data } = await supabase
       .from('material_selections')
-      .select('*, jobs(job_number, customer_name)')
+      .select('*, jobs(project_number, customer_name)')
       .order('created_at', { ascending: false });
     if (data) setSelections(data);
 
@@ -59,7 +59,7 @@ export default function MaterialSelectionsDashboardPage() {
   const rows = selections
     .map(s => ({
       ...s,
-      job_number: s.jobs?.job_number,
+      project_number: s.jobs?.project_number,
       customer_name: s.jobs?.customer_name || 'Unnamed',
       option_count: optionCounts[s.id] || 0,
       urgency: STATUS_URGENCY[s.status] ?? 1,
@@ -90,7 +90,7 @@ export default function MaterialSelectionsDashboardPage() {
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{r.customer_name}</span>
                   <span className="entity-mobile-row-sub">
-                    {r.title}{r.job_number ? ` · #${r.job_number}` : ''}
+                    {r.title}{r.project_number ? ` · #${r.project_number}` : ''}
                   </span>
                 </span>
                 <span className={`badge ${STATUS_BADGE_CLASS[r.status] || 'badge-draft'}`} style={{ flexShrink: 0 }}>{STATUS_LABELS[r.status] || r.status}</span>
@@ -107,7 +107,7 @@ export default function MaterialSelectionsDashboardPage() {
             rows={rows}
             rowClassName={r => r.status === 'approved' ? 'row-settled' : ''}
             columns={[
-              { key: 'job_number', label: 'Job #', defaultWidth: 90, render: r => r.job_number ? `#${r.job_number}` : '—' },
+              { key: 'project_number', label: 'Project #', defaultWidth: 90, render: r => r.project_number ? `#${r.project_number}` : '—' },
               { key: 'customer_name', label: 'Customer', defaultWidth: 180, render: r => r.customer_name },
               { key: 'title', label: 'Selection', defaultWidth: 220, render: r => r.title },
               { key: 'status', label: 'Status', defaultWidth: 150, render: r => STATUS_LABELS[r.status] || r.status },

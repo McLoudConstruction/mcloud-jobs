@@ -100,7 +100,7 @@ export default function IndividualProposalDocumentPage() {
 
       <ProposalDocument
         docTag={`#${projectNumber(job)} — ${proposal.name}`}
-        footerLabel={`Estimate #${projectNumber(job)} — ${proposal.name}`}
+        footerLabel={`Project #${projectNumber(job)} — ${proposal.name}`}
         customerName={job.customer_name}
         customerContact={job.customer_contact}
         projectAddress={job.project_address}
@@ -114,7 +114,7 @@ export default function IndividualProposalDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`Estimate #${projectNumber(job)} — ${proposal.name}`}
+        docLabel={`Project #${projectNumber(job)} — ${proposal.name}`}
         docType="proposal"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"

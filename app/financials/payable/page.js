@@ -41,9 +41,9 @@ export default function PayablePage() {
 
   const loadAll = useCallback(async () => {
     const [{ data: wo }, { data: be }, { data: r }] = await Promise.all([
-      supabase.from('work_orders').select('*, jobs(job_number, customer_name), companies(company_name)').neq('status', 'paid'),
+      supabase.from('work_orders').select('*, jobs(project_number, customer_name), companies(company_name)').neq('status', 'paid'),
       supabase.from('business_expenses').select('*').eq('payment_status', 'unpaid'),
-      supabase.from('receipts').select('*, jobs(job_number)').eq('payment_status', 'unpaid'),
+      supabase.from('receipts').select('*, jobs(project_number)').eq('payment_status', 'unpaid'),
     ]);
     if (wo) setWorkOrders(wo);
     if (be) setBusinessExpenses(be);
@@ -92,7 +92,7 @@ export default function PayablePage() {
                 >
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{wo.companies?.company_name || 'Unknown'}</span>
-                    <span className="data-mobile-row-sub">{wo.jobs ? `#${wo.jobs.job_number}` : '—'} · {WORK_ORDER_STATUS_LABELS[wo.status]} · {agingLabel(daysAgo(wo.issued_at || wo.created_at))}</span>
+                    <span className="data-mobile-row-sub">{wo.jobs ? `#${wo.jobs.project_number}` : '—'} · {WORK_ORDER_STATUS_LABELS[wo.status]} · {agingLabel(daysAgo(wo.issued_at || wo.created_at))}</span>
                   </span>
                   <span className="data-mobile-row-amount">{fmtMoney(wo.invoiced_amount ?? wo.amount)}</span>
                 </div>
@@ -115,7 +115,7 @@ export default function PayablePage() {
                   {workOrders.map(wo => (
                     <tr key={wo.id} onClick={() => window.location.href = wo.job_id ? `/jobs/${wo.job_id}?tab=Financials` : '#'}>
                       <td>{wo.companies?.company_name || 'Unknown'}</td>
-                      <td>{wo.jobs ? `#${wo.jobs.job_number}` : '—'}</td>
+                      <td>{wo.jobs ? `#${wo.jobs.project_number}` : '—'}</td>
                       <td>{WORK_ORDER_STATUS_LABELS[wo.status]}</td>
                       <td>{fmtMoney(wo.invoiced_amount ?? wo.amount)}</td>
                       <td>{agingLabel(daysAgo(wo.issued_at || wo.created_at))}</td>
@@ -182,7 +182,7 @@ export default function PayablePage() {
                 >
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{r.vendor_name || '—'}</span>
-                    <span className="data-mobile-row-sub">{r.jobs ? `#${r.jobs.job_number}` : '—'} · {agingLabel(daysAgo(r.receipt_date))}</span>
+                    <span className="data-mobile-row-sub">{r.jobs ? `#${r.jobs.project_number}` : '—'} · {agingLabel(daysAgo(r.receipt_date))}</span>
                   </span>
                   <span className="data-mobile-row-amount">{fmtMoney(r.amount)}</span>
                 </div>
@@ -204,7 +204,7 @@ export default function PayablePage() {
                   {receipts.map(r => (
                     <tr key={r.id} onClick={() => window.location.href = r.job_id ? `/jobs/${r.job_id}?tab=Financials` : '#'}>
                       <td>{r.vendor_name || '—'}</td>
-                      <td>{r.jobs ? `#${r.jobs.job_number}` : '—'}</td>
+                      <td>{r.jobs ? `#${r.jobs.project_number}` : '—'}</td>
                       <td>{fmtMoney(r.amount)}</td>
                       <td>{agingLabel(daysAgo(r.receipt_date))}</td>
                     </tr>

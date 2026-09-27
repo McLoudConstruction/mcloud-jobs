@@ -41,7 +41,7 @@ export default function ClosedLostPage() {
     if (!search.trim()) return jobs;
     const q = search.toLowerCase();
     return jobs.filter(j =>
-      (j.estimate_number || '').toLowerCase().includes(q) ||
+      (j.project_number || '').toLowerCase().includes(q) ||
       (j.customer_name || '').toLowerCase().includes(q) ||
       (j.project_address || '').toLowerCase().includes(q) ||
       (j.loss_reason || '').toLowerCase().includes(q)
@@ -65,7 +65,7 @@ export default function ClosedLostPage() {
 
         <div className="search-bar">
           <input
-            placeholder="Search by estimate #, customer, address, or loss reason…"
+            placeholder="Search by project #, customer, address, or loss reason…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

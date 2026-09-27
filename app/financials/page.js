@@ -39,10 +39,10 @@ export default function FinancialDashboardPage() {
     const [{ data: j }, { data: jc }, { data: wo }, { data: be }, { data: r }, { data: inv }] = await Promise.all([
       supabase.from('jobs').select('*, job_financials(contract_price, invoice_amount, invoice_status)'),
       supabase.from('job_costs').select('*'),
-      supabase.from('work_orders').select('*, jobs(job_number, customer_name), companies(company_name)'),
+      supabase.from('work_orders').select('*, jobs(project_number, customer_name), companies(company_name)'),
       supabase.from('business_expenses').select('*'),
-      supabase.from('receipts').select('*, jobs(job_number)'),
-      supabase.from('invoices').select('*, jobs(job_number, customer_name)'),
+      supabase.from('receipts').select('*, jobs(project_number)'),
+      supabase.from('invoices').select('*, jobs(project_number, customer_name)'),
     ]);
     if (j) setJobs(flattenJobFinancials(j));
     if (jc) setJobCosts(jc);
@@ -181,10 +181,10 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Cash Collected This Year</h3>
             {jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear()).map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.job_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
+              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
             ))}
             {draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear()).map(d => (
-              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.job_number}` : ''} — ${d.description || 'Draw'}`} value={fmtMoney(d.amount)} />
+              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'}`} value={fmtMoney(d.amount)} />
             ))}
           </div>
         )}
@@ -193,7 +193,7 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Jobs Approved This Year</h3>
             {jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear()).map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.job_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.contract_price)} />
+              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.contract_price)} />
             ))}
           </div>
         )}
@@ -207,7 +207,7 @@ export default function FinancialDashboardPage() {
                 <DrillRow
                   key={c.id}
                   href={job ? `/jobs/${job.id}?tab=Financials` : undefined}
-                  label={`${job ? `#${job.job_number}` : 'Unknown job'} — ${c.description || c.category} (${c.status})`}
+                  label={`${job ? `#${job.project_number}` : 'Unknown job'} — ${c.description || c.category} (${c.status})`}
                   value={fmtMoney(c.amount)}
                 />
               );
@@ -222,7 +222,7 @@ export default function FinancialDashboardPage() {
               <DrillRow
                 key={wo.id}
                 href={wo.job_id ? `/jobs/${wo.job_id}?tab=Financials` : undefined}
-                label={`${wo.companies?.company_name || 'Unknown company'} — ${wo.jobs ? `#${wo.jobs.job_number}` : ''} (${wo.status})`}
+                label={`${wo.companies?.company_name || 'Unknown company'} — ${wo.jobs ? `#${wo.jobs.project_number}` : ''} (${wo.status})`}
                 value={fmtMoney(wo.invoiced_amount ?? wo.amount)}
               />
             ))}
@@ -233,7 +233,7 @@ export default function FinancialDashboardPage() {
               <DrillRow
                 key={r.id}
                 href={r.job_id ? `/jobs/${r.job_id}?tab=Financials` : undefined}
-                label={`${r.vendor_name || 'Receipt'} — ${r.jobs ? `#${r.jobs.job_number}` : 'unlinked'} (unpaid)`}
+                label={`${r.vendor_name || 'Receipt'} — ${r.jobs ? `#${r.jobs.project_number}` : 'unlinked'} (unpaid)`}
                 value={fmtMoney(r.amount)}
               />
             ))}
@@ -244,10 +244,10 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Open Receivables</h3>
             {jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'sent').map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.job_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
+              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
             ))}
             {draws.filter(d => d.status === 'sent').map(d => (
-              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.job_number}` : ''} — ${d.description || 'Draw'} (${d.jobs?.customer_name || ''})`} value={fmtMoney(d.amount)} />
+              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'} (${d.jobs?.customer_name || ''})`} value={fmtMoney(d.amount)} />
             ))}
           </div>
         )}
@@ -266,7 +266,7 @@ export default function FinancialDashboardPage() {
               {jobRows.map(j => (
                 <Link key={j.id} href={`/jobs/${j.id}?tab=Financials`} className="fin-job-row">
                   <div className="fin-job-row-top">
-                    <span className="fin-job-row-name">#{j.job_number} — {j.customer_name || 'Unnamed'}</span>
+                    <span className="fin-job-row-name">#{j.project_number} — {j.customer_name || 'Unnamed'}</span>
                     <span className="fin-job-row-margin" style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>
                       {j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}
                     </span>
@@ -282,7 +282,7 @@ export default function FinancialDashboardPage() {
               onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Financials`}
               rows={jobRows}
               columns={[
-                { key: 'job_number', label: 'Job #', defaultWidth: 100, render: j => `#${j.job_number}` },
+                { key: 'project_number', label: 'Project #', defaultWidth: 100, render: j => `#${j.project_number}` },
                 { key: 'customer_name', label: 'Customer', defaultWidth: 170, render: j => j.customer_name || 'Unnamed' },
                 { key: 'contract_price', label: 'Contract Price', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.contract_price) },
                 { key: 'projected_cost', label: 'Projected Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.projected_cost) },

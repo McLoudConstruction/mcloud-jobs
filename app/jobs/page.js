@@ -63,8 +63,8 @@ export default function JobTrackerPage() {
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
-        (j.job_number || '').toLowerCase().includes(q) ||
-        (j.estimate_number || '').toLowerCase().includes(q) ||
+        (j.project_number || '').toLowerCase().includes(q) ||
+        (j.project_number || '').toLowerCase().includes(q) ||
         (j.customer_name || '').toLowerCase().includes(q) ||
         (j.project_address || '').toLowerCase().includes(q) ||
         (j.loss_reason || '').toLowerCase().includes(q)
@@ -121,7 +121,7 @@ export default function JobTrackerPage() {
           <>
             <div className="search-bar">
               <input
-                placeholder={view === 'lost' ? 'Search by estimate #, customer, address, or loss reason…' : 'Search by job #, customer, or address…'}
+                placeholder={view === 'lost' ? 'Search by project #, customer, address, or loss reason…' : 'Search by project #, customer, or address…'}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />

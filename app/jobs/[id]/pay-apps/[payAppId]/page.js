@@ -178,7 +178,7 @@ export default function PayApplicationPage() {
       const snapshot = {
         computed,
         header: { ...header, application_no: app.application_no },
-        job: { customer_name: job.customer_name, job_number: job.job_number, project_address: job.project_address },
+        job: { customer_name: job.customer_name, project_number: job.project_number, project_address: job.project_address },
         submitted_by: session.user.email,
         version: 1,
       };
@@ -290,7 +290,7 @@ export default function PayApplicationPage() {
               <span>Project: <b>{h.project_name || h.owner_address || '—'}</b></span>
               <span>Period: <b>{h.period_from ? fmtDate(h.period_from) + ' – ' : 'through '}{fmtDate(h.period_to)}</b></span>
               <span>Contract date: <b>{fmtDate(h.contract_date)}</b></span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
 
             <div className="section">
@@ -401,7 +401,7 @@ export default function PayApplicationPage() {
 
             <div className="doc-footer">
               <span>McLoud Construction</span>
-              <span>Job #{job.job_number} · Pay App #{app.application_no}</span>
+              <span>Project #{job.project_number} · Pay App #{app.application_no}</span>
             </div>
           </div>
         </div>

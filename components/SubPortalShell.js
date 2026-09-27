@@ -385,9 +385,9 @@ function NotificationBell({ company, role, align = 'right' }) {
 
   const loadAttention = useCallback(async (companyId) => {
     const [{ data: woData }, { data: rfpData }] = await Promise.all([
-      supabase.from('work_orders').select('*, jobs(job_number, estimate_number, stage, project_address)').eq('company_id', companyId),
+      supabase.from('work_orders').select('*, jobs(project_number, stage, project_address)').eq('company_id', companyId),
       supabase.from('rfp_recipients')
-        .select('*, rfps(id, title, job_id, jobs(job_number, estimate_number, stage, project_address))')
+        .select('*, rfps(id, title, job_id, jobs(project_number, stage, project_address))')
         .eq('company_id', companyId).in('status', ['sent', 'viewed']),
     ]);
     const wo = woData || [];

@@ -125,7 +125,7 @@ export default function InvoicesDashboardPage() {
             rows={rows}
             rowClassName={r => r.urgency === 0 ? 'row-settled' : ''}
             columns={[
-              { key: 'job_number', label: 'Job #', defaultWidth: 100, render: r => `#${r.job_number}` },
+              { key: 'project_number', label: 'Project #', defaultWidth: 100, render: r => `#${r.project_number}` },
               { key: 'customer_name', label: 'Customer', defaultWidth: 190, render: r => r.customer_name || 'Unnamed' },
               { key: 'stage', label: 'Stage', defaultWidth: 110, render: r => r.stage },
               { key: 'expected_close_date', label: 'Expected Close', defaultWidth: 130, filterable: false, render: r => fmtDate(r.expected_close_date) },

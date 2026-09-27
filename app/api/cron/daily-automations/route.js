@@ -19,7 +19,7 @@ function getAdminClient() {
 // uses) but now dispatches through dispatchMail() — Resend when
 // configured, SMTP as a fallback — instead of a hand-rolled SMTP-only
 // nodemailer transporter, so there's no longer a transporter to pass
-// in. Subject is tagged with the job number here (jobNumber is already
+// in. Subject is tagged with the project number here (jobNumber is already
 // on hand from each query below, avoiding an extra DB round-trip)
 // rather than passing jobId through to dispatchMail(), which would tag
 // it a second time.
@@ -135,7 +135,7 @@ export async function GET(request) {
           scheduledStartDate: job.scheduled_start_date,
           daysOut,
         });
-        await sendMail({ to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id, jobNumber: job.job_number });
+        await sendMail({ to: job.customer_email, subject, html, text, category: 'schedule_reminder', jobId: job.id, jobNumber: job.project_number });
         await supabase.from('jobs').update({ schedule_reminders_sent: [...alreadySent, daysOut] }).eq('id', job.id);
         results.reminders_sent++;
       } catch (err) {
@@ -158,7 +158,7 @@ export async function GET(request) {
 
     const { data: jobs } = await supabase
       .from('jobs')
-      .select('id, job_number, stage, job_type, customer_email, billing_email, customer_name, proposal_sent_at, proposal_followups_sent_count, proposal_followup_last_sent_at')
+      .select('id, project_number, stage, job_type, customer_email, billing_email, customer_name, proposal_sent_at, proposal_followups_sent_count, proposal_followup_last_sent_at')
       .not('proposal_sent_at', 'is', null)
       .lt('proposal_followups_sent_count', followupCount);
 
@@ -180,7 +180,7 @@ export async function GET(request) {
       try {
         const nextCount = (job.proposal_followups_sent_count || 0) + 1;
         const { subject, html, text } = buildProposalFollowupEmail({ customerName: job.customer_name, jobType: job.job_type, followupNumber: nextCount });
-        await sendMail({ to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id, jobNumber: job.job_number });
+        await sendMail({ to: recipient, subject, html, text, category: 'proposal_followup', jobId: job.id, jobNumber: job.project_number });
         await supabase.from('jobs').update({
           proposal_followups_sent_count: nextCount,
           proposal_followup_last_sent_at: new Date().toISOString(),
@@ -274,7 +274,7 @@ export async function GET(request) {
           const to = job?.billing_email || job?.customer_email || r.customer_email;
           if (!to) throw new Error('No email on file');
           const { subject, html, text } = buildReviewInviteEmail({ customerName: r.customer_name, reviewUrl: reviewUrl(r.token), projectLabel: r.project_label || job?.job_type, reminder });
-          await sendMail({ to, subject, html, text, category: 'review_request', jobId: r.job_id, jobNumber: r.job_number });
+          await sendMail({ to, subject, html, text, category: 'review_request', jobId: r.job_id, jobNumber: r.project_number });
           if (reminder) results.review_reminders_sent++; else results.review_requests_sent++;
         } catch (err) {
           await supabase.rpc('unclaim_review_send', { p_review: r.review_id, p_reminder: reminder });

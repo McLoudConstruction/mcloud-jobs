@@ -23,7 +23,7 @@ export default function EstimatingWorklistPage() {
 
   useEffect(() => {
     if (!session) return;
-    supabase.from('jobs').select('id, estimate_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('jobs').select('id, project_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
       // Supabase's embedded-resource syntax returns job_financials as a
       // nested object here (job_financials is the parent side of a 1:1
       // via the job_id primary key) — flatten it back onto each job so
@@ -43,7 +43,7 @@ export default function EstimatingWorklistPage() {
   const filtered = needsPricing.filter(j => {
     if (!search.trim()) return true;
     const term = search.toLowerCase();
-    return (j.estimate_number || '').toLowerCase().includes(term) || (j.customer_name || '').toLowerCase().includes(term);
+    return (j.project_number || '').toLowerCase().includes(term) || (j.customer_name || '').toLowerCase().includes(term);
   });
 
   return (
@@ -71,7 +71,7 @@ export default function EstimatingWorklistPage() {
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
                   <span className="entity-mobile-row-sub">
-                    {j.estimate_number ? `#${j.estimate_number}` : 'No estimate #'}{j.project_address ? ` · ${j.project_address}` : ''}
+                    {j.project_number ? `#${j.project_number}` : 'No project #'}{j.project_address ? ` · ${j.project_address}` : ''}
                   </span>
                 </span>
                 <span className={`badge badge-${j.stage}`} style={{ flexShrink: 0 }}>{STAGE_LABELS[j.stage] || j.stage}</span>
@@ -87,7 +87,7 @@ export default function EstimatingWorklistPage() {
             onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
             rows={filtered}
             columns={[
-              { key: 'estimate_number', label: 'Estimate #', defaultWidth: 130, render: j => j.estimate_number ? `#${j.estimate_number}` : '—' },
+              { key: 'project_number', label: 'Project #', defaultWidth: 130, render: j => j.project_number ? `#${j.project_number}` : '—' },
               { key: 'customer_name', label: 'Customer', defaultWidth: 200, render: j => j.customer_name || 'Unnamed' },
               { key: 'project_address', label: 'Address', defaultWidth: 250, render: j => j.project_address || '—' },
               { key: 'stage', label: 'Stage', defaultWidth: 130, render: j => j.stage || '—' },

@@ -7,7 +7,7 @@ import { useSubPortalData } from '../../../../lib/useSubPortalData';
 import SubPortalShell from '../../../../components/SubPortalShell';
 import RfpMessageThread from '../../../../components/RfpMessageThread';
 import PhotoLightbox from '../../../../components/PhotoLightbox';
-import { RFP_RECIPIENT_STATUS_LABELS, projectNumber, projectNumberLabel, customerLastName } from '../../../../lib/constants';
+import { RFP_RECIPIENT_STATUS_LABELS, projectNumber, customerLastName } from '../../../../lib/constants';
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -145,7 +145,6 @@ export default function SubPortalRfpDetailPage() {
 
   const resolved = recipient.status === 'awarded' || recipient.status === 'not_awarded';
   const num = projectNumber(recipient);
-  const numLabel = projectNumberLabel(recipient);
 
   return (
     <SubPortalShell company={company} role={role}>
@@ -166,7 +165,7 @@ export default function SubPortalRfpDetailPage() {
                 <div className="portal-info-value">{customerLastName(recipient) || '—'}</div>
               </div>
               <div>
-                <div className="portal-info-label">{numLabel} #</div>
+                <div className="portal-info-label">Project #</div>
                 <div className="portal-info-value">{num}</div>
               </div>
               <div>

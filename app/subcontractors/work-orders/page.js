@@ -43,7 +43,7 @@ export default function WorkOrdersHubPage() {
   const [createResult, setCreateResult] = useState('');
 
   const loadWorkOrders = useCallback(async () => {
-    const { data } = await supabase.from('work_orders').select('*, jobs(job_number, customer_name, project_address), companies(company_name)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('work_orders').select('*, jobs(project_number, customer_name, project_address), companies(company_name)').order('created_at', { ascending: false });
     if (data) setWorkOrders(data);
   }, []);
 
@@ -65,7 +65,7 @@ export default function WorkOrdersHubPage() {
     if (services.length === 0) { setEligibleJobs([]); return; }
 
     setLoadingEligible(true);
-    const { data: jobs } = await supabase.from('jobs').select('id, job_number, customer_name, project_address, stage').in('stage', ACTIVE_JOB_STAGES);
+    const { data: jobs } = await supabase.from('jobs').select('id, project_number, customer_name, project_address, stage').in('stage', ACTIVE_JOB_STAGES);
     const results = [];
     for (const job of jobs || []) {
       const { data: actions } = await supabase.from('job_scope_actions').select('*').eq('job_id', job.id).in('trade', services);
@@ -92,7 +92,7 @@ export default function WorkOrdersHubPage() {
     const rows = toCreate.map(r => ({
       job_id: r.job.id,
       company_id: createSubId,
-      description: `Work for ${r.job.project_address || 'job #' + r.job.job_number}`,
+      description: `Work for ${r.job.project_address || 'project #' + r.job.project_number}`,
       amount: parseFloat(r.amount) || 0,
       status: 'draft',
       included_scope_items: r.actions.map(formatAction),
@@ -170,7 +170,7 @@ export default function WorkOrdersHubPage() {
             {filteredWorkOrders.map(wo => (
               <Link key={wo.id} href={`/jobs/${wo.job_id}/work-orders/${wo.id}`} className="job-row" style={{ display: 'flex' }}>
                 <div className="job-main">
-                  <span className="job-number">#{wo.jobs?.job_number} — {wo.jobs?.customer_name}</span>
+                  <span className="job-number">#{wo.jobs?.project_number} — {wo.jobs?.customer_name}</span>
                   <span className="job-customer" style={{ fontSize: 13.5 }}>{wo.companies?.company_name || 'No subcontractor'}</span>
                   <span className="job-address">{wo.description}</span>
                 </div>
@@ -210,7 +210,7 @@ export default function WorkOrdersHubPage() {
                   <div key={r.job.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
                     <input type="checkbox" style={{ width: 'auto', marginTop: 4 }} checked={r.selected} onChange={() => toggleJobSelected(r.job.id)} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>#{r.job.job_number} — {r.job.project_address || r.job.customer_name}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>#{r.job.project_number} — {r.job.project_address || r.job.customer_name}</div>
                       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
                         {r.actions.length} matching action{r.actions.length === 1 ? '' : 's'}: {r.actions.map(a => a.description).join(', ')}
                       </div>

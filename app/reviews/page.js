@@ -33,7 +33,7 @@ export default function ReviewsPage() {
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('reviews')
-      .select('*, jobs(job_number, customer_name, project_address, job_type)')
+      .select('*, jobs(project_number, customer_name, project_address, job_type)')
       .order('created_at', { ascending: false });
     if (err) { setError(`${err.message} — make sure migration 138 has been run.`); return; }
     setError('');
@@ -132,7 +132,7 @@ export default function ReviewsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <Link href={`/jobs/${r.job_id}`} style={{ fontWeight: 700 }}>{j.customer_name || 'Customer'}</Link>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{j.job_number}{j.project_address ? ` · ${j.project_address}` : ''}</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{j.project_number}{j.project_address ? ` · ${j.project_address}` : ''}</span>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 4, color: st.color, background: st.bg, alignSelf: 'flex-start' }}>{st.label}</span>
               </div>

@@ -40,7 +40,7 @@ export default function DeferredScopePage() {
   }, []);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('deferred_scope_items').select('*, jobs(job_number, estimate_number, project_address)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('deferred_scope_items').select('*, jobs(project_number, project_address)').order('created_at', { ascending: false });
     if (data) setItems(data);
   }, []);
 
@@ -113,7 +113,7 @@ export default function DeferredScopePage() {
             columns={[
               { key: 'label', label: 'Item', defaultWidth: 240, render: i => i.label },
               { key: 'customer', label: 'Customer', defaultWidth: 180, filterValue: i => i.customer_name || '', render: i => i.customer_name || '—' },
-              { key: 'job', label: 'Job', defaultWidth: 150, filterValue: i => i.jobs?.job_number || '', render: i => i.jobs ? <Link href={`/jobs/${i.job_id}`} onClick={e => e.stopPropagation()}>#{i.jobs.job_number || i.jobs.estimate_number}</Link> : '—' },
+              { key: 'job', label: 'Job', defaultWidth: 150, filterValue: i => i.jobs?.project_number || '', render: i => i.jobs ? <Link href={`/jobs/${i.job_id}`} onClick={e => e.stopPropagation()}>#{i.jobs.project_number}</Link> : '—' },
               { key: 'price', label: 'Price', defaultWidth: 110, sortValue: i => Number(i.price) || 0, render: i => fmtMoney(i.price) },
               { key: 'status', label: 'Status', defaultWidth: 110, filterable: false, render: i => <span className="badge" style={{ background: STATUS_COLORS[i.status] }}>{STATUS_LABELS[i.status]}</span> },
               { key: 'follow_up_at', label: 'Follow Up', defaultWidth: 120, sortValue: i => i.follow_up_at || '', render: i => fmtDate(i.follow_up_at) },

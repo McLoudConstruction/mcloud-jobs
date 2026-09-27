@@ -102,7 +102,7 @@ export default function SubPortalCalendarPage() {
       // Jobs visible only through an RFP (no work order yet) — pulled in
       // so "Request Schedule Event" can offer a Meeting/Site Visit on a
       // job a sub is only bidding on, not just ones they've already won.
-      supabase.from('sub_visible_rfps').select('job_id, job_number, estimate_number, customer_name, stage, project_address').eq('company_id', companyId),
+      supabase.from('sub_visible_rfps').select('job_id, project_number, customer_name, stage, project_address').eq('company_id', companyId),
     ]);
     if (phaseData) setPhases(phaseData);
     if (eventData) setEvents(eventData);
@@ -136,7 +136,7 @@ export default function SubPortalCalendarPage() {
     const byId = { ...jobsById };
     rfpJobs.forEach(r => {
       if (!r.job_id || byId[r.job_id]) return;
-      byId[r.job_id] = { id: r.job_id, job_number: r.job_number, estimate_number: r.estimate_number, customer_name: r.customer_name, stage: r.stage, project_address: r.project_address };
+      byId[r.job_id] = { id: r.job_id, project_number: r.project_number, customer_name: r.customer_name, stage: r.stage, project_address: r.project_address };
     });
     return Object.values(byId);
   }, [jobsById, rfpJobs]);

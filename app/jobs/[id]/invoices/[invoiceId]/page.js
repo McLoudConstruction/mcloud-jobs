@@ -136,7 +136,7 @@ export default function DrawInvoiceDocumentPage() {
             <span className="doc-tagline-l1">Built Right.</span>
             <span className="doc-tagline-l2">Told Straight.</span>
           </div>
-            <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.project_number}</span></div>
           </div>
 
           <div className="doc-body">
@@ -169,7 +169,7 @@ export default function DrawInvoiceDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Job #{job.job_number} — {draw.description || 'Draw'}</span>
+              <span>Project #{job.project_number} — {draw.description || 'Draw'}</span>
             </div>
           </div>
         </div>
@@ -178,7 +178,7 @@ export default function DrawInvoiceDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`${draw.description || 'Draw'} — Job #${job.job_number}`}
+        docLabel={`${draw.description || 'Draw'} — Project #${job.project_number}`}
         docType="invoice"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"

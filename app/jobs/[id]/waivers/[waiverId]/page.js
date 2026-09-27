@@ -97,7 +97,7 @@ export default function LienWaiverDocumentPage() {
           </div>
           <div className="doc-body">
             <div className="doc-meta">
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
               <span>{WAIVER_TYPE_LABELS[w.waiver_type]}</span>
               <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
             </div>

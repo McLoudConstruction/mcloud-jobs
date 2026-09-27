@@ -57,7 +57,7 @@ export default function MaterialSelectionPage() {
     if (!session) return;
     load();
     loadSiblings();
-    supabase.from('jobs').select('job_number, estimate_number, customer_name, customer_email, billing_email').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
+    supabase.from('jobs').select('project_number, customer_name, customer_email, billing_email').eq('id', id).single().then(({ data }) => { if (data) setJob(data); });
     const channel = supabase.channel(`material-selection-${selectionId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selection_options', filter: `selection_id=eq.${selectionId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_selections', filter: `id=eq.${selectionId}` }, load)
@@ -157,7 +157,7 @@ export default function MaterialSelectionPage() {
       const titles = siblingSelections.map(s => s.title).join(', ');
       await supabase.from('notifications').insert({
         job_id: id,
-        message: `${job?.customer_name || 'Customer'} submitted material selections${job?.job_number ? ` for Job #${job.job_number}` : ''}: ${titles}.`,
+        message: `${job?.customer_name || 'Customer'} submitted material selections${job?.project_number ? ` for Project #${job.project_number}` : ''}: ${titles}.`,
       });
       setSiblingSelections(prev => prev.map(s => ({ ...s, status: 'approved' })));
       setSelection(prev => prev && { ...prev, status: 'approved', approved_at: new Date().toISOString() });
@@ -219,7 +219,7 @@ export default function MaterialSelectionPage() {
               return (
                 <div key={sib.id} className="card" style={{ marginBottom: 20 }}>
                   <h2 style={{ margin: 0, color: 'var(--heading)' }}>{sib.title}</h2>
-                  {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
+                  {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Project #{job.project_number}</div>}
                   {sib.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{sib.notes}</p>}
 
                   <div className="material-options-grid" style={{ marginTop: 18 }}>
@@ -249,7 +249,7 @@ export default function MaterialSelectionPage() {
           <>
             <div className="card">
               <h2 style={{ margin: 0, color: 'var(--heading)' }}>{selection.title}</h2>
-              {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Job/Estimate #{job.job_number || job.estimate_number}</div>}
+              {job && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{job.customer_name} — Project #{job.project_number}</div>}
               {selection.notes && <p style={{ fontSize: 13, marginTop: 10 }}>{selection.notes}</p>}
 
               <div className="material-options-grid" style={{ marginTop: 18 }}>

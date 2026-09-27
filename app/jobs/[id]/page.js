@@ -16,13 +16,13 @@ import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import JobRfpsPanel from '../../../components/JobRfpsCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
-import { assignNextJobNumber } from '../../../lib/assignJobNumber';
+import { assignNextProjectNumber } from '../../../lib/assignProjectNumber';
 import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import EmailThreadCard from '../../../components/EmailThreadCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
-import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
+import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
   PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
@@ -290,18 +290,20 @@ export default function JobDetailPage() {
     setTimeout(() => setFlash(''), 1500);
   }
 
-  // Recovery path for a job that's already past Approved but somehow
-  // never got a job number — shown as a fix-it banner rather than
-  // something that has to be chased down through the database directly.
-  async function fixMissingJobNumber() {
+  // Recovery path for a job that somehow never got a project number —
+  // shown as a fix-it banner rather than something that has to be
+  // chased down through the database directly. Should be rare now that
+  // the number is assigned at creation (app/jobs/new/page.js), but this
+  // stays as a safety net for older records or edge cases.
+  async function fixMissingProjectNumber() {
     try {
-      // assignNextJobNumber writes the number to this row itself (and
-      // retries if it collides with a number claimed a moment earlier by
-      // someone else) — nothing further to save here.
-      await assignNextJobNumber(id);
+      // assignNextProjectNumber writes the number to this row itself
+      // (and retries if it collides with a number claimed a moment
+      // earlier by someone else) — nothing further to save here.
+      await assignNextProjectNumber(id, job.project_type);
       flashSaved();
     } catch (err) {
-      setFlash(`Could not assign a job number: ${err.message}`);
+      setFlash(`Could not assign a project number: ${err.message}`);
       setTimeout(() => setFlash(''), 8000);
     }
   }
@@ -356,18 +358,6 @@ export default function JobDetailPage() {
 
     const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
 
-    if (next === 'approved' && !job.job_number) {
-      try {
-        // Writes job_number to this row directly (with its own
-        // collision-retry) before we touch stage/approved_at, so we never
-        // move a job to Approved without a number actually attached.
-        await assignNextJobNumber(id);
-      } catch (err) {
-        setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
-        setTimeout(() => setFlash(''), 8000);
-        return; // don't advance the stage without a job number — that's the exact stuck state we're trying to prevent
-      }
-    }
     await saveJob(patch);
 
     if (next === 'approved' && job.contract_price) {
@@ -480,14 +470,14 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {!isOpportunity(job) && !job.job_number && (
+        {!job.project_number && (
           <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ fontSize: 13 }}>
-                <b style={{ color: '#c0524f' }}>This job is past Approved but never got a real Job Number.</b>
+                <b style={{ color: '#c0524f' }}>This job never got a real Project Number.</b>
                 <div style={{ color: 'var(--ink-soft)', fontSize: 12, marginTop: 2 }}>That shouldn't happen — click to assign one now.</div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={fixMissingJobNumber}>Assign Job Number Now</button>
+              <button className="btn btn-primary btn-sm" onClick={fixMissingProjectNumber}>Assign Project Number Now</button>
             </div>
           </div>
         )}

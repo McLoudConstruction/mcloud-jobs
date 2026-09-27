@@ -21,8 +21,8 @@ export default function RfpsPage() {
 
   const load = useCallback(async () => {
     const [{ data: rfpData }, { data: jobData }, { data: companyData }] = await Promise.all([
-      supabase.from('rfps').select('*, jobs(job_number, estimate_number, stage, project_address), rfp_recipients(id, status)').order('created_at', { ascending: false }),
-      supabase.from('jobs').select('id, job_number, estimate_number, stage, project_address').order('created_at', { ascending: false }),
+      supabase.from('rfps').select('*, jobs(project_number, stage, project_address), rfp_recipients(id, status)').order('created_at', { ascending: false }),
+      supabase.from('jobs').select('id, project_number, stage, project_address').order('created_at', { ascending: false }),
       supabase.from('companies').select('id, company_name, contact_email').eq('company_type', 'Subcontractor').order('company_name', { ascending: true }),
     ]);
     if (rfpData) setRfps(rfpData);

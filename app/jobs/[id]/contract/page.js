@@ -7,7 +7,6 @@ import { useDocumentAuth } from '../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../components/SendDocModal';
 import { docFilename } from '../../../../lib/docFilename';
 import DocBackLink from '../../../../components/DocBackLink';
-import { assignNextJobNumber } from '../../../../lib/assignJobNumber';
 import SignaturePad from '../../../../components/SignaturePad';
 import SignatureAuditTrail from '../../../../components/SignatureAuditTrail';
 import { generatePdfBase64, downloadPdf } from '../../../../lib/generatePdf';
@@ -129,27 +128,15 @@ export default function ContractDocumentPage() {
     const advancing = preSignatureStages.includes(job.stage);
     const patch = { contract_finalized_at: new Date().toISOString() };
 
-    let assignedJobNumber = null;
     if (advancing) {
-      try {
-        // Writes job_number to this row directly (with its own
-        // collision-retry against the true max) before touching
-        // stage/approved_at below.
-        assignedJobNumber = await assignNextJobNumber(id);
-        patch.stage = 'approved';
-        patch.approved_at = new Date().toISOString();
-      } catch (err) {
-        setSaving(false);
-        setFlash(`Signature saved, but couldn't assign a Job Number: ${err.message}. Try Submit again, or use Advance Stage on the job page.`);
-        setTimeout(() => setFlash(''), 8000);
-        return; // signature itself already saved above — just don't advance the stage without a real number
-      }
+      patch.stage = 'approved';
+      patch.approved_at = new Date().toISOString();
     }
 
     const { error } = await supabase.from('jobs').update(patch).eq('id', id);
     if (!error) {
       await supabase.from('notifications').insert({
-        message: `Job ${assignedJobNumber ? '#' + assignedJobNumber : '#' + job.estimate_number} (${job.customer_name || 'customer'}) contract was submitted${advancing ? ' and auto-advanced to Approved' : ''}.`,
+        message: `Project #${job.project_number} (${job.customer_name || 'customer'}) contract was submitted${advancing ? ' and auto-advanced to Approved' : ''}.`,
         job_id: job.id,
       });
     }
@@ -184,7 +171,7 @@ export default function ContractDocumentPage() {
             <span className="doc-tagline-l1">Built Right.</span>
             <span className="doc-tagline-l2">Told Straight.</span>
           </div>
-            <div className="doc-brand-tag">Commercial Contract<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Commercial Contract<span className="doc-num">#{job.project_number}</span></div>
           </div>
 
           <div className="doc-body">
@@ -332,7 +319,7 @@ export default function ContractDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`Contract #${job.job_number}`}
+        docLabel={`Contract #${job.project_number}`}
         docType="contract"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"

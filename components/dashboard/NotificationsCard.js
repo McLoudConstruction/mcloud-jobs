@@ -19,7 +19,7 @@ export default function NotificationsCard() {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
-      .select('*, jobs(job_number, customer_name)')
+      .select('*, jobs(project_number, customer_name)')
       .eq('dismissed', false)
       .order('created_at', { ascending: false })
       .limit(30);

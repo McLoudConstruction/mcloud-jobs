@@ -96,7 +96,7 @@ export default function InvoiceDocumentPage() {
             <span className="pay-banner-label">Amount Due</span>
             <span className="pay-banner-amount">{fmtMoney(job.invoice_amount)}</span>
           </div>
-          <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} label={`Invoice #${job.job_number}`} />
+          <PaymentFlow jobId={id} invoiceId={null} amountDue={Number(job.invoice_amount)} createdBy="customer" onSuccess={() => loadJob()} label={`Invoice #${job.project_number}`} />
         </div>
       )}
 
@@ -114,7 +114,7 @@ export default function InvoiceDocumentPage() {
             <span className="doc-tagline-l1">Built Right.</span>
             <span className="doc-tagline-l2">Told Straight.</span>
           </div>
-            <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.job_number}</span></div>
+            <div className="doc-brand-tag">Invoice<span className="doc-num">#{job.project_number}</span></div>
           </div>
 
           <div className="doc-body">
@@ -152,7 +152,7 @@ export default function InvoiceDocumentPage() {
 
             <div className="doc-footer">
               <span>Stachys — McLoud Construction</span>
-              <span>Job #{job.job_number}</span>
+              <span>Project #{job.project_number}</span>
             </div>
           </div>
         </div>
@@ -161,7 +161,7 @@ export default function InvoiceDocumentPage() {
       <SendDocModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        docLabel={`Invoice #${job.job_number}`}
+        docLabel={`Invoice #${job.project_number}`}
         docType="invoice"
         customerName={job.customer_contact || job.customer_name}
         docElementId="doc-preview"

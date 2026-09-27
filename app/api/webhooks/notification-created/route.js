@@ -37,8 +37,8 @@ export async function POST(request) {
 
   let jobNumber = null;
   if (jobId) {
-    const { data: job } = await admin.from('jobs').select('job_number').eq('id', jobId).maybeSingle();
-    jobNumber = job?.job_number || null;
+    const { data: job } = await admin.from('jobs').select('project_number').eq('id', jobId).maybeSingle();
+    jobNumber = job?.project_number || null;
   }
 
   try {

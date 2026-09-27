@@ -64,7 +64,7 @@ export default function WeatherRiskPage() {
                       {f.phaseLabel} <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>({f.trade})</span>
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
-                      {formattedProjectNumber({ job_number: f.jobNumber })} · {f.customerName || 'Unnamed customer'} · {fmtDate(f.startDate)} – {fmtDate(f.endDate)}
+                      {formattedProjectNumber({ project_number: f.jobNumber })} · {f.customerName || 'Unnamed customer'} · {fmtDate(f.startDate)} – {fmtDate(f.endDate)}
                     </div>
                     <div style={{ fontSize: 11.5, color: '#a13f3f', marginTop: 4, maxWidth: 480 }}>
                       ⚠ Risk on {fmtDate(f.date)}: {f.reasons.join(' ')}

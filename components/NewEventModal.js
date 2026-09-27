@@ -34,7 +34,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
     setEventDate(defaultDate || todayISO());
     Promise.all([
       supabase.from('opportunities').select('id, project, contact_name, company').order('created_at', { ascending: false }).limit(200),
-      supabase.from('jobs').select('id, job_number, estimate_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
+      supabase.from('jobs').select('id, project_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
       supabase.from('staff_users').select('id, full_name, role').eq('status', 'active').order('full_name'),
       supabase.from('companies').select('id, company_name').order('company_name'),
     ]).then(([oppRes, jobRes, staffRes, companyRes]) => {
@@ -42,13 +42,11 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
         id: `opportunity:${o.id}`, label: o.project || o.contact_name || 'Untitled lead',
         sublabel: o.contact_name || o.company || '', group: 'Lead / Opportunity',
       }));
-      // A job row carries whichever number it has earned so far — Job #
-      // once approved, Estimate # while it's still a lead in the jobs
-      // table. Prefer the Job number when both are set (the more current
-      // one); fall back to Estimate; show neither rather than "#null".
+      // Every job carries one project_number for its whole lifecycle now
+      // — no more picking between a Job number and an Estimate number.
       const jobOptions = (jobRes.data || []).map(j => ({
-        id: `job:${j.id}`, label: j.project_address || j.customer_name || (j.job_number ? `Job ${j.job_number}` : 'Untitled job'),
-        sublabel: j.job_number ? `Job ${j.job_number}` : (j.estimate_number ? `Est ${j.estimate_number}` : ''),
+        id: `job:${j.id}`, label: j.project_address || j.customer_name || (j.project_number ? `Project ${j.project_number}` : 'Untitled job'),
+        sublabel: j.project_number ? `Project ${j.project_number}` : '',
         group: 'Project',
       }));
       setProjects([...jobOptions, ...oppOptions]);

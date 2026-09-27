@@ -47,7 +47,7 @@ export async function POST(request) {
 
     const { data: jobs, error: jobsError } = await service
       .from('jobs')
-      .select('id, job_number, customer_name, customer_email, billing_email')
+      .select('id, project_number, customer_name, customer_email, billing_email')
       .neq('stage', 'lost');
     if (jobsError) return Response.json({ error: jobsError.message }, { status: 500 });
 
@@ -64,7 +64,7 @@ export async function POST(request) {
       for (const raw of [j.customer_email, j.billing_email]) {
         const norm = normalizeEmail(raw);
         if (norm && !byEmail.has(norm)) {
-          byEmail.set(norm, { email: raw.trim(), customerName: j.customer_name || null, jobId: j.id, jobNumber: j.job_number });
+          byEmail.set(norm, { email: raw.trim(), customerName: j.customer_name || null, jobId: j.id, jobNumber: j.project_number });
         }
       }
     }
@@ -72,7 +72,7 @@ export async function POST(request) {
       const norm = normalizeEmail(row.email);
       if (norm && !byEmail.has(norm)) {
         const j = jobById[row.job_id];
-        byEmail.set(norm, { email: row.email.trim(), customerName: row.name || j?.customer_name || null, jobId: row.job_id, jobNumber: j?.job_number });
+        byEmail.set(norm, { email: row.email.trim(), customerName: row.name || j?.customer_name || null, jobId: row.job_id, jobNumber: j?.project_number });
       }
     }
 

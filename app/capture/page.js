@@ -68,7 +68,7 @@ export default function CapturePage() {
 
   useEffect(() => {
     if (!session) return;
-    supabase.from('jobs').select('id, customer_name, project_address, job_number').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('jobs').select('id, customer_name, project_address, project_number').order('created_at', { ascending: false }).then(({ data }) => {
       if (data) setJobs(data);
     });
   }, [session]);
@@ -222,7 +222,7 @@ export default function CapturePage() {
             <option value="">Select a job…</option>
             {jobs.map(j => (
               <option key={j.id} value={j.id}>
-                {j.job_number ? `#${j.job_number} — ` : ''}{j.customer_name}{j.project_address ? ` (${j.project_address})` : ''}
+                {j.project_number ? `#${j.project_number} — ` : ''}{j.customer_name}{j.project_address ? ` (${j.project_address})` : ''}
               </option>
             ))}
           </select>

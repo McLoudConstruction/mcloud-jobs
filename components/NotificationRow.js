@@ -8,7 +8,7 @@ function fmtDate(v) {
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-// One compact line — Type · Job # · Customer · date/time — with a chevron
+// One compact line — Type · Project # · Customer · date/time — with a chevron
 // that expands in place to the full original message text and the
 // read/dismiss/view-job actions. Used on both the Dashboard's notifications
 // rail and the full Notifications page so the two read as the same design,
@@ -16,7 +16,7 @@ function fmtDate(v) {
 export default function NotificationRow({ notification: n, onMarkRead, onDismiss }) {
   const [expanded, setExpanded] = useState(false);
   const category = categorizeNotification(n.message);
-  const jobNumber = n.jobs?.job_number;
+  const jobNumber = n.jobs?.project_number;
   const customerName = n.jobs?.customer_name;
   const isRead = n.read || n.dismissed;
 

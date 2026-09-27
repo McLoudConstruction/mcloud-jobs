@@ -35,7 +35,7 @@ export async function GET(_request, { params }) {
 
     const { data: job } = await admin
       .from('jobs')
-      .select('id, stage, job_number, estimate_number, customer_name, customer_contact, project_address, description, contract_price, scope_items, additional_terms, estimate_mode, estimate_groups_submitted_at, selected_scope_option_id, selected_proposal_id')
+      .select('id, stage, project_number, customer_name, customer_contact, project_address, description, contract_price, scope_items, additional_terms, estimate_mode, estimate_groups_submitted_at, selected_scope_option_id, selected_proposal_id')
       .eq('id', link.job_id)
       .maybeSingle();
     if (!job) return gone('This link is not valid.', 404);
@@ -114,7 +114,7 @@ export async function GET(_request, { params }) {
       kind: 'proposal',
       expiresAt,
       job: {
-        stage: job.stage, job_number: job.job_number, estimate_number: job.estimate_number,
+        stage: job.stage, project_number: job.project_number,
         customer_name: job.customer_name, customer_contact: job.customer_contact,
         project_address: job.project_address, description: job.description,
       },

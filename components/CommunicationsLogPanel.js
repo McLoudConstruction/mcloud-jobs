@@ -51,7 +51,7 @@ export default function CommunicationsLogPanel() {
     setError('');
     let query = supabase
       .from('communications_log')
-      .select('*, jobs(job_number, customer_name)')
+      .select('*, jobs(project_number, customer_name)')
       .order('sent_at', { ascending: false })
       .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE); // fetch one extra to detect "has more"
 
@@ -153,7 +153,7 @@ export default function CommunicationsLogPanel() {
                   <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.to_email}</td>
                   <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subject || '—'}</td>
                   <td>{categoryLabel(r.category)}</td>
-                  <td>{r.jobs ? `#${r.jobs.job_number}` : '—'}</td>
+                  <td>{r.jobs ? `#${r.jobs.project_number}` : '—'}</td>
                   <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sent_by || '—'}</td>
                   <td>
                     <span style={{ fontSize: 11, fontWeight: 600, color: r.status === 'sent' ? '#3a6b45' : '#a13f3f' }}>

@@ -100,7 +100,7 @@ export default function PublicProposalPage() {
 
       <ProposalDocument
         docTag={tag}
-        footerLabel={`Estimate ${tag}`}
+        footerLabel={`Project ${tag}`}
         customerName={job.customer_name}
         customerContact={job.customer_contact}
         projectAddress={job.project_address}

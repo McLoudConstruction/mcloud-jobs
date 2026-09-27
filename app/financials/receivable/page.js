@@ -40,7 +40,7 @@ export default function ReceivablePage() {
   const loadAll = useCallback(async () => {
     const [{ data: j }, { data: inv }] = await Promise.all([
       supabase.from('jobs').select('*, job_financials!inner(contract_price, invoice_amount, invoice_status)').eq('job_financials.invoice_status', 'sent'),
-      supabase.from('invoices').select('*, jobs(job_number, customer_name)').eq('status', 'sent'),
+      supabase.from('invoices').select('*, jobs(project_number, customer_name)').eq('status', 'sent'),
     ]);
     if (j) setJobs(flattenJobFinancials(j));
     if (inv) setDraws(inv);
@@ -89,7 +89,7 @@ export default function ReceivablePage() {
                 <div key={d.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`} style={{ cursor: 'pointer' }}>
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{d.jobs?.customer_name || 'Unnamed'}</span>
-                    <span className="data-mobile-row-sub">{d.jobs ? `#${d.jobs.job_number}` : '—'} · {d.description || 'Draw'} · {agingLabel(daysAgo(d.invoiced_at))}</span>
+                    <span className="data-mobile-row-sub">{d.jobs ? `#${d.jobs.project_number}` : '—'} · {d.description || 'Draw'} · {agingLabel(daysAgo(d.invoiced_at))}</span>
                   </span>
                   <span className="data-mobile-row-amount">{fmtMoney(d.amount)}</span>
                 </div>
@@ -101,7 +101,7 @@ export default function ReceivablePage() {
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 110 }}>Job #</th>
+                    <th style={{ width: 110 }}>Project #</th>
                     <th style={{ width: 160 }}>Customer</th>
                     <th style={{ width: 160 }}>Draw</th>
                     <th style={{ width: 120 }}>Amount</th>
@@ -111,7 +111,7 @@ export default function ReceivablePage() {
                 <tbody>
                   {sortedDraws.map(d => (
                     <tr key={d.id} onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`}>
-                      <td>{d.jobs ? `#${d.jobs.job_number}` : '—'}</td>
+                      <td>{d.jobs ? `#${d.jobs.project_number}` : '—'}</td>
                       <td>{d.jobs?.customer_name || 'Unnamed'}</td>
                       <td>{d.description || 'Draw'}</td>
                       <td>{fmtMoney(d.amount)}</td>
@@ -133,7 +133,7 @@ export default function ReceivablePage() {
                 <div key={j.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`} style={{ cursor: 'pointer' }}>
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
-                    <span className="data-mobile-row-sub">#{j.job_number} · {agingLabel(daysAgo(j.invoiced_at))}</span>
+                    <span className="data-mobile-row-sub">#{j.project_number} · {agingLabel(daysAgo(j.invoiced_at))}</span>
                   </span>
                   <span className="data-mobile-row-amount">{fmtMoney(j.invoice_amount)}</span>
                 </div>
@@ -145,7 +145,7 @@ export default function ReceivablePage() {
               <table className="data-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 110 }}>Job #</th>
+                    <th style={{ width: 110 }}>Project #</th>
                     <th style={{ width: 200 }}>Customer</th>
                     <th style={{ width: 130 }}>Amount</th>
                     <th style={{ width: 110 }}>Age</th>
@@ -154,7 +154,7 @@ export default function ReceivablePage() {
                 <tbody>
                   {sortedJobs.map(j => (
                     <tr key={j.id} onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`}>
-                      <td>#{j.job_number}</td>
+                      <td>#{j.project_number}</td>
                       <td>{j.customer_name || 'Unnamed'}</td>
                       <td>{fmtMoney(j.invoice_amount)}</td>
                       <td>{agingLabel(daysAgo(j.invoiced_at))}</td>

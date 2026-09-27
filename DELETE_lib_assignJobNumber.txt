@@ -1,0 +1,2 @@
+This file has been deleted and replaced by lib/assignProjectNumber.js.
+Please delete lib/assignJobNumber.js from the repo when applying this round.

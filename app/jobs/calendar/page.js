@@ -296,7 +296,7 @@ export default function JobCalendarPage() {
 
   useEffect(() => {
     if (!session) return;
-    const load = () => supabase.from('jobs').select('id, job_number, estimate_number, customer_name, stage, scheduled_start_date, scheduled_end_date')
+    const load = () => supabase.from('jobs').select('id, project_number, customer_name, stage, scheduled_start_date, scheduled_end_date')
       .not('scheduled_start_date', 'is', null)
       .then(({ data }) => { if (data) setJobs(data); });
     load();
@@ -341,7 +341,7 @@ export default function JobCalendarPage() {
   const loadScheduleRequests = useCallback(async () => {
     const { data } = await supabase
       .from('schedule_requests')
-      .select('*, companies(company_name), jobs(job_number, estimate_number, customer_name, stage, project_address)')
+      .select('*, companies(company_name), jobs(project_number, customer_name, stage, project_address)')
       .eq('status', 'pending')
       .order('requested_date', { ascending: true });
     if (data) setScheduleRequests(data);
