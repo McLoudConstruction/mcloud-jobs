@@ -6,6 +6,7 @@ import MapboxPlaceSearch from './MapboxPlaceSearch';
 import DriveModeOverlay from './DriveModeOverlay';
 import { findOrCreatePropertyForRouteStop } from '../lib/contactSync';
 import { useDragReorder } from '../lib/useDragReorder';
+import { PROPERTY_TYPES } from '../lib/constants';
 import {
   getActiveRoute, startRoute, updateRouteStops, finishRoute, cancelRoute,
   getCurrentLocation, haversineMiles,
@@ -105,6 +106,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const [allProps, setAllProps] = useState([]);
   const [propsLoaded, setPropsLoaded] = useState(false);
   const [propsError, setPropsError] = useState('');
+  const [typeFilter, setTypeFilter] = useState([]); // selected property types; empty = all
   const [homeAddress, setHomeAddress] = useState('');
   const [homeBusy, setHomeBusy] = useState(false);
   const [selected, setSelected] = useState(null); // { type: 'saved', id } | { type: 'spot', stop }
@@ -191,11 +193,25 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
 
   const savedProps = useMemo(() => allProps.filter(hasCoords), [allProps]);
   const unlocated = useMemo(() => allProps.filter(p => !hasCoords(p) && p.property_street), [allProps]);
+  // Types present on the map, with counts, in the app's usual order. '' = no type set.
+  const typeOptions = useMemo(() => {
+    const counts = new Map();
+    savedProps.forEach(p => { const t = p.property_type || ''; counts.set(t, (counts.get(t) || 0) + 1); });
+    const order = [...PROPERTY_TYPES, ...[...counts.keys()].filter(t => t && !PROPERTY_TYPES.includes(t)).sort(), ''];
+    return order.filter(t => counts.has(t)).map(t => ({ type: t, label: t || 'No type', count: counts.get(t) }));
+  }, [savedProps]);
+  const shownProps = useMemo(
+    () => (typeFilter.length ? savedProps.filter(p => typeFilter.includes(p.property_type || '')) : savedProps),
+    [savedProps, typeFilter]
+  );
+  function toggleType(t) {
+    setTypeFilter(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]));
+  }
   const bucketCounts = useMemo(() => {
     const counts = [0, 0, 0, 0];
-    savedProps.forEach(p => { counts[visitBucket(p.last_visited_at)] += 1; });
+    shownProps.forEach(p => { counts[visitBucket(p.last_visited_at)] += 1; });
     return counts;
-  }, [savedProps]);
+  }, [shownProps]);
 
   // ── Create the map once the container is on screen ────────────────────
   useEffect(() => {
@@ -278,10 +294,10 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           map.getCanvas().style.cursor = 'pointer';
           const el = document.createElement('div');
           const name = document.createElement('div');
-          name.style.cssText = 'font-weight:700;font-size:12.5px';
+          name.style.cssText = 'font-weight:700;font-size:12.5px;color:#171714';
           name.textContent = f.properties.name || 'Unnamed property';
           const mgmt = document.createElement('div');
-          mgmt.style.cssText = 'font-size:11.5px;color:#666;margin-top:2px';
+          mgmt.style.cssText = 'font-size:11.5px;color:#4a4a45;margin-top:2px';
           mgmt.textContent = f.properties.mgmt || 'No management company';
           el.appendChild(name);
           el.appendChild(mgmt);
@@ -355,7 +371,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     const onRoute = new Set(stops.map(s => s.property_id).filter(Boolean));
     mapRef.current.getSource('props')?.setData({
       type: 'FeatureCollection',
-      features: savedProps.map(p => ({
+      features: shownProps.map(p => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [Number(p.property_lng), Number(p.property_lat)] },
         properties: {
@@ -367,7 +383,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         },
       })),
     });
-  }, [mapReady, savedProps, stops]);
+  }, [mapReady, shownProps, stops]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -713,13 +729,13 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const inView = useMemo(() => {
     if (!bounds) return [];
     const center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
-    return savedProps
+    return shownProps
       .filter(p => Number(p.property_lat) >= bounds.south && Number(p.property_lat) <= bounds.north
         && Number(p.property_lng) >= bounds.west && Number(p.property_lng) <= bounds.east)
       .map(p => ({ p, d: haversineMiles(center, { lat: Number(p.property_lat), lng: Number(p.property_lng) }) ?? Infinity }))
       .sort((a, b) => a.d - b.d)
       .map(x => x.p);
-  }, [savedProps, bounds]);
+  }, [shownProps, bounds]);
 
   const selectedSaved = selected?.type === 'saved' ? savedProps.find(p => p.id === selected.id) || null : null;
   const detailStop = selectedSaved ? buildStop({ property: selectedSaved }) : (selected?.type === 'spot' ? selected.stop : null);
@@ -1151,6 +1167,41 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             </div>
           )}
 
+          {TOKEN && mapReady && typeOptions.length > 1 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 5 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', color: 'var(--ink-soft)' }}>PROPERTY TYPE</span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                  {typeFilter.length ? `Showing ${shownProps.length} of ${savedProps.length}` : 'Showing all'}
+                </span>
+                {typeFilter.length > 0 && (
+                  <button type="button" className="btn btn-sm" style={{ padding: '1px 8px', fontSize: 11 }} onClick={() => setTypeFilter([])}>Show all</button>
+                )}
+              </div>
+              <div style={{ display: 'inline-flex', flexWrap: 'wrap', border: '1px solid var(--line, #888)', borderRadius: 6, overflow: 'hidden' }}>
+                {typeOptions.map(o => {
+                  const on = typeFilter.includes(o.type);
+                  return (
+                    <button
+                      key={o.type || 'none'}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleType(o.type)}
+                      style={{
+                        padding: '5px 10px', fontSize: 12, cursor: 'pointer', border: 'none',
+                        borderRight: '1px solid var(--line, #888)', borderBottom: '1px solid var(--line, #888)',
+                        background: on ? 'var(--ink, #171714)' : 'transparent',
+                        color: on ? '#fff' : 'inherit', fontWeight: on ? 700 : 500,
+                      }}
+                    >
+                      {o.label} <span style={{ opacity: 0.7 }}>{o.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {detailStop && (
             <div style={{ border: '1px solid var(--ink, #171714)', borderRadius: 10, padding: 14, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
@@ -1193,14 +1244,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>Properties in view</div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {savedProps.length}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
             </div>
             {propsLoaded && savedProps.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>
                 No properties have a map location yet.
               </div>
             )}
-            {savedProps.length > 0 && inView.length === 0 && (
+            {shownProps.length > 0 && inView.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>No properties in this part of the map. Pan or zoom out.</div>
             )}
             <div className="mrb-inview">
