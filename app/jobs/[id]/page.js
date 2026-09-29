@@ -513,13 +513,13 @@ export default function JobDetailPage() {
             {!isMobile && (
               <>
                 <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Inbox" aria-label="Inbox">
-                  <MessagesIcon width={24} height={24} />
+                  <MessagesIcon width={20} height={20} />
                 </button>
                 {(role === 'owner' || role === 'estimator') && (
                   <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
                 )}
                 <button className="btn btn-sm" onClick={() => goToTab('Project Updates')} title="Project Updates" aria-label="Project Updates">
-                  <PersonToPersonIcon width={24} height={24} />
+                  <PersonToPersonIcon width={20} height={20} />
                 </button>
               </>
             )}
