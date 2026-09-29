@@ -43,7 +43,7 @@ export async function POST(request) {
 
   try {
     const { subject, html, text } = buildOwnerNotificationEmail({ message, jobNumber });
-    const { provider } = await sendMail({ to, subject, html, text, jobId: jobId || undefined });
+    const { provider } = await sendMail({ to, subject, html, text, jobId: jobId || undefined, noInbox: true });
     // This was the one email in the app that never showed up in
     // Communications Log — every other send (docs, invites, cron
     // follow-ups, sub approve/decline) already logs on both success and

@@ -98,7 +98,7 @@ export async function POST(request) {
       return Response.json({ error: `Unknown recipient_kind: ${recipientKind}` }, { status: 400 });
     }
 
-    const { provider } = await sendMail({ to, ...payload, jobId: jobId || undefined });
+    const { provider } = await sendMail({ to, ...payload, jobId: jobId || undefined, category: logCategory });
     await logCommunication({ category: logCategory, toEmail: to, subject: payload.subject, jobId: jobId || null, sentBy: 'system (portal notification)', status: 'sent', provider });
     return Response.json({ sent: true });
   } catch (err) {

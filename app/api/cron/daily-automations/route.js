@@ -26,7 +26,7 @@ function getAdminClient() {
 async function sendMail({ to, subject, html, text, category, jobId, jobNumber }) {
   const taggedSubject = jobNumber ? tagSubjectWithJob(subject, jobNumber) : subject;
   try {
-    const { provider } = await dispatchMail({ to, subject: taggedSubject, html, text, jobId: jobId || null });
+    const { provider } = await dispatchMail({ to, subject: taggedSubject, html, text, category, jobId: jobId || null });
     await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'sent', provider });
   } catch (err) {
     await logCommunication({ category, toEmail: to, subject: taggedSubject, jobId: jobId || null, sentBy: 'system (daily automation)', status: 'failed', errorMessage: err.message, provider: 'unknown' });
