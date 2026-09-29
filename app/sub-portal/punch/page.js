@@ -37,7 +37,7 @@ export default function SubPortalPunchPage() {
     // The final list's "schedule by" deadline (set when staff send the list to subs).
     const jobIds = [...new Set((data || []).filter(i => i.kind === 'punch').map(i => i.job_id))];
     if (jobIds.length) {
-      const { data: l } = await supabase.from('punch_lists').select('job_id, sent_to_subs_at, schedule_by').in('job_id', jobIds).not('sent_to_subs_at', 'is', null);
+      const { data: l } = await supabase.from('punch_lists').select('job_id, sent_to_subs_at, schedule_by, due_date').in('job_id', jobIds).not('sent_to_subs_at', 'is', null);
       setLists(l || []);
     } else {
       setLists([]);
@@ -87,7 +87,7 @@ export default function SubPortalPunchPage() {
             if (openForJob === 0) return null;
             return (
               <div key={l.job_id} style={{ background: '#f7efdc', border: '1px solid #e3d3a8', borderRadius: 6, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
-                <b>Please schedule your punch items{job ? ` for ${subPortalJobHeading(job)}` : ''} by {fmtPunchDate(l.schedule_by)}.</b>
+                <b>Please schedule your punch items{job ? ` for ${subPortalJobHeading(job)}` : ''} by {fmtPunchDate(l.schedule_by)}.</b>{l.due_date && <> The whole list is due complete by <b>{fmtPunchDate(l.due_date)}</b>.</>}
                 <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>The list is final and can&apos;t be changed by the customer. Mark items started and done as you go.</div>
               </div>
             );

@@ -2,9 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PunchPhotos from './PunchPhotos';
+import { uploadPunchPhotoFile } from '../lib/punchPhotos';
 import { PUNCH_STATUS, PUNCH_STATUS_ORDER, PUNCH_OPEN_STATUSES, fmtPunchDate } from '../lib/punch';
 
 const EMPTY = { title: '', description: '', location: '', assigned_company_id: '', due_date: '', priority: 'normal', customer_visible: false };
+
+// Due dates: a punch LIST has one due date for the whole list (set in the
+// workflow bar above); only warranty repairs are dated item by item.
 
 // Staff view of punch items (kind 'punch') or warranty claims (kind 'warranty')
 // on one job. Used by the Closeout tab's Punch List and Warranty sections.
@@ -18,6 +22,7 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
   const [filter, setFilter] = useState('open');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [newFiles, setNewFiles] = useState([]);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('punch_items').select('*').eq('job_id', jobId).eq('kind', kind).order('created_at', { ascending: false });
@@ -41,15 +46,23 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
     e.preventDefault();
     setBusy(true);
     setError('');
-    const { error: err } = await supabase.from('punch_items').insert({
+    const { data: created, error: err } = await supabase.from('punch_items').insert({
       job_id: jobId, kind, title: form.title.trim(), description: form.description.trim() || null, location: form.location.trim() || null,
-      assigned_company_id: form.assigned_company_id || null, due_date: form.due_date || null, priority: form.priority,
+      assigned_company_id: form.assigned_company_id || null, due_date: isWarranty ? (form.due_date || null) : null, priority: form.priority,
       customer_visible: isWarranty ? true : form.customer_visible, reported_by_kind: 'staff',
-    });
+    }).select('*').single();
+    if (err) { setBusy(false); setError(err.message); return; }
+    // Photos picked on the form go up now that the item exists.
+    let photoError = '';
+    for (const f of newFiles) {
+      try { await uploadPunchPhotoFile(created, f); } catch (upErr) { photoError = `A photo didn't upload: ${upErr.message || upErr}`; }
+    }
     setBusy(false);
-    if (err) { setError(err.message); return; }
+    if (photoError) setError(photoError);
     setForm(EMPTY);
+    setNewFiles([]);
     setShowForm(false);
+    setOpenId(created.id); // open the new item so more photos (incl. from the job's Photos) can be added right away
     load();
   }
 
@@ -111,10 +124,13 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
                 {subs.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}
               </select>
             </div>
-            <div><label>Due</label><input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} /></div>
+            {isWarranty && <div><label>Due</label><input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} /></div>}
           </div>
           <label>Details</label>
           <textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          <label>Photos</label>
+          <input type="file" accept="image/*" multiple onChange={e => setNewFiles(Array.from(e.target.files || []))} />
+          {newFiles.length > 0 && <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>{newFiles.length} photo{newFiles.length === 1 ? '' : 's'} will be added. You can also pull from the job&apos;s Photos after adding.</div>}
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', margin: '8px 0' }}>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400, cursor: 'pointer' }}>
               <input type="checkbox" style={{ width: 'auto' }} checked={form.priority === 'urgent'} onChange={e => setForm(f => ({ ...f, priority: e.target.checked ? 'urgent' : 'normal' }))} />Urgent
@@ -142,7 +158,7 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
                 <b>{i.priority === 'urgent' ? '⚑ ' : ''}{i.title}</b>
                 {!isWarranty && i.review_state === 'pending' && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: '#a13f3f', background: '#fbeae7' }}>Customer added — needs review</span>}
                 <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                  {[i.location, i.assigned_company_id ? `→ ${subName(i.assigned_company_id)}` : 'Unassigned', i.due_date ? `due ${fmtPunchDate(i.due_date)}` : null, i.reported_by_kind === 'customer' ? 'reported by customer' : null, i.customer_visible && !isWarranty ? 'shared with customer' : null].filter(Boolean).join(' · ')}
+                  {[i.location, i.assigned_company_id ? `→ ${subName(i.assigned_company_id)}` : 'Unassigned', isWarranty && i.due_date ? `due ${fmtPunchDate(i.due_date)}` : null, i.reported_by_kind === 'customer' ? 'reported by customer' : null, i.customer_visible && !isWarranty ? 'shared with customer' : null].filter(Boolean).join(' · ')}
                   {overdue ? ' · overdue' : ''}
                 </div>
               </div>
@@ -173,14 +189,14 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
                       {subs.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}
                     </select>
                   </div>
-                  <div><label>Due</label><input type="date" defaultValue={i.due_date || ''} onBlur={e => (e.target.value || null) !== (i.due_date || null) && patch(i, { due_date: e.target.value || null })} /></div>
+                  {isWarranty && <div><label>Due</label><input type="date" defaultValue={i.due_date || ''} onBlur={e => (e.target.value || null) !== (i.due_date || null) && patch(i, { due_date: e.target.value || null })} /></div>}
                 </div>
                 {!isWarranty && (
                   <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400, cursor: 'pointer', margin: '8px 0' }}>
                     <input type="checkbox" style={{ width: 'auto' }} checked={i.customer_visible} onChange={e => patch(i, { customer_visible: e.target.checked })} />Show this to the customer
                   </label>
                 )}
-                <PunchPhotos item={i} canAdd />
+                <PunchPhotos item={i} canAdd allowJobPhotos />
                 <div className="section-actions">
                   <button type="button" className="btn btn-sm btn-danger" onClick={() => remove(i)}>Delete</button>
                 </div>

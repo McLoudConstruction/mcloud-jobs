@@ -301,3 +301,18 @@ export function ProjectFeedIcon(props) {
     </svg>
   );
 }
+
+// Project Updates: one person passing an update on to another — a person on
+// the left, an arched arrow over the top, a second person on the right.
+export function PersonToPersonIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="5.5" cy="11" r="1.9" />
+      <path d="M2.4 17c0-2.2 1.4-3.6 3.1-3.6s3.1 1.4 3.1 3.6" />
+      <circle cx="14.5" cy="11" r="1.9" />
+      <path d="M11.4 17c0-2.2 1.4-3.6 3.1-3.6s3.1 1.4 3.1 3.6" />
+      <path d="M5.5 7.6C6.2 3.6 12.8 3.6 14 7" />
+      <path d="M11.8 6.2L14 7.2l.9-2.3" />
+    </svg>
+  );
+}

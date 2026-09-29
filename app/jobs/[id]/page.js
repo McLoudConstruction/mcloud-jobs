@@ -19,13 +19,13 @@ import EstimateTab from '../../../components/EstimateTab';
 import { assignNextProjectNumber } from '../../../lib/assignProjectNumber';
 import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
-import EmailThreadCard from '../../../components/EmailThreadCard';
+import JobInbox from '../../../components/JobInbox';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
-  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
+  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, PersonToPersonIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -34,7 +34,6 @@ import {
 // behavior, same props, nothing moved data-wise; this just makes it
 // possible to open "the Scope tab" without wading through 1,500+
 // unrelated lines to find it.
-import JobMessagesCard from '../../../components/JobMessagesCard';
 import ReviewRequestCard from '../../../components/ReviewRequestCard';
 import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
 import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
@@ -126,10 +125,9 @@ const TABS = [
   // safety effect all still work) but left out of the tab-button row
   // below — each now has its own quick-access button up in the job
   // header instead, so showing them again here was pure duplication.
-  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
-  { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
+  { key: 'Project Updates', label: 'Project Updates', icon: PersonToPersonIcon, noTabButton: true },
+  { key: 'Messages', label: 'Inbox', icon: MessagesIcon, noTabButton: true },
   { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
-  { key: 'Email', label: 'Email', icon: MessagesIcon },
 ];
 
 export default function JobDetailPage() {
@@ -207,7 +205,9 @@ export default function JobDetailPage() {
     const params = new URLSearchParams(window.location.search);
     const requestedTab = params.get('tab');
     const requestedSection = params.get('section');
-    if (requestedTab && TABS.some(t => t.key === requestedTab)) {
+    if (requestedTab === 'Email') {
+      goToTab('Messages'); // the Email tab now lives inside the job's Inbox
+    } else if (requestedTab && TABS.some(t => t.key === requestedTab)) {
       goToTab(requestedTab, requestedSection);
     }
   }, [goToTab]);
@@ -499,6 +499,13 @@ export default function JobDetailPage() {
             )}
             <div>
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
+              {/* Sits right beside the stage badge as a small button instead
+                  of a big primary button taking over the header row. */}
+              {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
+                <button className="btn btn-sm btn-primary" style={{ marginLeft: 8, verticalAlign: 'middle' }} onClick={advanceStage}>
+                  Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
+                </button>
+              )}
               {flash && <span className="saved-flash">{flash}</span>}
             </div>
             {job.stage === 'lost' && job.loss_reason && (
@@ -512,28 +519,20 @@ export default function JobDetailPage() {
                 this row. */}
             {!isMobile && (
               <>
-                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
+                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Inbox" aria-label="Inbox">
                   <MessagesIcon width={16} height={16} />
                 </button>
                 {(role === 'owner' || role === 'estimator') && (
                   <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
                 )}
-                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
-                  <ProjectFeedIcon width={16} height={16} /> Project Updates
-                </button>
-                <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
-                  {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
+                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')} title="Project Updates" aria-label="Project Updates">
+                  <PersonToPersonIcon width={16} height={16} />
                 </button>
               </>
             )}
             {/* Stage Advance dropped on mobile — it's an easy accidental
                 tap on a small screen next to Close Lost/Reopen, and the
                 job's stage badge is already visible right above. */}
-            {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
-              <button className="btn btn-primary" onClick={advanceStage}>
-                Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
-              </button>
-            )}
           </div>
         </div>
 
@@ -554,7 +553,7 @@ export default function JobDetailPage() {
               </button>
               <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Messages'); }}>
                 <MessagesIcon className="more-sheet-icon" />
-                Messages
+                Inbox
               </button>
               {(role === 'owner' || role === 'estimator') && (
                 <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); setRfpPanelOpen(true); }}>
@@ -563,12 +562,8 @@ export default function JobDetailPage() {
                 </button>
               )}
               <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Project Updates'); }}>
-                <ProjectFeedIcon className="more-sheet-icon" />
+                <PersonToPersonIcon className="more-sheet-icon" />
                 Project Updates
-              </button>
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); invitePortal(); }} disabled={inviting}>
-                <PersonIcon className="more-sheet-icon" />
-                {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
               </button>
             </BottomSheet>
           </>
@@ -578,11 +573,6 @@ export default function JobDetailPage() {
           <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} projectAddress={job.project_address} />
         )}
 
-        {inviteResult && (
-          <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
-            {inviteResult}
-          </div>
-        )}
         <div className="stage-tabs">
           {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
             <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
@@ -670,6 +660,20 @@ export default function JobDetailPage() {
 
         {tab === 'Customer' && section === 'portal' && (
           <>
+            <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ margin: '0 0 2px' }}>Portal invite</h3>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  {job.portal_invited_at ? 'Send the customer a fresh activation link if they can\'t find the first one.' : 'Invite the customer to their project portal.'}
+                </div>
+                {inviteResult && (
+                  <div style={{ fontSize: 12.5, marginTop: 6, color: inviteResult.startsWith('Activation invite sent') ? '#3a6b45' : '#a13f3f' }}>{inviteResult}</div>
+                )}
+              </div>
+              <button className="btn btn-sm btn-primary" onClick={invitePortal} disabled={inviting}>
+                {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
+              </button>
+            </div>
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>
@@ -771,9 +775,6 @@ export default function JobDetailPage() {
           <InternalUpdatesPanel jobId={id} session={session} />
         )}
 
-        {tab === 'Email' && (
-          <EmailThreadCard jobId={id} job={job} />
-        )}
 
         {tab === 'Documents' && (
           <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
@@ -813,7 +814,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Messages' && (
-          <JobMessagesCard jobId={id} job={job} />
+          <JobInbox jobId={id} job={job} session={session} />
         )}
       </div>
     </AppShell>

@@ -64,6 +64,20 @@ export default function PunchListWorkflow({ jobId }) {
 
   return (
     <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <label style={{ margin: 0, fontWeight: 600, fontSize: 12.5 }}>Punch list due</label>
+        <input
+          key={list?.due_date || 'none'}
+          type="date"
+          style={{ width: 'auto' }}
+          defaultValue={list?.due_date || ''}
+          onBlur={e => {
+            const v = e.target.value || null;
+            if (v !== (list?.due_date || null)) run('punch_list_set_due', { target_job_id: jobId, due_in: v }, v ? 'Due date saved for the whole list.' : 'Due date cleared.');
+          }}
+        />
+        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>One date for the whole list — it applies to every item.</span>
+      </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
         {STEPS.map((s, i) => (
           <span key={s.key} style={{

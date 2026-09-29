@@ -3,6 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { fmtPunchDate } from '../lib/punch';
 
+function rangeLabel(start, end) {
+  return end && end !== start ? `${fmtPunchDate(start)} – ${fmtPunchDate(end)}` : fmtPunchDate(start);
+}
+
 const STATUS_LABEL = {
   auto_applied: 'Added to the schedule — our team is confirming',
   needs_review: 'Received — our team is reviewing',
@@ -77,7 +81,7 @@ export default function CustomerBlackoutCard({ job }) {
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <h3>Dates we can&apos;t be at your home</h3>
+      <h3>Blackout dates</h3>
       {!signed ? (
         <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
           Once your contract is signed you can block off dates here — a trip, an event, anything that means crews shouldn&apos;t be on site.
@@ -85,39 +89,40 @@ export default function CustomerBlackoutCard({ job }) {
       ) : (
         <>
           <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.55 }}>
-            Tell us the dates crews shouldn&apos;t be on site and we&apos;ll schedule around them. <b>Please give us at least {noticeDays / 7 === 2 ? 'two weeks' : `${noticeDays} days`}&apos; notice</b> —
+            Add the date ranges crews shouldn&apos;t be on site and we&apos;ll schedule around them. <b>Please give us at least {noticeDays === 14 ? 'two weeks' : `${noticeDays} days`}&apos; notice</b> —
             dates entered with less than that may not be able to be honored, and our team will review them before anything changes.
           </div>
-          <form onSubmit={submit} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
-            <div className="two-col">
-              <div><label>First day</label><input type="date" min={today} value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value, end: f.end && f.end < e.target.value ? e.target.value : f.end }))} required /></div>
-              <div><label>Last day (leave blank for one day)</label><input type="date" min={form.start || today} value={form.end} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} /></div>
-            </div>
-            <label>Reason (optional)</label>
-            <input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="e.g. Out of town" />
-            {error && <div className="error-text" style={{ margin: '8px 0' }}>{error}</div>}
-            <button className="btn btn-primary btn-sm" type="submit" disabled={busy || !form.start} style={{ marginTop: 8 }}>{busy ? 'Saving…' : 'Block off these dates'}</button>
-          </form>
-          {notice && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 10 }}>{notice}</div>}
-        </>
-      )}
-
-      {rows.length > 0 && (
-        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 6 }}>Dates crews can&apos;t be on site</div>
+          {rows.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 8 }}>None added yet.</div>}
           {rows.map(r => (
-            <div key={r.id} style={{ borderTop: '1px solid var(--line)', padding: '10px 0', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div key={r.id} style={{ borderTop: '1px solid var(--line)', padding: '9px 0', fontSize: 13.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div>
-                <b>{fmtPunchDate(r.start_date)}{r.end_date !== r.start_date ? ` – ${fmtPunchDate(r.end_date)}` : ''}</b>
+                <b>{rangeLabel(r.start_date, r.end_date)}</b>
                 {r.reason && <span style={{ color: 'var(--ink-soft)' }}> · {r.reason}</span>}
                 <div style={{ fontSize: 11.5, color: r.status === 'declined' ? '#a13f3f' : 'var(--ink-soft)' }}>
                   {STATUS_LABEL[r.status]}{r.status === 'declined' && r.staff_note ? ` — ${r.staff_note}` : ''}
                 </div>
               </div>
-              {r.status === 'needs_review' && <button type="button" className="btn btn-sm" onClick={() => withdraw(r.id)}>Cancel request</button>}
+              {r.status === 'needs_review' && <button type="button" className="btn btn-sm" onClick={() => withdraw(r.id)}>Remove</button>}
             </div>
           ))}
-        </div>
+          <form onSubmit={submit} style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="date" aria-label="From" min={today} value={form.start} style={{ width: 'auto' }}
+                onChange={e => setForm(f => ({ ...f, start: e.target.value, end: f.end && f.end < e.target.value ? e.target.value : f.end }))} required />
+              <span style={{ color: 'var(--ink-soft)' }}>to</span>
+              <input type="date" aria-label="To" min={form.start || today} value={form.end || form.start} style={{ width: 'auto' }}
+                onChange={e => setForm(f => ({ ...f, end: e.target.value }))} disabled={!form.start} />
+              <input aria-label="Reason (optional)" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Reason (optional)" style={{ flex: '1 1 160px', minWidth: 140 }} />
+              <button className="btn btn-primary btn-sm" type="submit" disabled={busy || !form.start}>{busy ? 'Adding…' : '+ Add'}</button>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>For a single day, use the same date in both boxes.</div>
+            {error && <div className="error-text" style={{ margin: '8px 0 0' }}>{error}</div>}
+          </form>
+          {notice && <div style={{ fontSize: 12.5, color: '#3a6b45', marginTop: 10 }}>{notice}</div>}
+        </>
       )}
+
     </div>
   );
 }

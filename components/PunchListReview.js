@@ -88,6 +88,7 @@ export default function PunchListReview({ job }) {
           {list.sent_to_subs_at ? ' It has been sent to the crews to schedule.' : ''} You can follow each item below.
         </div>
       )}
+      {list.due_date && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>Target completion for the whole list: <b>{fmtPunchDate(list.due_date)}</b></div>}
       {notice && <div style={{ fontSize: 12.5, color: '#3a6b45', marginBottom: 10 }}>{notice}</div>}
       {error && <div className="error-text" style={{ marginBottom: 8 }}>{error}</div>}
 

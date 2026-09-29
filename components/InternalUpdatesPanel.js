@@ -10,6 +10,10 @@ import { INTERNAL_UPDATE_CATEGORIES, categoryPhotoFolder } from '../lib/constant
 import CameraCapture from './CameraCapture';
 import PolishTextButton from './PolishTextButton';
 import PopupModal from './PopupModal';
+import { uploadPunchPhotoFile } from '../lib/punchPhotos';
+
+const PUNCH_CATEGORY = 'Punch List';
+const newPunchRow = () => ({ id: crypto.randomUUID(), title: '', location: '', files: [] });
 
 // Photos on an Internal Update now go through the exact same path as the
 // Photos tab's "Take Photos" / "Upload from library" buttons (see
@@ -61,6 +65,10 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const [upcomingWork, setUpcomingWork] = useState('');
   const [nextSteps, setNextSteps] = useState('');
   const [category, setCategory] = useState('');
+  // Punch List category: one row per item; each becomes a punch_items row on
+  // the job's Closeout → Punch List when the update is posted.
+  const [punchRows, setPunchRows] = useState(() => [newPunchRow()]);
+  const [punchByUpdate, setPunchByUpdate] = useState({});
   // Photos taken/picked for the update currently being drafted. Each entry
   // is already a real job_photos row by the time it's in this array — see
   // uploadDraftPhoto below — not a File waiting to be queued.
@@ -122,6 +130,11 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     cacheJobPatch(jobId, { internalUpdates: updates });
 
     if (updates.length > 0) {
+      const { data: linked } = await supabase.from('punch_items').select('id, update_id, title, location, status, review_state').in('update_id', updates.map(u => u.id)).order('created_at', { ascending: true });
+      const byUpdate = {};
+      for (const it of linked || []) (byUpdate[it.update_id] = byUpdate[it.update_id] || []).push(it);
+      setPunchByUpdate(byUpdate);
+
       const { data: photos } = await supabase.from('job_photos').select('*').in('update_id', updates.map(u => u.id));
       const grouped = {};
       for (const p of photos || []) {
@@ -285,6 +298,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     setUpcomingWork('');
     setNextSteps('');
     setCategory('');
+    setPunchRows([newPunchRow()]);
     setDraftPhotos([]);
     setPhotoError('');
     draftIdRef.current = crypto.randomUUID();
@@ -292,8 +306,55 @@ export default function InternalUpdatesPanel({ jobId, session }) {
     setFormOpen(false);
   }
 
+  // "Punch List" updates are written like the punch list itself — one row per
+  // item, with its own photos — and every row lands on the job's Closeout →
+  // Punch List as it's posted. The update keeps a numbered copy of the items
+  // so the feed reads like the list; the live status of each item is shown
+  // from the punch list itself.
+  async function postPunchUpdate() {
+    const rows = punchRows.filter(r => r.title.trim());
+    if (rows.length === 0) throw new Error('Add at least one punch item.');
+    const updateId = crypto.randomUUID();
+    const summary = rows.map((r, i) => `${i + 1}. ${r.title.trim()}${r.location.trim() ? ` — ${r.location.trim()}` : ''}`).join('\n');
+    const { error: updErr } = await supabase.from('job_updates').insert({
+      id: updateId, job_id: jobId, issues_notes: summary, category: PUNCH_CATEGORY, created_by_email: createdByEmail, is_internal: true,
+    });
+    if (updErr) throw updErr;
+    const failedPhotos = [];
+    for (const r of rows) {
+      const { data: item, error: itemErr } = await supabase.from('punch_items').insert({
+        job_id: jobId, kind: 'punch', title: r.title.trim().slice(0, 200), location: r.location.trim() || null,
+        reported_by_kind: 'staff', update_id: updateId,
+      }).select('*').single();
+      if (itemErr) throw itemErr;
+      for (const f of r.files) {
+        try { await uploadPunchPhotoFile(item, f); } catch { failedPhotos.push(r.title.trim()); }
+      }
+    }
+    await loadUpdates();
+    if (failedPhotos.length) throw new Error(`Items were added, but some photos didn't upload (${[...new Set(failedPhotos)].join(', ')}). Add them from Closeout → Punch List.`);
+  }
+
+  function setPunchRow(id, patch) {
+    setPunchRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
   async function handlePost(e) {
     e.preventDefault();
+    if (category === PUNCH_CATEGORY) {
+      setPosting(true);
+      setPostError('');
+      try {
+        await postPunchUpdate();
+        resetDraft();
+      } catch (err) {
+        setPostError(err.message || 'Failed to post the punch list.');
+        if (/Items were added/.test(err.message || '')) resetDraft();
+      } finally {
+        setPosting(false);
+      }
+      return;
+    }
     const hasText = noteText.trim() || workCompleted.trim() || upcomingWork.trim() || nextSteps.trim();
     if (!hasText && draftPhotos.length === 0) return;
     setPosting(true);
@@ -462,6 +523,36 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             <option value="">Category (optional)</option>
             {INTERNAL_UPDATE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {category === PUNCH_CATEGORY ? (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 }}>
+                List each item that needs fixing. Every row is added to this job&apos;s Closeout → Punch List when you post.
+              </div>
+              {punchRows.map((r, i) => (
+                <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 8, padding: '8px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--ink-soft)', paddingTop: 8 }}>{i + 1}.</div>
+                  <div>
+                    <input placeholder="Item — e.g. Touch up paint" value={r.title} onChange={e => setPunchRow(r.id, { title: e.target.value })} />
+                    <input placeholder="Location — e.g. Hallway" value={r.location} onChange={e => setPunchRow(r.id, { location: e.target.value })} style={{ marginTop: 6 }} />
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+                      <label className="btn btn-sm" style={{ margin: 0 }}>
+                        Take photo
+                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ''; setPunchRow(r.id, { files: [...r.files, ...f] }); }} />
+                      </label>
+                      <label className="btn btn-sm" style={{ margin: 0 }}>
+                        Upload
+                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ''; setPunchRow(r.id, { files: [...r.files, ...f] }); }} />
+                      </label>
+                      {r.files.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{r.files.length} photo{r.files.length === 1 ? '' : 's'}</span>}
+                      {punchRows.length > 1 && <button type="button" className="btn btn-sm" onClick={() => setPunchRows(rows => rows.filter(x => x.id !== r.id))}>Remove</button>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="btn btn-sm" style={{ margin: '6px 0 12px' }} onClick={() => setPunchRows(rows => [...rows, newPunchRow()])}>+ Add another item</button>
+            </div>
+          ) : (
+            <>
           <textarea placeholder="What's happening on site?" value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} />
           <div style={{ marginBottom: 8 }}><PolishTextButton value={noteText} onPolished={setNoteText} /></div>
           <label>Work completed</label>
@@ -494,6 +585,9 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             </label>
           </div>
 
+            </>
+          )}
+
           {photoError && <div className="error-text">{photoError}</div>}
           {postError && <div className="error-text">{postError}</div>}
 
@@ -501,11 +595,12 @@ export default function InternalUpdatesPanel({ jobId, session }) {
             type="submit"
             disabled={
               posting ||
+              (category === PUNCH_CATEGORY && !punchRows.some(r => r.title.trim())) ||
               draftPhotos.some(p => p.uploading) ||
-              (!noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && draftPhotos.length === 0)
+              (category !== PUNCH_CATEGORY && !noteText.trim() && !workCompleted.trim() && !upcomingWork.trim() && !nextSteps.trim() && draftPhotos.length === 0)
             }
           >
-            {posting ? 'Posting…' : draftPhotos.some(p => p.uploading) ? 'Photo uploading…' : 'Post update'}
+            {posting ? 'Posting…' : draftPhotos.some(p => p.uploading) ? 'Photo uploading…' : category === PUNCH_CATEGORY ? 'Add to punch list' : 'Post update'}
           </button>
         </form>
         <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Internal Update Photos" />
@@ -535,12 +630,31 @@ export default function InternalUpdatesPanel({ jobId, session }) {
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{isExpanded ? '▲ collapse' : '▼ expand'}</span>
               </div>
-              {!isExpanded && u.issues_notes && (
+              {!isExpanded && u.category === PUNCH_CATEGORY && (
+                <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(punchByUpdate[u.id] || []).length || (u.issues_notes || '').split('\n').filter(Boolean).length} item(s) on the punch list</p>
+              )}
+              {!isExpanded && u.category !== PUNCH_CATEGORY && u.issues_notes && (
                 <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.issues_notes}</p>
               )}
               {isExpanded && editingId !== u.id && (
                 <>
-                  {u.issues_notes && <p>{u.issues_notes}</p>}
+                  {u.category === PUNCH_CATEGORY ? (
+                    <div style={{ margin: '6px 0' }}>
+                      {(punchByUpdate[u.id] || []).length > 0 ? (
+                        <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.7 }}>
+                          {punchByUpdate[u.id].map(it => (
+                            <li key={it.id} style={it.status === 'verified' || it.status === 'resolved' ? { textDecoration: 'line-through', color: 'var(--ink-soft)' } : it.status === 'declined' ? { color: '#a13f3f' } : undefined}>
+                              {it.title}{it.location ? <span style={{ color: 'var(--ink-soft)' }}> — {it.location}</span> : null}
+                              {it.status === 'declined' && <span style={{ color: '#a13f3f' }}> (declined)</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <pre style={{ margin: 0, fontFamily: 'inherit', fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{u.issues_notes}</pre>
+                      )}
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>These items are on the job&apos;s Closeout → Punch List — edit or delete them there. Deleting this update leaves them on the list.</div>
+                    </div>
+                  ) : (u.issues_notes && <p>{u.issues_notes}</p>)}
                   {u.work_completed && <><div className="update-field-label">Work completed</div><p>{u.work_completed}</p></>}
                   {u.upcoming_work && <><div className="update-field-label">Upcoming work</div><p>{u.upcoming_work}</p></>}
                   {u.next_steps && <><div className="update-field-label">Next steps</div><p>{u.next_steps}</p></>}
@@ -553,7 +667,7 @@ export default function InternalUpdatesPanel({ jobId, session }) {
                   )}
                   {!u._pending && (
                     <div className="section-actions" style={{ marginTop: 8 }}>
-                      <button type="button" className="btn btn-sm" onClick={() => startEdit(u)}>Edit</button>
+                      {u.category !== PUNCH_CATEGORY && <button type="button" className="btn btn-sm" onClick={() => startEdit(u)}>Edit</button>}
                       <button
                         type="button"
                         className="btn btn-sm btn-danger"
