@@ -71,6 +71,16 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
     await patch(item, { status });
   }
 
+  async function acceptAddition(item) {
+    await patch(item, { review_state: 'approved' });
+  }
+
+  async function declineAddition(item) {
+    const reason = window.prompt('Why isn\'t this being added to the list? The customer will see this.');
+    if (!reason || !reason.trim()) return;
+    await patch(item, { status: 'declined', declined_reason: reason.trim(), review_state: 'approved' });
+  }
+
   async function remove(item) {
     if (!window.confirm('Delete this item and its photos?')) return;
     const { error: err } = await supabase.from('punch_items').delete().eq('id', item.id);
@@ -130,6 +140,7 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, cursor: 'pointer' }} onClick={() => setOpenId(isOpen ? null : i.id)}>
               <div>
                 <b>{i.priority === 'urgent' ? '⚑ ' : ''}{i.title}</b>
+                {!isWarranty && i.review_state === 'pending' && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: '#a13f3f', background: '#fbeae7' }}>Customer added — needs review</span>}
                 <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
                   {[i.location, i.assigned_company_id ? `→ ${subName(i.assigned_company_id)}` : 'Unassigned', i.due_date ? `due ${fmtPunchDate(i.due_date)}` : null, i.reported_by_kind === 'customer' ? 'reported by customer' : null, i.customer_visible && !isWarranty ? 'shared with customer' : null].filter(Boolean).join(' · ')}
                   {overdue ? ' · overdue' : ''}
@@ -142,6 +153,12 @@ export default function PunchItemsPanel({ jobId, kind, onChanged }) {
                 {i.description && <div style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, marginBottom: 6 }}>{i.description}</div>}
                 {i.resolution_note && <div style={{ fontSize: 12.5, marginBottom: 6 }}><b>Fix noted:</b> {i.resolution_note}</div>}
                 {i.declined_reason && <div style={{ fontSize: 12.5, marginBottom: 6, color: '#a13f3f' }}><b>Declined:</b> {i.declined_reason}</div>}
+                {!isWarranty && i.review_state === 'pending' && (
+                  <div className="section-actions" style={{ marginBottom: 10 }}>
+                    <button type="button" className="btn btn-sm btn-primary" onClick={() => acceptAddition(i)}>Accept onto the list</button>
+                    <button type="button" className="btn btn-sm" onClick={() => declineAddition(i)}>Decline</button>
+                  </div>
+                )}
                 <div className="two-col">
                   <div>
                     <label>Status</label>

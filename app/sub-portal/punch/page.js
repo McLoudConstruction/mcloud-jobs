@@ -13,6 +13,7 @@ export default function SubPortalPunchPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
+  const [lists, setLists] = useState([]);
   const [filter, setFilter] = useState('open');
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState('');
@@ -33,6 +34,14 @@ export default function SubPortalPunchPage() {
     if (!company) return;
     const { data } = await supabase.from('punch_items').select('*').eq('assigned_company_id', company.id).order('due_date', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
     setItems(data || []);
+    // The final list's "schedule by" deadline (set when staff send the list to subs).
+    const jobIds = [...new Set((data || []).filter(i => i.kind === 'punch').map(i => i.job_id))];
+    if (jobIds.length) {
+      const { data: l } = await supabase.from('punch_lists').select('job_id, sent_to_subs_at, schedule_by').in('job_id', jobIds).not('sent_to_subs_at', 'is', null);
+      setLists(l || []);
+    } else {
+      setLists([]);
+    }
   }, [company]);
 
   useEffect(() => {
@@ -72,6 +81,17 @@ export default function SubPortalPunchPage() {
               <button key={k} type="button" className={`tab-section-btn ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{label}</button>
             ))}
           </div>
+          {lists.map(l => {
+            const job = jobsById[l.job_id];
+            const openForJob = items.filter(i => i.job_id === l.job_id && i.kind === 'punch' && ['open', 'in_progress'].includes(i.status)).length;
+            if (openForJob === 0) return null;
+            return (
+              <div key={l.job_id} style={{ background: '#f7efdc', border: '1px solid #e3d3a8', borderRadius: 6, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
+                <b>Please schedule your punch items{job ? ` for ${subPortalJobHeading(job)}` : ''} by {fmtPunchDate(l.schedule_by)}.</b>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>The list is final and can&apos;t be changed by the customer. Mark items started and done as you go.</div>
+              </div>
+            );
+          })}
           {error && <div className="error-text" style={{ marginBottom: 8 }}>{error}</div>}
           {shown.length === 0 && <div className="empty-state">{items.length === 0 ? 'Nothing assigned to you.' : 'Nothing in this view.'}</div>}
           {shown.map(i => {

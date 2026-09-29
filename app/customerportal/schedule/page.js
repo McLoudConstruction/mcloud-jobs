@@ -5,6 +5,7 @@ import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import PortalScheduleCard from '../../../components/PortalScheduleCard';
 import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
+import CustomerBlackoutCard from '../../../components/CustomerBlackoutCard';
 
 export default function CustomerSchedulePage() {
   const { session, loading } = usePortalAuth();
@@ -19,6 +20,7 @@ export default function CustomerSchedulePage() {
         <PortalJobSwitcher jobs={jobs} selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />
 
         {job && <PortalScheduleCard jobId={job.id} />}
+        {job && <CustomerBlackoutCard key={job.id} job={job} />}
       </div>
     </CustomerPortalShell>
   );

@@ -177,6 +177,48 @@ function WarrantySettings() {
   );
 }
 
+const PUNCH_FIELDS = ['punch_schedule_days'];
+
+function PunchListSettings() {
+  const s = useSection(PUNCH_FIELDS);
+  const v = s.values || {};
+  return (
+    <SectionShell
+      title="Punch list scheduling"
+      intro="When you send a final punch list to the subcontractors, each sub is asked to schedule their items within this many days. It shows in their portal and in the notification they receive, and becomes the due date on any item that doesn't already have one."
+      section={s}
+    >
+      <div className="two-col">
+        <div>
+          <label>Days for subs to schedule punch items</label>
+          <input type="number" min="1" max="60" value={v.punch_schedule_days ?? 5} onChange={e => s.set('punch_schedule_days', Math.max(1, Number(e.target.value) || 1))} />
+        </div>
+      </div>
+    </SectionShell>
+  );
+}
+
+const BLACKOUT_FIELDS = ['blackout_notice_days'];
+
+function BlackoutSettings() {
+  const s = useSection(BLACKOUT_FIELDS);
+  const v = s.values || {};
+  return (
+    <SectionShell
+      title="Customer blackout dates"
+      intro="Customers can block off dates once their contract is signed. A request made at least this many days ahead moves the schedule automatically (and is flagged for your review before it goes to the subs). A shorter-notice request waits for you to approve it before the schedule changes."
+      section={s}
+    >
+      <div className="two-col">
+        <div>
+          <label>Notice needed to move the schedule automatically (days)</label>
+          <input type="number" min="1" max="90" value={v.blackout_notice_days ?? 14} onChange={e => s.set('blackout_notice_days', Math.max(1, Number(e.target.value) || 1))} />
+        </div>
+      </div>
+    </SectionShell>
+  );
+}
+
 const REVIEW_FIELDS = ['review_auto_request', 'review_request_delay_days', 'review_reminder_days', 'review_google_min_rating', 'review_hold_if_open_punch', 'review_hold_if_unpaid', 'review_max_hold_days', 'review_google_url'];
 
 function ReviewSettings() {
@@ -243,6 +285,8 @@ export default function FeatureSettingsPanels() {
       <ComplianceSettings />
       <WaiverSettings />
       <WarrantySettings />
+      <PunchListSettings />
+      <BlackoutSettings />
       <ReviewSettings />
     </>
   );

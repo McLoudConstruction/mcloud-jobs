@@ -7,6 +7,7 @@ import CustomerPortalShell from '../../../components/CustomerPortalShell';
 import PortalJobSwitcher from '../../../components/PortalJobSwitcher';
 import NoActiveProjectNotice from '../../../components/NoActiveProjectNotice';
 import PunchPhotos from '../../../components/PunchPhotos';
+import PunchListReview from '../../../components/PunchListReview';
 import { PUNCH_STATUS, PUNCH_OPEN_STATUSES, fmtPunchDate } from '../../../lib/punch';
 
 const CUSTOMER_STATUS_LABEL = {
@@ -28,7 +29,7 @@ function WarrantyView({ job }) {
   const load = useCallback(async () => {
     const [{ data: w }, { data: list }] = await Promise.all([
       supabase.from('warranties').select('*').eq('job_id', job.id).maybeSingle(),
-      supabase.from('punch_items').select('*').eq('job_id', job.id).eq('customer_visible', true).order('created_at', { ascending: false }),
+      supabase.from('punch_items').select('*').eq('job_id', job.id).eq('customer_visible', true).eq('kind', 'warranty').order('created_at', { ascending: false }),
     ]);
     setWarranty(w || null);
     setItems(list || []);
@@ -75,6 +76,7 @@ function WarrantyView({ job }) {
 
   return (
     <div>
+      <PunchListReview job={job} />
       <div className="card">
         <h3>Your warranty</h3>
         {!warranty ? (

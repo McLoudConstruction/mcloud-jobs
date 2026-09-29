@@ -18,11 +18,15 @@ const ALERT_CATEGORIES = {
     lien_waiver_requested: { headline: 'Lien waiver requested', ctaLabel: 'Review & sign', path: '/waivers' },
     punch_assigned: { headline: 'Punch list item assigned', ctaLabel: 'View punch list', path: '/punch' },
     schedule_change: { headline: 'Schedule update', ctaLabel: 'View schedule', path: '/calendar' },
+    punch_final: { headline: 'Final punch list published', ctaLabel: 'View punch list', path: '/punch' },
+    punch_schedule_request: { headline: 'Please schedule your punch list items', ctaLabel: 'View punch list', path: '/punch' },
   },
   customer: {
     punch_update: { headline: 'Punch list update', ctaLabel: 'View my project', path: '' },
     warranty_update: { headline: 'Warranty request update', ctaLabel: 'View my project', path: '' },
     schedule_change: { headline: 'Your project schedule was updated', ctaLabel: 'View schedule', path: '' },
+    punch_review: { headline: 'Your punch list is ready for review', ctaLabel: 'Review my punch list', path: '/warranty' },
+    punch_final: { headline: 'Your final punch list is published', ctaLabel: 'View my punch list', path: '/warranty' },
   },
 };
 

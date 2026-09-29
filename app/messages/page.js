@@ -7,6 +7,7 @@ import AppShell from '../../components/AppShell';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
 import SwipeableRow from '../../components/SwipeableRow';
 import NotificationRow from '../../components/NotificationRow';
+import EmailConversations from '../../components/EmailConversations';
 
 function fmtDate(v) {
   if (!v) return '';
@@ -216,7 +217,17 @@ export default function MessagesPage() {
           </div>
         )}
 
-        {isMobile ? (
+        {inboxFilter === 'email' ? (
+          <>
+            <ScrollFadeRow trackClassName="stage-tabs">
+              <button type="button" className="stage-tab" onClick={() => setInboxFilter('all')}>All</button>
+              <button type="button" className="stage-tab" onClick={() => setInboxFilter('messages')}>Messages</button>
+              <button type="button" className="stage-tab" onClick={() => setInboxFilter('system')}>System</button>
+              <button type="button" className="stage-tab active" onClick={() => setInboxFilter('email')}>Email</button>
+            </ScrollFadeRow>
+            <EmailConversations session={session} />
+          </>
+        ) : isMobile ? (
           mobileThread ? (
             <div className="mobile-inbox-detail">
               <button className="mobile-inbox-back" onClick={() => setMobileThreadId(null)}>‹ Inbox</button>
@@ -248,6 +259,7 @@ export default function MessagesPage() {
                 <button type="button" className={`stage-tab ${inboxFilter === 'all' ? 'active' : ''}`} onClick={() => setInboxFilter('all')}>All</button>
                 <button type="button" className={`stage-tab ${inboxFilter === 'messages' ? 'active' : ''}`} onClick={() => setInboxFilter('messages')}>Messages</button>
                 <button type="button" className={`stage-tab ${inboxFilter === 'system' ? 'active' : ''}`} onClick={() => setInboxFilter('system')}>System</button>
+                <button type="button" className={`stage-tab ${inboxFilter === 'email' ? 'active' : ''}`} onClick={() => setInboxFilter('email')}>Email</button>
               </ScrollFadeRow>
 
               {filteredFeed.length === 0 && <div className="empty-state">Nothing here.</div>}
@@ -290,6 +302,7 @@ export default function MessagesPage() {
               <button type="button" className={`stage-tab ${inboxFilter === 'all' ? 'active' : ''}`} onClick={() => setInboxFilter('all')}>All</button>
               <button type="button" className={`stage-tab ${inboxFilter === 'messages' ? 'active' : ''}`} onClick={() => setInboxFilter('messages')}>Messages</button>
               <button type="button" className={`stage-tab ${inboxFilter === 'system' ? 'active' : ''}`} onClick={() => setInboxFilter('system')}>System</button>
+                <button type="button" className={`stage-tab ${inboxFilter === 'email' ? 'active' : ''}`} onClick={() => setInboxFilter('email')}>Email</button>
             </ScrollFadeRow>
 
             {inboxFilter === 'system' ? (

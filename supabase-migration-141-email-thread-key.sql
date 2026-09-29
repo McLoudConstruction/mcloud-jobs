@@ -17,3 +17,13 @@ set thread_key = job_id::text || ':' || lower(trim(regexp_replace(
 where thread_key is null and job_id is not null;
 
 create index if not exists email_messages_thread_idx on email_messages (thread_key, received_at);
+
+-- email_messages was readable/writable by ANY authenticated user — which
+-- includes customer and subcontractor portal accounts. Now that every
+-- communication on a job is filed here, that must be staff-only.
+drop policy if exists "Authenticated can do everything on email_messages" on email_messages;
+drop policy if exists "Admin can do everything on email_messages" on email_messages;
+create policy "Admin can do everything on email_messages"
+  on email_messages for all
+  using (is_admin())
+  with check (is_admin());

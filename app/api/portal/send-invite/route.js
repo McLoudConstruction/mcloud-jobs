@@ -70,7 +70,7 @@ export async function POST(request) {
     // too so the subject carries the [Project #…] tag and the send is
     // filed on that job's thread like every other communication.
     try {
-      const { provider, subject: sentSubject } = await sendMail({ to: email, subject, html, text, sentBy: caller.email, jobId: jobId || null });
+      const { provider, subject: sentSubject } = await sendMail({ to: email, subject, html, text, sentBy: caller.email, jobId: jobId || null, sensitive: true });
       await logCommunication({ category: logCategory, toEmail: email, subject: sentSubject || subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
     } catch (sendErr) {
       await logCommunication({ category: logCategory, toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });

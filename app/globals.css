@@ -719,6 +719,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .cal-day-event-dot{ width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .cal-day-event-dot.dot-event{ background: var(--accent); }
 .cal-day-event-dot.dot-bidwalk{ background: #b8860b; }
+.cal-day-event-dot.dot-blackout{ background: #a13f3f; }
 .cal-day-event-dot.dot-personal{ background: var(--ink-soft); }
 .cal-day-event-time{ color: var(--ink-soft); flex-shrink: 0; }
 .cal-day-event-title{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }

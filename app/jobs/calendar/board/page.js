@@ -46,12 +46,13 @@ export default function ScheduleBoardPage() {
     const { data: jobs, error: jobErr } = await supabase.from('jobs').select('id, project_number, customer_name, project_address, stage').in('stage', ACTIVE_STAGES);
     if (jobErr) { setError(jobErr.message); return; }
     const jobIds = (jobs || []).map(j => j.id);
-    if (!jobIds.length) { setData({ jobs: [], phases: [], workOrders: [], companies: {}, unavailability: [], compliance: {} }); return; }
-    const [ph, wo, un, ov] = await Promise.all([
+    if (!jobIds.length) { setData({ jobs: [], phases: [], workOrders: [], companies: {}, unavailability: [], compliance: {}, blackouts: [] }); return; }
+    const [ph, wo, un, ov, bl] = await Promise.all([
       supabase.from('job_phases').select('id, job_id, label, trade, phase_key, start_date, end_date, allow_weekend_work, needs_review').in('job_id', jobIds).eq('status', 'published').order('start_date'),
       supabase.from('work_orders').select('id, job_id, company_id, trade, status').in('job_id', jobIds),
       supabase.from('company_unavailability').select('*').gte('end_date', addDays(today, -1)),
       supabase.rpc('sub_compliance_overview'),
+      supabase.from('customer_blackout_dates').select('*').in('job_id', jobIds).in('status', ['auto_applied', 'needs_review', 'approved', 'sent_to_subs']).gte('end_date', addDays(today, -1)),
     ]);
     const cids = [...new Set([...(wo.data || []).map(w => w.company_id), ...(un.data || []).map(u => u.company_id)].filter(Boolean))];
     let companies = {};
@@ -62,6 +63,7 @@ export default function ScheduleBoardPage() {
     setData({
       jobs: jobs || [], phases: ph.data || [], workOrders: wo.data || [], companies,
       unavailability: un.data || [], compliance: Object.fromEntries((ov.data || []).map(r => [r.company_id, r])),
+      blackouts: bl.data || [],
     });
   }, [today]);
 
@@ -72,6 +74,7 @@ export default function ScheduleBoardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_phases' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_unavailability' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_blackout_dates' }, load)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, load]);
@@ -98,6 +101,10 @@ export default function ScheduleBoardPage() {
     if (view === 'job') {
       return data.jobs.map(j => {
         const items = data.phases.filter(p => p.job_id === j.id && inWindow(p.start_date, p.end_date)).map(p => phaseItem(p));
+        // Customer blackout dates render like a sub's "unavailable" stripe.
+        for (const b of (data.blackouts || []).filter(x => x.job_id === j.id && inWindow(x.start_date, x.end_date))) {
+          items.push({ key: 'b' + b.id, start: b.start_date, end: b.end_date, label: `Customer unavailable${b.reason ? ` — ${b.reason}` : ''}${b.status === 'needs_review' ? ' (needs review)' : ''}`, off: true });
+        }
         return { id: j.id, title: j.project_number ? `#${j.project_number} · ${j.customer_name || ''}` : (j.customer_name || 'Job'), sub: j.project_address, href: `/jobs/${j.id}?tab=Schedule`, items };
       }).filter(r => r.items.length);
     }

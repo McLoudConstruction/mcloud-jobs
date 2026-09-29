@@ -21,6 +21,30 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 // scheduled yet."
 const SCHEDULABLE_STAGES = ['approved', 'scheduled', 'active', 'completed'];
 
+// Customer blackout dates are folded into the calendar as synthetic
+// all-day events (one per day of the window) — they aren't rows in
+// schedule_events, so they carry _blackout and can't be deleted from here.
+const BLACKOUT_STATUSES = ['auto_applied', 'needs_review', 'approved', 'sent_to_subs'];
+function evLabel(ev) {
+  return ev._blackout ? 'Customer blackout' : EVENT_TYPE_LABELS[ev.event_type];
+}
+function expandBlackouts(rows) {
+  const out = [];
+  for (const b of rows) {
+    const start = new Date(b.start_date + 'T00:00:00');
+    const end = new Date(b.end_date + 'T00:00:00');
+    const who = [b.jobs?.project_number ? `#${b.jobs.project_number}` : null, b.jobs?.customer_name].filter(Boolean).join(' ');
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      out.push({
+        id: `blackout-${b.id}-${iso}`, _blackout: true, job_id: b.job_id, event_date: iso, event_time: null, event_type: 'blackout',
+        description: `Blackout — ${who || 'customer'}${b.status === 'needs_review' ? ' (needs review)' : ''}`,
+      });
+    }
+  }
+  return out;
+}
+
 function toDateOnly(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function sameDay(a, b) { return !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
@@ -229,6 +253,7 @@ export default function JobCalendarPage() {
   const [bidWalks, setBidWalks] = useState([]);
   const [previewJob, setPreviewJob] = useState(null);
   const [scheduleEvents, setScheduleEvents] = useState([]);
+  const [blackouts, setBlackouts] = useState([]);
   const [staffById, setStaffById] = useState({});
   const [scheduleRequests, setScheduleRequests] = useState([]);
   const [resolvingRequestId, setResolvingRequestId] = useState(null);
@@ -325,6 +350,18 @@ export default function JobCalendarPage() {
     if (data) setScheduleEvents(data);
   }, []);
   useEffect(() => {
+    if (!session) return undefined;
+    const loadBlackouts = () => supabase.from('customer_blackout_dates').select('*, jobs(project_number, customer_name)').in('status', BLACKOUT_STATUSES)
+      .then(({ data }) => setBlackouts(data || []));
+    loadBlackouts();
+    const ch = supabase.channel('calendar-blackouts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_blackout_dates' }, loadBlackouts)
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [session]);
+  const blackoutEvents = useMemo(() => expandBlackouts(blackouts), [blackouts]);
+
+  useEffect(() => {
     if (!session) return;
     loadScheduleEvents();
     supabase.from('staff_users').select('id, full_name').eq('status', 'active').then(({ data }) => {
@@ -395,7 +432,7 @@ export default function JobCalendarPage() {
 
   function scheduleEventsForDay(date) {
     const day = toDateOnly(date);
-    return scheduleEvents.filter(ev => sameDay(parseDateOnly(ev.event_date), day))
+    return [...scheduleEvents, ...blackoutEvents].filter(ev => sameDay(parseDateOnly(ev.event_date), day))
       .sort((a, b) => (a.event_time || '').localeCompare(b.event_time || ''));
   }
 
@@ -417,8 +454,8 @@ export default function JobCalendarPage() {
           key: `ev-${ev.id}`,
           sortMinutes: ev.event_time ? h * 60 + (m || 0) : -1,
           time: ev.event_time ? formatEventTime(ev.event_time) : null,
-          title: ev.description || EVENT_TYPE_LABELS[ev.event_type],
-          dotClass: 'dot-event',
+          title: ev.description || evLabel(ev),
+          dotClass: ev._blackout ? 'dot-blackout' : 'dot-event',
           onClick: () => setPreviewEvent(ev),
         });
       });
@@ -532,9 +569,9 @@ export default function JobCalendarPage() {
           <div key={ev.id} className="job-row" onClick={() => setPreviewEvent(ev)}>
             <div className="job-main">
               <span className="job-number">📌 {formatEventTime(ev.event_time)}</span>
-              <span className="job-customer">{ev.description || EVENT_TYPE_LABELS[ev.event_type]}</span>
+              <span className="job-customer">{ev.description || evLabel(ev)}</span>
             </div>
-            <span className="badge">{EVENT_TYPE_LABELS[ev.event_type]}</span>
+            <span className="badge">{evLabel(ev)}</span>
           </div>
         ))}
         {walksToday.map(b => (
@@ -662,7 +699,7 @@ export default function JobCalendarPage() {
                       style={{ top: topPxForTimeStr(ev.event_time), height: 40 }}
                       onClick={() => setPreviewEvent(ev)}
                     >
-                      <span className="tg-event-title">📌 {ev.description || EVENT_TYPE_LABELS[ev.event_type]}</span>
+                      <span className="tg-event-title">📌 {ev.description || evLabel(ev)}</span>
                       <span className="tg-event-time">{formatEventTime(ev.event_time)}</span>
                     </div>
                   ))}
@@ -987,11 +1024,11 @@ export default function JobCalendarPage() {
       <PopupModal open={!!previewEvent} onClose={() => setPreviewEvent(null)} maxWidth={380}>
         {previewEvent && (
           <div>
-            <span className="badge">{EVENT_TYPE_LABELS[previewEvent.event_type]}</span>
-            <h3 style={{ margin: '8px 0 4px' }}>{previewEvent.description || EVENT_TYPE_LABELS[previewEvent.event_type]}</h3>
+            <span className="badge">{evLabel(previewEvent)}</span>
+            <h3 style={{ margin: '8px 0 4px' }}>{previewEvent.description || evLabel(previewEvent)}</h3>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
               {parseDateOnly(previewEvent.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-              {' · '}{formatEventTime(previewEvent.event_time)}
+              {previewEvent._blackout ? ' · all day' : ` · ${formatEventTime(previewEvent.event_time)}`}
             </div>
             {previewEvent.assigned_staff_ids?.length > 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
@@ -999,9 +1036,13 @@ export default function JobCalendarPage() {
               </div>
             )}
             <div className="section-actions" style={{ marginTop: 16 }}>
-              <button className="btn btn-sm btn-danger" disabled={deletingEvent} onClick={() => deleteScheduleEvent(previewEvent.id)}>
-                {deletingEvent ? 'Deleting…' : 'Delete'}
-              </button>
+              {previewEvent._blackout ? (
+                <Link className="btn btn-sm" href={`/jobs/${previewEvent.job_id}?tab=Schedule`}>Review on the job</Link>
+              ) : (
+                <button className="btn btn-sm btn-danger" disabled={deletingEvent} onClick={() => deleteScheduleEvent(previewEvent.id)}>
+                  {deletingEvent ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
             </div>
           </div>
         )}

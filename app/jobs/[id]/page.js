@@ -54,6 +54,8 @@ import BudgetCard from '../../../components/BudgetCard';
 import PayAppsCard from '../../../components/PayAppsCard';
 import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
+import PunchListWorkflow from '../../../components/PunchListWorkflow';
+import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
 import WarrantyCard from '../../../components/WarrantyCard';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
@@ -687,6 +689,7 @@ export default function JobDetailPage() {
 
         {tab === 'Schedule' && (
           <>
+            <BlackoutDatesCard jobId={id} />
             <ScheduleCard job={job} jobId={id} />
             <ScheduleDelayCard jobId={id} job={job} />
           </>
@@ -749,8 +752,9 @@ export default function JobDetailPage() {
           <div className="card">
             <h3>Punch List</h3>
             <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-              Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
+              Final fixes before you close the job. Build the list, publish it for the customer to review, then publish the final list and send it to the subs to schedule. Open items hold back the review request.
             </div>
+            <PunchListWorkflow jobId={id} />
             <PunchItemsPanel jobId={id} kind="punch" />
           </div>
         )}
