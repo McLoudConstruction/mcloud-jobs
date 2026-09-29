@@ -7,6 +7,11 @@ import { tagSubjectWithJob } from '../../../../lib/emailThreading';
 import { syncConnectionEmail } from '../../../../lib/integrations/emailSync';
 import { workdayOnOrAfter } from '../../../../lib/scheduleDates';
 import { reviewUrl } from '../../../../lib/reviews';
+import { runDailyOutreach } from '../../../../lib/outreach';
+
+// The outreach step below sends through the Gmail API one message at a time
+// (bounded by the daily cap in Outreach settings), so give the run room.
+export const maxDuration = 60;
 
 // Uses the service role key, not the public anon key — this route runs on
 // a schedule with no logged-in user, so RLS (which requires a session)
@@ -284,6 +289,17 @@ export async function GET(request) {
     }
   } catch (err) {
     results.errors.push(`Review requests failed: ${err.message}`);
+  }
+
+  // ── Outbound prospecting sequences (migration 140). Sends the emails that
+  // are due through the outreach Gmail account, capped per day in Outreach
+  // settings. Does nothing until outreach is switched on there. Runs before
+  // the inbound sync so a slow mailbox sync can't crowd it out.
+  try {
+    results.outreach = await runDailyOutreach(supabase);
+    for (const e of results.outreach.errors || []) results.errors.push(`Outreach: ${e}`);
+  } catch (err) {
+    results.errors.push(`Outreach run failed: ${err.message}`);
   }
 
   // ── Inbound email sync — folded in here rather than its own cron

@@ -9,13 +9,20 @@ export async function GET(request) {
   try {
     const admin = getAdminClient();
     const [{ data: connections }, { data: credentials }] = await Promise.all([
-      admin.from('integration_connections').select('provider, external_account_email, external_account_label, connected_at').eq('staff_id', auth.staffId),
+      admin.from('integration_connections').select('provider, external_account_email, external_account_label, connected_at, scope').eq('staff_id', auth.staffId),
       admin.from('integration_credentials').select('provider, updated_at'),
     ]);
 
     const byProvider = {};
     for (const c of connections || []) {
-      byProvider[c.provider] = { connected: true, label: c.external_account_label || c.external_account_email, connectedAt: c.connected_at };
+      byProvider[c.provider] = {
+        connected: true,
+        label: c.external_account_label || c.external_account_email,
+        connectedAt: c.connected_at,
+        // Whether the stored Google grant includes permission to send mail:
+        // Outreach settings uses this to say when a reconnect is needed.
+        ...(c.provider === 'google' ? { canSend: (c.scope || '').includes('gmail.send') } : {}),
+      };
     }
     for (const p of ['google', 'microsoft', 'quickbooks']) {
       if (!byProvider[p]) byProvider[p] = { connected: false };
