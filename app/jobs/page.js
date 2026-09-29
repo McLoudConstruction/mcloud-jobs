@@ -8,7 +8,11 @@ import AppShell from '../../components/AppShell';
 import MobileFab from '../../components/MobileFab';
 import { STAGE_ORDER, STAGE_LABELS, formattedProjectNumber } from '../../lib/constants';
 
-const STAGES = ['all', ...STAGE_ORDER];
+// Work is finished once a job reaches Completed — through invoicing and
+// payment it stays on the Completed tab rather than crowding Active.
+const COMPLETED_STAGES = ['completed', 'invoiced', 'paid'];
+const ACTIVE_STAGE_ORDER = STAGE_ORDER.filter(s => !COMPLETED_STAGES.includes(s));
+const STAGES = ['all', ...ACTIVE_STAGE_ORDER];
 const TAB_LABELS = { all: 'All', ...STAGE_LABELS };
 
 function fmtDate(v) {
@@ -20,7 +24,7 @@ export default function JobTrackerPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
   const [jobs, setJobs] = useState([]);
-  const [view, setView] = useState('active'); // 'active' | 'lost'
+  const [view, setView] = useState('active'); // 'active' | 'completed' | 'lost'
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
   const [isMobile, setIsMobile] = useState(false);
@@ -53,11 +57,12 @@ export default function JobTrackerPage() {
     };
   }, [session]);
 
-  const activeJobs = useMemo(() => jobs.filter(j => j.stage !== 'lost'), [jobs]);
+  const activeJobs = useMemo(() => jobs.filter(j => j.stage !== 'lost' && !COMPLETED_STAGES.includes(j.stage)), [jobs]);
+  const completedJobs = useMemo(() => jobs.filter(j => COMPLETED_STAGES.includes(j.stage)), [jobs]);
   const lostJobs = useMemo(() => jobs.filter(j => j.stage === 'lost'), [jobs]);
 
   const filtered = useMemo(() => {
-    const base = view === 'lost' ? lostJobs : activeJobs;
+    const base = view === 'lost' ? lostJobs : view === 'completed' ? completedJobs : activeJobs;
     return base.filter(j => {
       if (view === 'active' && stage !== 'all' && j.stage !== stage) return false;
       if (!search.trim()) return true;
@@ -70,7 +75,7 @@ export default function JobTrackerPage() {
         (j.loss_reason || '').toLowerCase().includes(q)
       );
     });
-  }, [activeJobs, lostJobs, view, stage, search]);
+  }, [activeJobs, completedJobs, lostJobs, view, stage, search]);
 
   if (loading || !session) return null;
 
@@ -92,6 +97,9 @@ export default function JobTrackerPage() {
         <div className="stage-tabs" style={{ marginBottom: 14 }}>
           <button className={`stage-tab ${view === 'active' ? 'active' : ''}`} onClick={() => setView('active')}>
             Active ({activeJobs.length})
+          </button>
+          <button className={`stage-tab ${view === 'completed' ? 'active' : ''}`} onClick={() => setView('completed')}>
+            Completed ({completedJobs.length})
           </button>
           <button className={`stage-tab ${view === 'lost' ? 'active' : ''}`} onClick={() => setView('lost')}>
             Closed Lost ({lostJobs.length})
@@ -139,7 +147,7 @@ export default function JobTrackerPage() {
           </>
         )}
 
-        {filtered.length === 0 && <div className="empty-state">{view === 'lost' ? 'Nothing here yet.' : 'No jobs here yet.'}</div>}
+        {filtered.length === 0 && <div className="empty-state">{view === 'lost' ? 'Nothing here yet.' : view === 'completed' ? 'No completed projects yet.' : 'No jobs here yet.'}</div>}
 
         {isMobile ? (
           <div className="entity-mobile-list">

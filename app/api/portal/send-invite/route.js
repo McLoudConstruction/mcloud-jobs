@@ -66,13 +66,12 @@ export async function POST(request) {
     const { subject, html, text } = buildPortalInviteEmail({ customerName, actionLink: linkData.properties.action_link, portalLabel: portalLabel || 'project portal' });
     const logCategory = category || 'portal_invite';
 
-    // jobId isn't passed into sendMail() here (only into logCommunication
-    // below) — this invite isn't scoped to one job, and tagging the
-    // subject with a project number would be wrong/confusing for what's an
-    // account-access email, not a job-thread email.
+    // When the invite is sent from a specific job, jobId goes to sendMail()
+    // too so the subject carries the [Project #…] tag and the send is
+    // filed on that job's thread like every other communication.
     try {
-      const { provider } = await sendMail({ to: email, subject, html, text, sentBy: caller.email });
-      await logCommunication({ category: logCategory, toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
+      const { provider, subject: sentSubject } = await sendMail({ to: email, subject, html, text, sentBy: caller.email, jobId: jobId || null });
+      await logCommunication({ category: logCategory, toEmail: email, subject: sentSubject || subject, jobId: jobId || null, sentBy: caller.email, status: 'sent', provider });
     } catch (sendErr) {
       await logCommunication({ category: logCategory, toEmail: email, subject, jobId: jobId || null, sentBy: caller.email, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });
       throw sendErr;
