@@ -13,7 +13,7 @@ import {
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
   MAPBOX_MAX_POINTS, VISIT_BUCKETS, visitBucket, daysSince,
-  reverseGeocode, fetchDirections, geocodeAddressPermanent,
+  reverseGeocode, searchPlaces, fetchDirections, geocodeAddressPermanent,
 } from '../lib/mapboxRoute';
 import {
   DEFAULT_MAP_CENTER, buildStop, stopHasCoords, formatStopAddress,
@@ -104,6 +104,9 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const [showSaved, setShowSaved] = useState(true);
   const [allProps, setAllProps] = useState([]);
   const [propsLoaded, setPropsLoaded] = useState(false);
+  const [propsError, setPropsError] = useState('');
+  const [homeAddress, setHomeAddress] = useState('');
+  const [homeBusy, setHomeBusy] = useState(false);
   const [selected, setSelected] = useState(null); // { type: 'saved', id } | { type: 'spot', stop }
   const [bounds, setBounds] = useState(null);
   const [roadRoute, setRoadRoute] = useState(null); // { key, geometry, meters, seconds, legs }
@@ -143,6 +146,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
       if (cancelled) return;
       setStaffId(id);
       if (id) {
+        supabase.from('staff_users').select('home_address').eq('id', id).maybeSingle()
+          .then(({ data: h }) => { if (!cancelled && h?.home_address) setHomeAddress(h.home_address); });
         const active = await getActiveRoute(id);
         if (!cancelled && active && (active.stops || []).length > 0) {
           setRoute(active);
@@ -164,16 +169,21 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     let cancelled = false;
     (async () => {
       const rows = [];
+      let fields = PROPERTY_FIELDS;
+      let failure = '';
       for (let from = 0; ; from += PAGE_SIZE) {
-        const { data, error: err } = await supabase
-          .from('properties')
-          .select(PROPERTY_FIELDS)
-          .order('id')
-          .range(from, from + PAGE_SIZE - 1);
-        if (err || !data) break;
+        let res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
+        if (res.error && fields !== '*') {
+          // A named column may be missing on this database; take everything instead.
+          fields = '*';
+          res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
+        }
+        if (res.error) { failure = res.error.message || 'Unknown error'; break; }
+        const data = res.data || [];
         rows.push(...data);
         if (data.length < PAGE_SIZE) break;
       }
+      if (!cancelled && failure) setPropsError(failure);
       if (!cancelled) { setAllProps(rows); setPropsLoaded(true); }
     })();
     return () => { cancelled = true; };
@@ -540,6 +550,17 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     const loc = await getCurrentLocation();
     if (!loc) { setError('Could not get your current location. Enable location access and try again.'); return; }
     chooseStart('Your current location', loc);
+  }
+
+  async function useHome() {
+    setError('');
+    if (!homeAddress) return;
+    setHomeBusy(true);
+    const found = await searchPlaces(homeAddress, TOKEN, null, 'address,poi');
+    setHomeBusy(false);
+    const hit = found[0];
+    if (!hit) { setError('Could not find your home address on the map. Check it in Settings.'); return; }
+    chooseStart(homeAddress, { lat: hit.lat, lng: hit.lng });
   }
 
   function clearStart() {
@@ -925,9 +946,13 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         </div>
       )}
 
-      {TOKEN && propsLoaded && unlocated.length > 0 && !locating && (
+      {TOKEN && propsLoaded && (propsError || allProps.length === 0 || unlocated.length > 0) && !locating && (
         <div style={{ fontSize: 12.5, background: 'rgba(161,124,63,0.12)', border: '1px solid rgba(161,124,63,0.35)', borderRadius: 8, padding: '9px 12px', marginBottom: 12 }}>
-          {confirmLocate ? (
+          {propsError ? (
+            <div>Could not load properties: {propsError}</div>
+          ) : allProps.length === 0 ? (
+            <div>The database returned 0 properties for this login, so there is nothing to draw.</div>
+          ) : confirmLocate ? (
             <>
               <div style={{ marginBottom: 8 }}>
                 This looks up each address with Mapbox permanent geocoding and saves the coordinates onto the property, one lookup per property.
@@ -969,6 +994,9 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                 onClear={clearStart}
               />
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                {homeAddress
+                  ? <button type="button" className="btn btn-sm" onClick={useHome} disabled={homeBusy || !TOKEN} title={homeAddress}>{homeBusy ? 'Finding home…' : 'Use home'}</button>
+                  : <a className="btn btn-sm" href="/settings" style={{ textDecoration: 'none' }}>Set home address</a>}
                 <button type="button" className="btn btn-sm" onClick={useMyLocation}>Use my location</button>
                 {startPoint && <button type="button" className="btn btn-sm" onClick={() => { clearStart(); }}>Clear start</button>}
               </div>

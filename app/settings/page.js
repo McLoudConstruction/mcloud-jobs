@@ -10,6 +10,7 @@ import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
 import FeatureSettingsPanels from '../../components/FeatureSettingsPanels';
+import HomeAddressCard from '../../components/HomeAddressCard';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
@@ -292,6 +293,7 @@ function SettingsPageInner() {
 
         {tab === 'Cosmetic' && (
         <>
+        <HomeAddressCard />
         <div className="card">
           <h3>Logo</h3>
           {settings.logo_url && (
