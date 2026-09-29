@@ -13,7 +13,7 @@ import {
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
   MAPBOX_MAX_POINTS, VISIT_BUCKETS, visitBucket, daysSince,
-  reverseGeocode, searchPlaces, fetchDirections, geocodeAddressPermanent,
+  reverseGeocode, searchPlaces, fetchDirections, geocodeAddress,
 } from '../lib/mapboxRoute';
 import {
   DEFAULT_MAP_CENTER, buildStop, stopHasCoords, formatStopAddress,
@@ -767,7 +767,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         if (i >= list.length) return;
         const p = list[i];
         try {
-          const c = await geocodeAddressPermanent(p, TOKEN);
+          const c = await geocodeAddress(p, TOKEN);
           if (c) {
             const { error: upErr } = await supabase.from('properties')
               .update({ property_lat: c.lat, property_lng: c.lng }).eq('id', p.id);
@@ -778,7 +778,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         } catch (err) {
           if (err.status === 401 || err.status === 403) {
             stopAll = true;
-            setError('Mapbox refused the permanent geocoding request. Permanent geocoding has to be enabled on your Mapbox account before addresses can be saved as map locations.');
+            setError('Mapbox refused the lookup request. Check that NEXT_PUBLIC_MAPBOX_TOKEN is valid and has search access.');
           }
         }
         done += 1;
@@ -955,8 +955,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           ) : confirmLocate ? (
             <>
               <div style={{ marginBottom: 8 }}>
-                This looks up each address with Mapbox permanent geocoding and saves the coordinates onto the property, one lookup per property.
-                Mapbox bills those lookups and the feature has to be enabled on your account. Locate {unlocated.length} {unlocated.length === 1 ? 'property' : 'properties'}?
+                This looks up each address with Mapbox and saves the coordinates onto the property, one lookup per property. It uses Mapbox's free monthly allowance. Locate {unlocated.length} {unlocated.length === 1 ? 'property' : 'properties'}?
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" className="btn btn-primary btn-sm" onClick={locateMissing}>Yes, locate them</button>
