@@ -1,8 +1,8 @@
 'use client';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { loadGoogleMapsPlaces } from '../lib/googleMapsLoader';
-import PlacesAutocompleteInput from './PlacesAutocompleteInput';
+import MapboxPlaceSearch from './MapboxPlaceSearch';
 import DriveModeOverlay from './DriveModeOverlay';
 import { findOrCreatePropertyForRouteStop } from '../lib/contactSync';
 import { useDragReorder } from '../lib/useDragReorder';
@@ -12,27 +12,38 @@ import {
 } from '../lib/salesRoutes';
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
+  MAPBOX_MAX_POINTS, VISIT_BUCKETS, visitBucket, daysSince,
+  reverseGeocode, fetchDirections, geocodeAddressPermanent,
+} from '../lib/mapboxRoute';
+import {
   DEFAULT_MAP_CENTER, buildStop, stopHasCoords, formatStopAddress,
-  reverseGeocode, placeFromPlaceId, metersToMiles, formatMiles, formatDuration,
-  straightLineMiles, computeRoadRoute, MAX_ROAD_ROUTE_POINTS,
+  metersToMiles, formatMiles, formatDuration, straightLineMiles,
 } from '../lib/mapRouteHelpers';
 
-const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
-const SAVED_PROPERTY_LIMIT = 800;
+const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const PROPERTY_FIELDS = 'id, property_name, property_type, management_company, property_street, property_city, property_state, property_zip, property_lat, property_lng, prospect_stage, last_visited_at';
+const PAGE_SIZE = 1000;
 const IN_VIEW_LIMIT = 100;
 const ROUTE_DEBOUNCE_MS = 500;
 const DUPLICATE_RADIUS_MILES = 0.02; // ~30 m, a second tap on the same building
 const INK = '#1C1B19';
-const SLATE = '#2F4858';
-const GOLD = '#9B773D';
 const RUST = '#A8471F';
+const EMPTY = { type: 'FeatureCollection', features: [] };
 
 function stripKey({ key, ...rest }) {
   return rest;
 }
 
-function stopLatLng(s) {
-  return { lat: s.property_lat, lng: s.property_lng };
+function stopLngLat(s) {
+  return [Number(s.property_lng), Number(s.property_lat)];
+}
+
+function stopPoint(s) {
+  return { lat: Number(s.property_lat), lng: Number(s.property_lng) };
+}
+
+function hasCoords(p) {
+  return p.property_lat != null && p.property_lng != null;
 }
 
 function sameStop(a, b) {
@@ -41,20 +52,16 @@ function sameStop(a, b) {
   const sb = (b.property_street || '').trim().toLowerCase();
   if (sa && sb && sa === sb && (a.property_zip || '') === (b.property_zip || '')) return true;
   if (stopHasCoords(a) && stopHasCoords(b)) {
-    const d = haversineMiles(stopLatLng(a), stopLatLng(b));
+    const d = haversineMiles(stopPoint(a), stopPoint(b));
     if (d != null && d < DUPLICATE_RADIUS_MILES) return true;
   }
   return false;
 }
 
-function daysSince(iso) {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
-
-function pinElement(label, kind) {
+function pinElement(label, kind, title) {
   const el = document.createElement('div');
   el.textContent = label;
+  if (title) el.title = title;
   const bg = kind === 'start' ? '#16a34a' : kind === 'visited' ? '#5a7d5a' : INK;
   el.style.cssText = [
     'width:26px', 'height:26px', 'border-radius:50%', 'box-sizing:border-box',
@@ -65,11 +72,12 @@ function pinElement(label, kind) {
   return el;
 }
 
-// Map-first Sales Route builder, modeled on the Overlanding Trip Planner's
-// trip screen. You work the map: tap one of your saved properties (or any
-// building or spot) to select it, read its card, and add it to the route.
-// A "saved properties in view" list follows whatever the map is showing, and
-// the route line, mileage and per-leg times redraw as the stop list changes.
+// Map-first Sales Route builder on Mapbox, modeled on the Overlanding Trip
+// Planner's trip screen. Every property with a location shows as a point,
+// colored by how recently it was visited; hover for its name and management
+// company, tap to select it and add it to the route. A "saved properties in
+// view" list follows the map, and the route line, mileage and per-leg times
+// redraw as the stop list changes.
 //
 // Stops are ordered automatically for the most efficient drive (exact up to
 // 12 stops, heuristic beyond) until you reorder by hand; "Re-optimize order"
@@ -77,44 +85,39 @@ function pinElement(label, kind) {
 //
 // Saves into the same sales_routes flow as the typed builder, so Drive Mode,
 // resume-after-screen-off and Recent Routes work unchanged.
-//
-// Road routing (route line, drive time, per-leg times) uses Google's Routes
-// library and needs the Routes API enabled on the same key as Maps/Places.
-// If it isn't, or a request fails, the line falls back to straight segments.
-// Ordering itself never calls a paid API.
 export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrome }) {
   const [staffId, setStaffId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [route, setRoute] = useState(null); // saved sales_routes row once started/resumed
   const [stops, setStops] = useState([]);
-  const [mapStatus, setMapStatus] = useState('loading'); // loading | ready | nokey
-  const [search, setSearch] = useState('');
+  const [mapReady, setMapReady] = useState(false);
   const [startInput, setStartInput] = useState('');
   const [startPoint, setStartPoint] = useState(null); // { lat, lng }
   const [autoOrder, setAutoOrder] = useState(true);
   const [followRoads, setFollowRoads] = useState(true);
   const [showSaved, setShowSaved] = useState(true);
-  const [savedProps, setSavedProps] = useState([]);
+  const [allProps, setAllProps] = useState([]);
+  const [propsLoaded, setPropsLoaded] = useState(false);
   const [selected, setSelected] = useState(null); // { type: 'saved', id } | { type: 'spot', stop }
   const [bounds, setBounds] = useState(null);
-  const [roadRoute, setRoadRoute] = useState(null); // { key, path, meters, seconds, legs }
+  const [roadRoute, setRoadRoute] = useState(null); // { key, geometry, meters, seconds, legs }
   const [routeBusy, setRouteBusy] = useState(false);
-  const [roadFailed, setRoadFailed] = useState(false);
+  const [routeError, setRouteError] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [driving, setDriving] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [confirmLocate, setConfirmLocate] = useState(false);
+  const [locating, setLocating] = useState(null); // { done, total }
 
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
+  const mapboxRef = useRef(null);
   const stopMarkersRef = useRef([]);
   const spotMarkerRef = useRef(null);
-  const linesRef = useRef([]);
-  const routeReqRef = useRef(0);
   const clickHandlerRef = useRef(null);
-  const dataClickAtRef = useRef(0);
   const framedRef = useRef(false);
   const fitAfterRouteRef = useRef(true);
   const stopsRef = useRef(stops);
@@ -140,7 +143,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           setStops(active.stops);
           setAutoOrder(false); // never reshuffle a route already in progress
           if (active.start_lat != null && active.start_lng != null) {
-            setStartPoint({ lat: active.start_lat, lng: active.start_lng });
+            setStartPoint({ lat: Number(active.start_lat), lng: Number(active.start_lng) });
             setStartInput(active.start_label || 'Your current location');
           }
         }
@@ -150,142 +153,223 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     return () => { cancelled = true; };
   }, []);
 
-  // ── Saved properties (the Property Database, as selectable points) ────
+  // ── Every property (the whole Property Database), fetched in pages ───
   useEffect(() => {
     let cancelled = false;
-    supabase.from('properties')
-      .select('id, property_name, property_type, management_company, property_street, property_city, property_state, property_zip, property_lat, property_lng, prospect_stage, last_visited_at')
-      .not('property_lat', 'is', null)
-      .not('property_lng', 'is', null)
-      .not('prospect_stage', 'in', '("won","lost")')
-      .limit(SAVED_PROPERTY_LIMIT)
-      .then(({ data }) => { if (!cancelled) setSavedProps(data || []); });
+    (async () => {
+      const rows = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error: err } = await supabase
+          .from('properties')
+          .select(PROPERTY_FIELDS)
+          .order('id')
+          .range(from, from + PAGE_SIZE - 1);
+        if (err || !data) break;
+        rows.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
+      if (!cancelled) { setAllProps(rows); setPropsLoaded(true); }
+    })();
     return () => { cancelled = true; };
   }, []);
 
+  const savedProps = useMemo(() => allProps.filter(hasCoords), [allProps]);
+  const unlocated = useMemo(() => allProps.filter(p => !hasCoords(p) && p.property_street), [allProps]);
+  const bucketCounts = useMemo(() => {
+    const counts = [0, 0, 0, 0];
+    savedProps.forEach(p => { counts[visitBucket(p.last_visited_at)] += 1; });
+    return counts;
+  }, [savedProps]);
+
   // ── Create the map once the container is on screen ────────────────────
   useEffect(() => {
-    if (checkingActive) return undefined;
+    if (checkingActive || !TOKEN) return undefined;
     let cancelled = false;
+    let map = null;
+    let ro = null;
     (async () => {
-      const loaded = await loadGoogleMapsPlaces();
-      if (cancelled) return;
-      if (!loaded) { setMapStatus('nokey'); return; }
-      const { Map } = await window.google.maps.importLibrary('maps');
-      await window.google.maps.importLibrary('marker');
+      const mapboxgl = (await import('mapbox-gl')).default;
       if (cancelled || !mapDivRef.current) return;
-      const map = new Map(mapDivRef.current, {
+      mapboxgl.accessToken = TOKEN;
+      mapboxRef.current = mapboxgl;
+      map = new mapboxgl.Map({
+        container: mapDivRef.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
         center: DEFAULT_MAP_CENTER,
-        zoom: 11,
-        mapId: MAP_ID,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: true,
-        clickableIcons: true,
-        gestureHandling: 'greedy',
+        zoom: 9,
       });
+      map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-      // Saved properties live in the Data layer: one cheap circle each,
-      // clickable, restyled from feature properties.
-      map.data.setStyle(f => {
-        if (f.getProperty('inRoute')) return { visible: false };
-        const sel = !!f.getProperty('selected');
-        return {
-          clickable: true,
-          zIndex: sel ? 5 : 1,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: sel ? 9 : 6,
-            fillColor: sel ? GOLD : SLATE,
-            fillOpacity: 1,
-            strokeColor: sel ? INK : '#ffffff',
-            strokeWeight: sel ? 3 : 2,
-          },
-        };
-      });
-      map.data.addListener('click', ev => {
-        dataClickAtRef.current = Date.now();
-        setNotice('');
-        setSelected({ type: 'saved', id: ev.feature.getProperty('id') });
-      });
-
-      map.addListener('click', e => { if (clickHandlerRef.current) clickHandlerRef.current(e); });
-      map.addListener('idle', () => {
+      const emitBounds = () => {
         const b = map.getBounds();
         if (!b) return;
-        const ne = b.getNorthEast();
-        const sw = b.getSouthWest();
-        setBounds({ north: ne.lat(), east: ne.lng(), south: sw.lat(), west: sw.lng() });
+        setBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+      };
+
+      map.on('load', () => {
+        // Road route: white casing under a dark line.
+        map.addSource('route', { type: 'geojson', data: EMPTY });
+        map.addLayer({
+          id: 'route-casing', type: 'line', source: 'route',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': '#ffffff', 'line-width': 8, 'line-opacity': 0.9 },
+        });
+        map.addLayer({
+          id: 'route-line', type: 'line', source: 'route',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': INK, 'line-width': 4 },
+        });
+        // Straight segments shown while the road route is pending or unavailable.
+        map.addSource('route-straight', { type: 'geojson', data: EMPTY });
+        map.addLayer({
+          id: 'route-straight-line', type: 'line', source: 'route-straight',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': INK, 'line-width': 3, 'line-opacity': 0.45, 'line-dasharray': [2, 2] },
+        });
+        // Every property, colored by last visit.
+        map.addSource('props', { type: 'geojson', data: EMPTY });
+        map.addLayer({
+          id: 'props-circles', type: 'circle', source: 'props',
+          filter: ['!=', ['get', 'inRoute'], 1],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 5, 13, 8],
+            'circle-color': [
+              'match', ['get', 'bucket'],
+              0, VISIT_BUCKETS[0].color,
+              1, VISIT_BUCKETS[1].color,
+              2, VISIT_BUCKETS[2].color,
+              VISIT_BUCKETS[3].color,
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.5,
+          },
+        });
+        map.addLayer({
+          id: 'props-selected', type: 'circle', source: 'props', filter: ['==', ['get', 'id'], ''],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 8, 9, 10, 13, 13],
+            'circle-color': 'rgba(0,0,0,0)',
+            'circle-stroke-color': INK,
+            'circle-stroke-width': 3,
+          },
+        });
+
+        // Hover card: property name and management company.
+        const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'mrb-popup', maxWidth: '260px' });
+        map.on('mousemove', 'props-circles', e => {
+          const f = e.features && e.features[0];
+          if (!f) return;
+          map.getCanvas().style.cursor = 'pointer';
+          const el = document.createElement('div');
+          const name = document.createElement('div');
+          name.style.cssText = 'font-weight:700;font-size:12.5px';
+          name.textContent = f.properties.name || 'Unnamed property';
+          const mgmt = document.createElement('div');
+          mgmt.style.cssText = 'font-size:11.5px;color:#666;margin-top:2px';
+          mgmt.textContent = f.properties.mgmt || 'No management company';
+          el.appendChild(name);
+          el.appendChild(mgmt);
+          popup.setLngLat(f.geometry.coordinates).setDOMContent(el).addTo(map);
+        });
+        map.on('mouseleave', 'props-circles', () => {
+          map.getCanvas().style.cursor = '';
+          popup.remove();
+        });
+
+        // One click handler: a property circle selects that property, anything
+        // else is treated as "tell me what's here".
+        map.on('click', e => {
+          const box = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
+          const hits = map.queryRenderedFeatures(box, { layers: ['props-circles'] });
+          if (hits.length) {
+            setNotice('');
+            setSelected({ type: 'saved', id: String(hits[0].properties.id) });
+            return;
+          }
+          if (clickHandlerRef.current) clickHandlerRef.current(e);
+        });
+
+        mapRef.current = map;
+        emitBounds();
+        setMapReady(true);
       });
-      mapRef.current = map;
-      setMapStatus('ready');
+      map.on('moveend', emitBounds);
+
+      ro = new ResizeObserver(() => map.resize());
+      ro.observe(mapDivRef.current);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (ro) ro.disconnect();
+      stopMarkersRef.current.forEach(m => m.remove());
+      stopMarkersRef.current = [];
+      if (spotMarkerRef.current) { spotMarkerRef.current.remove(); spotMarkerRef.current = null; }
+      if (map) map.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    };
   }, [checkingActive]);
 
   const fitToStops = useCallback(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const mapboxgl = mapboxRef.current;
+    if (!map || !mapboxgl) return;
     const pts = [
-      ...(startRef.current ? [startRef.current] : []),
-      ...stopsRef.current.filter(stopHasCoords).map(stopLatLng),
+      ...(startRef.current ? [[startRef.current.lng, startRef.current.lat]] : []),
+      ...stopsRef.current.filter(stopHasCoords).map(stopLngLat),
     ];
     if (pts.length === 0) return;
-    if (pts.length === 1) { map.panTo(pts[0]); map.setZoom(15); return; }
-    const b = new window.google.maps.LatLngBounds();
+    if (pts.length === 1) { map.easeTo({ center: pts[0], zoom: 15, duration: 500 }); return; }
+    const b = new mapboxgl.LngLatBounds();
     pts.forEach(p => b.extend(p));
-    map.fitBounds(b, 60);
+    map.fitBounds(b, { padding: 60, maxZoom: 14, duration: 600 });
   }, []);
 
   // Frame a resumed route once, as soon as both the map and stops exist.
   useEffect(() => {
-    if (mapStatus === 'ready' && !framedRef.current && stops.length > 0) {
+    if (mapReady && !framedRef.current && stops.length > 0) {
       framedRef.current = true;
       fitToStops();
     }
-  }, [mapStatus, stops, fitToStops]);
+  }, [mapReady, stops, fitToStops]);
 
-  // ── Saved-property layer: rebuild on data change, restyle on state ────
+  // ── Property points ──────────────────────────────────────────────────
   useEffect(() => {
-    if (mapStatus !== 'ready') return;
-    const map = mapRef.current;
-    const toRemove = [];
-    map.data.forEach(f => toRemove.push(f));
-    toRemove.forEach(f => map.data.remove(f));
-    map.data.addGeoJson({
+    if (!mapReady) return;
+    const onRoute = new Set(stops.map(s => s.property_id).filter(Boolean));
+    mapRef.current.getSource('props')?.setData({
       type: 'FeatureCollection',
       features: savedProps.map(p => ({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: [p.property_lng, p.property_lat] },
-        properties: { id: p.id, inRoute: 0, selected: 0 },
+        geometry: { type: 'Point', coordinates: [Number(p.property_lng), Number(p.property_lat)] },
+        properties: {
+          id: p.id,
+          name: p.property_name || '',
+          mgmt: p.management_company || '',
+          bucket: visitBucket(p.last_visited_at),
+          inRoute: onRoute.has(p.id) ? 1 : 0,
+        },
       })),
     });
-  }, [savedProps, mapStatus]);
+  }, [mapReady, savedProps, stops]);
 
   useEffect(() => {
-    if (mapStatus !== 'ready') return;
-    const map = mapRef.current;
-    const onRoute = new Set(stops.map(s => s.property_id).filter(Boolean));
-    const selId = selected?.type === 'saved' ? selected.id : null;
-    map.data.forEach(f => {
-      const id = f.getProperty('id');
-      const inRoute = onRoute.has(id) ? 1 : 0;
-      const sel = id === selId ? 1 : 0;
-      if (f.getProperty('inRoute') !== inRoute) f.setProperty('inRoute', inRoute);
-      if (f.getProperty('selected') !== sel) f.setProperty('selected', sel);
-    });
-  }, [savedProps, stops, selected, mapStatus]);
+    if (!mapReady) return;
+    const selId = selected?.type === 'saved' ? selected.id : '';
+    mapRef.current.setFilter('props-selected', ['==', ['get', 'id'], selId]);
+  }, [mapReady, selected]);
 
   useEffect(() => {
-    if (mapStatus !== 'ready') return;
-    mapRef.current.data.setMap(showSaved ? mapRef.current : null);
-  }, [showSaved, mapStatus]);
+    if (!mapReady) return;
+    const vis = showSaved ? 'visible' : 'none';
+    ['props-circles', 'props-selected'].forEach(id => mapRef.current.setLayoutProperty(id, 'visibility', vis));
+  }, [mapReady, showSaved]);
 
   // ── Persisting and resolving stops ────────────────────────────────────
-  // Nothing touches the Property Database until "Save & Start Route", so
-  // exploring the map and discarding a draft leaves no stray properties.
-  // Once a route is active, each added stop is resolved right away since
-  // it is persisted immediately.
+  // Nothing new is written to the Property Database until "Save & Start
+  // Route", so exploring the map and discarding a draft leaves no stray
+  // properties. Once a route is active, each added stop is resolved right
+  // away since it is persisted immediately.
   const persistStops = useCallback(async (next) => {
     setStops(next);
     if (route?.id) {
@@ -309,7 +393,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   // leaving from the last visited stop (or the start, if set).
   function anchorFor(list, startOverride) {
     const lastVisited = [...list].reverse().find(s => s.visited_at && stopHasCoords(s));
-    if (lastVisited) return stopLatLng(lastVisited);
+    if (lastVisited) return stopPoint(lastVisited);
     const start = startOverride !== undefined ? startOverride : startRef.current;
     return start || null;
   }
@@ -328,9 +412,9 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
       setNotice(`${stop.property_name || 'That spot'} is already on this route.`);
       return;
     }
-    const pointCount = current.length + (startRef.current ? 1 : 0);
-    if (pointCount >= MAX_ROAD_ROUTE_POINTS) {
-      setNotice(`A route can have at most ${MAX_ROAD_ROUTE_POINTS - (startRef.current ? 1 : 0)} stops${startRef.current ? ' with a starting location' : ''}.`);
+    const hasStart = !!startRef.current;
+    if (current.length + (hasStart ? 1 : 0) >= MAPBOX_MAX_POINTS) {
+      setNotice(`A route can have at most ${MAPBOX_MAX_POINTS - (hasStart ? 1 : 0)} stops${hasStart ? ' with a starting location' : ''}.`);
       return;
     }
     try {
@@ -359,45 +443,40 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, autoOrder, persistStops, resolveStop]);
 
-  // Tapping a business icon or an empty spot selects it (address looked up)
+  // Tapping a business label or an empty spot selects it (address looked up)
   // and opens its card; nothing is added until you say so.
   clickHandlerRef.current = async (e) => {
-    if (!e?.latLng || driving) return;
-    if (Date.now() - dataClickAtRef.current < 100) return; // that tap was on a saved-property circle
-    if (e.placeId && typeof e.stop === 'function') e.stop(); // suppress Google's own info window
+    if (driving) return;
+    const map = mapRef.current;
+    const poi = map.queryRenderedFeatures(e.point).find(f => /poi/i.test(f.layer?.id || '') && f.properties?.name);
+    const lngLat = poi && poi.geometry?.type === 'Point' ? poi.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
     setBusy('Finding address…');
     setError('');
     setNotice('');
     try {
-      let found = null;
-      if (e.placeId) {
-        try { found = await placeFromPlaceId(e.placeId); } catch { found = null; }
-      }
-      if (!found || !found.street) {
-        found = await reverseGeocode({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-      }
-      if (!found || !found.street) {
-        setNotice('No street address found there. Tap a building, a business icon, or a spot on a road.');
+      const found = await reverseGeocode(lngLat[0], lngLat[1], TOKEN);
+      if (!found) {
+        setNotice('No street address found there. Tap a building, a business label, or a spot on a road.');
         return;
       }
       setSelected({
         type: 'spot',
         stop: buildStop({
-          name: found.name, street: found.street, city: found.city, state: found.state,
-          zip: found.zip, lat: found.lat ?? e.latLng.lat(), lng: found.lng ?? e.latLng.lng(),
+          name: poi ? poi.properties.name : found.name,
+          street: found.street, city: found.city, state: found.state, zip: found.zip,
+          lat: poi ? lngLat[1] : found.lat, lng: poi ? lngLat[0] : found.lng,
         }),
       });
     } catch {
-      setNotice('Could not look up an address for that spot. Check that the Geocoding API is enabled for your Google Maps key.');
+      setNotice('Could not look up an address for that spot.');
     } finally {
       setBusy('');
     }
   };
 
   function handleSearchPicked(place) {
-    setSearch('');
     const map = mapRef.current;
-    if (map && place.lat != null) { map.panTo({ lat: place.lat, lng: place.lng }); map.setZoom(16); }
+    if (map) map.easeTo({ center: [place.lng, place.lat], zoom: 16, duration: 500 });
     if (!place.street) {
       setNotice('That result has no street address, so it was not added. Tap the building on the map instead.');
       return;
@@ -408,15 +487,21 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     }), false);
   }
 
-  // Saved properties matching what's typed in the search box, offered
-  // alongside Google's suggestions (same idea as saved campsites in the trip planner).
-  const searchMatches = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return savedProps
-      .filter(p => `${p.property_name} ${p.property_street || ''} ${p.property_city || ''}`.toLowerCase().includes(q))
-      .slice(0, 4);
-  }, [savedProps, search]);
+  // Saved properties matching what's typed, offered ahead of Mapbox's own suggestions.
+  const localMatches = useCallback((q) => savedProps
+    .filter(p => `${p.property_name} ${p.property_street || ''} ${p.property_city || ''}`.toLowerCase().includes(q))
+    .slice(0, 4)
+    .map(p => ({
+      key: `s-${p.id}`,
+      label: `⌂ ${p.property_name}`,
+      sub: `Saved property${p.property_city ? ` · ${p.property_city}` : ''}`,
+      pick: () => {
+        const map = mapRef.current;
+        setSelected({ type: 'saved', id: p.id });
+        if (map) map.easeTo({ center: [Number(p.property_lng), Number(p.property_lat)], zoom: 15, duration: 500 });
+        addStop(buildStop({ property: p }), false);
+      },
+    })), [savedProps, addStop]);
 
   // ── Start location (draft only; a saved route keeps the start it began with) ─
   function chooseStart(label, point) {
@@ -474,12 +559,12 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   function focusStop(index) {
     const s = stops[index];
     const map = mapRef.current;
-    if (map && s && stopHasCoords(s)) { map.panTo(stopLatLng(s)); map.setZoom(Math.max(map.getZoom() || 0, 15)); }
+    if (map && s && stopHasCoords(s)) map.easeTo({ center: stopLngLat(s), zoom: Math.max(map.getZoom(), 15), duration: 500 });
   }
 
   // ── Derived: route points, drawn route, totals ────────────────────────
   const routePoints = useMemo(
-    () => [...(startPoint ? [startPoint] : []), ...stops.filter(stopHasCoords).map(stopLatLng)],
+    () => [...(startPoint ? [startPoint] : []), ...stops.filter(stopHasCoords).map(stopPoint)],
     [startPoint, stops]
   );
   const routeKey = useMemo(() => pointsKey(routePoints), [routePoints]);
@@ -489,60 +574,46 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   // Keep the road route in sync with the ordered stops (debounced; a newer
   // edit supersedes an older request).
   useEffect(() => {
-    if (mapStatus !== 'ready') return undefined;
-    if (!followRoads || routePoints.length < 2 || routePoints.length > MAX_ROAD_ROUTE_POINTS) {
-      routeReqRef.current++;
+    if (!mapReady) return undefined;
+    if (!followRoads || routePoints.length < 2) {
       setRouteBusy(false);
+      setRouteError('');
       return undefined;
     }
     if (roadRouteRef.current && roadRouteRef.current.key === routeKey) {
       setRouteBusy(false);
       return undefined;
     }
-    const id = ++routeReqRef.current;
+    const ctrl = new AbortController();
     setRouteBusy(true);
     const timer = setTimeout(async () => {
-      try {
-        const result = await computeRoadRoute(routePoints);
-        if (id !== routeReqRef.current) return;
-        setRoadFailed(false);
-        setRoadRoute({ key: routeKey, ...result });
-        if (fitAfterRouteRef.current) fitToStops();
-      } catch {
-        if (id !== routeReqRef.current) return;
-        setRoadFailed(true); // Routes API off for this key, quota, offline: keep the straight line
-      } finally {
-        if (id === routeReqRef.current) setRouteBusy(false);
-      }
+      const { route: r, error: err } = await fetchDirections(routePoints, TOKEN, ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      setRouteBusy(false);
+      if (err) { setRouteError(err); return; }
+      setRouteError('');
+      setRoadRoute({ key: routeKey, ...r });
+      if (fitAfterRouteRef.current) fitToStops();
     }, ROUTE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeKey, followRoads, mapStatus]);
+  }, [routeKey, followRoads, mapReady]);
 
-  // Draw the route: straight segments while a road route is pending or
-  // unavailable, white-cased road line once it matches the current stops.
+  // Draw the route: white-cased road line once it matches the current stops,
+  // dashed straight segments while it is pending or unavailable.
   useEffect(() => {
-    if (mapStatus !== 'ready') return undefined;
+    if (!mapReady) return;
     const map = mapRef.current;
-    linesRef.current.forEach(l => l.setMap(null));
-    linesRef.current = [];
-    if (routePoints.length < 2) return undefined;
-    const g = window.google.maps;
-    if (roadInSync && followRoads) {
-      linesRef.current = [
-        new g.Polyline({ map, path: roadRoute.path, strokeColor: '#ffffff', strokeOpacity: 0.9, strokeWeight: 8, zIndex: 1 }),
-        new g.Polyline({ map, path: roadRoute.path, strokeColor: INK, strokeOpacity: 1, strokeWeight: 4, zIndex: 2 }),
-      ];
-    } else {
-      linesRef.current = [
-        new g.Polyline({ map, path: routePoints, strokeColor: INK, strokeOpacity: 0.45, strokeWeight: 3, zIndex: 1 }),
-      ];
-    }
-    return () => {
-      linesRef.current.forEach(l => l.setMap(null));
-      linesRef.current = [];
-    };
-  }, [roadInSync, roadRoute, routePoints, followRoads, mapStatus]);
+    const showRoad = roadInSync && followRoads;
+    map.getSource('route')?.setData(
+      showRoad ? { type: 'Feature', geometry: roadRoute.geometry, properties: {} } : EMPTY
+    );
+    map.getSource('route-straight')?.setData(
+      !showRoad && routePoints.length >= 2
+        ? { type: 'Feature', geometry: { type: 'LineString', coordinates: routePoints.map(p => [p.lng, p.lat]) }, properties: {} }
+        : EMPTY
+    );
+  }, [mapReady, roadInSync, roadRoute, routePoints, followRoads]);
 
   const totals = useMemo(() => {
     if (routePoints.length < 2) return null;
@@ -556,55 +627,51 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
 
   // ── Pins ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (mapStatus !== 'ready') return undefined;
-    const { AdvancedMarkerElement } = window.google.maps.marker;
+    if (!mapReady) return undefined;
+    const mapboxgl = mapboxRef.current;
     const map = mapRef.current;
-    stopMarkersRef.current.forEach(m => { m.map = null; });
+    stopMarkersRef.current.forEach(m => m.remove());
     stopMarkersRef.current = [];
     if (startPoint) {
-      stopMarkersRef.current.push(new AdvancedMarkerElement({
-        map, position: startPoint, content: pinElement('S', 'start'), title: startInput || 'Start', zIndex: 900,
-      }));
+      stopMarkersRef.current.push(
+        new mapboxgl.Marker({ element: pinElement('S', 'start', startInput || 'Start') })
+          .setLngLat([startPoint.lng, startPoint.lat]).addTo(map)
+      );
     }
     stops.forEach((s, i) => {
       if (!stopHasCoords(s)) return;
-      stopMarkersRef.current.push(new AdvancedMarkerElement({
-        map,
-        position: stopLatLng(s),
-        content: pinElement(s.visited_at ? '✓' : String(i + 1), s.visited_at ? 'visited' : 'stop'),
-        title: `${i + 1}. ${s.property_name}`,
-        zIndex: 1000 + i,
-      }));
+      stopMarkersRef.current.push(
+        new mapboxgl.Marker({ element: pinElement(s.visited_at ? '✓' : String(i + 1), s.visited_at ? 'visited' : 'stop', `${i + 1}. ${s.property_name}`) })
+          .setLngLat(stopLngLat(s)).addTo(map)
+      );
     });
     return () => {
-      stopMarkersRef.current.forEach(m => { m.map = null; });
+      stopMarkersRef.current.forEach(m => m.remove());
       stopMarkersRef.current = [];
     };
-  }, [stops, startPoint, startInput, mapStatus]);
+  }, [stops, startPoint, startInput, mapReady]);
 
   // Marker for a tapped building or spot that isn't added yet.
   useEffect(() => {
-    if (mapStatus !== 'ready') return undefined;
-    const { AdvancedMarkerElement, PinElement } = window.google.maps.marker;
-    if (spotMarkerRef.current) { spotMarkerRef.current.map = null; spotMarkerRef.current = null; }
+    if (!mapReady) return undefined;
+    const mapboxgl = mapboxRef.current;
+    if (spotMarkerRef.current) { spotMarkerRef.current.remove(); spotMarkerRef.current = null; }
     if (selected?.type !== 'spot' || !stopHasCoords(selected.stop)) return undefined;
-    const pin = new PinElement({ background: RUST, borderColor: '#ffffff', glyphColor: '#ffffff' });
-    spotMarkerRef.current = new AdvancedMarkerElement({
-      map: mapRef.current, position: stopLatLng(selected.stop), content: pin.element, title: selected.stop.property_name, zIndex: 800,
-    });
+    spotMarkerRef.current = new mapboxgl.Marker({ color: RUST })
+      .setLngLat(stopLngLat(selected.stop)).addTo(mapRef.current);
     return () => {
-      if (spotMarkerRef.current) { spotMarkerRef.current.map = null; spotMarkerRef.current = null; }
+      if (spotMarkerRef.current) { spotMarkerRef.current.remove(); spotMarkerRef.current = null; }
     };
-  }, [selected, mapStatus]);
+  }, [selected, mapReady]);
 
-  // ── Saved properties in the current map view ─────────────────────────
+  // ── Properties in the current map view ───────────────────────────────
   const inView = useMemo(() => {
     if (!bounds) return [];
     const center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
     return savedProps
-      .filter(p => p.property_lat >= bounds.south && p.property_lat <= bounds.north
-        && p.property_lng >= bounds.west && p.property_lng <= bounds.east)
-      .map(p => ({ p, d: haversineMiles(center, { lat: p.property_lat, lng: p.property_lng }) ?? Infinity }))
+      .filter(p => Number(p.property_lat) >= bounds.south && Number(p.property_lat) <= bounds.north
+        && Number(p.property_lng) >= bounds.west && Number(p.property_lng) <= bounds.east)
+      .map(p => ({ p, d: haversineMiles(center, { lat: Number(p.property_lat), lng: Number(p.property_lng) }) ?? Infinity }))
       .sort((a, b) => a.d - b.d)
       .map(x => x.p);
   }, [savedProps, bounds]);
@@ -620,7 +687,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   function pickSaved(p) {
     setSelected({ type: 'saved', id: p.id });
     const map = mapRef.current;
-    if (map) { map.panTo({ lat: p.property_lat, lng: p.property_lng }); map.setZoom(Math.max(map.getZoom() || 0, 13)); }
+    if (map) map.easeTo({ center: [Number(p.property_lng), Number(p.property_lat)], zoom: Math.max(map.getZoom(), 13), duration: 500 });
   }
 
   function addDetail() {
@@ -635,7 +702,47 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
 
   function useDetailAsStart() {
     if (!detailStop || !stopHasCoords(detailStop)) return;
-    chooseStart(detailStop.property_name, stopLatLng(detailStop));
+    chooseStart(detailStop.property_name, stopPoint(detailStop));
+  }
+
+  // ── One-time backfill: give address-only properties a map location ────
+  async function locateMissing() {
+    setConfirmLocate(false);
+    setError('');
+    setNotice('');
+    const list = unlocated.slice();
+    let idx = 0;
+    let done = 0;
+    let located = 0;
+    let stopAll = false;
+    setLocating({ done: 0, total: list.length });
+    async function worker() {
+      while (!stopAll) {
+        const i = idx++;
+        if (i >= list.length) return;
+        const p = list[i];
+        try {
+          const c = await geocodeAddressPermanent(p, TOKEN);
+          if (c) {
+            const { error: upErr } = await supabase.from('properties')
+              .update({ property_lat: c.lat, property_lng: c.lng }).eq('id', p.id);
+            if (upErr) throw upErr;
+            located += 1;
+            setAllProps(prev => prev.map(x => (x.id === p.id ? { ...x, property_lat: c.lat, property_lng: c.lng } : x)));
+          }
+        } catch (err) {
+          if (err.status === 401 || err.status === 403) {
+            stopAll = true;
+            setError('Mapbox refused the permanent geocoding request. Permanent geocoding has to be enabled on your Mapbox account before addresses can be saved as map locations.');
+          }
+        }
+        done += 1;
+        setLocating({ done, total: list.length });
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    setLocating(null);
+    if (!stopAll) setNotice(`Located ${located} of ${list.length} properties. ${list.length - located > 0 ? `${list.length - located} had no address match and stay off the map.` : ''}`.trim());
   }
 
   // ── Route actions ────────────────────────────────────────────────────
@@ -687,7 +794,10 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     const stop = stops[index];
     if (!stop) return;
     const nowIso = new Date().toISOString();
-    if (stop.property_id) await supabase.from('properties').update({ last_visited_at: nowIso }).eq('id', stop.property_id);
+    if (stop.property_id) {
+      await supabase.from('properties').update({ last_visited_at: nowIso }).eq('id', stop.property_id);
+      setAllProps(prev => prev.map(p => (p.id === stop.property_id ? { ...p, last_visited_at: nowIso } : p)));
+    }
     await persistStops(stops.map((s, i) => (i === index ? { ...s, visited_at: nowIso } : s)));
   }
 
@@ -703,7 +813,11 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     setMarking(true);
     const nowIso = new Date().toISOString();
     const ids = stops.map(s => s.property_id).filter(Boolean);
-    if (ids.length) await supabase.from('properties').update({ last_visited_at: nowIso }).in('id', ids);
+    if (ids.length) {
+      await supabase.from('properties').update({ last_visited_at: nowIso }).in('id', ids);
+      const idSet = new Set(ids);
+      setAllProps(prev => prev.map(p => (idSet.has(p.id) ? { ...p, last_visited_at: nowIso } : p)));
+    }
     await persistStops(stops.map(s => ({ ...s, visited_at: s.visited_at || nowIso })));
     setMarking(false);
   }
@@ -766,15 +880,18 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     <>
       <style>{`
         .mrb-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
-        .mrb-panel { display: flex; flex-direction: column; gap: 10px; max-height: 760px; overflow-y: auto; }
-        .mrb-map { position: relative; height: 560px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: #e8e4da; }
+        .mrb-panel { display: flex; flex-direction: column; gap: 10px; }
+        .mrb-stops { max-height: 380px; overflow-y: auto; }
+        .mrb-map { position: relative; height: 580px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: #e8e4da; }
         .mrb-inview { max-height: 260px; overflow-y: auto; }
         .mrb-stop.over { box-shadow: 0 -3px 0 #16a34a inset; }
+        .mrb-popup .mapboxgl-popup-content { padding: 7px 10px; border-radius: 7px; font-family: system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
         @media (max-width: 900px) {
           .mrb-grid { grid-template-columns: 1fr; }
           .mrb-mapcol { order: 1; }
-          .mrb-panel { order: 2; max-height: none; }
-          .mrb-map { height: 400px; }
+          .mrb-panel { order: 2; }
+          .mrb-map { height: 420px; }
+          .mrb-stops { max-height: none; }
         }
       `}</style>
 
@@ -784,45 +901,67 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         </div>
       )}
 
+      {TOKEN && propsLoaded && unlocated.length > 0 && !locating && (
+        <div style={{ fontSize: 12.5, background: 'rgba(161,124,63,0.12)', border: '1px solid rgba(161,124,63,0.35)', borderRadius: 8, padding: '9px 12px', marginBottom: 12 }}>
+          {confirmLocate ? (
+            <>
+              <div style={{ marginBottom: 8 }}>
+                This looks up each address with Mapbox permanent geocoding and saves the coordinates onto the property, one lookup per property.
+                Mapbox bills those lookups and the feature has to be enabled on your account. Locate {unlocated.length} {unlocated.length === 1 ? 'property' : 'properties'}?
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={locateMissing}>Yes, locate them</button>
+                <button type="button" className="btn btn-sm" onClick={() => setConfirmLocate(false)}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <span>
+                {unlocated.length} of {allProps.length} properties have an address but no map location yet, so they are not on the map.
+              </span>
+              <button type="button" className="btn btn-sm" onClick={() => setConfirmLocate(true)}>Locate them</button>
+            </div>
+          )}
+        </div>
+      )}
+      {locating && (
+        <div style={{ fontSize: 12.5, marginBottom: 12 }}>
+          Locating properties… {locating.done} of {locating.total}
+        </div>
+      )}
+
       <div className="mrb-grid">
         <div className="mrb-panel">
           {!isActive ? (
             <div>
               <label>Starting location (optional)</label>
-              <PlacesAutocompleteInput
-                value={startInput}
-                onChange={v => { setStartInput(v); if (!v) setStartPoint(null); }}
-                onPlaceSelected={p => { if (p.lat != null) chooseStart(p.name || p.street || 'Start', { lat: p.lat, lng: p.lng }); }}
+              <MapboxPlaceSearch
+                token={TOKEN}
                 placeholder="Where does the route start?"
+                proximity={null}
+                types="poi,address,place"
+                defaultText={startInput}
+                onPickPlace={p => chooseStart(p.name || p.street || 'Start', { lat: p.lat, lng: p.lng })}
+                onClear={clearStart}
               />
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                 <button type="button" className="btn btn-sm" onClick={useMyLocation}>Use my location</button>
-                {startPoint && <button type="button" className="btn btn-sm" onClick={clearStart}>Clear start</button>}
+                {startPoint && <button type="button" className="btn btn-sm" onClick={() => { clearStart(); }}>Clear start</button>}
               </div>
             </div>
           ) : null}
 
           <div>
             <label>Add a stop</label>
-            <PlacesAutocompleteInput
-              value={search}
-              onChange={setSearch}
-              onPlaceSelected={handleSearchPicked}
-              placeholder="Search a business or address"
+            <MapboxPlaceSearch
+              token={TOKEN}
+              placeholder="Search a saved property, business or address"
+              proximity={startPoint}
+              types="poi,address"
+              clearOnPick
+              localMatches={localMatches}
+              onPickPlace={handleSearchPicked}
             />
-            {searchMatches.length > 0 && (
-              <div style={{ marginTop: 6, border: '1px solid var(--line)', borderRadius: 6 }}>
-                {searchMatches.map(p => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderTop: '1px solid var(--line)' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⌂ {p.property_name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Saved property{p.property_city ? ` · ${p.property_city}` : ''}</div>
-                    </div>
-                    <button type="button" className="btn btn-sm" onClick={() => { setSearch(''); pickSaved(p); addStop(buildStop({ property: p }), false); }}>＋ Add</button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -840,7 +979,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             </div>
           )}
 
-          <div>
+          <div className="mrb-stops">
             {startPoint && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
                 <span style={{ ...badgeStyle, background: '#16a34a' }}>S</span>
@@ -900,7 +1039,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             })}
             {stops.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '6px 0' }}>
-                No stops yet. Tap a saved property or a building on the map, then add it. You can also search above.
+                No stops yet. Tap a property on the map, then add it. You can also search above.
               </div>
             )}
           </div>
@@ -910,31 +1049,42 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             </div>
           )}
           <div style={{ fontSize: 13, minHeight: 20 }}>{summary}</div>
-          {roadFailed && followRoads && (
-            <div style={{ fontSize: 11, color: '#a17c3f' }}>
-              Road routing is unavailable right now (check that the Routes API is enabled for your Google Maps key), so the line shows straight segments.
-            </div>
+          {routeError && followRoads && (
+            <div style={{ fontSize: 11, color: '#a17c3f' }}>{routeError} The line shows straight segments until it clears.</div>
           )}
         </div>
 
         <div className="mrb-mapcol">
           <div className="mrb-map">
-            {mapStatus === 'nokey' ? (
+            {!TOKEN ? (
               <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
-                The map needs a Google Maps API key. Add one under Settings → Integrations, then reload this page. The Typed List mode above still works without it.
+                The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
+                The Typed List mode above still works without it.
               </div>
             ) : (
               <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />
             )}
-            {mapStatus === 'loading' && (
+            {TOKEN && !mapReady && (
               <div style={overlayPillStyle({ top: 10, left: 10 })}>Loading map…</div>
             )}
             {busy && (
               <div style={overlayPillStyle({ top: 10, left: '50%', transform: 'translateX(-50%)' })}>{busy}</div>
             )}
+            {TOKEN && mapReady && (
+              <div style={{ ...overlayPillStyle({ bottom: 10, left: 10 }), padding: '8px 10px', pointerEvents: 'none', lineHeight: 1.5 }}>
+                {VISIT_BUCKETS.map(b => (
+                  <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.25)', flexShrink: 0 }} />
+                    <span>{b.label}</span>
+                    <span style={{ color: 'var(--ink-soft)', marginLeft: 'auto', paddingLeft: 8 }}>{bucketCounts[b.key]}</span>
+                  </div>
+                ))}
+                {!propsLoaded && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Loading properties…</div>}
+              </div>
+            )}
           </div>
 
-          {mapStatus === 'ready' && (
+          {TOKEN && mapReady && (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
               <label style={toggleStyle}>
                 <input type="checkbox" style={{ width: 'auto' }} checked={followRoads} onChange={e => setFollowRoads(e.target.checked)} />
@@ -942,7 +1092,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
               </label>
               <label style={toggleStyle}>
                 <input type="checkbox" style={{ width: 'auto' }} checked={showSaved} onChange={e => setShowSaved(e.target.checked)} />
-                Show saved properties
+                Show properties
               </label>
               <button type="button" className="btn btn-sm" onClick={fitToStops} disabled={routePoints.length === 0}>Fit route</button>
             </div>
@@ -989,21 +1139,22 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
 
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>Saved properties in view</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>Properties in view</div>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {savedProps.length}</div>
             </div>
-            {savedProps.length === 0 && (
+            {propsLoaded && savedProps.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>
-                No saved properties with map coordinates yet. Properties you add from an address search get them automatically.
+                No properties have a map location yet.
               </div>
             )}
             {savedProps.length > 0 && inView.length === 0 && (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>No saved properties in this part of the map. Pan or zoom out.</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>No properties in this part of the map. Pan or zoom out.</div>
             )}
             <div className="mrb-inview">
               {inView.slice(0, IN_VIEW_LIMIT).map(p => {
                 const idx = stopIndexForProperty(p);
                 const isSel = selected?.type === 'saved' && selected.id === p.id;
+                const bucket = VISIT_BUCKETS[visitBucket(p.last_visited_at)];
                 return (
                   <div
                     key={p.id}
@@ -1012,6 +1163,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                       background: isSel ? 'rgba(155,119,61,0.10)' : 'transparent',
                     }}
                   >
+                    <span title={bucket.label} style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
                     <button
                       type="button"
                       onClick={() => pickSaved(p)}
@@ -1019,7 +1171,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                     >
                       <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.property_name}</div>
                       <div style={{ fontSize: 11, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {[p.property_type, p.property_city].filter(Boolean).join(' · ')}
+                        {[p.management_company, p.property_city].filter(Boolean).join(' · ')}
                       </div>
                     </button>
                     {idx >= 0
@@ -1096,7 +1248,7 @@ const dragHandleStyle = {
 };
 function overlayPillStyle(pos) {
   return {
-    position: 'absolute', ...pos, fontSize: 12, background: 'var(--card-bg, #fff)',
+    position: 'absolute', zIndex: 2, ...pos, fontSize: 12, background: 'var(--card-bg, #fff)',
     padding: '4px 12px', borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
   };
 }
