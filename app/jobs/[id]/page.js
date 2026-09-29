@@ -499,13 +499,6 @@ export default function JobDetailPage() {
             )}
             <div>
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              {/* Sits right beside the stage badge as a small button instead
-                  of a big primary button taking over the header row. */}
-              {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
-                <button className="btn btn-sm btn-primary" style={{ marginLeft: 8, verticalAlign: 'middle' }} onClick={advanceStage}>
-                  Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
-                </button>
-              )}
               {flash && <span className="saved-flash">{flash}</span>}
             </div>
             {job.stage === 'lost' && job.loss_reason && (
@@ -520,15 +513,23 @@ export default function JobDetailPage() {
             {!isMobile && (
               <>
                 <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Inbox" aria-label="Inbox">
-                  <MessagesIcon width={16} height={16} />
+                  <MessagesIcon width={24} height={24} />
                 </button>
                 {(role === 'owner' || role === 'estimator') && (
                   <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
                 )}
                 <button className="btn btn-sm" onClick={() => goToTab('Project Updates')} title="Project Updates" aria-label="Project Updates">
-                  <PersonToPersonIcon width={16} height={16} />
+                  <PersonToPersonIcon width={24} height={24} />
                 </button>
               </>
+            )}
+            {/* Stage Advance dropped on mobile — it's an easy accidental
+                tap on a small screen next to Close Lost/Reopen, and the
+                job's stage badge is already visible right above. */}
+            {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
+              <button className="btn btn-primary" onClick={advanceStage}>
+                Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
+              </button>
             )}
             {/* Stage Advance dropped on mobile — it's an easy accidental
                 tap on a small screen next to Close Lost/Reopen, and the

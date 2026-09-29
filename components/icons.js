@@ -302,17 +302,18 @@ export function ProjectFeedIcon(props) {
   );
 }
 
-// Project Updates: one person passing an update on to another — a person on
-// the left, an arched arrow over the top, a second person on the right.
+// Project Updates: a person on the left handing an update to a person on the
+// right, with a bold arched arrow between them. Drawn heavier than the other
+// icons so it still reads at button size.
 export function PersonToPersonIcon(props) {
   return (
-    <svg {...common} {...props}>
-      <circle cx="5.5" cy="11" r="1.9" />
-      <path d="M2.4 17c0-2.2 1.4-3.6 3.1-3.6s3.1 1.4 3.1 3.6" />
-      <circle cx="14.5" cy="11" r="1.9" />
-      <path d="M11.4 17c0-2.2 1.4-3.6 3.1-3.6s3.1 1.4 3.1 3.6" />
-      <path d="M5.5 7.6C6.2 3.6 12.8 3.6 14 7" />
-      <path d="M11.8 6.2L14 7.2l.9-2.3" />
+    <svg {...common} strokeWidth="1.8" {...props}>
+      <circle cx="4.6" cy="10.6" r="2.2" />
+      <path d="M1.3 17.6c0-2.5 1.5-4.1 3.3-4.1s3.3 1.6 3.3 4.1" />
+      <circle cx="15.4" cy="10.6" r="2.2" />
+      <path d="M12.1 17.6c0-2.5 1.5-4.1 3.3-4.1s3.3 1.6 3.3 4.1" />
+      <path d="M5 6.6C6 1.6 14 1.6 15 6.2" />
+      <path d="M12.4 5.8l2.7.7.9-2.6" />
     </svg>
   );
 }
