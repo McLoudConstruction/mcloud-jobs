@@ -11,6 +11,8 @@ import { supabase } from '../lib/supabaseClient';
 //   • customer portal chat is one conversation per job;
 //   • subcontractor messages are one conversation per company (or per RFP when
 //     the message was about a specific request).
+// Mail that isn't tied to a job (sub applications, sign-in links) files into the
+// overall Inbox (no jobId) under "System".
 // Each row shows who it's with, the topic ("Estimate Sent"), and when the last
 // message went or came in. Pass jobId to limit it to one project.
 
@@ -75,7 +77,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
   scopedJobRef.current = scopedJob;
 
   const load = useCallback(async () => {
-    let eq = supabase.from('email_messages').select('*').not('job_id', 'is', null).order('received_at', { ascending: false }).limit(1000);
+    let eq = supabase.from('email_messages').select('*').order('received_at', { ascending: false }).limit(1000);
     let pq = supabase.from('job_questions').select('*').order('created_at', { ascending: false }).limit(1000);
     let sq = supabase.from('sub_messages').select('*, rfp_recipients(rfps(title, job_id))').order('created_at', { ascending: false }).limit(1000);
     if (jobId) { eq = eq.eq('job_id', jobId); pq = pq.eq('job_id', jobId); }
@@ -86,7 +88,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
     // A sub message belongs to a job directly, or through the RFP it was about.
     const subRows = (s.data || [])
       .map(m => ({ ...m, _job: m.job_id || m.rfp_recipients?.rfps?.job_id || null }))
-      .filter(m => m._job && (!jobId || m._job === jobId));
+      .filter(m => (jobId ? m._job === jobId : true));
     setEmails(e.data || []);
     setPortal(p.data || []);
     setSubs(subRows);
@@ -115,7 +117,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
   const conversations = useMemo(() => {
     const convs = [];
     const nameFor = (jid, address) => {
-      const j = jobsById[jid] || {};
+      const j = (jid && jobsById[jid]) || {};
       if ([j.customer_email, j.billing_email].some(x => (x || '').toLowerCase() === address) && j.customer_name) return j.customer_name;
       const co = companies.find(x => (x.contact_email || '').toLowerCase() === address);
       return co?.company_name || address;
@@ -130,7 +132,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
       const out = m.direction === 'outbound';
       const address = addressOf(out ? m.to_email : m.from_email);
       if (!address) continue;
-      const tkey = `${m.thread_key || m.job_id}|${address}`;
+      const tkey = `${m.thread_key || m.job_id || 'system'}|${address}`;
       const isReply = !out || /^\s*(re|fwd?|fw)\s*:/i.test(m.subject || '');
       let conv = isReply ? latestByThread.get(tkey) : null;
       if (!conv) {
@@ -265,7 +267,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
                 <span className="em-item-name">{c.name}</span>
                 <span className="em-item-time">{listTime(c.last.at)}</span>
               </span>
-              <span className="em-item-topic">{!jobId && c.project ? `#${c.project} · ` : ''}{c.topic}</span>
+              <span className="em-item-topic">{!jobId ? (c.project ? `#${c.project} · ` : 'System · ') : ''}{c.topic}</span>
             </span>
           </button>
         ))}
@@ -282,7 +284,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
                 <div className="em-head-name">{selected.name}</div>
                 <div className="em-head-sub">{selected.topic}</div>
               </div>
-              {!jobId && <Link href={`/jobs/${selected.jobId}`} className="em-job-link">Job</Link>}
+              {!jobId && selected.jobId && <Link href={`/jobs/${selected.jobId}`} className="em-job-link">Job</Link>}
             </header>
 
             <div className="em-scroll" ref={scrollRef}>

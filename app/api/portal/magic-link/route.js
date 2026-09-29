@@ -64,7 +64,7 @@ export async function POST(request) {
     const { subject, html, text } = buildPortalInviteEmail({ actionLink: linkData.properties.action_link, portalLabel: config.portalLabel });
 
     try {
-      const { provider } = await sendMail({ to: email, subject, html, text });
+      const { provider } = await sendMail({ to: email, subject, html, text, sensitive: true, category: 'portal_magic_link' });
       await logCommunication({ category: 'portal_magic_link', toEmail: email, subject, status: 'sent', provider });
     } catch (sendErr) {
       await logCommunication({ category: 'portal_magic_link', toEmail: email, subject, status: 'failed', errorMessage: sendErr.message, provider: 'unknown' });

@@ -148,7 +148,7 @@ export async function POST(request) {
     if (contactEmail) {
       try {
         const { subject, html, text } = buildSubApplicationReceivedEmail({ companyName });
-        const { provider } = await sendMail({ to: contactEmail, subject, html, text });
+        const { provider } = await sendMail({ to: contactEmail, subject, html, text, category: 'sub_application_received' });
         await logCommunication({ category: 'sub_application_received', toEmail: contactEmail, subject, status: 'sent', provider });
       } catch (mailErr) {
         await logCommunication({ category: 'sub_application_received', toEmail: contactEmail, status: 'failed', errorMessage: mailErr.message });

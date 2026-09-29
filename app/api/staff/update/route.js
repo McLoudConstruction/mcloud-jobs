@@ -97,7 +97,7 @@ export async function POST(request) {
         roleLabel: ROLE_LABELS[targetRow.role],
         actionLink: linkData.properties.action_link,
       });
-      await sendMail({ to: targetRow.email, subject, html, text });
+      await sendMail({ to: targetRow.email, subject, html, text, sensitive: true, category: 'staff_invite' });
     } else {
       return Response.json({ error: 'Not a valid action.' }, { status: 400 });
     }
