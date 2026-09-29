@@ -940,17 +940,21 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const body = (
     <>
       <style>{`
-        .mrb-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+        .mrb-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
+        .mrb-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .mrb-row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+        .mrb-types { flex-wrap: wrap; height: auto; }
         .mrb-panel { display: flex; flex-direction: column; gap: 10px; }
         .mrb-stops { max-height: 380px; overflow-y: auto; }
         .mrb-map { position: relative; height: 580px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: #e8e4da; }
-        .mrb-inview { max-height: 260px; overflow-y: auto; }
+        .mrb-inview { max-height: 440px; overflow-y: auto; }
         .mrb-stop.over { box-shadow: 0 -3px 0 #16a34a inset; }
         .mrb-popup .mapboxgl-popup-content { padding: 7px 10px; border-radius: 7px; font-family: system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
         @media (max-width: 900px) {
           .mrb-grid { grid-template-columns: 1fr; }
+          .mrb-row2 { grid-template-columns: 1fr; }
           .mrb-mapcol { order: 1; }
-          .mrb-panel { order: 2; }
+          .mrb-side { order: 2; }
           .mrb-map { height: 420px; }
           .mrb-stops { max-height: none; }
         }
@@ -994,8 +998,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         </div>
       )}
 
-      <div className="mrb-grid">
-        <div className="mrb-panel">
+      <div className="mrb-panel mrb-top">
+          <div className="mrb-row2">
           {!isActive ? (
             <div>
               <label>Starting location (optional)</label>
@@ -1031,6 +1035,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
               onPickPlace={handleSearchPicked}
               onPickText={addTypedStop}
             />
+          </div>
+
           </div>
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -1121,89 +1127,12 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           {routeError && followRoads && (
             <div style={{ fontSize: 11, color: '#a17c3f' }}>{routeError} The line shows straight segments until it clears.</div>
           )}
-        </div>
+      </div>
 
-        <div className="mrb-mapcol">
-          <div className="mrb-map">
-            {!TOKEN ? (
-              <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
-                The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
-                You can still type places into the box on the left without it.
-              </div>
-            ) : (
-              <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />
-            )}
-            {TOKEN && !mapReady && (
-              <div style={overlayPillStyle({ top: 10, left: 10 })}>Loading map…</div>
-            )}
-            {busy && (
-              <div style={overlayPillStyle({ top: 10, left: '50%', transform: 'translateX(-50%)' })}>{busy}</div>
-            )}
-            {TOKEN && mapReady && (
-              <div style={{ ...overlayPillStyle({ bottom: 10, left: 10 }), padding: '8px 10px', pointerEvents: 'none', lineHeight: 1.5 }}>
-                {VISIT_BUCKETS.map(b => (
-                  <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.25)', flexShrink: 0 }} />
-                    <span>{b.label}</span>
-                    <span style={{ color: 'var(--ink-soft)', marginLeft: 'auto', paddingLeft: 8 }}>{bucketCounts[b.key]}</span>
-                  </div>
-                ))}
-                {!propsLoaded && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Loading properties…</div>}
-              </div>
-            )}
-          </div>
-
-          {TOKEN && mapReady && (
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-              <label style={toggleStyle}>
-                <input type="checkbox" style={{ width: 'auto' }} checked={followRoads} onChange={e => setFollowRoads(e.target.checked)} />
-                Follow roads
-              </label>
-              <label style={toggleStyle}>
-                <input type="checkbox" style={{ width: 'auto' }} checked={showSaved} onChange={e => setShowSaved(e.target.checked)} />
-                Show properties
-              </label>
-              <button type="button" className="btn btn-sm" onClick={fitToStops} disabled={routePoints.length === 0}>Fit route</button>
-            </div>
-          )}
-
-          {TOKEN && mapReady && typeOptions.length > 1 && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 5 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', color: 'var(--ink-soft)' }}>PROPERTY TYPE</span>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                  {typeFilter.length ? `Showing ${shownProps.length} of ${savedProps.length}` : 'Showing all'}
-                </span>
-                {typeFilter.length > 0 && (
-                  <button type="button" className="btn btn-sm" style={{ padding: '1px 8px', fontSize: 11 }} onClick={() => setTypeFilter([])}>Show all</button>
-                )}
-              </div>
-              <div style={{ display: 'inline-flex', flexWrap: 'wrap', border: '1px solid var(--line, #888)', borderRadius: 6, overflow: 'hidden' }}>
-                {typeOptions.map(o => {
-                  const on = typeFilter.includes(o.type);
-                  return (
-                    <button
-                      key={o.type || 'none'}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => toggleType(o.type)}
-                      style={{
-                        padding: '5px 10px', fontSize: 12, cursor: 'pointer', border: 'none',
-                        borderRight: '1px solid var(--line, #888)', borderBottom: '1px solid var(--line, #888)',
-                        background: on ? 'var(--ink, #171714)' : 'transparent',
-                        color: on ? '#fff' : 'inherit', fontWeight: on ? 700 : 500,
-                      }}
-                    >
-                      {o.label} <span style={{ opacity: 0.7 }}>{o.count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
+      <div className="mrb-grid">
+        <div className="mrb-side">
           {detailStop && (
-            <div style={{ border: '1px solid var(--ink, #171714)', borderRadius: 10, padding: 14, marginTop: 12 }}>
+            <div style={{ border: '1px solid var(--ink, #171714)', borderRadius: 10, padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 10, letterSpacing: '.14em', fontWeight: 700, color: 'var(--ink-soft)' }}>
@@ -1241,7 +1170,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             </div>
           )}
 
-          <div style={{ marginTop: 14 }}>
+          <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>Properties in view</div>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
@@ -1291,6 +1220,74 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mrb-mapcol">
+          {TOKEN && mapReady && typeOptions.length > 1 && (
+            <div className="tab-sections-pills mrb-types" style={{ marginBottom: 10 }}>
+              <button type="button" className={`tab-section-btn ${typeFilter.length === 0 ? 'active' : ''}`} onClick={() => setTypeFilter([])}>
+                All {savedProps.length}
+              </button>
+              {typeOptions.map(o => {
+                const on = typeFilter.includes(o.type);
+                return (
+                  <button
+                    key={o.type || 'none'}
+                    type="button"
+                    aria-pressed={on}
+                    className={`tab-section-btn ${on ? 'active' : ''}`}
+                    onClick={() => toggleType(o.type)}
+                  >
+                    {o.label} {o.count}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="mrb-map">
+            {!TOKEN ? (
+              <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
+                The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
+                You can still type places into the box on the left without it.
+              </div>
+            ) : (
+              <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />
+            )}
+            {TOKEN && !mapReady && (
+              <div style={overlayPillStyle({ top: 10, left: 10 })}>Loading map…</div>
+            )}
+            {busy && (
+              <div style={overlayPillStyle({ top: 10, left: '50%', transform: 'translateX(-50%)' })}>{busy}</div>
+            )}
+            {TOKEN && mapReady && (
+              <div style={{ ...overlayPillStyle({ bottom: 10, left: 10 }), padding: '8px 10px', pointerEvents: 'none', lineHeight: 1.5 }}>
+                {VISIT_BUCKETS.map(b => (
+                  <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.25)', flexShrink: 0 }} />
+                    <span>{b.label}</span>
+                    <span style={{ color: 'var(--ink-soft)', marginLeft: 'auto', paddingLeft: 8 }}>{bucketCounts[b.key]}</span>
+                  </div>
+                ))}
+                {!propsLoaded && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Loading properties…</div>}
+              </div>
+            )}
+          </div>
+
+          {TOKEN && mapReady && (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+              <label style={toggleStyle}>
+                <input type="checkbox" style={{ width: 'auto' }} checked={followRoads} onChange={e => setFollowRoads(e.target.checked)} />
+                Follow roads
+              </label>
+              <label style={toggleStyle}>
+                <input type="checkbox" style={{ width: 'auto' }} checked={showSaved} onChange={e => setShowSaved(e.target.checked)} />
+                Show properties
+              </label>
+              <button type="button" className="btn btn-sm" onClick={fitToStops} disabled={routePoints.length === 0}>Fit route</button>
+            </div>
+          )}
+
         </div>
       </div>
 
