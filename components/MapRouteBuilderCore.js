@@ -55,6 +55,12 @@ function sameStop(a, b) {
     const d = haversineMiles(stopPoint(a), stopPoint(b));
     if (d != null && d < DUPLICATE_RADIUS_MILES) return true;
   }
+  // Two hand-typed stops with no address to compare: same name is the same stop.
+  if (!sa && !sb && !stopHasCoords(a) && !stopHasCoords(b)) {
+    const na = (a.property_name || '').trim().toLowerCase();
+    const nb = (b.property_name || '').trim().toLowerCase();
+    if (na && na === nb) return true;
+  }
   return false;
 }
 
@@ -474,6 +480,24 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     }
   };
 
+  // A place typed in by hand. If it matches a property already in the database
+  // by name, use that property (and its address); otherwise it goes on the route
+  // by name alone. Name-only stops can't be drawn or ordered by distance, so they
+  // sit at the end of the list until they resolve to a real property.
+  function addTypedStop(text) {
+    const wanted = text.trim().toLowerCase();
+    const match = allProps.find(p => (p.property_name || '').trim().toLowerCase() === wanted);
+    if (match) {
+      if (hasCoords(match) && mapRef.current) {
+        mapRef.current.easeTo({ center: [Number(match.property_lng), Number(match.property_lat)], zoom: 15, duration: 500 });
+      }
+      addStop(buildStop({ property: match }), false);
+      return;
+    }
+    addStop(buildStop({ name: text.trim() }), false);
+    setNotice(`Added ${text.trim()} by name. It has no map location, so it is not drawn on the map or ordered by distance.`);
+  }
+
   function handleSearchPicked(place) {
     const map = mapRef.current;
     if (map) map.easeTo({ center: [place.lng, place.lat], zoom: 16, duration: 500 });
@@ -756,7 +780,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   }
 
   async function saveAndStart() {
-    if (stops.length === 0) { setError('Add at least one stop from the map or the search box.'); return; }
+    if (stops.length === 0) { setError('Add at least one stop from the map or type one in.'); return; }
     setSaving(true);
     setError('');
     setNotice('');
@@ -872,7 +896,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     <span style={{ color: 'var(--ink-soft)' }}>Updating route…</span>
   ) : (
     <span style={{ color: 'var(--ink-soft)' }}>
-      {stops.length === 0 ? 'Add a stop from the map or the search box.' : 'Add a start or a second stop to build the route.'}
+      {stops.length === 0 ? 'Add a stop from the map or type one in.' : 'Add a start or a second stop to build the route.'}
     </span>
   );
 
@@ -955,12 +979,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             <label>Add a stop</label>
             <MapboxPlaceSearch
               token={TOKEN}
-              placeholder="Search a saved property, business or address"
+              placeholder="Type a property name or address, or tap the map"
               proximity={startPoint}
               types="poi,address"
               clearOnPick
+              allowFreeText
               localMatches={localMatches}
               onPickPlace={handleSearchPicked}
+              onPickText={addTypedStop}
             />
           </div>
 
@@ -1020,7 +1046,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, textDecoration: s.visited_at ? 'line-through' : 'none', opacity: s.visited_at ? 0.6 : 1 }}>{s.property_name}</div>
                     <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                      {formatStopAddress(s) || 'No address on file'}
+                      {formatStopAddress(s) || 'No address, not shown on the map'}
                       {leg && leg.meters != null ? ` · ${formatMiles(metersToMiles(leg.meters))} mi, ${formatDuration(leg.seconds)} from previous` : ''}
                     </div>
                   </div>
@@ -1039,7 +1065,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             })}
             {stops.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '6px 0' }}>
-                No stops yet. Tap a property on the map, then add it. You can also search above.
+                No stops yet. Tap a property on the map, then add it, or type a place above.
               </div>
             )}
           </div>
@@ -1059,7 +1085,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             {!TOKEN ? (
               <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
                 The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
-                The Typed List mode above still works without it.
+                You can still type places into the box on the left without it.
               </div>
             ) : (
               <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />

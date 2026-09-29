@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import ManualRouteBuilderCore from './ManualRouteBuilderCore';
+import MapRouteBuilderCore from './MapRouteBuilderCore';
 import RouteBuilderCore from './RouteBuilderCore';
 
 const MODES = [
@@ -8,11 +8,12 @@ const MODES = [
   { key: 'ai', label: 'AI-Powered' },
 ];
 
-// One "Create Sales Route" card with a mode toggle, instead of the
-// manual and AI-assisted builders sitting as two separate stacked
-// cards. Both underlying components are unchanged — this just supplies
-// a single shared card frame (via each core's `hideChrome` prop) and a
-// bordered segmented control to switch between them.
+// One "Create Sales Route" card with a mode toggle. Manual is the map
+// builder: pick properties on the map and/or type places in by hand, with
+// the route drawn as you go. AI-Powered builds a route from area and
+// property-type filters. Each core supplies its own content; this just
+// provides the shared card frame (via each core's `hideChrome` prop) and the
+// segmented control to switch between them.
 export default function CombinedRouteBuilderCard({ onRouteChanged }) {
   const [mode, setMode] = useState('manual');
 
@@ -35,7 +36,7 @@ export default function CombinedRouteBuilderCard({ onRouteChanged }) {
       </div>
 
       {mode === 'manual'
-        ? <ManualRouteBuilderCore hideChrome onRouteChanged={onRouteChanged} />
+        ? <MapRouteBuilderCore hideChrome onRouteChanged={onRouteChanged} />
         : <RouteBuilderCore hideChrome />}
     </div>
   );
