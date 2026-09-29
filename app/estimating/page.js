@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
+import Link from 'next/link';
 import { STAGE_LABELS } from '../../lib/constants';
 
 const NEEDS_PRICING_STAGES = ['new', 'inspected', 'proposal_delivered'];
@@ -13,6 +14,7 @@ export default function EstimatingWorklistPage() {
   const [jobs, setJobs] = useState([]);
   const [search, setSearch] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [winRate, setWinRate] = useState(null);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -23,7 +25,7 @@ export default function EstimatingWorklistPage() {
 
   useEffect(() => {
     if (!session) return;
-    supabase.from('jobs').select('id, project_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('jobs').select('id, estimate_number, customer_name, project_address, stage, job_financials(contract_price)').order('created_at', { ascending: false }).then(({ data }) => {
       // Supabase's embedded-resource syntax returns job_financials as a
       // nested object here (job_financials is the parent side of a 1:1
       // via the job_id primary key) — flatten it back onto each job so
@@ -31,6 +33,11 @@ export default function EstimatingWorklistPage() {
       data = data?.map(j => ({ ...j, contract_price: j.job_financials?.contract_price, job_financials: undefined }));
       if (data) setJobs(data);
     });
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    supabase.rpc('estimate_win_rate').then(({ data }) => setWinRate(data || null));
   }, [session]);
 
   if (loading || !session) return null;
@@ -43,15 +50,19 @@ export default function EstimatingWorklistPage() {
   const filtered = needsPricing.filter(j => {
     if (!search.trim()) return true;
     const term = search.toLowerCase();
-    return (j.project_number || '').toLowerCase().includes(term) || (j.customer_name || '').toLowerCase().includes(term);
+    return (j.estimate_number || '').toLowerCase().includes(term) || (j.customer_name || '').toLowerCase().includes(term);
   });
 
   return (
     <AppShell>
       <div className="container">
-        <h2 style={{ margin: '0 0 8px', color: 'var(--heading)' }}>Estimating</h2>
-        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 16 }}>
+        <div className="top-actions">
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Estimating</h2>
+          <Link href="/estimating/assemblies" className="btn btn-sm">Assemblies</Link>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '8px 0 16px' }}>
           Jobs that don't have a contract price set yet ({needsPricing.length}).
+          {winRate?.win_rate_pct != null && ` Win rate on priced estimates: ${winRate.win_rate_pct}% (${winRate.won} won, ${winRate.lost} lost).`}
         </div>
 
         <div className="search-bar">
@@ -71,7 +82,7 @@ export default function EstimatingWorklistPage() {
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
                   <span className="entity-mobile-row-sub">
-                    {j.project_number ? `#${j.project_number}` : 'No project #'}{j.project_address ? ` · ${j.project_address}` : ''}
+                    {j.estimate_number ? `#${j.estimate_number}` : 'No estimate #'}{j.project_address ? ` · ${j.project_address}` : ''}
                   </span>
                 </span>
                 <span className={`badge badge-${j.stage}`} style={{ flexShrink: 0 }}>{STAGE_LABELS[j.stage] || j.stage}</span>
@@ -87,7 +98,7 @@ export default function EstimatingWorklistPage() {
             onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
             rows={filtered}
             columns={[
-              { key: 'project_number', label: 'Project #', defaultWidth: 130, render: j => j.project_number ? `#${j.project_number}` : '—' },
+              { key: 'estimate_number', label: 'Estimate #', defaultWidth: 130, render: j => j.estimate_number ? `#${j.estimate_number}` : '—' },
               { key: 'customer_name', label: 'Customer', defaultWidth: 200, render: j => j.customer_name || 'Unnamed' },
               { key: 'project_address', label: 'Address', defaultWidth: 250, render: j => j.project_address || '—' },
               { key: 'stage', label: 'Stage', defaultWidth: 130, render: j => j.stage || '—' },

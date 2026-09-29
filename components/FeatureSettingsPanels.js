@@ -177,48 +177,6 @@ function WarrantySettings() {
   );
 }
 
-const PUNCH_FIELDS = ['punch_schedule_days'];
-
-function PunchListSettings() {
-  const s = useSection(PUNCH_FIELDS);
-  const v = s.values || {};
-  return (
-    <SectionShell
-      title="Punch list scheduling"
-      intro="When you send a final punch list to the subcontractors, each sub is asked to schedule their items within this many days. It shows in their portal and in the notification they receive, and becomes the due date on any item that doesn't already have one."
-      section={s}
-    >
-      <div className="two-col">
-        <div>
-          <label>Days for subs to schedule punch items</label>
-          <input type="number" min="1" max="60" value={v.punch_schedule_days ?? 5} onChange={e => s.set('punch_schedule_days', Math.max(1, Number(e.target.value) || 1))} />
-        </div>
-      </div>
-    </SectionShell>
-  );
-}
-
-const BLACKOUT_FIELDS = ['blackout_notice_days'];
-
-function BlackoutSettings() {
-  const s = useSection(BLACKOUT_FIELDS);
-  const v = s.values || {};
-  return (
-    <SectionShell
-      title="Customer blackout dates"
-      intro="Customers can block off dates once their contract is signed. A request made at least this many days ahead moves the schedule automatically (and is flagged for your review before it goes to the subs). A shorter-notice request waits for you to approve it before the schedule changes."
-      section={s}
-    >
-      <div className="two-col">
-        <div>
-          <label>Notice needed to move the schedule automatically (days)</label>
-          <input type="number" min="1" max="90" value={v.blackout_notice_days ?? 14} onChange={e => s.set('blackout_notice_days', Math.max(1, Number(e.target.value) || 1))} />
-        </div>
-      </div>
-    </SectionShell>
-  );
-}
-
 const REVIEW_FIELDS = ['review_auto_request', 'review_request_delay_days', 'review_reminder_days', 'review_google_min_rating', 'review_hold_if_open_punch', 'review_hold_if_unpaid', 'review_max_hold_days', 'review_google_url'];
 
 function ReviewSettings() {
@@ -279,15 +237,118 @@ function ReviewSettings() {
   );
 }
 
+function AiSandboxSettings() {
+  const [status, setStatus] = useState(null);
+  const [textProvider, setTextProvider] = useState('anthropic');
+  const [textModel, setTextModel] = useState('');
+  const [textKeyInput, setTextKeyInput] = useState('');
+  const [transcriptionKeyInput, setTranscriptionKeyInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    const { data, error: err } = await supabase.from('ai_provider_settings').select('*').eq('id', 1).maybeSingle();
+    if (err) { setError(`${err.message} — make sure migration 140 has been run.`); return; }
+    setStatus(data || null);
+    if (data) { setTextProvider(data.text_provider); setTextModel(data.text_model || ''); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function saveProviderChoice() {
+    setBusy(true); setError('');
+    const { error: err } = await supabase.from('ai_provider_settings').update({ text_provider: textProvider, text_model: textModel || null }).eq('id', 1);
+    setBusy(false);
+    if (err) { setError(err.message); return; }
+    setFlash('Saved'); setTimeout(() => setFlash(''), 2000); load();
+  }
+
+  async function saveKey(kind) {
+    const value = kind === 'text' ? textKeyInput : transcriptionKeyInput;
+    if (!value.trim()) return;
+    setBusy(true); setError('');
+    const { error: err } = await supabase.rpc('set_ai_api_key', { p_kind: kind, p_api_key: value.trim() });
+    setBusy(false);
+    if (err) { setError(err.message); return; }
+    if (kind === 'text') setTextKeyInput(''); else setTranscriptionKeyInput('');
+    setFlash('Key saved'); setTimeout(() => setFlash(''), 2000); load();
+  }
+
+  async function clearKey(kind) {
+    if (!window.confirm('Remove this key? AI features using it will fall back to the environment variable, if one is set.')) return;
+    setBusy(true); setError('');
+    const { error: err } = await supabase.rpc('clear_ai_api_key', { p_kind: kind });
+    setBusy(false);
+    if (err) { setError(err.message); return; }
+    load();
+  }
+
+  return (
+    <div className="dash-section" style={{ marginTop: 18 }}>
+      <h3>AI provider (sandbox)</h3>
+      <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '0 0 12px', maxWidth: 640, lineHeight: 1.55 }}>
+        Every AI feature in the app goes through this one setting. Leave it blank to keep using the ANTHROPIC_API_KEY set in Vercel — pasting a key here is optional today, and is what a future customer of this platform would do with their own key instead of yours.
+      </div>
+      {!status && !error && <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Loading…</div>}
+      {error && <div className="error-text">{error}</div>}
+      {status && (
+        <>
+          <div className="two-col">
+            <div>
+              <label>Text drafting provider</label>
+              <select value={textProvider} onChange={e => setTextProvider(e.target.value)}>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div>
+              <label>Model override (optional)</label>
+              <input value={textModel} onChange={e => setTextModel(e.target.value)} placeholder="leave blank for the default" />
+            </div>
+          </div>
+          <div className="section-actions">
+            <button className="btn btn-primary btn-sm" onClick={saveProviderChoice} disabled={busy}>Save provider choice</button>
+            {flash && <span style={{ fontSize: 12, color: '#3a6b45', marginLeft: 10 }}>{flash}</span>}
+          </div>
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <label>{textProvider === 'openai' ? 'OpenAI' : 'Anthropic'} API key {status.has_text_key ? '— a key is on file' : '(using the environment variable)'}</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="password" value={textKeyInput} onChange={e => setTextKeyInput(e.target.value)} placeholder="Paste an API key" style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => saveKey('text')} disabled={busy || !textKeyInput.trim()}>Save key</button>
+              {status.has_text_key && <button className="btn btn-sm" onClick={() => clearKey('text')} disabled={busy}>Remove</button>}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <label>Voice transcription (OpenAI Whisper) key {status.has_transcription_key ? '— a key is on file' : '(using the environment variable)'}</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="password" value={transcriptionKeyInput} onChange={e => setTranscriptionKeyInput(e.target.value)} placeholder="Paste an OpenAI API key" style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => saveKey('transcription')} disabled={busy || !transcriptionKeyInput.trim()}>Save key</button>
+              {status.has_transcription_key && <button className="btn btn-sm" onClick={() => clearKey('transcription')} disabled={busy}>Remove</button>}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+              Voice-to-scope always transcribes through OpenAI's Whisper, even when Claude drafts the text — Claude doesn't take audio input directly.
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 12 }}>
+            Keys are encrypted before they're stored and are never shown again once saved. If this is the first key saved on this platform, an encryption passphrase must be set once in the SQL editor first — see the comment at the top of migration 140.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function FeatureSettingsPanels() {
   return (
     <>
       <ComplianceSettings />
       <WaiverSettings />
       <WarrantySettings />
-      <PunchListSettings />
-      <BlackoutSettings />
       <ReviewSettings />
+      <AiSandboxSettings />
     </>
   );
 }

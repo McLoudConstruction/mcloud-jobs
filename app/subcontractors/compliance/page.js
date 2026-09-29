@@ -36,13 +36,16 @@ export default function ComplianceOverviewPage() {
   const [openId, setOpenId] = useState(null);
   const [flash, setFlash] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [reliability, setReliability] = useState({});
 
   const load = useCallback(async () => {
-    const [overviewRes, pendingRes, settingsRes] = await Promise.all([
+    const [overviewRes, pendingRes, settingsRes, reliabilityRes] = await Promise.all([
       supabase.rpc('sub_compliance_overview'),
       supabase.from('sub_compliance_docs').select('company_id').eq('status', 'pending_review'),
       supabase.from('app_settings').select('compliance_enforcement, compliance_expiring_days').eq('id', 1).maybeSingle(),
+      supabase.rpc('sub_reliability_scores'),
     ]);
+    setReliability(Object.fromEntries((reliabilityRes.data || []).map(r => [r.company_id, r])));
     if (overviewRes.error) { setLoadError(overviewRes.error.message); return; }
     setLoadError('');
     setRows(overviewRes.data || []);
@@ -157,6 +160,11 @@ export default function ComplianceOverviewPage() {
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{r.company_name}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                     <Chip def={COMPLIANCE_OVERALL[r.overall]}>{COMPLIANCE_OVERALL[r.overall]?.label || r.overall}</Chip>
+                    {reliability[r.company_id] && (
+                      <Chip def={reliability[r.company_id].score >= 80 ? COMPLIANCE_OVERALL.compliant : reliability[r.company_id].score >= 60 ? COMPLIANCE_OVERALL.expiring : COMPLIANCE_OVERALL.noncompliant}>
+                        Reliability: {reliability[r.company_id].score}/100
+                      </Chip>
+                    )}
                     {(r.summary?.required || []).map(item => (
                       <Chip key={item.doc_type} def={COMPLIANCE_STATUS[item.status]}>
                         {DOC_TYPE_BY_KEY[item.doc_type]?.short || item.doc_type}: {COMPLIANCE_STATUS[item.status]?.label || item.status}

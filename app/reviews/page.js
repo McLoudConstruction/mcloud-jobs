@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import { REVIEW_STATUS, holdLabel, starText, CATEGORY_LABELS } from '../../lib/reviews';
+import { aiFetch } from '../../lib/aiFetch';
 
 const FILTERS = [
   { key: 'follow', label: 'Needs follow-up' },
@@ -29,11 +30,12 @@ export default function ReviewsPage() {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [editing, setEditing] = useState(null); // { id, display_name, project_label }
+  const [drafts, setDrafts] = useState({}); // review id -> { mode, text, loading, error }
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('reviews')
-      .select('*, jobs(project_number, customer_name, project_address, job_type)')
+      .select('*, jobs(job_number, customer_name, project_address, job_type)')
       .order('created_at', { ascending: false });
     if (err) { setError(`${err.message} — make sure migration 138 has been run.`); return; }
     setError('');
@@ -81,6 +83,17 @@ export default function ReviewsPage() {
   async function saveEdit() {
     const ok = await patch(editing.id, { display_name: editing.display_name.trim() || null, project_label: editing.project_label.trim() || null });
     if (ok) setEditing(null);
+  }
+
+  async function draftReply(r, mode) {
+    setDrafts(prev => ({ ...prev, [r.id]: { mode, loading: true, text: '', error: '' } }));
+    try {
+      const data = await aiFetch('/api/ai/draft-review-reply', { mode, rating: r.rating, comment: r.comment, reviewerName: r.reviewer_name });
+      const text = mode === 'followup' ? data.followup_points : data.public_reply;
+      setDrafts(prev => ({ ...prev, [r.id]: { mode, loading: false, text, error: '' } }));
+    } catch (err) {
+      setDrafts(prev => ({ ...prev, [r.id]: { mode, loading: false, text: '', error: err.message } }));
+    }
   }
 
   async function followUp(r) {
@@ -132,7 +145,7 @@ export default function ReviewsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <Link href={`/jobs/${r.job_id}`} style={{ fontWeight: 700 }}>{j.customer_name || 'Customer'}</Link>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{j.project_number}{j.project_address ? ` · ${j.project_address}` : ''}</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{j.job_number}{j.project_address ? ` · ${j.project_address}` : ''}</span>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 4, color: st.color, background: st.bg, alignSelf: 'flex-start' }}>{st.label}</span>
               </div>
@@ -183,7 +196,14 @@ export default function ReviewsPage() {
                     ) : (
                       <button className="btn btn-sm" onClick={() => setEditing({ id: r.id, display_name: r.display_name || '', project_label: r.project_label || '' })}>Edit display</button>
                     )}
+                    <button className="btn btn-sm" onClick={() => draftReply(r, 'public')}>✦ Draft public reply</button>
+                    {r.needs_follow_up && <button className="btn btn-sm" onClick={() => draftReply(r, 'followup')}>✦ Draft call notes</button>}
                   </div>
+                  {drafts[r.id] && (
+                    <div style={{ marginTop: 8, background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 10, fontSize: 12.5, whiteSpace: 'pre-wrap' }}>
+                      {drafts[r.id].loading ? 'Drafting…' : drafts[r.id].error ? <span style={{ color: '#a13f3f' }}>{drafts[r.id].error}</span> : drafts[r.id].text}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 6 }}>

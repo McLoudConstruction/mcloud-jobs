@@ -2,6 +2,9 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import AIScopeGenerator from './AIScopeGenerator';
+import VoiceScopeRecorder from './VoiceScopeRecorder';
+import AssemblyPicker from './AssemblyPicker';
+import EstimateGuardrailBanner from './EstimateGuardrailBanner';
 import ScopeOptionsCard from './ScopeOptionsCard';
 import { flagScheduleStale } from '../lib/scheduleStale';
 
@@ -33,6 +36,8 @@ export default function ScopeCard({ job, jobId, onSave }) {
       <div className="card">
         <h3>Scope of work</h3>
 
+        <EstimateGuardrailBanner job={job} />
+
         <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>This estimate has:</span>
           <button className={`btn btn-sm ${mode === 'single' ? 'btn-primary' : ''}`} onClick={() => setMode('single')} disabled={isLocked}>One scope</button>
@@ -41,11 +46,20 @@ export default function ScopeCard({ job, jobId, onSave }) {
 
         {mode === 'single' ? (
           <>
+            <div style={{ marginBottom: 4 }}>
+              <AssemblyPicker onApply={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])} />
+            </div>
             <AIScopeGenerator
               projectType={job.project_type}
               jobId={jobId}
               onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
               onTradeActions={saveTradeActions}
+            />
+            <VoiceScopeRecorder
+              projectType={job.project_type}
+              jobId={jobId}
+              existingItems={items.filter(t => t.trim())}
+              onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
             />
             {items.length === 0 && <div className="empty-state">No scope items yet.</div>}
             {items.map((text, i) => (

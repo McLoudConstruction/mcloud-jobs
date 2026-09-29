@@ -16,16 +16,16 @@ import WorkOrdersCard from '../../../components/WorkOrdersCard';
 import JobRfpsPanel from '../../../components/JobRfpsCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
-import { assignNextProjectNumber } from '../../../lib/assignProjectNumber';
+import { assignNextJobNumber } from '../../../lib/assignJobNumber';
 import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
-import JobInbox from '../../../components/JobInbox';
+import EmailThreadCard from '../../../components/EmailThreadCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
-import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber } from '../../../lib/constants';
+import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
   OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
-  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, PersonToPersonIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
+  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
 } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
@@ -34,6 +34,7 @@ import {
 // behavior, same props, nothing moved data-wise; this just makes it
 // possible to open "the Scope tab" without wading through 1,500+
 // unrelated lines to find it.
+import JobMessagesCard from '../../../components/JobMessagesCard';
 import ReviewRequestCard from '../../../components/ReviewRequestCard';
 import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
 import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
@@ -43,6 +44,7 @@ import ScopeCard from '../../../components/ScopeCard';
 import EstimateGroupsCard from '../../../components/EstimateGroupsCard';
 import ScheduleCard from '../../../components/ScheduleCard';
 import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
+import ScheduleRiskBadge from '../../../components/ScheduleRiskBadge';
 import PriceCard from '../../../components/PriceCard';
 import TermsCard from '../../../components/TermsCard';
 import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
@@ -53,8 +55,6 @@ import BudgetCard from '../../../components/BudgetCard';
 import PayAppsCard from '../../../components/PayAppsCard';
 import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
-import PunchListWorkflow from '../../../components/PunchListWorkflow';
-import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
 import WarrantyCard from '../../../components/WarrantyCard';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
@@ -125,9 +125,10 @@ const TABS = [
   // safety effect all still work) but left out of the tab-button row
   // below — each now has its own quick-access button up in the job
   // header instead, so showing them again here was pure duplication.
-  { key: 'Project Updates', label: 'Project Updates', icon: PersonToPersonIcon, noTabButton: true },
-  { key: 'Messages', label: 'Inbox', icon: MessagesIcon, noTabButton: true },
+  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
+  { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
   { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
+  { key: 'Email', label: 'Email', icon: MessagesIcon },
 ];
 
 export default function JobDetailPage() {
@@ -205,9 +206,7 @@ export default function JobDetailPage() {
     const params = new URLSearchParams(window.location.search);
     const requestedTab = params.get('tab');
     const requestedSection = params.get('section');
-    if (requestedTab === 'Email') {
-      goToTab('Messages'); // the Email tab now lives inside the job's Inbox
-    } else if (requestedTab && TABS.some(t => t.key === requestedTab)) {
+    if (requestedTab && TABS.some(t => t.key === requestedTab)) {
       goToTab(requestedTab, requestedSection);
     }
   }, [goToTab]);
@@ -237,7 +236,7 @@ export default function JobDetailPage() {
     try {
       const [{ data, error }, { data: financials }] = await Promise.all([
         supabase.from('jobs').select('*').eq('id', id).single(),
-        supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status').eq('job_id', id).maybeSingle(),
+        supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status, priced_at').eq('job_id', id).maybeSingle(),
       ]);
       if (error || !data) throw error || new Error('Job not found');
       const merged = { ...data, ...financials };
@@ -292,20 +291,18 @@ export default function JobDetailPage() {
     setTimeout(() => setFlash(''), 1500);
   }
 
-  // Recovery path for a job that somehow never got a project number —
-  // shown as a fix-it banner rather than something that has to be
-  // chased down through the database directly. Should be rare now that
-  // the number is assigned at creation (app/jobs/new/page.js), but this
-  // stays as a safety net for older records or edge cases.
-  async function fixMissingProjectNumber() {
+  // Recovery path for a job that's already past Approved but somehow
+  // never got a job number — shown as a fix-it banner rather than
+  // something that has to be chased down through the database directly.
+  async function fixMissingJobNumber() {
     try {
-      // assignNextProjectNumber writes the number to this row itself
-      // (and retries if it collides with a number claimed a moment
-      // earlier by someone else) — nothing further to save here.
-      await assignNextProjectNumber(id, job.project_type);
+      // assignNextJobNumber writes the number to this row itself (and
+      // retries if it collides with a number claimed a moment earlier by
+      // someone else) — nothing further to save here.
+      await assignNextJobNumber(id);
       flashSaved();
     } catch (err) {
-      setFlash(`Could not assign a project number: ${err.message}`);
+      setFlash(`Could not assign a job number: ${err.message}`);
       setTimeout(() => setFlash(''), 8000);
     }
   }
@@ -360,6 +357,18 @@ export default function JobDetailPage() {
 
     const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
 
+    if (next === 'approved' && !job.job_number) {
+      try {
+        // Writes job_number to this row directly (with its own
+        // collision-retry) before we touch stage/approved_at, so we never
+        // move a job to Approved without a number actually attached.
+        await assignNextJobNumber(id);
+      } catch (err) {
+        setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
+        setTimeout(() => setFlash(''), 8000);
+        return; // don't advance the stage without a job number — that's the exact stuck state we're trying to prevent
+      }
+    }
     await saveJob(patch);
 
     if (next === 'approved' && job.contract_price) {
@@ -472,14 +481,14 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {!job.project_number && (
+        {!isOpportunity(job) && !job.job_number && (
           <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ fontSize: 13 }}>
-                <b style={{ color: '#c0524f' }}>This job never got a real Project Number.</b>
+                <b style={{ color: '#c0524f' }}>This job is past Approved but never got a real Job Number.</b>
                 <div style={{ color: 'var(--ink-soft)', fontSize: 12, marginTop: 2 }}>That shouldn't happen — click to assign one now.</div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={fixMissingProjectNumber}>Assign Project Number Now</button>
+              <button className="btn btn-primary btn-sm" onClick={fixMissingJobNumber}>Assign Job Number Now</button>
             </div>
           </div>
         )}
@@ -512,14 +521,17 @@ export default function JobDetailPage() {
                 this row. */}
             {!isMobile && (
               <>
-                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Inbox" aria-label="Inbox">
-                  <MessagesIcon width={20} height={20} />
+                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
+                  <MessagesIcon width={16} height={16} />
                 </button>
                 {(role === 'owner' || role === 'estimator') && (
                   <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
                 )}
-                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')} title="Project Updates" aria-label="Project Updates">
-                  <PersonToPersonIcon width={20} height={20} />
+                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
+                  <ProjectFeedIcon width={16} height={16} /> Project Updates
+                </button>
+                <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
+                  {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
                 </button>
               </>
             )}
@@ -531,9 +543,6 @@ export default function JobDetailPage() {
                 Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
               </button>
             )}
-            {/* Stage Advance dropped on mobile — it's an easy accidental
-                tap on a small screen next to Close Lost/Reopen, and the
-                job's stage badge is already visible right above. */}
           </div>
         </div>
 
@@ -554,7 +563,7 @@ export default function JobDetailPage() {
               </button>
               <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Messages'); }}>
                 <MessagesIcon className="more-sheet-icon" />
-                Inbox
+                Messages
               </button>
               {(role === 'owner' || role === 'estimator') && (
                 <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); setRfpPanelOpen(true); }}>
@@ -563,8 +572,12 @@ export default function JobDetailPage() {
                 </button>
               )}
               <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Project Updates'); }}>
-                <PersonToPersonIcon className="more-sheet-icon" />
+                <ProjectFeedIcon className="more-sheet-icon" />
                 Project Updates
+              </button>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); invitePortal(); }} disabled={inviting}>
+                <PersonIcon className="more-sheet-icon" />
+                {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
               </button>
             </BottomSheet>
           </>
@@ -574,6 +587,11 @@ export default function JobDetailPage() {
           <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} projectAddress={job.project_address} />
         )}
 
+        {inviteResult && (
+          <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
+            {inviteResult}
+          </div>
+        )}
         <div className="stage-tabs">
           {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
             <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
@@ -661,20 +679,6 @@ export default function JobDetailPage() {
 
         {tab === 'Customer' && section === 'portal' && (
           <>
-            <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <h3 style={{ margin: '0 0 2px' }}>Portal invite</h3>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                  {job.portal_invited_at ? 'Send the customer a fresh activation link if they can\'t find the first one.' : 'Invite the customer to their project portal.'}
-                </div>
-                {inviteResult && (
-                  <div style={{ fontSize: 12.5, marginTop: 6, color: inviteResult.startsWith('Activation invite sent') ? '#3a6b45' : '#a13f3f' }}>{inviteResult}</div>
-                )}
-              </div>
-              <button className="btn btn-sm btn-primary" onClick={invitePortal} disabled={inviting}>
-                {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
-              </button>
-            </div>
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>
@@ -694,8 +698,8 @@ export default function JobDetailPage() {
 
         {tab === 'Schedule' && (
           <>
-            <BlackoutDatesCard jobId={id} />
             <ScheduleCard job={job} jobId={id} />
+            <ScheduleRiskBadge jobId={id} />
             <ScheduleDelayCard jobId={id} job={job} />
           </>
         )}
@@ -757,9 +761,8 @@ export default function JobDetailPage() {
           <div className="card">
             <h3>Punch List</h3>
             <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-              Final fixes before you close the job. Build the list, publish it for the customer to review, then publish the final list and send it to the subs to schedule. Open items hold back the review request.
+              Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
             </div>
-            <PunchListWorkflow jobId={id} />
             <PunchItemsPanel jobId={id} kind="punch" />
           </div>
         )}
@@ -776,6 +779,9 @@ export default function JobDetailPage() {
           <InternalUpdatesPanel jobId={id} session={session} />
         )}
 
+        {tab === 'Email' && (
+          <EmailThreadCard jobId={id} job={job} />
+        )}
 
         {tab === 'Documents' && (
           <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
@@ -815,7 +821,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Messages' && (
-          <JobInbox jobId={id} job={job} session={session} />
+          <JobMessagesCard jobId={id} job={job} />
         )}
       </div>
     </AppShell>

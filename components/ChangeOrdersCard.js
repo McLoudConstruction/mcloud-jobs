@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 import { CHANGE_ORDER_REASON_CATEGORIES } from '../lib/constants';
+import { aiFetch } from '../lib/aiFetch';
 
 const REASON_CATEGORY_KEYS = Object.keys(CHANGE_ORDER_REASON_CATEGORIES);
 const EMPTY_FORM = { description: '', amount: '', co_date: new Date().toISOString().slice(0, 10), reason_category: '', reason: '' };
@@ -13,6 +14,9 @@ export default function ChangeOrdersCard({ jobId, changeOrders, onChanged }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [recentUpdates, setRecentUpdates] = useState([]);
+  const [draftNotes, setDraftNotes] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState('');
   const [updatePhotos, setUpdatePhotos] = useState({}); // updateId -> [{id, url}]
 
   const loadRecentUpdates = useCallback(async () => {
@@ -82,6 +86,20 @@ export default function ChangeOrdersCard({ jobId, changeOrders, onChanged }) {
     await onChanged?.();
   }
 
+  async function draftWithAI() {
+    if (!draftNotes.trim()) return;
+    setDrafting(true);
+    setDraftError('');
+    try {
+      const data = await aiFetch('/api/ai/draft-change-order', { jobId, notes: draftNotes });
+      setForm(prev => ({ ...prev, description: data.description || prev.description, reason_category: data.reason_category || prev.reason_category, reason: data.reason || prev.reason }));
+    } catch (err) {
+      setDraftError(err.message);
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   async function removeCo(coId) {
     if (!confirm('Delete this change order?')) return;
     const { error: deleteError } = await supabase.from('change_orders').delete().eq('id', coId);
@@ -113,6 +131,14 @@ export default function ChangeOrdersCard({ jobId, changeOrders, onChanged }) {
                 {(CHANGE_ORDER_REASON_CATEGORIES[form.reason_category] || []).map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+          </div>
+          <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 10, marginTop: 10 }}>
+            <label style={{ marginTop: 0 }}>Rough field notes (optional)</label>
+            <textarea value={draftNotes} onChange={e => setDraftNotes(e.target.value)} placeholder="e.g. found rotted subfloor under the old tile, had to replace 40 sq ft before we could continue" rows={2} />
+            <div className="section-actions" style={{ marginTop: 6 }}>
+              <button type="button" className="btn btn-sm" onClick={draftWithAI} disabled={drafting || !draftNotes.trim()}>{drafting ? 'Drafting…' : '✦ Draft description & reason'}</button>
+            </div>
+            {draftError && <div style={{ fontSize: 11.5, color: '#a13f3f', marginTop: 4 }}>{draftError}</div>}
           </div>
           <label style={{ marginTop: 10 }}>Description of change</label>
           <textarea value={form.description} onChange={e => update('description', e.target.value)} />
