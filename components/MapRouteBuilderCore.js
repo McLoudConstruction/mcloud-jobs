@@ -122,6 +122,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const [marking, setMarking] = useState(false);
   const [confirmLocate, setConfirmLocate] = useState(false);
   const [locating, setLocating] = useState(null); // { done, total }
+  const [leftMin, setLeftMin] = useState(false); // 'Visible on map' card minimized
+  const [rightMin, setRightMin] = useState(false); // 'Route' card minimized
 
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
@@ -1000,6 +1002,10 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         .mrb-float-left { top: 10px; left: 10px; width: 320px; max-height: calc(100% - 130px); }
         .mrb-float-right { top: 10px; right: 10px; width: 350px; max-height: calc(100% - 110px); }
         .mrb-float-detail { bottom: 10px; left: 340px; right: 370px; margin: 0 auto; width: 440px; max-width: max(300px, calc(100% - 720px)); padding: 0; }
+        .mrb-min-btn { border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 6px; width: 26px; height: 26px; line-height: 1; cursor: pointer; font-size: 15px; font-weight: 700; flex-shrink: 0; }
+        .mrb-min-btn:hover { background: rgba(155,119,61,0.15); }
+        .mrb-float.mrb-collapsed { gap: 0; }
+        .mrb-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
         .mrb-visible { display: flex; flex-direction: column; min-height: 0; flex: 1; }
         .mrb-inview { flex: 1; min-height: 0; overflow-y: auto; padding-right: 8px; }
         .mrb-stops { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
@@ -1128,12 +1134,16 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
 
 
         {TOKEN && mapReady && (
-        <div className="mrb-float mrb-float-left">
+        <div className={`mrb-float mrb-float-left${leftMin ? ' mrb-collapsed' : ''}`}>
           <div className="mrb-visible">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: leftMin ? 0 : 6 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>Visible on map</div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
+                <button type="button" className="mrb-min-btn" aria-expanded={!leftMin} aria-label={leftMin ? 'Expand Visible on map' : 'Minimize Visible on map'} title={leftMin ? 'Expand' : 'Minimize'} onClick={() => setLeftMin(v => !v)}>{leftMin ? '+' : '−'}</button>
+              </div>
             </div>
+            {!leftMin && (<>
             {propsLoaded && savedProps.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>
                 No properties have a map location yet.
@@ -1178,15 +1188,22 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                 Showing the {IN_VIEW_LIMIT} closest to the map center. Zoom in to narrow the list.
               </div>
             )}
+            </>)}
           </div>
         </div>
         )}
 
-        <div className="mrb-float mrb-float-right mrb-routebox">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div className={`mrb-float mrb-float-right mrb-routebox${rightMin ? ' mrb-collapsed' : ''}`}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>Route</div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{stops.length} stop{stops.length === 1 ? '' : 's'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{stops.length} stop{stops.length === 1 ? '' : 's'}</div>
+              <button type="button" className="mrb-min-btn" aria-expanded={!rightMin} aria-label={rightMin ? 'Expand Route' : 'Minimize Route'} title={rightMin ? 'Expand' : 'Minimize'} onClick={() => setRightMin(v => !v)}>{rightMin ? '+' : '−'}</button>
+            </div>
           </div>
+          {rightMin && stops.length > 0 && <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{summary}</div>}
+          {!rightMin && (
+          <div className="mrb-body">
           <div style={{ fontSize: 13, minHeight: 20 }}>{summary}</div>
           {!isActive && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1283,6 +1300,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           )}
           {routeError && followRoads && (
             <div style={{ fontSize: 11, color: '#a17c3f' }}>{routeError} The line shows straight segments until it clears.</div>
+          )}
+          </div>
           )}
         </div>
 
