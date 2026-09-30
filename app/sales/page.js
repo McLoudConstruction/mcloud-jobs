@@ -17,13 +17,14 @@ import { formatPhone } from '../../lib/constants';
 const STAGE_BADGE_CLASS = {
   prospecting: 'badge-new',
   contacted: 'badge-proposal_delivered',
+  site_request: 'badge-inspected',
   lost: 'badge-lost',
   converted: 'badge-approved',
 };
 
-const STAGES = ['prospecting', 'contacted', 'lost', 'converted'];
-const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', lost: 'Lost', converted: 'Converted' };
-const ACTIVE_STAGES = ['prospecting', 'contacted'];
+const STAGES = ['prospecting', 'contacted', 'site_request', 'lost', 'converted'];
+const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', site_request: 'Site Request', lost: 'Lost', converted: 'Converted' };
+const ACTIVE_STAGES = ['prospecting', 'contacted', 'site_request'];
 
 const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '', referral_name: '' };
 
@@ -268,12 +269,12 @@ export default function SalesDashboardPage() {
         <div className="dash-section" style={{ paddingTop: isMobile ? 12 : 20 }}>
           <h3 style={{ fontSize: 12.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', margin: '0 0 10px', fontWeight: 700 }}>Pipeline overview</h3>
           {isMobile ? (
-            // Only 4 stages — a compact 4-column grid fits all of them on
+            // Only 5 stages — a compact 5-column grid fits all of them on
             // screen at once, rather than a horizontal scroll strip that
             // clips the last one (the exact "hint at more, don't make it
             // obvious you can swipe" problem this redesign is fixing
             // elsewhere; here the real fix is just not needing to scroll).
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
               {STAGES.map(s => (
                 <div key={s} style={{ textAlign: 'center', padding: '4px 2px' }}>
                   <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--heading)', lineHeight: 1.1 }}>{stats[s] || 0}</div>
@@ -429,6 +430,18 @@ export default function SalesDashboardPage() {
                       {o.stage === 'lost' && o.loss_reason && (
                         <div className="opp-card-detail-line">Loss reason: {o.loss_reason}</div>
                       )}
+                      {o.stage === 'site_request' && (
+                        <>
+                          {o.site_address && <div className="opp-card-detail-line">Site: {o.site_address}</div>}
+                          {(o.contact_email || o.contact_phone) && (
+                            <div className="opp-card-detail-line">
+                              {[o.contact_email, o.contact_phone ? formatPhone(o.contact_phone) : null].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                          {o.notes && <div className="opp-card-detail-line" style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</div>}
+                          <OpportunityPhotosPanel opportunityId={o.id} />
+                        </>
+                      )}
                       {o.bid_walk_scheduled_at && (
                         <div className="opp-card-detail-line">
                           Bid walk scheduled: {new Date(o.bid_walk_scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -440,7 +453,7 @@ export default function SalesDashboardPage() {
                       ) : (
                         <>
                           <select value={o.stage} onChange={e => setStage(o.id, e.target.value)}>
-                            {['prospecting', 'contacted', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                            {['prospecting', 'contacted', 'site_request', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
                           </select>
                           {ACTIVE_STAGES.includes(o.stage) && (
                             <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>

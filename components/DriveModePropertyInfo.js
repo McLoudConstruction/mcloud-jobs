@@ -2,14 +2,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatPhone } from '../lib/constants';
+import SiteRequestForm from './SiteRequestForm';
 
-// Drive Mode: jot a note or add a contact (with title) for the stop you are at.
+// Drive Mode: jot a note, add a contact (with title), or log a site
+// request for the stop you are at.
 // Notes go on the property's own notes field, newest first with the date.
 // Contacts go in the same contacts table the Properties page uses.
 const EMPTY = { name: '', position: '', phone: '', email: '' };
 
 export default function DriveModePropertyInfo({ stop }) {
-  const [open, setOpen] = useState(null); // null | 'note' | 'contact'
+  const [open, setOpen] = useState(null); // null | 'note' | 'contact' | 'site'
   const [existingNotes, setExistingNotes] = useState('');
   const [contacts, setContacts] = useState([]);
   const [note, setNote] = useState('');
@@ -97,9 +99,10 @@ export default function DriveModePropertyInfo({ stop }) {
 
   return (
     <div style={wrapStyle}>
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" style={{ ...tabBtn, ...(open === 'note' ? tabBtnOn : null) }} onClick={() => toggle('note')}>Add note</button>
         <button type="button" style={{ ...tabBtn, ...(open === 'contact' ? tabBtnOn : null) }} onClick={() => toggle('contact')}>Add contact</button>
+        <button type="button" style={{ ...tabBtn, ...(open === 'site' ? tabBtnOn : null) }} onClick={() => toggle('site')}>Site request</button>
       </div>
 
       {open === 'note' && (
@@ -124,6 +127,18 @@ export default function DriveModePropertyInfo({ stop }) {
           <input style={fieldStyle} placeholder="Email" inputMode="email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           <button type="button" style={saveBtn} disabled={busy || !form.name.trim()} onClick={saveContact}>{busy ? 'Saving…' : 'Save contact'}</button>
         </div>
+      )}
+
+      {open === 'site' && (
+        <SiteRequestForm
+          stop={stop}
+          contacts={contacts}
+          onSaved={(photoCount) => {
+            setOpen(null);
+            setMsg(`Site request saved${photoCount ? ` with ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}. Find it in Sales.`);
+            load();
+          }}
+        />
       )}
 
       {msg && <div style={{ fontSize: 13, color: '#8fcf8f', marginTop: 10 }}>{msg}</div>}
@@ -151,7 +166,7 @@ export default function DriveModePropertyInfo({ stop }) {
 const wrapStyle = { marginTop: 22, width: '100%', maxWidth: 360 };
 const tabBtn = {
   flex: 1, padding: '11px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)',
-  borderRadius: 10, color: '#f3ede0', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  borderRadius: 10, color: '#f3ede0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
 };
 const tabBtnOn = { background: '#9b773d', borderColor: '#9b773d' };
 const panelStyle = { marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 };
