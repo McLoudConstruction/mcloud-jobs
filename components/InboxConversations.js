@@ -72,6 +72,7 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const scrollRef = useRef(null);
   const scopedJobRef = useRef(scopedJob);
   scopedJobRef.current = scopedJob;
@@ -252,6 +253,32 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
     setSending(false);
   }
 
+  // Deletes every message in the open conversation from the table its channel
+  // lives in. Customer portal and sub messages are also seen by the other side,
+  // so the confirm says they will disappear there too.
+  async function deleteConversation() {
+    if (!selected || deleting) return;
+    const table = selected.channel === 'email' ? 'email_messages' : selected.channel === 'portal' ? 'job_questions' : 'sub_messages';
+    const ids = selected.msgs.map(m => m.id);
+    const count = ids.length;
+    const shared = selected.channel === 'portal' ? ' The customer will no longer see them in their portal.' : selected.channel === 'sub' ? ' The subcontractor will no longer see them in their portal.' : '';
+    if (!confirm(`Delete this conversation? ${count === 1 ? 'The 1 message in it' : `All ${count} messages in it`} will be permanently deleted.${shared} This cannot be undone.`)) return;
+    setDeleting(true);
+    setError('');
+    // select('id') returns the rows actually removed, so a delete that RLS
+    // silently blocked (zero rows) is reported instead of looking like success.
+    const { data, error: delErr } = await supabase.from(table).delete().in('id', ids).select('id');
+    if (delErr || (data || []).length === 0) {
+      setError(`Delete failed: ${delErr?.message || 'no messages were removed.'}`);
+      setDeleting(false);
+      return;
+    }
+    setSelectedKey(null);
+    setReply('');
+    await load();
+    setDeleting(false);
+  }
+
   if (!loaded) return <div className="empty-state">Loading…</div>;
 
   return (
@@ -284,7 +311,10 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
                 <div className="em-head-name">{selected.name}</div>
                 <div className="em-head-sub">{selected.topic}</div>
               </div>
-              {!jobId && selected.jobId && <Link href={`/jobs/${selected.jobId}`} className="em-job-link">Job</Link>}
+              <div className="em-head-actions">
+                {!jobId && selected.jobId && <Link href={`/jobs/${selected.jobId}`} className="em-job-link">Job</Link>}
+                <button type="button" className="em-delete" onClick={deleteConversation} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</button>
+              </div>
             </header>
 
             <div className="em-scroll" ref={scrollRef}>
@@ -340,7 +370,10 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
         .em-head-center { grid-column: 2; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; }
         .em-head-name { font-size: 14px; font-weight: 600; color: var(--heading); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .em-head-sub { font-size: 12px; color: var(--ink-soft); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .em-job-link { grid-column: 3; justify-self: end; font-size: 13px; color: #0a84ff; text-decoration: none; }
+        .em-head-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 12px; }
+        .em-job-link { font-size: 13px; color: #0a84ff; text-decoration: none; }
+        .em-delete { border: none; background: none; padding: 6px 0; font: inherit; font-size: 13px; color: #d70015; cursor: pointer; }
+        .em-delete:disabled { opacity: 0.5; cursor: default; }
         .em-scroll { flex: 1; overflow-y: auto; padding: 14px 16px 6px; }
         .em-stamp { text-align: center; font-size: 11.5px; color: var(--ink-soft); margin: 14px 0 8px; }
         .em-row { display: flex; margin: 2px 0; }
