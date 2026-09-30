@@ -128,6 +128,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   const mapboxRef = useRef(null);
   const stopMarkersRef = useRef([]);
   const spotMarkerRef = useRef(null);
+  const selPopupRef = useRef(null);
   const clickHandlerRef = useRef(null);
   const framedRef = useRef(false);
   const fitAfterRouteRef = useRef(true);
@@ -390,6 +391,29 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     const selId = selected?.type === 'saved' ? selected.id : '';
     mapRef.current.setFilter('props-selected', ['==', ['get', 'id'], selId]);
   }, [mapReady, selected]);
+
+  // Popup that stays open on the selected property (search or click).
+  useEffect(() => {
+    if (selPopupRef.current) { selPopupRef.current.remove(); selPopupRef.current = null; }
+    if (!mapReady || selected?.type !== 'saved') return undefined;
+    const p = savedProps.find(x => x.id === selected.id);
+    const mapboxgl = mapboxRef.current;
+    if (!p || !mapboxgl || !mapRef.current) return undefined;
+    const el = document.createElement('div');
+    const name = document.createElement('div');
+    name.style.cssText = 'font-weight:700;font-size:12.5px;color:#171714';
+    name.textContent = p.property_name || 'Unnamed property';
+    const mgmt = document.createElement('div');
+    mgmt.style.cssText = 'font-size:11.5px;color:#4a4a45;margin-top:2px';
+    mgmt.textContent = p.management_company || 'No management company';
+    el.appendChild(name);
+    el.appendChild(mgmt);
+    selPopupRef.current = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'mrb-popup', maxWidth: '260px' })
+      .setLngLat([Number(p.property_lng), Number(p.property_lat)])
+      .setDOMContent(el)
+      .addTo(mapRef.current);
+    return () => { if (selPopupRef.current) { selPopupRef.current.remove(); selPopupRef.current = null; } };
+  }, [mapReady, selected, savedProps]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -744,6 +768,34 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   function stopIndexForProperty(p) {
     return stops.findIndex(s => s.property_id === p.id);
   }
+
+  // Map search: any located property, by name, management company or address.
+  // Behaves like clicking its dot: zooms in, selects it, opens its card and popup.
+  function focusProperty(p) {
+    const t = p.property_type || '';
+    setTypeFilter(prev => (prev.length && !prev.includes(t) ? [...prev, t] : prev)); // never hide what was just found
+    setShowSaved(true);
+    setSelected({ type: 'saved', id: p.id });
+    const map = mapRef.current;
+    if (map) map.easeTo({ center: [Number(p.property_lng), Number(p.property_lat)], zoom: 16, duration: 700 });
+  }
+
+  const mapSearchMatches = useCallback((q) => {
+    const rows = [];
+    for (const p of savedProps) {
+      const hay = `${p.property_name || ''} ${p.management_company || ''} ${p.property_street || ''} ${p.property_city || ''}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+      const name = (p.property_name || '').toLowerCase();
+      rows.push({ p, rank: name.startsWith(q) ? 0 : name.includes(q) ? 1 : 2 });
+    }
+    rows.sort((a, b) => a.rank - b.rank || (a.p.property_name || '').localeCompare(b.p.property_name || ''));
+    return rows.slice(0, 8).map(({ p }) => ({
+      key: `m-${p.id}`,
+      label: p.property_name || 'Unnamed property',
+      sub: [p.property_type, p.management_company, p.property_city].filter(Boolean).join(' · '),
+      pick: () => focusProperty(p),
+    }));
+  }, [savedProps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function pickSaved(p) {
     setSelected({ type: 'saved', id: p.id });
@@ -1223,6 +1275,18 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         </div>
 
         <div className="mrb-mapcol">
+          {TOKEN && mapReady && (
+            <div style={{ marginBottom: 10 }}>
+              <MapboxPlaceSearch
+                token=""
+                placeholder="Find a property on the map by name, management company or address"
+                clearOnPick
+                localMatches={mapSearchMatches}
+                onPickPlace={() => {}}
+              />
+            </div>
+          )}
+
           {TOKEN && mapReady && typeOptions.length > 1 && (
             <div className="tab-sections-pills mrb-types" style={{ marginBottom: 10 }}>
               <button type="button" className={`tab-section-btn ${typeFilter.length === 0 ? 'active' : ''}`} onClick={() => setTypeFilter([])}>
