@@ -18,6 +18,7 @@ import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } f
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
+import { mapRow, splitDuplicates } from '../../lib/propertyImport';
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
@@ -26,35 +27,6 @@ const EMPTY_FORM = {
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
 };
 const EMPTY_CONTACT_FORM = { name: '', role: 'Property Contact', contact_phone: '', contact_email: '' };
-
-const HEADER_MAP = {
-  property_name: ['property', 'property name', 'name', 'building'],
-  property_type: ['type', 'property type', 'category'],
-  prospect_stage: ['prospect stage', 'stage'],
-  management_company: ['company', 'management company', 'management', 'organization'],
-  contact_name: ['contact', 'contact name'],
-  contact_phone: ['phone', 'contact phone', 'phone number'],
-  contact_email: ['email', 'contact email'],
-  property_street: ['street', 'address', 'street address'],
-  property_unit: ['unit', 'suite'],
-  property_city: ['city'],
-  property_state: ['state'],
-  property_zip: ['zip', 'zip code', 'postal code'],
-  year_built: ['year built', 'built'],
-  sq_ft: ['sq ft', 'square feet', 'square footage', 'sqft'],
-  target_value: ['target value', 'value'],
-  notes: ['notes', 'note', 'comments'],
-};
-function normalizeHeader(h) { return (h || '').toString().trim().toLowerCase(); }
-function mapRow(row) {
-  const out = {};
-  const keys = Object.keys(row);
-  for (const [field, variants] of Object.entries(HEADER_MAP)) {
-    const match = keys.find(k => variants.includes(normalizeHeader(k)));
-    if (match && row[match] !== undefined && row[match] !== null) out[field] = String(row[match]).trim();
-  }
-  return out;
-}
 
 function propertyExportColumns(customColumns) {
   return [
@@ -278,6 +250,21 @@ export default function PropertiesPage() {
     loadPropertyContacts(editingId);
   }
 
+  async function fetchAllPropertiesForDedupe() {
+    const all = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('property_name, property_street, property_unit, property_city, property_zip')
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      all.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    return all;
+  }
+
   async function handleImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -285,17 +272,62 @@ export default function PropertiesPage() {
     setImportResult('');
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      const mapped = rows.map(mapRow).filter(p => p.property_name && p.property_name.trim());
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+      const mapped = rows.map(mapRow).filter(p => p.property_name);
       if (mapped.length === 0) {
         setImportResult('No rows with a recognizable property name column were found.');
         return;
       }
-      const { error } = await supabase.from('properties').insert(mapped);
-      if (error) throw error;
-      setImportResult(`Imported ${mapped.length} propert${mapped.length === 1 ? 'y' : 'ies'}.`);
+
+      // Skip anything already in Properties, and repeats within the file itself.
+      const existing = await fetchAllPropertiesForDedupe();
+      const { fresh, duplicates } = splitDuplicates(existing, mapped);
+
+      // Link each management company to Companies (created if new), once per name.
+      const companyIds = new Map();
+      for (const p of fresh) {
+        const key = p.management_company.toLowerCase();
+        if (!key) continue;
+        if (!companyIds.has(key)) {
+          companyIds.set(key, await linkOrCreateCompanyByName(p.management_company, { defaultCompanyType: 'Management Company' }));
+        }
+      }
+
+      const payloads = fresh.map(p => {
+        const { last_visited_at, ...rest } = p;
+        const payload = { ...rest, company_id: companyIds.get(p.management_company.toLowerCase()) || null };
+        if (last_visited_at) payload.last_visited_at = last_visited_at;
+        return payload;
+      });
+
+      let inserted = [];
+      for (let i = 0; i < payloads.length; i += 200) {
+        const { data, error } = await supabase.from('properties').insert(payloads.slice(i, i + 200)).select('id, property_name, management_company, contact_name, contact_phone, contact_email');
+        if (error) throw new Error(`${error.message} (${inserted.length} of ${payloads.length} were saved before this error; re-importing will skip them)`);
+        inserted = inserted.concat(data || []);
+      }
+
+      // Contact details become real linked People, same as the Add property form.
+      for (const p of inserted) {
+        if (!p.contact_name) continue;
+        await syncPropertyContact({
+          propertyId: p.id,
+          propertyName: p.property_name,
+          managementCompany: p.management_company,
+          name: p.contact_name,
+          phone: p.contact_phone,
+          email: p.contact_email,
+        });
+      }
+
+      const skipped = duplicates.length;
+      setImportResult(
+        `Imported ${inserted.length} propert${inserted.length === 1 ? 'y' : 'ies'}.` +
+        (skipped ? ` Skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}.` : '')
+      );
+      await loadProperties();
     } catch (err) {
       setImportResult(`Import failed: ${err.message}`);
     } finally {
