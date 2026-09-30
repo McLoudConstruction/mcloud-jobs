@@ -281,17 +281,19 @@ export default function FinancialDashboardPage() {
               getRowKey={j => j.id}
               onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Financials`}
               rows={jobRows}
+              exportFileName="job-financials"
+              exportSheetName="Job Financials"
               columns={[
-                { key: 'project_number', label: 'Project #', defaultWidth: 100, render: j => `#${j.project_number}` },
+                { key: 'project_number', label: 'Project #', defaultWidth: 100, exportValue: j => j.project_number, render: j => `#${j.project_number}` },
                 { key: 'customer_name', label: 'Customer', defaultWidth: 170, render: j => j.customer_name || 'Unnamed' },
-                { key: 'contract_price', label: 'Contract Price', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.contract_price) },
-                { key: 'projected_cost', label: 'Projected Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.projected_cost) },
-                { key: 'projectedMargin', label: 'Projected Margin', defaultWidth: 140, filterable: false, render: j => <span style={{ color: j.projectedMargin != null && j.projectedMargin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.projectedMargin)}</span> },
-                { key: 'projectedMarginPercent', label: 'Projected Margin %', defaultWidth: 140, filterable: false, render: j => <span style={{ color: j.projectedMarginPercent != null && j.projectedMarginPercent < 0 ? '#a13f3f' : undefined }}>{j.projectedMarginPercent != null ? `${j.projectedMarginPercent.toFixed(1)}%` : '—'}</span> },
-                { key: 'committed', label: 'Committed Cost', defaultWidth: 130, filterable: false, render: j => fmtMoney(j.committed) },
-                { key: 'actual', label: 'Actual Cost', defaultWidth: 120, filterable: false, render: j => fmtMoney(j.actual) },
-                { key: 'margin', label: 'Actual Margin', defaultWidth: 130, filterable: false, render: j => <span style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</span> },
-                { key: 'marginPercent', label: 'Margin %', defaultWidth: 100, filterable: false, render: j => <span style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>{j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}</span> },
+                { key: 'contract_price', label: 'Contract Price', defaultWidth: 130, filterable: false, exportValue: j => j.contract_price, render: j => fmtMoney(j.contract_price) },
+                { key: 'projected_cost', label: 'Projected Cost', defaultWidth: 130, filterable: false, exportValue: j => j.projected_cost, render: j => fmtMoney(j.projected_cost) },
+                { key: 'projectedMargin', label: 'Projected Margin', defaultWidth: 140, filterable: false, exportValue: j => j.projectedMargin, render: j => <span style={{ color: j.projectedMargin != null && j.projectedMargin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.projectedMargin)}</span> },
+                { key: 'projectedMarginPercent', label: 'Projected Margin %', defaultWidth: 140, filterable: false, exportValue: j => (j.projectedMarginPercent != null ? Number(j.projectedMarginPercent.toFixed(1)) : ''), render: j => <span style={{ color: j.projectedMarginPercent != null && j.projectedMarginPercent < 0 ? '#a13f3f' : undefined }}>{j.projectedMarginPercent != null ? `${j.projectedMarginPercent.toFixed(1)}%` : '—'}</span> },
+                { key: 'committed', label: 'Committed Cost', defaultWidth: 130, filterable: false, exportValue: j => j.committed, render: j => fmtMoney(j.committed) },
+                { key: 'actual', label: 'Actual Cost', defaultWidth: 120, filterable: false, exportValue: j => j.actual, render: j => fmtMoney(j.actual) },
+                { key: 'margin', label: 'Actual Margin', defaultWidth: 130, filterable: false, exportValue: j => j.margin, render: j => <span style={{ color: j.margin != null && j.margin < 0 ? '#a13f3f' : undefined }}>{fmtMoney(j.margin)}</span> },
+                { key: 'marginPercent', label: 'Margin %', defaultWidth: 100, filterable: false, exportValue: j => (j.marginPercent != null ? Number(j.marginPercent.toFixed(1)) : ''), render: j => <span style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>{j.marginPercent != null ? `${j.marginPercent.toFixed(1)}%` : '—'}</span> },
               ]}
             />
           )}

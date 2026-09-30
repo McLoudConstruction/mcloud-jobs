@@ -14,6 +14,7 @@ import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { linkOrCreateCompanyByName, findPropertyIdByName } from '../../lib/contactSync';
 
@@ -66,6 +67,36 @@ function mapRow(row) {
   }
   if (contact.contact_phone) contact.contact_phone = formatPhone(contact.contact_phone);
   return contact;
+}
+
+// Everything worth having in a spreadsheet, not just the columns the table
+// shows. Headers match the Excel import so an export can be edited and
+// brought back in.
+function contactExportColumns(customColumns) {
+  return [
+    { label: 'Name', value: c => c.name },
+    { label: 'Type', value: c => c.contact_type },
+    { label: 'First Name', value: c => c.first_name },
+    { label: 'Last Name', value: c => c.last_name },
+    { label: 'Company', value: c => c.management_company },
+    { label: 'Position', value: c => c.position },
+    { label: 'Phone', value: c => (c.contact_phone ? formatPhone(c.contact_phone) : '') },
+    { label: 'Email', value: c => c.contact_email },
+    { label: 'Billing Email', value: c => c.billing_email },
+    { label: 'Property', value: c => c.property },
+    { label: 'Street', value: c => c.address_street },
+    { label: 'Unit', value: c => c.address_unit },
+    { label: 'City', value: c => c.address_city },
+    { label: 'State', value: c => c.address_state },
+    { label: 'Zip', value: c => c.address_zip },
+    { label: 'Billing Street', value: c => c.billing_street },
+    { label: 'Billing Unit', value: c => c.billing_unit },
+    { label: 'Billing City', value: c => c.billing_city },
+    { label: 'Billing State', value: c => c.billing_state },
+    { label: 'Billing Zip', value: c => c.billing_zip },
+    { label: 'Notes', value: c => c.notes },
+    ...customColumnsToExport(customColumns),
+  ];
 }
 
 export default function CustomersPage() {
@@ -272,6 +303,10 @@ export default function CustomersPage() {
     return (c.name || '').toLowerCase().includes(q) || (c.management_company || '').toLowerCase().includes(q);
   });
 
+  function exportContacts() {
+    exportToSheet({ fileName: 'contacts', sheetName: 'Contacts', columns: contactExportColumns(customColumns), rows: filtered });
+  }
+
   if (loading || !session) return null;
 
   return (
@@ -307,6 +342,7 @@ export default function CustomersPage() {
           )}
           {isMobile && (
             <MobileOverflowMenu>
+              <button className="btn btn-sm" onClick={exportContacts}>↓ Export to Excel</button>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -473,6 +509,9 @@ export default function CustomersPage() {
             getRowKey={c => c.id}
             onRowClick={startEdit}
             rows={filtered}
+            exportFileName="contacts"
+            exportSheetName="Contacts"
+            exportColumns={contactExportColumns(customColumns)}
             columns={[
               { key: 'name', label: 'Name', defaultWidth: 180, render: c => c.name },
               { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },

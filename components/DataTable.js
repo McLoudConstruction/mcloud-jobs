@@ -1,11 +1,19 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { exportToSheet, columnsToExport } from '../lib/exportToSheet';
 
 // columns: [{ key, label, defaultWidth?, render?(row), filterValue?(row), sortValue?(row), filterable?, sortable?, stopClickPropagation?, sticky? }]
 // sticky: true pins the column to the right edge of the table (header, filter
 // row, and body cells) so it stays visible when the table scrolls horizontally
 // — meant for a trailing actions column on wide tables.
-export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName }) {
+//
+// Export: pass exportFileName to show an "Export to Excel" button above the
+// table. It exports exactly the rows currently shown (after column filters
+// and sorting). Each column can set exportValue(row) to control its cell
+// (falls back to filterValue, then row[key]) or exportable: false to leave it
+// out. Pass exportColumns ([{ label, value(row) }]) to export a fuller set of
+// fields than the table displays, e.g. addresses and notes.
+export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName, exportFileName, exportSheetName, exportColumns }) {
   const [widths, setWidths] = useState(() => {
     // On a narrow viewport, start columns noticeably tighter so more of
     // the table is visible before scrolling — the user can still drag
@@ -124,7 +132,24 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, sort, columns]);
 
+  function handleExport() {
+    exportToSheet({
+      fileName: exportFileName,
+      sheetName: exportSheetName || exportFileName,
+      columns: exportColumns || columnsToExport(columns),
+      rows: sortedRows,
+    });
+  }
+
   return (
+    <>
+    {exportFileName && sortedRows.length > 0 && (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button type="button" className="btn btn-sm" onClick={handleExport}>
+          ↓ Export to Excel ({sortedRows.length})
+        </button>
+      </div>
+    )}
     <div className="data-table-wrap">
       <table className="data-table" style={{ tableLayout: 'fixed' }}>
         <colgroup>
@@ -182,5 +207,6 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
       </table>
       {sortedRows.length === 0 && <div className="empty-state">No results match these filters.</div>}
     </div>
+    </>
   );
 }

@@ -17,6 +17,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 
 const EMPTY_FORM = {
   property_name: '', property_type: '', prospect_stage: 'prospecting',
@@ -53,6 +54,30 @@ function mapRow(row) {
     if (match && row[match] !== undefined && row[match] !== null) out[field] = String(row[match]).trim();
   }
   return out;
+}
+
+function propertyExportColumns(customColumns) {
+  return [
+    { label: 'Property Name', value: p => p.property_name },
+    { label: 'Property Type', value: p => p.property_type },
+    { label: 'Prospect Stage', value: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '' },
+    { label: 'Active', value: p => p.active !== false },
+    { label: 'Street', value: p => p.property_street },
+    { label: 'Unit', value: p => p.property_unit },
+    { label: 'City', value: p => p.property_city },
+    { label: 'State', value: p => p.property_state },
+    { label: 'Zip', value: p => p.property_zip },
+    { label: 'Management Company', value: p => p.management_company },
+    { label: 'Contact Name', value: p => p.contact_name },
+    { label: 'Phone', value: p => (p.contact_phone ? formatPhone(p.contact_phone) : '') },
+    { label: 'Email', value: p => p.contact_email },
+    { label: 'Year Built', value: p => p.year_built },
+    { label: 'Sq Ft', value: p => p.sq_ft },
+    { label: 'Target Value', value: p => p.target_value },
+    { label: 'Last Visited', value: p => (p.last_visited_at ? new Date(p.last_visited_at).toLocaleDateString('en-US') : '') },
+    { label: 'Notes', value: p => p.notes },
+    ...customColumnsToExport(customColumns),
+  ];
 }
 
 export default function PropertiesPage() {
@@ -286,6 +311,10 @@ export default function PropertiesPage() {
     return (p.property_name || '').toLowerCase().includes(q) || (p.management_company || '').toLowerCase().includes(q);
   });
 
+  function exportProperties() {
+    exportToSheet({ fileName: 'properties', sheetName: 'Properties', columns: propertyExportColumns(customColumns), rows: filtered });
+  }
+
   if (loading || !session) return null;
 
   return (
@@ -307,6 +336,7 @@ export default function PropertiesPage() {
           )}
           {isMobile && (
             <MobileOverflowMenu>
+              <button className="btn btn-sm" onClick={exportProperties}>↓ Export to Excel</button>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -472,6 +502,9 @@ export default function PropertiesPage() {
             getRowKey={p => p.id}
             onRowClick={startEdit}
             rows={filtered}
+            exportFileName="properties"
+            exportSheetName="Properties"
+            exportColumns={propertyExportColumns(customColumns)}
             columns={[
               { key: 'property_name', label: 'Property Name', defaultWidth: 220, render: p => <>{p.property_name}{!p.active && ' (inactive)'}</> },
               { key: 'property_type', label: 'Property Type', defaultWidth: 170, render: p => p.property_type || '—' },

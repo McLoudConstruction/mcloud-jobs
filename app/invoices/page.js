@@ -123,16 +123,18 @@ export default function InvoicesDashboardPage() {
             getRowKey={r => r.id}
             onRowClick={r => window.location.href = `/jobs/${r.id}?tab=Financials`}
             rows={rows}
+            exportFileName="invoices"
+            exportSheetName="Invoices"
             rowClassName={r => r.urgency === 0 ? 'row-settled' : ''}
             columns={[
-              { key: 'project_number', label: 'Project #', defaultWidth: 100, render: r => `#${r.project_number}` },
-              { key: 'customer_name', label: 'Customer', defaultWidth: 190, render: r => r.customer_name || 'Unnamed' },
-              { key: 'stage', label: 'Stage', defaultWidth: 110, render: r => r.stage },
-              { key: 'expected_close_date', label: 'Expected Close', defaultWidth: 130, filterable: false, render: r => fmtDate(r.expected_close_date) },
-              { key: 'billing_type', label: 'Billing Type', defaultWidth: 120, filterable: false, render: r => r.usesDraws ? 'Draws' : 'Single Invoice' },
-              { key: 'flaggedReady', label: 'Ready to Invoice', defaultWidth: 130, filterable: false, render: r => r.flaggedReady ? <span style={{ color: '#3a6b45', fontWeight: 700 }}>Yes</span> : '—' },
-              { key: 'status', label: 'Status', defaultWidth: 220, render: r => r.status },
-              { key: 'outstanding', label: 'Outstanding', defaultWidth: 120, filterable: false, render: r => fmtMoney(r.outstanding) },
+              { key: 'project_number', label: 'Project #', defaultWidth: 100, exportValue: r => r.project_number, render: r => `#${r.project_number}` },
+              { key: 'customer_name', label: 'Customer', defaultWidth: 190, exportValue: r => r.customer_name, render: r => r.customer_name || 'Unnamed' },
+              { key: 'stage', label: 'Stage', defaultWidth: 110, exportValue: r => r.stage, render: r => r.stage },
+              { key: 'expected_close_date', label: 'Expected Close', defaultWidth: 130, filterable: false, exportValue: r => r.expected_close_date, render: r => fmtDate(r.expected_close_date) },
+              { key: 'billing_type', label: 'Billing Type', defaultWidth: 120, filterable: false, exportValue: r => (r.usesDraws ? 'Draws' : 'Single Invoice'), render: r => r.usesDraws ? 'Draws' : 'Single Invoice' },
+              { key: 'flaggedReady', label: 'Ready to Invoice', defaultWidth: 130, filterable: false, exportValue: r => !!r.flaggedReady, render: r => r.flaggedReady ? <span style={{ color: '#3a6b45', fontWeight: 700 }}>Yes</span> : '—' },
+              { key: 'status', label: 'Status', defaultWidth: 220, exportValue: r => r.status, render: r => r.status },
+              { key: 'outstanding', label: 'Outstanding', defaultWidth: 120, filterable: false, exportValue: r => r.outstanding, render: r => fmtMoney(r.outstanding) },
             ]}
           />
         )}

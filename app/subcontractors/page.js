@@ -18,6 +18,7 @@ import { COMPLIANCE_OVERALL } from '../../lib/compliance';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { syncCompanyContact } from '../../lib/contactSync';
 
 const DECLINE_REASONS = [
@@ -72,6 +73,36 @@ function coiStatus(expiresAt) {
   if (days < 0) return <span style={{ color: '#a13f3f', fontWeight: 600 }}>Expired</span>;
   if (days <= 30) return <span style={{ color: '#a17c3f', fontWeight: 600 }}>Expires soon</span>;
   return <span style={{ color: '#3a6b45' }}>Current</span>;
+}
+
+// Plain text version of coiStatus for spreadsheets.
+function coiStatusText(expiresAt) {
+  if (!expiresAt) return 'Not on file';
+  const days = Math.floor((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return 'Expired';
+  if (days <= 30) return 'Expires soon';
+  return 'Current';
+}
+
+function subExportColumns(customColumns, complianceMap) {
+  return [
+    { label: 'Name', value: c => c.company_name },
+    { label: 'Contact Name', value: c => c.contact_name },
+    { label: 'Phone', value: c => (c.contact_phone ? formatPhone(c.contact_phone) : '') },
+    { label: 'Email', value: c => c.contact_email },
+    { label: 'Crew Email', value: c => c.crew_email },
+    { label: 'Street', value: c => c.street },
+    { label: 'Unit', value: c => c.unit },
+    { label: 'City', value: c => c.city },
+    { label: 'State', value: c => c.state },
+    { label: 'Zip', value: c => c.zip },
+    { label: 'Services Offered', value: c => c.services_offered },
+    { label: 'Portal', value: c => (c.portal_invited_at ? 'Invited' : 'Not invited') },
+    { label: 'Compliance', value: c => COMPLIANCE_OVERALL[complianceMap[c.id]]?.label || coiStatusText(c.coi_expires_at) },
+    { label: 'COI Expires', value: c => c.coi_expires_at },
+    { label: 'Notes', value: c => c.notes },
+    ...customColumnsToExport(customColumns),
+  ];
 }
 
 // A single green/red compliance signal for the mobile row list — expired,
@@ -597,6 +628,10 @@ export default function SubcontractorsPage() {
 
   const filtered = subs.filter(c => !search.trim() || (c.company_name || '').toLowerCase().includes(search.toLowerCase()));
 
+  function exportSubs() {
+    exportToSheet({ fileName: 'subcontractors', sheetName: 'Subcontractors', columns: subExportColumns(customColumns, complianceMap), rows: filtered });
+  }
+
   if (loading || !session) return null;
 
   return (
@@ -619,6 +654,7 @@ export default function SubcontractorsPage() {
           {isMobile && (
             <MobileOverflowMenu>
               <Link href="/subcontractors/compliance" className="btn">Compliance</Link>
+              <button className="btn btn-sm" onClick={exportSubs}>↓ Export to Excel</button>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -886,6 +922,9 @@ export default function SubcontractorsPage() {
             getRowKey={c => c.id}
             onRowClick={startEdit}
             rows={filtered}
+            exportFileName="subcontractors"
+            exportSheetName="Subcontractors"
+            exportColumns={subExportColumns(customColumns, complianceMap)}
             columns={[
               { key: 'company_name', label: 'Name', defaultWidth: 220, render: c => c.company_name },
               { key: 'city', label: 'City', defaultWidth: 150, render: c => c.city || '—' },

@@ -110,14 +110,16 @@ export default function DeferredScopePage() {
             getRowKey={i => i.id}
             onRowClick={setEditing}
             rows={filtered}
+            exportFileName="deferred-scope"
+            exportSheetName="Deferred Scope"
             columns={[
               { key: 'label', label: 'Item', defaultWidth: 240, render: i => i.label },
               { key: 'customer', label: 'Customer', defaultWidth: 180, filterValue: i => i.customer_name || '', render: i => i.customer_name || '—' },
-              { key: 'job', label: 'Job', defaultWidth: 150, filterValue: i => i.jobs?.project_number || '', render: i => i.jobs ? <Link href={`/jobs/${i.job_id}`} onClick={e => e.stopPropagation()}>#{i.jobs.project_number}</Link> : '—' },
-              { key: 'price', label: 'Price', defaultWidth: 110, sortValue: i => Number(i.price) || 0, render: i => fmtMoney(i.price) },
-              { key: 'status', label: 'Status', defaultWidth: 110, filterable: false, render: i => <span className="badge" style={{ background: STATUS_COLORS[i.status] }}>{STATUS_LABELS[i.status]}</span> },
-              { key: 'follow_up_at', label: 'Follow Up', defaultWidth: 120, sortValue: i => i.follow_up_at || '', render: i => fmtDate(i.follow_up_at) },
-              { key: 'created_at', label: 'Captured', defaultWidth: 120, sortValue: i => i.created_at, render: i => fmtDate(i.created_at) },
+              { key: 'job', label: 'Job', defaultWidth: 150, filterValue: i => i.jobs?.project_number || '', exportValue: i => i.jobs?.project_number, render: i => i.jobs ? <Link href={`/jobs/${i.job_id}`} onClick={e => e.stopPropagation()}>#{i.jobs.project_number}</Link> : '—' },
+              { key: 'price', label: 'Price', defaultWidth: 110, sortValue: i => Number(i.price) || 0, exportValue: i => (i.price === null || i.price === undefined || i.price === '' ? '' : Number(i.price)), render: i => fmtMoney(i.price) },
+              { key: 'status', label: 'Status', defaultWidth: 110, filterable: false, exportValue: i => STATUS_LABELS[i.status] || i.status, render: i => <span className="badge" style={{ background: STATUS_COLORS[i.status] }}>{STATUS_LABELS[i.status]}</span> },
+              { key: 'follow_up_at', label: 'Follow Up', defaultWidth: 120, exportValue: i => i.follow_up_at, sortValue: i => i.follow_up_at || '', render: i => fmtDate(i.follow_up_at) },
+              { key: 'created_at', label: 'Captured', defaultWidth: 120, exportValue: i => i.created_at, sortValue: i => i.created_at, render: i => fmtDate(i.created_at) },
               {
                 key: 'actions', label: '', defaultWidth: 80, filterable: false, stopClickPropagation: true,
                 render: i => <button className="btn btn-sm btn-danger" onClick={() => deleteItem(i)}>Delete</button>,

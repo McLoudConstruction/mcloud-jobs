@@ -97,8 +97,10 @@ export default function EstimatingWorklistPage() {
             getRowKey={j => j.id}
             onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
             rows={filtered}
+            exportFileName="estimates"
+            exportSheetName="Estimates"
             columns={[
-              { key: 'estimate_number', label: 'Estimate #', defaultWidth: 130, render: j => j.estimate_number ? `#${j.estimate_number}` : '—' },
+              { key: 'estimate_number', label: 'Estimate #', defaultWidth: 130, exportValue: j => j.estimate_number, render: j => j.estimate_number ? `#${j.estimate_number}` : '—' },
               { key: 'customer_name', label: 'Customer', defaultWidth: 200, render: j => j.customer_name || 'Unnamed' },
               { key: 'project_address', label: 'Address', defaultWidth: 250, render: j => j.project_address || '—' },
               { key: 'stage', label: 'Stage', defaultWidth: 130, render: j => j.stage || '—' },

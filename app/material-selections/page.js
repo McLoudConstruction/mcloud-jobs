@@ -105,14 +105,16 @@ export default function MaterialSelectionsDashboardPage() {
             getRowKey={r => r.id}
             onRowClick={r => window.location.href = `/jobs/${r.job_id}/material-selections/${r.id}`}
             rows={rows}
+            exportFileName="material-selections"
+            exportSheetName="Material Selections"
             rowClassName={r => r.status === 'approved' ? 'row-settled' : ''}
             columns={[
-              { key: 'project_number', label: 'Project #', defaultWidth: 90, render: r => r.project_number ? `#${r.project_number}` : '—' },
+              { key: 'project_number', label: 'Project #', defaultWidth: 90, exportValue: r => r.project_number, render: r => r.project_number ? `#${r.project_number}` : '—' },
               { key: 'customer_name', label: 'Customer', defaultWidth: 180, render: r => r.customer_name },
               { key: 'title', label: 'Selection', defaultWidth: 220, render: r => r.title },
-              { key: 'status', label: 'Status', defaultWidth: 150, render: r => STATUS_LABELS[r.status] || r.status },
-              { key: 'option_count', label: 'Options', defaultWidth: 90, filterable: false, render: r => r.option_count },
-              { key: 'created_at', label: 'Created', defaultWidth: 130, filterable: false, render: r => fmtDate(r.created_at) },
+              { key: 'status', label: 'Status', defaultWidth: 150, exportValue: r => STATUS_LABELS[r.status] || r.status, render: r => STATUS_LABELS[r.status] || r.status },
+              { key: 'option_count', label: 'Options', defaultWidth: 90, filterable: false, exportValue: r => r.option_count, render: r => r.option_count },
+              { key: 'created_at', label: 'Created', defaultWidth: 130, filterable: false, exportValue: r => r.created_at, render: r => fmtDate(r.created_at) },
             ]}
           />
         )}

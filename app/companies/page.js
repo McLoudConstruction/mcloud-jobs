@@ -14,6 +14,7 @@ import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import { formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncCompanyContact } from '../../lib/contactSync';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 
@@ -45,6 +46,23 @@ function mapRow(row) {
     if (match && row[match] !== undefined && row[match] !== null) out[field] = String(row[match]).trim();
   }
   return out;
+}
+
+function companyExportColumns(customColumns) {
+  return [
+    { label: 'Company Name', value: c => c.company_name },
+    { label: 'Type', value: c => c.company_type },
+    { label: 'Street', value: c => c.street },
+    { label: 'Unit', value: c => c.unit },
+    { label: 'City', value: c => c.city },
+    { label: 'State', value: c => c.state },
+    { label: 'Zip', value: c => c.zip },
+    { label: 'Contact Name', value: c => c.contact_name },
+    { label: 'Phone', value: c => (c.contact_phone ? formatPhone(c.contact_phone) : '') },
+    { label: 'Email', value: c => c.contact_email },
+    { label: 'Notes', value: c => c.notes },
+    ...customColumnsToExport(customColumns),
+  ];
 }
 
 export default function CompaniesPage() {
@@ -190,6 +208,10 @@ export default function CompaniesPage() {
     return (c.company_name || '').toLowerCase().includes(search.toLowerCase());
   });
 
+  function exportCompanies() {
+    exportToSheet({ fileName: 'companies', sheetName: 'Companies', columns: companyExportColumns(customColumns), rows: filtered });
+  }
+
   if (loading || !session) return null;
 
   return (
@@ -209,6 +231,7 @@ export default function CompaniesPage() {
           )}
           {isMobile && (
             <MobileOverflowMenu>
+              <button className="btn btn-sm" onClick={exportCompanies}>↓ Export to Excel</button>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -285,6 +308,9 @@ export default function CompaniesPage() {
             getRowKey={c => c.id}
             onRowClick={startEdit}
             rows={filtered}
+            exportFileName="companies"
+            exportSheetName="Companies"
+            exportColumns={companyExportColumns(customColumns)}
             columns={[
               { key: 'company_name', label: 'Company Name', defaultWidth: 220, render: c => c.company_name },
               { key: 'company_type', label: 'Type', defaultWidth: 170, render: c => c.company_type || '—' },
