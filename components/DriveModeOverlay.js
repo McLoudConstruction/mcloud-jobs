@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import DriveModePropertyInfo from './DriveModePropertyInfo';
 import { getPreferredMapsProvider, setPreferredMapsProvider, mapsUrlFor } from '../lib/salesRoutes';
 
 // Same Google Font ('Big Shoulders', not the separate 'Big Shoulders
@@ -94,6 +95,7 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
               </button>
             )}
           </div>
+          <DriveModePropertyInfo key={current.property_id || currentIndex} stop={current} />
         </div>
       ) : showEndAsNext ? (
         <div style={contentStyle}>
@@ -158,7 +160,7 @@ const exitBtnStyle = {
   background: 'rgba(255,255,255,0.08)', border: 'none', color: '#f3ede0',
   width: 40, height: 40, borderRadius: '50%', fontSize: 22, lineHeight: 1, cursor: 'pointer',
 };
-const contentStyle = { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px' };
+const contentStyle = { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'safe center', textAlign: 'center', padding: '0 24px', overflowY: 'auto', minHeight: 0 };
 const progressStyle = { fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 18 };
 const headlineStyle = { fontFamily: "'Big Shoulders', sans-serif", fontWeight: 800, fontSize: 'clamp(42px, 13vw, 76px)', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1, color: '#9b773d' };
 const nameStyle = { fontSize: 'clamp(20px, 6vw, 32px)', fontWeight: 600, marginTop: 16, maxWidth: 600 };

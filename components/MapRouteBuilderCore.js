@@ -168,29 +168,40 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
   }, []);
 
   // ── Every property (the whole Property Database), fetched in pages ───
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const rows = [];
-      let fields = PROPERTY_FIELDS;
-      let failure = '';
-      for (let from = 0; ; from += PAGE_SIZE) {
-        let res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
-        if (res.error && fields !== '*') {
-          // A named column may be missing on this database; take everything instead.
-          fields = '*';
-          res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
-        }
-        if (res.error) { failure = res.error.message || 'Unknown error'; break; }
-        const data = res.data || [];
-        rows.push(...data);
-        if (data.length < PAGE_SIZE) break;
+  // Re-run on tab focus and after a route ends, so visits logged elsewhere
+  // (the Properties page, another tab) show up in the dot colors.
+  const loadAllProps = useCallback(async () => {
+    const rows = [];
+    let fields = PROPERTY_FIELDS;
+    let failure = '';
+    for (let from = 0; ; from += PAGE_SIZE) {
+      let res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
+      if (res.error && fields !== '*') {
+        // A named column may be missing on this database; take everything instead.
+        fields = '*';
+        res = await supabase.from('properties').select(fields).order('id').range(from, from + PAGE_SIZE - 1);
       }
-      if (!cancelled && failure) setPropsError(failure);
-      if (!cancelled) { setAllProps(rows); setPropsLoaded(true); }
-    })();
-    return () => { cancelled = true; };
+      if (res.error) { failure = res.error.message || 'Unknown error'; break; }
+      const data = res.data || [];
+      rows.push(...data);
+      if (data.length < PAGE_SIZE) break;
+    }
+    if (failure) {
+      setPropsError(failure);
+      setPropsLoaded(true);
+      return; // keep whatever is already on screen rather than replacing it with a partial list
+    }
+    setPropsError('');
+    setAllProps(rows);
+    setPropsLoaded(true);
   }, []);
+
+  useEffect(() => {
+    loadAllProps();
+    const onVisible = () => { if (document.visibilityState === 'visible') loadAllProps(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadAllProps]);
 
   const savedProps = useMemo(() => allProps.filter(hasCoords), [allProps]);
   const unlocated = useMemo(() => allProps.filter(p => !hasCoords(p) && p.property_street), [allProps]);
@@ -300,8 +311,13 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           const mgmt = document.createElement('div');
           mgmt.style.cssText = 'font-size:11.5px;color:#4a4a45;margin-top:2px';
           mgmt.textContent = f.properties.mgmt || 'No management company';
+          const visit = document.createElement('div');
+          visit.style.cssText = 'font-size:11px;color:#4a4a45;margin-top:2px';
+          const dsv = daysSince(f.properties.lv || null);
+          visit.textContent = dsv == null ? 'Never visited' : dsv === 0 ? 'Visited today' : `Visited ${dsv} day${dsv === 1 ? '' : 's'} ago`;
           el.appendChild(name);
           el.appendChild(mgmt);
+          el.appendChild(visit);
           popup.setLngLat(f.geometry.coordinates).setDOMContent(el).addTo(map);
         });
         map.on('mouseleave', 'props-circles', () => {
@@ -380,6 +396,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           name: p.property_name || '',
           mgmt: p.management_company || '',
           bucket: visitBucket(p.last_visited_at),
+          lv: p.last_visited_at || '',
           inRoute: onRoute.has(p.id) ? 1 : 0,
         },
       })),
@@ -406,8 +423,13 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     const mgmt = document.createElement('div');
     mgmt.style.cssText = 'font-size:11.5px;color:#4a4a45;margin-top:2px';
     mgmt.textContent = p.management_company || 'No management company';
+    const visit = document.createElement('div');
+    visit.style.cssText = 'font-size:11px;color:#4a4a45;margin-top:2px';
+    const dsv = daysSince(p.last_visited_at);
+    visit.textContent = dsv == null ? 'Never visited' : dsv === 0 ? 'Visited today' : `Visited ${dsv} day${dsv === 1 ? '' : 's'} ago`;
     el.appendChild(name);
     el.appendChild(mgmt);
+    el.appendChild(visit);
     selPopupRef.current = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'mrb-popup', maxWidth: '260px' })
       .setLngLat([Number(p.property_lng), Number(p.property_lat)])
       .setDOMContent(el)
@@ -856,19 +878,41 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     }
   }
 
+  // Writes last_visited_at and confirms a row actually changed. A silent
+  // failure here is what leaves a dot red after a visit, so surface it.
+  async function recordVisit(ids, nowIso) {
+    const { data, error: err } = await supabase.from('properties')
+      .update({ last_visited_at: nowIso }).in('id', ids).select('id');
+    if (err) { setError(`Could not record the visit: ${err.message}`); return false; }
+    const done = new Set((data || []).map(r => r.id));
+    if (done.size < ids.length) {
+      setError(`The visit was not saved for ${ids.length - done.size} of ${ids.length} properties (no permission or the property no longer exists).`);
+    }
+    if (done.size === 0) return false;
+    setAllProps(prev => prev.map(x => (done.has(x.id) ? { ...x, last_visited_at: nowIso } : x)));
+    return true;
+  }
+
   async function markStopVisited(index) {
     const stop = stops[index];
     if (!stop) return;
     const nowIso = new Date().toISOString();
     if (stop.property_id) {
-      await supabase.from('properties').update({ last_visited_at: nowIso }).eq('id', stop.property_id);
-      setAllProps(prev => prev.map(p => (p.id === stop.property_id ? { ...p, last_visited_at: nowIso } : p)));
+      await recordVisit([stop.property_id], nowIso);
+    } else {
+      setNotice(`${stop.property_name || 'That stop'} is not linked to a property, so its visit date was not saved.`);
     }
     await persistStops(stops.map((s, i) => (i === index ? { ...s, visited_at: nowIso } : s)));
   }
-
-  // Only un-marks this route's own record; last_visited_at on the property
-  // is shared app-wide, so it is deliberately left alone (same as the typed builder).
+  async function markAllVisited() {
+    if (stops.length === 0) return;
+    setMarking(true);
+    const nowIso = new Date().toISOString();
+    const ids = stops.map(s => s.property_id).filter(Boolean);
+    if (ids.length) await recordVisit(ids, nowIso);
+    await persistStops(stops.map(s => ({ ...s, visited_at: s.visited_at || nowIso })));
+    setMarking(false);
+  }
   async function unmarkStopVisited(index) {
     if (!stops[index]) return;
     await persistStops(stops.map((s, i) => (i === index ? { ...s, visited_at: null } : s)));
@@ -911,12 +955,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     if (route?.id) await finishRoute(route.id);
     setDriving(false);
     resetAll();
+    loadAllProps();
     if (onRouteChanged) onRouteChanged();
   }
 
   async function discardRoute() {
     if (route?.id) await cancelRoute(route.id);
     resetAll();
+    loadAllProps();
     if (onRouteChanged) onRouteChanged();
   }
 
@@ -955,8 +1001,12 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         .mrb-float-right { top: 10px; right: 10px; width: 350px; max-height: calc(100% - 110px); }
         .mrb-float-detail { bottom: 10px; left: 340px; right: 370px; margin: 0 auto; width: 440px; max-width: max(300px, calc(100% - 720px)); padding: 0; }
         .mrb-visible { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-        .mrb-inview { flex: 1; min-height: 0; overflow-y: auto; }
-        .mrb-stops { flex: 1; min-height: 0; overflow-y: auto; }
+        .mrb-inview { flex: 1; min-height: 0; overflow-y: auto; padding-right: 8px; }
+        .mrb-stops { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+        .mrb-inview, .mrb-stops { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+        .mrb-inview::-webkit-scrollbar, .mrb-stops::-webkit-scrollbar { width: 8px; }
+        .mrb-inview::-webkit-scrollbar-track, .mrb-stops::-webkit-scrollbar-track { background: transparent; }
+        .mrb-inview::-webkit-scrollbar-thumb, .mrb-stops::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
         .mrb-stop.over { box-shadow: 0 -3px 0 #16a34a inset; }
         .mrb-popup .mapboxgl-popup-content { padding: 7px 10px; border-radius: 7px; font-family: system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
         @media (max-width: 900px) {
