@@ -14,7 +14,7 @@ const MODES = [
 // property-type filters. Each core supplies its own content; this just
 // provides the shared card frame (via each core's `hideChrome` prop) and the
 // segmented control to switch between them.
-export default function CombinedRouteBuilderCard({ onRouteChanged }) {
+export default function CombinedRouteBuilderCard({ onRouteChanged, onRouteSaved, autoStartDriving }) {
   const [mode, setMode] = useState('manual');
 
   return (
@@ -36,7 +36,7 @@ export default function CombinedRouteBuilderCard({ onRouteChanged }) {
       </div>
 
       {mode === 'manual'
-        ? <MapRouteBuilderCore hideChrome onRouteChanged={onRouteChanged} />
+        ? <MapRouteBuilderCore hideChrome onRouteChanged={onRouteChanged} onRouteSaved={onRouteSaved} autoStartDriving={autoStartDriving} />
         : <RouteBuilderCore hideChrome />}
     </div>
   );

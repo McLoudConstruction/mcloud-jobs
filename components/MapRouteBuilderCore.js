@@ -9,7 +9,7 @@ import { useDragReorder } from '../lib/useDragReorder';
 import { PROPERTY_TYPES } from '../lib/constants';
 import {
   getActiveRoute, startRoute, updateRouteStops, finishRoute, cancelRoute,
-  getCurrentLocation, haversineMiles,
+  saveRoute, shelveRoute, getCurrentLocation, haversineMiles,
 } from '../lib/salesRoutes';
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
@@ -92,7 +92,7 @@ function pinElement(label, kind, title) {
 //
 // Saves into the same sales_routes flow as the typed builder, so Drive Mode,
 // resume-after-screen-off and Recent Routes work unchanged.
-export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrome }) {
+export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSaved, autoStartDriving, hideChrome }) {
   const [staffId, setStaffId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [route, setRoute] = useState(null); // saved sales_routes row once started/resumed
@@ -158,6 +158,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
           setRoute(active);
           setStops(active.stops);
           setAutoOrder(false); // never reshuffle a route already in progress
+          // Coming from "Start Driving" on a saved route: go straight to Drive Mode.
+          if (autoStartDriving) setDriving(true);
           if (active.start_lat != null && active.start_lng != null) {
             setStartPoint({ lat: Number(active.start_lat), lng: Number(active.start_lng) });
             setStartInput(active.start_label || 'Your current location');
@@ -880,6 +882,60 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     }
   }
 
+  // Save Route: keep what is in the builder as a saved route WITHOUT
+  // starting it, then clear the builder so another one can be built. The
+  // saved route shows up in Recent Routes with a Start Driving button.
+  async function saveForLater() {
+    if (stops.length === 0) { setError('Add at least one stop from the map or type one in.'); return; }
+    if (!staffId) { setError('Could not tell who is signed in. Reload and try again.'); return; }
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const resolved = [];
+      for (const s of stops) {
+        const { stop } = await resolveStop(s);
+        resolved.push(stripKey({ ...stop, visited_at: null }));
+      }
+      await saveRoute({
+        staffId,
+        startLabel: startPoint ? (startInput || 'Start') : null,
+        start: startPoint,
+        endLabel: null,
+        end: null,
+        stops: resolved,
+        autoOrdered: autoOrder,
+      });
+      resetAll();
+      if (onRouteSaved) onRouteSaved(resolved.length);
+      else if (onRouteChanged) onRouteChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Save Route on a route already in progress: set it aside (progress is
+  // kept) and clear the builder.
+  async function saveActiveForLater() {
+    if (!route?.id) return;
+    setSaving(true);
+    setError('');
+    try {
+      await shelveRoute(route.id);
+      setDriving(false);
+      const count = (route.stops || stops).length;
+      resetAll();
+      if (onRouteSaved) onRouteSaved(count);
+      else if (onRouteChanged) onRouteChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Writes last_visited_at and confirms a row actually changed. A silent
   // failure here is what leaves a dot red after a visit, so surface it.
   async function recordVisit(ids, nowIso) {
@@ -1371,12 +1427,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             <button className="btn btn-primary btn-sm" onClick={saveAndStart} disabled={saving || stops.length === 0}>
               {saving ? 'Saving…' : 'Save & Start Route'}
             </button>
+            <button className="btn btn-sm" onClick={saveForLater} disabled={saving || stops.length === 0}>Save Route</button>
             <button className="btn btn-sm" onClick={openInMaps} disabled={stops.length === 0}>Open in Google Maps</button>
             <button className="btn btn-sm" onClick={resetAll} disabled={stops.length === 0 && !startPoint}>Clear</button>
           </>
         ) : (
           <>
             <button className="btn btn-primary btn-sm" onClick={() => setDriving(true)}>Start Driving →</button>
+            <button className="btn btn-sm" onClick={saveActiveForLater} disabled={saving}>{saving ? 'Saving…' : 'Save Route'}</button>
             <button className="btn btn-sm" onClick={openInMaps}>Open Full Route in Google Maps</button>
             <button className="btn btn-sm" onClick={markAllVisited} disabled={marking}>{marking ? 'Marking…' : 'Mark All Visited'}</button>
             <button className="btn btn-sm" onClick={handleFinishRoute}>Finish &amp; Start Over</button>

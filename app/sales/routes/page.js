@@ -4,9 +4,9 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import CombinedRouteBuilderCard from '../../../components/CombinedRouteBuilderCard';
-import { listRouteHistory, repeatRoute, deleteRoute } from '../../../lib/salesRoutes';
+import { listRouteHistory, repeatRoute, deleteRoute, shelveRoute, activateSavedRoute } from '../../../lib/salesRoutes';
 
-const STATUS_LABELS = { active: 'In progress', completed: 'Completed', canceled: 'Canceled' };
+const STATUS_LABELS = { active: 'In progress', saved: 'Saved', completed: 'Completed', canceled: 'Canceled' };
 
 function formatWhen(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -21,12 +21,13 @@ function formatStopTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function RouteHistory({ staffId, onChanged }) {
+function RouteHistory({ staffId, onChanged, onSaved, onStartDriving }) {
   const [history, setHistory] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [repeatingId, setRepeatingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
@@ -44,6 +45,38 @@ function RouteHistory({ staffId, onChanged }) {
       setActionError(err.message);
     } finally {
       setRepeatingId(null);
+    }
+  }
+
+  // Save Route on the in-progress route: sets it aside (progress kept) and
+  // clears the builder. It then shows here as Saved with Start Driving.
+  async function handleSave(r) {
+    setActionError('');
+    setBusyId(r.id);
+    try {
+      await shelveRoute(r.id);
+      if (onSaved) onSaved((r.stops || []).length);
+      else if (onChanged) onChanged();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Start Driving on a saved route: makes it the active route (any route
+  // in progress is set aside as saved) and opens Drive Mode.
+  async function handleStartDriving(r) {
+    setActionError('');
+    setBusyId(r.id);
+    try {
+      await activateSavedRoute(r);
+      if (onStartDriving) onStartDriving();
+      else if (onChanged) onChanged();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -86,7 +119,17 @@ function RouteHistory({ staffId, onChanged }) {
                 <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{visited} visited{r.start_label ? ` · from ${r.start_label}` : ''}{r.end_label ? ` · to ${r.end_label}` : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span className={`badge ${r.status === 'completed' ? 'badge-approved' : ''}`}>{STATUS_LABELS[r.status] || r.status}</span>
+                <span className={`badge ${r.status === 'completed' ? 'badge-approved' : r.status === 'saved' ? 'badge-scheduled' : ''}`}>{STATUS_LABELS[r.status] || r.status}</span>
+                {r.status === 'active' && (
+                  <button type="button" className="btn btn-sm" disabled={busyId === r.id} onClick={() => handleSave(r)}>
+                    {busyId === r.id ? 'Saving…' : 'Save Route'}
+                  </button>
+                )}
+                {r.status === 'saved' && (
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busyId === r.id} onClick={() => handleStartDriving(r)}>
+                    {busyId === r.id ? 'Starting…' : 'Start Driving'}
+                  </button>
+                )}
                 {r.status === 'completed' && (
                   <button type="button" className="btn btn-sm" disabled={repeatingId === r.id} onClick={() => handleRepeat(r)}>
                     {repeatingId === r.id ? 'Starting…' : 'Repeat Route'}
@@ -142,6 +185,27 @@ export default function RouteBuilderPage() {
   // two otherwise-independent components.
   const [refreshKey, setRefreshKey] = useState(0);
   const bumpRefresh = () => setRefreshKey(k => k + 1);
+  // Set when Start Driving is tapped on a saved route, so the builder
+  // (which remounts and resumes the now-active route) opens Drive Mode.
+  // It only needs to be true for that one remount.
+  const [pendingDrive, setPendingDrive] = useState(false);
+  const [flash, setFlash] = useState('');
+
+  useEffect(() => { if (pendingDrive) setPendingDrive(false); }, [pendingDrive]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(''), 7000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  function handleRouteSaved(stopCount) {
+    setFlash(`Route saved (${stopCount} stop${stopCount === 1 ? '' : 's'}). Start it any time from Recent Routes.`);
+    bumpRefresh();
+  }
+  function handleStartDriving() {
+    setPendingDrive(true);
+    bumpRefresh();
+  }
 
   useEffect(() => {
     if (!session) return;
@@ -153,8 +217,20 @@ export default function RouteBuilderPage() {
   return (
     <AppShell>
       <div className="container">
-        <CombinedRouteBuilderCard key={`combined-${refreshKey}`} onRouteChanged={bumpRefresh} />
-        <RouteHistory key={`history-${refreshKey}`} staffId={staffId} onChanged={bumpRefresh} />
+        <CombinedRouteBuilderCard
+          key={`combined-${refreshKey}`}
+          onRouteChanged={bumpRefresh}
+          onRouteSaved={handleRouteSaved}
+          autoStartDriving={pendingDrive}
+        />
+        {flash && <div style={{ fontSize: 13, fontWeight: 600, color: '#4f9a63', margin: '0 0 12px' }}>{flash}</div>}
+        <RouteHistory
+          key={`history-${refreshKey}`}
+          staffId={staffId}
+          onChanged={bumpRefresh}
+          onSaved={handleRouteSaved}
+          onStartDriving={handleStartDriving}
+        />
       </div>
     </AppShell>
   );
