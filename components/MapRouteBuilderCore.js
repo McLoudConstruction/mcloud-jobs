@@ -231,7 +231,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         center: DEFAULT_MAP_CENTER,
         zoom: 9,
       });
-      map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
 
       const emitBounds = () => {
         const b = map.getBounds();
@@ -529,53 +529,6 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
       setBusy('');
     }
   };
-
-  // A place typed in by hand. If it matches a property already in the database
-  // by name, use that property (and its address); otherwise it goes on the route
-  // by name alone. Name-only stops can't be drawn or ordered by distance, so they
-  // sit at the end of the list until they resolve to a real property.
-  function addTypedStop(text) {
-    const wanted = text.trim().toLowerCase();
-    const match = allProps.find(p => (p.property_name || '').trim().toLowerCase() === wanted);
-    if (match) {
-      if (hasCoords(match) && mapRef.current) {
-        mapRef.current.easeTo({ center: [Number(match.property_lng), Number(match.property_lat)], zoom: 15, duration: 500 });
-      }
-      addStop(buildStop({ property: match }), false);
-      return;
-    }
-    addStop(buildStop({ name: text.trim() }), false);
-    setNotice(`Added ${text.trim()} by name. It has no map location, so it is not drawn on the map or ordered by distance.`);
-  }
-
-  function handleSearchPicked(place) {
-    const map = mapRef.current;
-    if (map) map.easeTo({ center: [place.lng, place.lat], zoom: 16, duration: 500 });
-    if (!place.street) {
-      setNotice('That result has no street address, so it was not added. Tap the building on the map instead.');
-      return;
-    }
-    addStop(buildStop({
-      name: place.name, street: place.street, city: place.city, state: place.state,
-      zip: place.zip, lat: place.lat, lng: place.lng,
-    }), false);
-  }
-
-  // Saved properties matching what's typed, offered ahead of Mapbox's own suggestions.
-  const localMatches = useCallback((q) => savedProps
-    .filter(p => `${p.property_name} ${p.property_street || ''} ${p.property_city || ''}`.toLowerCase().includes(q))
-    .slice(0, 4)
-    .map(p => ({
-      key: `s-${p.id}`,
-      label: `⌂ ${p.property_name}`,
-      sub: `Saved property${p.property_city ? ` · ${p.property_city}` : ''}`,
-      pick: () => {
-        const map = mapRef.current;
-        setSelected({ type: 'saved', id: p.id });
-        if (map) map.easeTo({ center: [Number(p.property_lng), Number(p.property_lat)], zoom: 15, duration: 500 });
-        addStop(buildStop({ property: p }), false);
-      },
-    })), [savedProps, addStop]);
 
   // ── Start location (draft only; a saved route keeps the start it began with) ─
   function chooseStart(label, point) {
@@ -985,30 +938,35 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
     <span style={{ color: 'var(--ink-soft)' }}>Updating route…</span>
   ) : (
     <span style={{ color: 'var(--ink-soft)' }}>
-      {stops.length === 0 ? 'Add a stop from the map or type one in.' : 'Add a start or a second stop to build the route.'}
+      {stops.length === 0 ? 'Tap + on a property, or tap the map, to add stops.' : 'Add a start or a second stop to build the route.'}
     </span>
   );
 
   const body = (
     <>
       <style>{`
-        .mrb-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
-        .mrb-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-        .mrb-row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+        .mrb-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .mrb-search { flex: 0 1 380px; min-width: 240px; }
         .mrb-types { flex-wrap: wrap; height: auto; }
-        .mrb-panel { display: flex; flex-direction: column; gap: 10px; }
-        .mrb-stops { max-height: 380px; overflow-y: auto; }
-        .mrb-map { position: relative; height: 580px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: #e8e4da; }
-        .mrb-inview { max-height: 440px; overflow-y: auto; }
+        .mrb-stage { position: relative; }
+        .mrb-map { position: relative; height: 720px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: #e8e4da; }
+        .mrb-float { position: absolute; z-index: 3; background: var(--card-bg, #fff); border: 1px solid var(--panel-line, var(--line)); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.35); padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+        .mrb-float-left { top: 10px; left: 10px; width: 320px; max-height: calc(100% - 130px); }
+        .mrb-float-right { top: 10px; right: 10px; width: 350px; max-height: calc(100% - 110px); }
+        .mrb-float-detail { bottom: 10px; left: 340px; right: 370px; margin: 0 auto; width: 440px; max-width: max(300px, calc(100% - 720px)); padding: 0; }
+        .mrb-visible { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        .mrb-inview { flex: 1; min-height: 0; overflow-y: auto; }
+        .mrb-stops { flex: 1; min-height: 0; overflow-y: auto; }
         .mrb-stop.over { box-shadow: 0 -3px 0 #16a34a inset; }
         .mrb-popup .mapboxgl-popup-content { padding: 7px 10px; border-radius: 7px; font-family: system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
         @media (max-width: 900px) {
-          .mrb-grid { grid-template-columns: 1fr; }
-          .mrb-row2 { grid-template-columns: 1fr; }
-          .mrb-mapcol { order: 1; }
-          .mrb-side { order: 2; }
-          .mrb-map { height: 420px; }
-          .mrb-stops { max-height: none; }
+          .mrb-stage { display: flex; flex-direction: column; gap: 12px; }
+          .mrb-map { height: 460px; order: 1; }
+          .mrb-float { position: static; width: auto; max-height: none; }
+          .mrb-float-detail { order: 2; width: auto; max-width: none; margin: 0; }
+          .mrb-float-right { order: 3; }
+          .mrb-float-left { order: 4; }
+          .mrb-inview { max-height: 420px; }
         }
       `}</style>
 
@@ -1050,47 +1008,145 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
         </div>
       )}
 
-      <div className="mrb-panel mrb-top">
-          <div className="mrb-row2">
-          {!isActive ? (
-            <div>
-              <label>Starting location (optional)</label>
+      {TOKEN && mapReady && (
+        <div className="mrb-toolbar">
+          {TOKEN && mapReady && (
+            <div className="mrb-search">
               <MapboxPlaceSearch
-                token={TOKEN}
-                placeholder="Where does the route start?"
-                proximity={null}
-                types="poi,address,place"
-                defaultText={startInput}
-                onPickPlace={p => chooseStart(p.name || p.street || 'Start', { lat: p.lat, lng: p.lng })}
-                onClear={clearStart}
+                token=""
+                placeholder="Find a property on the map by name, management company or address"
+                clearOnPick
+                localMatches={mapSearchMatches}
+                onPickPlace={() => {}}
               />
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                {homeAddress
-                  ? <button type="button" className="btn btn-sm" onClick={useHome} disabled={homeBusy || !TOKEN} title={homeAddress}>{homeBusy ? 'Finding home…' : 'Use home'}</button>
-                  : <a className="btn btn-sm" href="/settings" style={{ textDecoration: 'none' }}>Set home address</a>}
-                <button type="button" className="btn btn-sm" onClick={useMyLocation}>Use my location</button>
-                {startPoint && <button type="button" className="btn btn-sm" onClick={() => { clearStart(); }}>Clear start</button>}
-              </div>
             </div>
-          ) : null}
+          )}
 
-          <div>
-            <label>Add a stop</label>
-            <MapboxPlaceSearch
-              token={TOKEN}
-              placeholder="Type a property name or address, or tap the map"
-              proximity={startPoint}
-              types="poi,address"
-              clearOnPick
-              allowFreeText
-              localMatches={localMatches}
-              onPickPlace={handleSearchPicked}
-              onPickText={addTypedStop}
-            />
+          {TOKEN && mapReady && typeOptions.length > 1 && (
+            <div className="tab-sections-pills mrb-types">
+              <button type="button" className={`tab-section-btn ${typeFilter.length === 0 ? 'active' : ''}`} onClick={() => setTypeFilter([])}>
+                All {savedProps.length}
+              </button>
+              {typeOptions.map(o => {
+                const on = typeFilter.includes(o.type);
+                return (
+                  <button
+                    key={o.type || 'none'}
+                    type="button"
+                    aria-pressed={on}
+                    className={`tab-section-btn ${on ? 'active' : ''}`}
+                    onClick={() => toggleType(o.type)}
+                  >
+                    {o.label} {o.count}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      <div className="mrb-stage">
+          <div className="mrb-map">
+            {!TOKEN ? (
+              <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
+                The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
+                      </div>
+            ) : (
+              <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />
+            )}
+            {TOKEN && !mapReady && (
+              <div style={overlayPillStyle({ top: 10, left: 10 })}>Loading map…</div>
+            )}
+            {busy && (
+              <div style={overlayPillStyle({ top: 10, left: '50%', transform: 'translateX(-50%)' })}>{busy}</div>
+            )}
+            {TOKEN && mapReady && (
+              <div style={{ ...overlayPillStyle({ bottom: 10, left: 10 }), padding: '8px 10px', pointerEvents: 'none', lineHeight: 1.5 }}>
+                {VISIT_BUCKETS.map(b => (
+                  <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.25)', flexShrink: 0 }} />
+                    <span>{b.label}</span>
+                    <span style={{ color: 'var(--ink-soft)', marginLeft: 'auto', paddingLeft: 8 }}>{bucketCounts[b.key]}</span>
+                  </div>
+                ))}
+                {!propsLoaded && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Loading properties…</div>}
+              </div>
+            )}
           </div>
 
-          </div>
 
+        {TOKEN && mapReady && (
+        <div className="mrb-float mrb-float-left">
+          <div className="mrb-visible">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>Visible on map</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
+            </div>
+            {propsLoaded && savedProps.length === 0 && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>
+                No properties have a map location yet.
+              </div>
+            )}
+            {shownProps.length > 0 && inView.length === 0 && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>No properties in this part of the map. Pan or zoom out.</div>
+            )}
+            <div className="mrb-inview">
+              {inView.slice(0, IN_VIEW_LIMIT).map(p => {
+                const idx = stopIndexForProperty(p);
+                const isSel = selected?.type === 'saved' && selected.id === p.id;
+                const bucket = VISIT_BUCKETS[visitBucket(p.last_visited_at)];
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--line)', padding: '8px 0',
+                      background: isSel ? 'rgba(155,119,61,0.10)' : 'transparent',
+                    }}
+                  >
+                    <span title={bucket.label} style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
+                    <button
+                      type="button"
+                      onClick={() => pickSaved(p)}
+                      style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', color: 'inherit' }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.property_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {[p.management_company, p.property_city].filter(Boolean).join(' · ')}
+                      </div>
+                    </button>
+                    {idx >= 0
+                      ? <button type="button" className="btn btn-sm" onClick={() => removeStop(idx)} title="On the route. Tap to remove." aria-label="Remove from route">✓</button>
+                      : <button type="button" className="btn btn-sm" title="Add to route" aria-label={`Add ${p.property_name} to route`} style={{ minWidth: 34, fontSize: 16, lineHeight: 1, fontWeight: 700 }} onClick={() => addStop(buildStop({ property: p }), true)}>+</button>}
+                  </div>
+                );
+              })}
+            </div>
+            {inView.length > IN_VIEW_LIMIT && (
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+                Showing the {IN_VIEW_LIMIT} closest to the map center. Zoom in to narrow the list.
+              </div>
+            )}
+          </div>
+        </div>
+        )}
+
+        <div className="mrb-float mrb-float-right mrb-routebox">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Route</div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{stops.length} stop{stops.length === 1 ? '' : 's'}</div>
+          </div>
+          <div style={{ fontSize: 13, minHeight: 20 }}>{summary}</div>
+          {!isActive && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {homeAddress
+                ? <button type="button" className="btn btn-sm" onClick={useHome} disabled={homeBusy || !TOKEN} title={homeAddress}>{homeBusy ? 'Finding home…' : 'Start at home'}</button>
+                : <a className="btn btn-sm" href="/settings" style={{ textDecoration: 'none' }}>Set home address</a>}
+              <button type="button" className="btn btn-sm" onClick={useMyLocation}>Start at my location</button>
+              {startPoint && <button type="button" className="btn btn-sm" onClick={() => { clearStart(); }}>Clear start</button>}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <label style={toggleStyle}>
               <input type="checkbox" style={{ width: 'auto' }} checked={autoOrder} onChange={e => toggleAuto(e.target.checked)} />
@@ -1166,7 +1222,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             })}
             {stops.length === 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '6px 0' }}>
-                No stops yet. Tap a property on the map, then add it, or type a place above.
+                No stops yet. Tap + on a property, or tap the map.
               </div>
             )}
           </div>
@@ -1175,16 +1231,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
               Drag stops (or use the arrows) to change the order. Editing the order turns automatic ordering off.
             </div>
           )}
-          <div style={{ fontSize: 13, minHeight: 20 }}>{summary}</div>
           {routeError && followRoads && (
             <div style={{ fontSize: 11, color: '#a17c3f' }}>{routeError} The line shows straight segments until it clears.</div>
           )}
-      </div>
+        </div>
 
-      <div className="mrb-grid">
-        <div className="mrb-side">
-          {detailStop && (
-            <div style={{ border: '1px solid var(--ink, #171714)', borderRadius: 10, padding: 14 }}>
+        {detailStop && (
+        <div className="mrb-float mrb-float-detail">
+            <div style={{ padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 10, letterSpacing: '.14em', fontWeight: 700, color: 'var(--ink-soft)' }}>
@@ -1220,123 +1274,9 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
                 )}
               </div>
             </div>
-          )}
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>Properties in view</div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{inView.length} of {shownProps.length}</div>
-            </div>
-            {propsLoaded && savedProps.length === 0 && (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>
-                No properties have a map location yet.
-              </div>
-            )}
-            {shownProps.length > 0 && inView.length === 0 && (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', padding: '8px 0' }}>No properties in this part of the map. Pan or zoom out.</div>
-            )}
-            <div className="mrb-inview">
-              {inView.slice(0, IN_VIEW_LIMIT).map(p => {
-                const idx = stopIndexForProperty(p);
-                const isSel = selected?.type === 'saved' && selected.id === p.id;
-                const bucket = VISIT_BUCKETS[visitBucket(p.last_visited_at)];
-                return (
-                  <div
-                    key={p.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--line)', padding: '8px 0',
-                      background: isSel ? 'rgba(155,119,61,0.10)' : 'transparent',
-                    }}
-                  >
-                    <span title={bucket.label} style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
-                    <button
-                      type="button"
-                      onClick={() => pickSaved(p)}
-                      style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', color: 'inherit' }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.property_name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {[p.management_company, p.property_city].filter(Boolean).join(' · ')}
-                      </div>
-                    </button>
-                    {idx >= 0
-                      ? <button type="button" className="btn btn-sm" onClick={() => removeStop(idx)} title="Remove from route">✓ On route</button>
-                      : <button type="button" className="btn btn-sm" onClick={() => addStop(buildStop({ property: p }), true)}>＋ Add</button>}
-                  </div>
-                );
-              })}
-            </div>
-            {inView.length > IN_VIEW_LIMIT && (
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
-                Showing the {IN_VIEW_LIMIT} closest to the map center. Zoom in to narrow the list.
-              </div>
-            )}
-          </div>
         </div>
-
-        <div className="mrb-mapcol">
-          {TOKEN && mapReady && (
-            <div style={{ marginBottom: 10 }}>
-              <MapboxPlaceSearch
-                token=""
-                placeholder="Find a property on the map by name, management company or address"
-                clearOnPick
-                localMatches={mapSearchMatches}
-                onPickPlace={() => {}}
-              />
-            </div>
-          )}
-
-          {TOKEN && mapReady && typeOptions.length > 1 && (
-            <div className="tab-sections-pills mrb-types" style={{ marginBottom: 10 }}>
-              <button type="button" className={`tab-section-btn ${typeFilter.length === 0 ? 'active' : ''}`} onClick={() => setTypeFilter([])}>
-                All {savedProps.length}
-              </button>
-              {typeOptions.map(o => {
-                const on = typeFilter.includes(o.type);
-                return (
-                  <button
-                    key={o.type || 'none'}
-                    type="button"
-                    aria-pressed={on}
-                    className={`tab-section-btn ${on ? 'active' : ''}`}
-                    onClick={() => toggleType(o.type)}
-                  >
-                    {o.label} {o.count}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="mrb-map">
-            {!TOKEN ? (
-              <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>
-                The map needs a Mapbox public token. Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> in Vercel (Project Settings, Environment Variables), then redeploy.
-                You can still type places into the box on the left without it.
-              </div>
-            ) : (
-              <div ref={mapDivRef} style={{ position: 'absolute', inset: 0 }} />
-            )}
-            {TOKEN && !mapReady && (
-              <div style={overlayPillStyle({ top: 10, left: 10 })}>Loading map…</div>
-            )}
-            {busy && (
-              <div style={overlayPillStyle({ top: 10, left: '50%', transform: 'translateX(-50%)' })}>{busy}</div>
-            )}
-            {TOKEN && mapReady && (
-              <div style={{ ...overlayPillStyle({ bottom: 10, left: 10 }), padding: '8px 10px', pointerEvents: 'none', lineHeight: 1.5 }}>
-                {VISIT_BUCKETS.map(b => (
-                  <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.25)', flexShrink: 0 }} />
-                    <span>{b.label}</span>
-                    <span style={{ color: 'var(--ink-soft)', marginLeft: 'auto', paddingLeft: 8 }}>{bucketCounts[b.key]}</span>
-                  </div>
-                ))}
-                {!propsLoaded && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Loading properties…</div>}
-              </div>
-            )}
-          </div>
+        )}
+      </div>
 
           {TOKEN && mapReady && (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
@@ -1352,8 +1292,6 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, hideChrom
             </div>
           )}
 
-        </div>
-      </div>
 
       {notice && <div style={{ fontSize: 12, color: '#a17c3f', marginTop: 12 }}>{notice}</div>}
       {error && <div style={{ fontSize: 12.5, color: '#a13f3f', marginTop: 12 }}>{error}</div>}
