@@ -706,6 +706,14 @@ export default function JobCalendarPage() {
       : [];
     const { placed: allDayBars, laneCount: allDayLanes } = assignLanes(overlapping);
 
+    // To-dos always live in the All day bar, and so does anything else
+    // without a clock time (blackouts, untimed events). Left in the hour
+    // grid they all land at 12am and pile on top of each other, hiding
+    // all but one. Each day gets one stacked card per kind instead.
+    const isAllDayEv = ev => ev._todo || !ev.event_time;
+    const allDayByDay = days.map(d => scheduleEventsForDay(d).filter(isAllDayEv));
+    const hasAllDayItems = allDayByDay.some(list => list.length > 0);
+
     return (
       <div className="tg">
         <div className="tg-header" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
@@ -722,13 +730,14 @@ export default function JobCalendarPage() {
           ))}
         </div>
 
-        {(allDayBars.length > 0 || !isSingleDay) && (
+        {(allDayBars.length > 0 || hasAllDayItems || !isSingleDay) && (
           <div
             className="tg-allday"
-            style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minHeight: Math.max(allDayLanes, 1) * 24 + 8 }}
+            style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}
           >
             <div className="tg-allday-label">All day</div>
-            <div className="tg-allday-cells" style={{ gridColumn: `2 / ${days.length + 2}`, position: 'relative' }}>
+            <div className="tg-allday-cells" style={{ gridColumn: `2 / ${days.length + 2}` }}>
+              <div style={{ position: 'relative', height: allDayLanes * 22 }}>
               {allDayBars.map(job => (
                 <div
                   key={job.id}
@@ -744,6 +753,45 @@ export default function JobCalendarPage() {
                   {formattedProjectNumber(job)} {job.customer_name || ''}
                 </div>
               ))}
+              </div>
+              <div className="tg-allday-days" style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
+                {allDayByDay.map((list, i) => {
+                  const todoList = list.filter(ev => ev._todo);
+                  const otherList = list.filter(ev => !ev._todo);
+                  return (
+                    <div key={days[i].toISOString()} className="tg-allday-day">
+                      {todoList.length > 0 && (
+                        <div className="tg-allday-stack tg-allday-stack-todo">
+                          {todoList.map(ev => (
+                            <div
+                              key={ev.id}
+                              className={`tg-allday-stack-item${ev.todo.completed_at ? ' tg-event-done' : ''}`}
+                              onClick={e => { e.stopPropagation(); setPreviewEvent(ev); }}
+                              title={ev.description}
+                            >
+                              {todoMark(ev)} {ev.description}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {otherList.length > 0 && (
+                        <div className="tg-allday-stack">
+                          {otherList.map(ev => (
+                            <div
+                              key={ev.id}
+                              className="tg-allday-stack-item"
+                              onClick={e => { e.stopPropagation(); setPreviewEvent(ev); }}
+                              title={ev.description || evLabel(ev)}
+                            >
+                              {ev._blackout ? '' : '📌 '}{ev.description || evLabel(ev)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -757,7 +805,7 @@ export default function JobCalendarPage() {
             </div>
             {days.map(d => {
               const walksToday = showBidWalks ? bidWalksForDay(d) : [];
-              const eventsToday = scheduleEventsForDay(d);
+              const eventsToday = scheduleEventsForDay(d).filter(ev => !isAllDayEv(ev));
               const busyToday = showPersonal ? busyForDay(d) : [];
               const isToday = sameDay(d, today);
               return (
@@ -1246,7 +1294,19 @@ export default function JobCalendarPage() {
 
         .tg-allday{ display: grid; border-bottom: 1px solid var(--line); position: relative; padding: 4px 0; flex-shrink: 0; }
         .tg-allday-label{ font-size: 9.5px; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; }
-        .tg-allday-cells{ min-height: 20px; }
+        .tg-allday-cells{ min-height: 20px; position: relative; }
+        .tg-allday-days{ display: grid; }
+        .tg-allday-day{ padding: 0 2px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .tg-allday-stack{
+          border-radius: 5px; padding: 3px 6px; background: var(--panel);
+          border-left: 3px solid var(--accent); font-size: 10.5px; line-height: 1.3;
+        }
+        .tg-allday-stack-todo{ border-left-color: #4f7f5a; }
+        .tg-allday-stack-item{
+          font-weight: 600; color: var(--heading); cursor: pointer; padding: 1px 0;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tg-allday-stack-item:hover{ text-decoration: underline; }
         .tg-allday-bar{
           position: absolute; height: 20px; border-radius: 4px; font-size: 10.5px; font-weight: 600;
           color: #fff; padding: 2px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
