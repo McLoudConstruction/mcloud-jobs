@@ -65,7 +65,7 @@ export default function DriveModePropertyInfo({ stop }) {
     const { data: prop } = await supabase.from('properties')
       .select('property_name, property_type, management_company, property_street, property_unit, property_city, property_state, property_zip, contact_name')
       .eq('id', propertyId).maybeSingle();
-    const { error: err } = await supabase.from('contacts').insert({
+    const { data: created, error: err } = await supabase.from('contacts').insert({
       name,
       first_name: name.split(' ')[0],
       last_name: name.split(' ').slice(1).join(' '),
@@ -82,7 +82,7 @@ export default function DriveModePropertyInfo({ stop }) {
       address_city: prop?.property_city || stop.property_city || null,
       address_state: prop?.property_state || stop.property_state || null,
       address_zip: prop?.property_zip || stop.property_zip || null,
-    });
+    }).select('id').single();
     if (err) { setBusy(false); setError(err.message); return; }
     // First contact on a property also fills the property's own contact fields.
     if (prop && !prop.contact_name) {
@@ -95,6 +95,8 @@ export default function DriveModePropertyInfo({ stop }) {
     setOpen(null);
     setMsg('Contact saved.');
     load();
+    // Tell the To-Do panel so it can offer this contact right away.
+    window.dispatchEvent(new CustomEvent('mcloud:contact-saved', { detail: { propertyId, contactId: created?.id || null } }));
   }
 
   return (

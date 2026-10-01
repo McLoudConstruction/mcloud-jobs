@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import MapboxPlaceSearch from './MapboxPlaceSearch';
+import { supabase } from '../lib/supabaseClient';
 import { buildStop } from '../lib/mapRouteHelpers';
 import { getCurrentLocation, haversineMiles } from '../lib/salesRoutes';
 import {
@@ -9,6 +10,7 @@ import {
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const NEARBY_LIMIT = 5;
+const RECENT_CONTACT_MS = 30 * 60 * 1000; // a contact added in the last 30 minutes counts as "just added"
 
 // Drive Mode quick actions for the stop you are at (or the route as a whole):
 //   + Add Stop   search a saved property or any place, or pick one near you;
@@ -29,9 +31,42 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
   const [lookedUp, setLookedUp] = useState(false); // location lookup finished (found or not)
   const [locating, setLocating] = useState(false);
   const [position, setPosition] = useState(null);
+  const [propContacts, setPropContacts] = useState([]); // this stop's contacts, newest first
+  const [contactId, setContactId] = useState('');
   // Always call the latest onQuickAdd, even from search results built earlier.
   const quickAddRef = useRef(onQuickAdd);
   quickAddRef.current = onQuickAdd;
+
+  const propertyId = stop?.property_id || null;
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  // Load the stop's contacts. preselect: true picks the newest one when it
+  // was added moments ago, so "add contact, then add the To-Do" links it
+  // without an extra tap. A tap on the chip unlinks it.
+  const loadContacts = useCallback(async ({ preselect = false, forceId = null } = {}) => {
+    if (!propertyId) { setPropContacts([]); return; }
+    const { data, error: err } = await supabase.from('contacts')
+      .select('id, name, position, contact_email, created_at')
+      .eq('property_id', propertyId)
+      .order('created_at', { ascending: false })
+      .limit(6);
+    if (err) { setPropContacts([]); return; }
+    const list = data || [];
+    setPropContacts(list);
+    if (forceId && list.some(c => c.id === forceId)) setContactId(forceId);
+    else if (preselect && list[0] && Date.now() - new Date(list[0].created_at).getTime() < RECENT_CONTACT_MS) setContactId(list[0].id);
+  }, [propertyId]);
+
+  // A contact saved from the property panel below shows up here at once.
+  useEffect(() => {
+    function onSaved(e) {
+      if (e.detail?.propertyId !== propertyId) return;
+      loadContacts({ forceId: e.detail.contactId });
+    }
+    window.addEventListener('mcloud:contact-saved', onSaved);
+    return () => window.removeEventListener('mcloud:contact-saved', onSaved);
+  }, [propertyId, loadContacts]);
 
   function toggle(which) {
     setMsg('');
@@ -42,6 +77,9 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
     setDueTime('');
     setLinkStop(true);
     setDueDate(todayKey());
+    setContactId('');
+    setPropContacts([]);
+    if (which === 'todo') loadContacts({ preselect: true });
     setOpen(which);
   }
 
@@ -121,11 +159,13 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
         dueTime,
         property: linkStop && stop ? stop : null,
         routeId,
+        contactId: linkStop ? contactId : null,
       });
       setMsg(`To-Do added for ${formatDueDate(dueDate).toLowerCase()}${dueTime ? ` at ${formatDueTime(dueTime)}` : ''}. It shows on your Dashboard and Calendar.`);
       setOpen(null);
       setTitle('');
       setNote('');
+      setContactId('');
     } catch (err) {
       setError(err.message || 'Could not save that.');
     } finally {
@@ -236,6 +276,27 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
             value={note}
             onChange={e => setNote(e.target.value)}
           />
+
+          {stop && propContacts.length > 0 && (
+            <>
+              <div style={{ ...hintStyle, textAlign: 'left', marginTop: 2 }}>Contact (optional)</div>
+              <div style={chipRowStyle}>
+                {propContacts.map(c => {
+                  const fresh = Date.now() - new Date(c.created_at).getTime() < RECENT_CONTACT_MS;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      style={{ ...chipStyle, ...(contactId === c.id ? chipOnStyle : null) }}
+                      onClick={() => setContactId(prev => (prev === c.id ? '' : c.id))}
+                    >
+                      {c.name}{fresh ? ' · just added' : ''}{c.contact_email ? '' : ' · no email'}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {stop && (
             <label style={linkLabelStyle}>

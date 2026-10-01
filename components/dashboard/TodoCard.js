@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import {
-  listOpenTodos, createTodo, setTodoDone, moveTodo, deleteTodo,
+  listOpenTodos, createTodo, setTodoDone, moveTodo, deleteTodo, isEmailTodo,
   todayKey, addDaysKey, nextMondayKey, formatDueDate, formatDueTime,
 } from '../../lib/salesTodos';
 
@@ -115,8 +115,10 @@ export default function TodoCard() {
     const done = !!item.completed_at;
     const meta = [
       item.due_time ? formatDueTime(item.due_time) : null,
+      item.contact?.name || null,
       item.property_name || null,
     ].filter(Boolean).join(' · ');
+    const mailTo = !done && isEmailTodo(item) && item.contact?.contact_email ? item.contact.contact_email.trim() : null;
     return (
       <div key={item.id} style={rowStyle}>
         <input
@@ -133,6 +135,9 @@ export default function TodoCard() {
           {meta && <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 1 }}>{meta}</div>}
         </div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          {mailTo && (
+            <a className="btn btn-sm" href={`mailto:${mailTo}`} title={`Email ${item.contact.name || mailTo}`}>Email</a>
+          )}
           {canPush && !done && (
             <button type="button" className="btn btn-sm" disabled={busyId === item.id} title="Move to tomorrow" onClick={() => run(item.id, () => moveTodo(item.id, addDaysKey(1)))}>Tomorrow</button>
           )}
