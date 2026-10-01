@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import {
   COMPLIANCE_DOC_TYPES, DOC_TYPE_BY_KEY, COMPLIANCE_STATUS, COMPLIANCE_OVERALL, ENFORCEMENT_MODES,
   docTypeLabel, fmtComplianceDate, fmtDaysLeft, safeFileName, openStorageDoc,
+  COMPLIANCE_FILE_ACCEPT, checkComplianceFile,
 } from '../lib/compliance';
 
 const BUCKET = 'subcontractor-docs';
@@ -73,13 +74,14 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
 
   async function submitUpload(e) {
     e.preventDefault();
-    if (!upload.file) { setError('Choose a file first.'); return; }
+    const check = checkComplianceFile(upload.file);
+    if (!check.ok) { setError(check.error); return; }
     if (uploadType.needsExpiry && !upload.expires_at) { setError('An expiration date is required for this document.'); return; }
     setBusy(true);
     setError('');
     try {
       const path = `compliance/${companyId}/${upload.doc_type}-${Date.now()}-${safeFileName(upload.file.name)}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, upload.file);
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, upload.file, { contentType: check.contentType });
       if (upErr) throw upErr;
       const { data: { session } } = await supabase.auth.getSession();
       const { error: insErr } = await supabase.from('sub_compliance_docs').insert({
@@ -98,7 +100,10 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
         reviewed_by_email: session?.user?.email || null,
         reviewed_at: new Date().toISOString(),
       });
-      if (insErr) throw insErr;
+      if (insErr) {
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw insErr;
+      }
       setUpload(EMPTY_UPLOAD);
       setShowUpload(false);
       await changed();
@@ -265,7 +270,7 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
               {COMPLIANCE_DOC_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
             <label style={{ fontSize: 11, marginTop: 6 }}>File</label>
-            <input type="file" accept=".pdf,image/*" onChange={e => setUpload(u => ({ ...u, file: e.target.files[0] || null }))} />
+            <input type="file" accept={COMPLIANCE_FILE_ACCEPT} onChange={e => { setError(''); setUpload(u => ({ ...u, file: e.target.files[0] || null })); }} />
             {uploadType?.needsExpiry && (
               <>
                 <label style={{ fontSize: 11, marginTop: 6 }}>Expiration date</label>

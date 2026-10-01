@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import {
   COMPLIANCE_DOC_TYPES, DOC_TYPE_BY_KEY, COMPLIANCE_STATUS,
   docTypeLabel, fmtComplianceDate, fmtDaysLeft, safeFileName, openStorageDoc,
+  COMPLIANCE_FILE_ACCEPT, checkComplianceFile,
 } from '../lib/compliance';
 
 const BUCKET = 'subcontractor-docs';
@@ -59,13 +60,15 @@ export default function SubComplianceSection({ company }) {
   async function submit(e) {
     e.preventDefault();
     const def = DOC_TYPE_BY_KEY[openType];
-    if (!form.file) { setError('Choose a file first.'); return; }
+    const check = checkComplianceFile(form.file);
+    if (!check.ok) { setError(check.error); return; }
     if (def.needsExpiry && !form.expires_at) { setError('Enter the expiration date shown on the document.'); return; }
     setBusy(true);
     setError('');
+    let path = null;
     try {
-      const path = `compliance/${company.id}/${openType}-${Date.now()}-${safeFileName(form.file.name)}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, form.file);
+      path = `compliance/${company.id}/${openType}-${Date.now()}-${safeFileName(form.file.name)}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, form.file, { contentType: check.contentType });
       if (upErr) throw upErr;
       const { error: rpcErr } = await supabase.rpc('submit_sub_compliance_doc_v2', {
         target_company_id: company.id,
@@ -78,7 +81,11 @@ export default function SubComplianceSection({ company }) {
         coverage_amount_in: form.coverage_amount ? Number(form.coverage_amount) : null,
         effective_date_in: null,
       });
-      if (rpcErr) throw rpcErr;
+      if (rpcErr) {
+        // Don't leave an orphaned file behind when the record couldn't be saved.
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw rpcErr;
+      }
       setOpenType(null);
       setForm(EMPTY);
       setNotice('Uploaded — the office will review it shortly.');
@@ -99,7 +106,7 @@ export default function SubComplianceSection({ company }) {
     return (
       <form onSubmit={submit} style={{ marginTop: 10, padding: 12, border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel)' }}>
         <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 8 }}>Upload {docTypeLabel(openType)}</div>
-        <input type="file" accept="application/pdf,image/*" onChange={e => setForm(f => ({ ...f, file: e.target.files[0] || null }))} />
+        <input type="file" accept={COMPLIANCE_FILE_ACCEPT} onChange={e => { setError(''); setForm(f => ({ ...f, file: e.target.files[0] || null })); }} />
         {def.needsExpiry && (
           <>
             <label style={{ marginTop: 8 }}>Expiration date (as shown on the document)</label>
