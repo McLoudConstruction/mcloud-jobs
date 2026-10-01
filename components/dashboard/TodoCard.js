@@ -114,7 +114,6 @@ export default function TodoCard() {
   function renderRow(item, { canPush }) {
     const done = !!item.completed_at;
     const meta = [
-      item.kind === 'event' ? 'Event' : null,
       item.due_time ? formatDueTime(item.due_time) : null,
       item.property_name || null,
     ].filter(Boolean).join(' · ');

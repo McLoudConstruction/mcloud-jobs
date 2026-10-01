@@ -8,6 +8,7 @@ import AppShell from '../../../components/AppShell';
 import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
+import { setTodoDone, deleteTodo } from '../../../lib/salesTodos';
 import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber, subPortalJobHeading, SCHEDULE_REQUEST_STATUS_LABELS } from '../../../lib/constants';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -26,7 +27,26 @@ const SCHEDULABLE_STAGES = ['approved', 'scheduled', 'active', 'completed'];
 // schedule_events, so they carry _blackout and can't be deleted from here.
 const BLACKOUT_STATUSES = ['auto_applied', 'needs_review', 'approved', 'sent_to_subs'];
 function evLabel(ev) {
+  if (ev._todo) return 'To-Do';
   return ev._blackout ? 'Customer blackout' : EVENT_TYPE_LABELS[ev.event_type];
+}
+
+// Sales to-dos (captured in Drive Mode or the Dashboard) are folded in as
+// synthetic events, like blackouts: not rows in schedule_events, so they
+// carry _todo and are checked off or deleted through sales_todos instead.
+function expandTodos(rows) {
+  return rows.map(t => ({
+    id: `todo-${t.id}`,
+    _todo: true,
+    todo: t,
+    event_date: t.due_date,
+    event_time: t.due_time,
+    event_type: 'todo',
+    description: t.title,
+  }));
+}
+function todoMark(ev) {
+  return ev.todo?.completed_at ? '✓' : '☐';
 }
 function expandBlackouts(rows) {
   const out = [];
@@ -130,7 +150,7 @@ function assignLanes(jobsInWeek) {
 // their overlay), not decoration.
 function CalendarSidebar({
   monthDate, cursorDate, today, onSelectDay, onPrevMonth, onNextMonth, onNewEvent,
-  showJobs, setShowJobs, showBidWalks, setShowBidWalks, showScheduleEvents, setShowScheduleEvents, showPersonal, setShowPersonal,
+  showJobs, setShowJobs, showBidWalks, setShowBidWalks, showScheduleEvents, setShowScheduleEvents, showTodos, setShowTodos, showPersonal, setShowPersonal,
   scheduleRequests, resolveRequest, resolvingRequestId,
 }) {
   const miniWeeks = useMemo(() => buildWeeks(monthDate), [monthDate]);
@@ -183,6 +203,10 @@ function CalendarSidebar({
         <label className="cal-sidebar-toggle">
           <input type="checkbox" checked={showScheduleEvents} onChange={e => setShowScheduleEvents(e.target.checked)} />
           Events
+        </label>
+        <label className="cal-sidebar-toggle">
+          <input type="checkbox" checked={showTodos} onChange={e => setShowTodos(e.target.checked)} />
+          To-Dos
         </label>
         <label className="cal-sidebar-toggle">
           <input type="checkbox" checked={showPersonal} onChange={e => setShowPersonal(e.target.checked)} />
@@ -268,6 +292,9 @@ export default function JobCalendarPage() {
   const [showJobs, setShowJobs] = useState(true);
   const [showBidWalks, setShowBidWalks] = useState(true);
   const [showScheduleEvents, setShowScheduleEvents] = useState(true);
+  const [showTodos, setShowTodos] = useState(true);
+  const [todos, setTodos] = useState([]);
+  const [updatingTodo, setUpdatingTodo] = useState(false);
   const [showPersonal, setShowPersonal] = useState(true);
 
   // Ticks once a minute to move the live current-time indicator on the
@@ -361,6 +388,49 @@ export default function JobCalendarPage() {
   }, [session]);
   const blackoutEvents = useMemo(() => expandBlackouts(blackouts), [blackouts]);
 
+  // The signed-in user's own to-dos (sales_todos are per person).
+  const loadTodos = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return;
+    const { data, error } = await supabase.from('sales_todos').select('*').eq('staff_id', uid).order('due_date', { ascending: true });
+    if (!error && data) setTodos(data);
+  }, []);
+  useEffect(() => {
+    if (!session) return undefined;
+    loadTodos();
+    const ch = supabase.channel('calendar-sales-todos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_todos' }, loadTodos)
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [session, loadTodos]);
+  const todoEvents = useMemo(() => expandTodos(todos), [todos]);
+
+  async function toggleTodoFromCalendar(todo) {
+    setUpdatingTodo(true);
+    try {
+      await setTodoDone(todo.id, !todo.completed_at);
+      await loadTodos();
+      setPreviewEvent(null);
+    } catch (err) {
+      alert(err.message || 'Could not update that to-do.');
+    } finally {
+      setUpdatingTodo(false);
+    }
+  }
+  async function deleteTodoFromCalendar(todo) {
+    setUpdatingTodo(true);
+    try {
+      await deleteTodo(todo.id);
+      await loadTodos();
+      setPreviewEvent(null);
+    } catch (err) {
+      alert(err.message || 'Could not delete that to-do.');
+    } finally {
+      setUpdatingTodo(false);
+    }
+  }
+
   useEffect(() => {
     if (!session) return;
     loadScheduleEvents();
@@ -432,7 +502,11 @@ export default function JobCalendarPage() {
 
   function scheduleEventsForDay(date) {
     const day = toDateOnly(date);
-    return [...scheduleEvents, ...blackoutEvents].filter(ev => sameDay(parseDateOnly(ev.event_date), day))
+    const pool = [
+      ...(showScheduleEvents ? [...scheduleEvents, ...blackoutEvents] : []),
+      ...(showTodos ? todoEvents : []),
+    ];
+    return pool.filter(ev => sameDay(parseDateOnly(ev.event_date), day))
       .sort((a, b) => (a.event_time || '').localeCompare(b.event_time || ''));
   }
 
@@ -447,19 +521,17 @@ export default function JobCalendarPage() {
   // out of this list; they're already their own full-width bar.
   function timedItemsForDay(date) {
     const items = [];
-    if (showScheduleEvents) {
-      scheduleEventsForDay(date).forEach(ev => {
-        const [h, m] = (ev.event_time || '').split(':').map(Number);
-        items.push({
-          key: `ev-${ev.id}`,
-          sortMinutes: ev.event_time ? h * 60 + (m || 0) : -1,
-          time: ev.event_time ? formatEventTime(ev.event_time) : null,
-          title: ev.description || evLabel(ev),
-          dotClass: ev._blackout ? 'dot-blackout' : 'dot-event',
-          onClick: () => setPreviewEvent(ev),
-        });
+    scheduleEventsForDay(date).forEach(ev => {
+      const [h, m] = (ev.event_time || '').split(':').map(Number);
+      items.push({
+        key: `ev-${ev.id}`,
+        sortMinutes: ev.event_time ? h * 60 + (m || 0) : -1,
+        time: ev.event_time ? formatEventTime(ev.event_time) : null,
+        title: ev._todo ? `${todoMark(ev)} ${ev.description}` : (ev.description || evLabel(ev)),
+        dotClass: ev._todo ? 'dot-todo' : ev._blackout ? 'dot-blackout' : 'dot-event',
+        onClick: () => setPreviewEvent(ev),
       });
-    }
+    });
     if (showBidWalks) {
       bidWalksForDay(date).forEach(b => {
         const at = new Date(b.bid_walk_scheduled_at);
@@ -554,7 +626,7 @@ export default function JobCalendarPage() {
     const jobsToday = showJobs ? jobsForDay(date) : [];
     const walksToday = showBidWalks ? bidWalksForDay(date) : [];
     const busyToday = showPersonal ? busyForDay(date) : [];
-    const eventsToday = showScheduleEvents ? scheduleEventsForDay(date) : [];
+    const eventsToday = scheduleEventsForDay(date);
     const isEmpty = jobsToday.length === 0 && walksToday.length === 0 && busyToday.length === 0 && eventsToday.length === 0;
     return (
       <div className="card" style={{ marginBottom: 12 }}>
@@ -568,8 +640,8 @@ export default function JobCalendarPage() {
         {eventsToday.map(ev => (
           <div key={ev.id} className="job-row" onClick={() => setPreviewEvent(ev)}>
             <div className="job-main">
-              <span className="job-number">📌 {formatEventTime(ev.event_time)}</span>
-              <span className="job-customer">{ev.description || evLabel(ev)}</span>
+              <span className="job-number">{ev._todo ? todoMark(ev) : '📌'} {formatEventTime(ev.event_time)}</span>
+              <span className="job-customer" style={ev._todo && ev.todo.completed_at ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>{ev.description || evLabel(ev)}</span>
             </div>
             <span className="badge">{evLabel(ev)}</span>
           </div>
@@ -685,7 +757,7 @@ export default function JobCalendarPage() {
             </div>
             {days.map(d => {
               const walksToday = showBidWalks ? bidWalksForDay(d) : [];
-              const eventsToday = showScheduleEvents ? scheduleEventsForDay(d) : [];
+              const eventsToday = scheduleEventsForDay(d);
               const busyToday = showPersonal ? busyForDay(d) : [];
               const isToday = sameDay(d, today);
               return (
@@ -695,11 +767,11 @@ export default function JobCalendarPage() {
                   {eventsToday.map(ev => (
                     <div
                       key={`ev-${ev.id}`}
-                      className="tg-event tg-event-schedule"
+                      className={`tg-event tg-event-schedule${ev._todo ? ' tg-event-todo' : ''}${ev._todo && ev.todo.completed_at ? ' tg-event-done' : ''}`}
                       style={{ top: topPxForTimeStr(ev.event_time), height: 40 }}
                       onClick={() => setPreviewEvent(ev)}
                     >
-                      <span className="tg-event-title">📌 {ev.description || evLabel(ev)}</span>
+                      <span className="tg-event-title">{ev._todo ? todoMark(ev) : '📌'} {ev.description || evLabel(ev)}</span>
                       <span className="tg-event-time">{formatEventTime(ev.event_time)}</span>
                     </div>
                   ))}
@@ -997,6 +1069,7 @@ export default function JobCalendarPage() {
               showJobs={showJobs} setShowJobs={setShowJobs}
               showBidWalks={showBidWalks} setShowBidWalks={setShowBidWalks}
               showScheduleEvents={showScheduleEvents} setShowScheduleEvents={setShowScheduleEvents}
+              showTodos={showTodos} setShowTodos={setShowTodos}
               showPersonal={showPersonal} setShowPersonal={setShowPersonal}
               scheduleRequests={scheduleRequests}
               resolveRequest={resolveRequest}
@@ -1030,13 +1103,29 @@ export default function JobCalendarPage() {
               {parseDateOnly(previewEvent.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
               {previewEvent._blackout ? ' · all day' : ` · ${formatEventTime(previewEvent.event_time)}`}
             </div>
+            {previewEvent._todo && previewEvent.todo.property_name && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>At: {previewEvent.todo.property_name}</div>
+            )}
+            {previewEvent._todo && previewEvent.todo.note && (
+              <div style={{ fontSize: 12.5, marginTop: 8, whiteSpace: 'pre-wrap' }}>{previewEvent.todo.note}</div>
+            )}
+            {previewEvent._todo && previewEvent.todo.completed_at && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>Done</div>
+            )}
             {previewEvent.assigned_staff_ids?.length > 0 && (
               <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
                 With: {previewEvent.assigned_staff_ids.map(id => staffById[id] || 'Unknown').join(', ')}
               </div>
             )}
             <div className="section-actions" style={{ marginTop: 16 }}>
-              {previewEvent._blackout ? (
+              {previewEvent._todo ? (
+                <>
+                  <button className="btn btn-primary btn-sm" disabled={updatingTodo} onClick={() => toggleTodoFromCalendar(previewEvent.todo)}>
+                    {previewEvent.todo.completed_at ? 'Mark not done' : 'Mark done'}
+                  </button>
+                  <button className="btn btn-sm btn-danger" disabled={updatingTodo} onClick={() => deleteTodoFromCalendar(previewEvent.todo)}>Delete</button>
+                </>
+              ) : previewEvent._blackout ? (
                 <Link className="btn btn-sm" href={`/jobs/${previewEvent.job_id}?tab=Schedule`}>Review on the job</Link>
               ) : (
                 <button className="btn btn-sm btn-danger" disabled={deletingEvent} onClick={() => deleteScheduleEvent(previewEvent.id)}>
@@ -1185,6 +1274,9 @@ export default function JobCalendarPage() {
         .tg-event-title{ font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tg-event-time{ color: var(--ink-soft); font-size: 9.5px; }
         .tg-event-schedule{ cursor: pointer; border-left-color: var(--accent); }
+        .tg-event-todo{ border-left-color: #4f7f5a; }
+        .tg-event-done .tg-event-title{ text-decoration: line-through; opacity: 0.6; }
+        .cal-day-event-dot.dot-todo{ background: #4f7f5a; }
         .tg-event-bidwalk{ border-left-color: #b8860b; }
         .tg-event-personal{ border-left-color: var(--ink-soft); opacity: 0.75; }
 

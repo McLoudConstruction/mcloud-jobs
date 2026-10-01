@@ -4,7 +4,7 @@ import MapboxPlaceSearch from './MapboxPlaceSearch';
 import { buildStop } from '../lib/mapRouteHelpers';
 import { getCurrentLocation, haversineMiles } from '../lib/salesRoutes';
 import {
-  TODO_PRESETS, EVENT_PRESETS, createTodo, todayKey, addDaysKey, nextMondayKey, formatDueDate,
+  TODO_PRESETS, createTodo, todayKey, addDaysKey, nextMondayKey, formatDueDate, formatDueTime,
 } from '../lib/salesTodos';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -13,11 +13,11 @@ const NEARBY_LIMIT = 5;
 // Drive Mode quick actions for the stop you are at (or the route as a whole):
 //   + Add Stop   search a saved property or any place, or pick one near you;
 //                it slots into the route where it adds the least driving
-//   + To-Do      a checklist item for a chosen day (Send COI, Send Intro Email)
-//   + Event      a dated event, optionally with a time (follow-up email,
-//                inspection); both land on the Dashboard
+//   + To-Do      a checklist item for a chosen day, with an optional time
+//                (Send COI, Send Intro Email, Inspection at 9:00); it shows
+//                on the Dashboard and the Calendar
 export default function DriveModeQuickActions({ stop, stops, staffId, routeId, properties, onQuickAdd }) {
-  const [open, setOpen] = useState(null); // null | 'stop' | 'todo' | 'event'
+  const [open, setOpen] = useState(null); // null | 'stop' | 'todo'
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [dueDate, setDueDate] = useState(todayKey());
@@ -41,7 +41,7 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
     setNote('');
     setDueTime('');
     setLinkStop(true);
-    setDueDate(which === 'event' ? addDaysKey(1) : todayKey());
+    setDueDate(todayKey());
     setOpen(which);
   }
 
@@ -108,14 +108,13 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
     }
   }
 
-  async function save(kind) {
+  async function save() {
     setError('');
     setMsg('');
     setBusy(true);
     try {
       await createTodo({
         staffId,
-        kind,
         title,
         note,
         dueDate,
@@ -123,7 +122,7 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
         property: linkStop && stop ? stop : null,
         routeId,
       });
-      setMsg(`${kind === 'event' ? 'Event' : 'To-Do'} added for ${formatDueDate(dueDate).toLowerCase()}. It shows on your Dashboard.`);
+      setMsg(`To-Do added for ${formatDueDate(dueDate).toLowerCase()}${dueTime ? ` at ${formatDueTime(dueTime)}` : ''}. It shows on your Dashboard and Calendar.`);
       setOpen(null);
       setTitle('');
       setNote('');
@@ -133,8 +132,6 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
       setBusy(false);
     }
   }
-
-  const presets = open === 'event' ? EVENT_PRESETS : TODO_PRESETS;
 
   return (
     <div style={wrapStyle}>
@@ -148,7 +145,6 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" style={{ ...tabBtn, ...(open === 'stop' ? tabBtnOn : null) }} onClick={() => toggle('stop')}>+ Add Stop</button>
         <button type="button" style={{ ...tabBtn, ...(open === 'todo' ? tabBtnOn : null) }} onClick={() => toggle('todo')}>+ To-Do</button>
-        <button type="button" style={{ ...tabBtn, ...(open === 'event' ? tabBtnOn : null) }} onClick={() => toggle('event')}>+ Event</button>
       </div>
 
       {open === 'stop' && (
@@ -188,10 +184,10 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
         </div>
       )}
 
-      {(open === 'todo' || open === 'event') && (
+      {open === 'todo' && (
         <div style={panelStyle}>
           <div style={chipRowStyle}>
-            {presets.map(label => (
+            {TODO_PRESETS.map(label => (
               <button
                 key={label}
                 type="button"
@@ -202,7 +198,7 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
           </div>
           <input
             style={fieldStyle}
-            placeholder={open === 'event' ? 'What is the event?' : 'What needs to get done?'}
+            placeholder="What needs to get done?"
             value={title}
             onChange={e => setTitle(e.target.value)}
           />
@@ -223,16 +219,15 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
             onChange={e => { if (e.target.value) setDueDate(e.target.value); }}
           />
 
-          {open === 'event' && (
-            <input
-              className="dm-date"
-              type="time"
-              style={fieldStyle}
-              aria-label="Time (optional)"
-              value={dueTime}
-              onChange={e => setDueTime(e.target.value)}
-            />
-          )}
+          <div style={{ ...hintStyle, textAlign: 'left', marginTop: 2 }}>Time (optional)</div>
+          <input
+            className="dm-date"
+            type="time"
+            style={fieldStyle}
+            aria-label="Time (optional)"
+            value={dueTime}
+            onChange={e => setDueTime(e.target.value)}
+          />
 
           <textarea
             style={fieldStyle}
@@ -249,8 +244,8 @@ export default function DriveModeQuickActions({ stop, stops, staffId, routeId, p
             </label>
           )}
 
-          <button type="button" style={saveBtn} disabled={busy || !title.trim()} onClick={() => save(open)}>
-            {busy ? 'Saving…' : open === 'event' ? `Add event for ${formatDueDate(dueDate).toLowerCase()}` : `Add to To-Do for ${formatDueDate(dueDate).toLowerCase()}`}
+          <button type="button" style={saveBtn} disabled={busy || !title.trim()} onClick={save}>
+            {busy ? 'Saving…' : `Add to To-Do for ${formatDueDate(dueDate).toLowerCase()}${dueTime ? ` at ${formatDueTime(dueTime)}` : ''}`}
           </button>
         </div>
       )}
