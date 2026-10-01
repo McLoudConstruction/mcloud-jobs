@@ -283,6 +283,7 @@ export default function JobCalendarPage() {
   const [resolvingRequestId, setResolvingRequestId] = useState(null);
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [previewEvent, setPreviewEvent] = useState(null);
+  const [todoDayPreview, setTodoDayPreview] = useState(null); // 'YYYY-MM-DD' of the day whose To Do checklist is open
   const [deletingEvent, setDeletingEvent] = useState(false);
 
   // Sidebar filter toggles — what's actually plotted on the calendar today
@@ -414,6 +415,28 @@ export default function JobCalendarPage() {
       setPreviewEvent(null);
     } catch (err) {
       alert(err.message || 'Could not update that to-do.');
+    } finally {
+      setUpdatingTodo(false);
+    }
+  }
+  async function toggleTodoInChecklist(todo) {
+    setUpdatingTodo(true);
+    try {
+      await setTodoDone(todo.id, !todo.completed_at);
+      await loadTodos();
+    } catch (err) {
+      alert(err.message || 'Could not update that to-do.');
+    } finally {
+      setUpdatingTodo(false);
+    }
+  }
+  async function deleteTodoInChecklist(todo) {
+    setUpdatingTodo(true);
+    try {
+      await deleteTodo(todo.id);
+      await loadTodos();
+    } catch (err) {
+      alert(err.message || 'Could not delete that to-do.');
     } finally {
       setUpdatingTodo(false);
     }
@@ -761,17 +784,14 @@ export default function JobCalendarPage() {
                   return (
                     <div key={days[i].toISOString()} className="tg-allday-day">
                       {todoList.length > 0 && (
-                        <div className="tg-allday-stack tg-allday-stack-todo">
-                          {todoList.map(ev => (
-                            <div
-                              key={ev.id}
-                              className={`tg-allday-stack-item${ev.todo.completed_at ? ' tg-event-done' : ''}`}
-                              onClick={e => { e.stopPropagation(); setPreviewEvent(ev); }}
-                              title={ev.description}
-                            >
-                              {todoMark(ev)} {ev.description}
-                            </div>
-                          ))}
+                        <div
+                          className="tg-allday-stack tg-allday-stack-todo tg-allday-todo-chip"
+                          onClick={e => { e.stopPropagation(); setTodoDayPreview(todoList[0].event_date); }}
+                          title={`${todoList.length} to-do${todoList.length === 1 ? '' : 's'}`}
+                        >
+                          <div className="tg-allday-stack-item">
+                            ☐ To Do ({todoList.filter(ev => !ev.todo.completed_at).length}/{todoList.length})
+                          </div>
                         </div>
                       )}
                       {otherList.length > 0 && (
@@ -1185,6 +1205,45 @@ export default function JobCalendarPage() {
         )}
       </PopupModal>
 
+      <PopupModal open={!!todoDayPreview} onClose={() => setTodoDayPreview(null)} maxWidth={420}>
+        {todoDayPreview && (() => {
+          const list = todoEvents.filter(ev => ev.event_date === todoDayPreview);
+          return (
+            <div>
+              <span className="badge">To Do</span>
+              <h3 style={{ margin: '8px 0 4px' }}>
+                {parseDateOnly(todoDayPreview).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </h3>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                {list.filter(ev => ev.todo.completed_at).length} of {list.length} done
+              </div>
+              {list.length === 0 && <div className="empty-state">No to-dos left for this day.</div>}
+              {list.map(ev => (
+                <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!ev.todo.completed_at}
+                    disabled={updatingTodo}
+                    onChange={() => toggleTodoInChecklist(ev.todo)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={ev.todo.completed_at ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>{ev.description}</div>
+                    {ev.todo.property_name && (
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>At: {ev.todo.property_name}</div>
+                    )}
+                    {ev.todo.note && (
+                      <div style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{ev.todo.note}</div>
+                    )}
+                  </div>
+                  <button className="btn btn-sm btn-danger" disabled={updatingTodo} onClick={() => deleteTodoInChecklist(ev.todo)}>Delete</button>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </PopupModal>
+
       <PopupModal open={!!previewJob} onClose={() => setPreviewJob(null)} maxWidth={360}>
         {previewJob && (
           <div>
@@ -1307,6 +1366,7 @@ export default function JobCalendarPage() {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .tg-allday-stack-item:hover{ text-decoration: underline; }
+        .tg-allday-todo-chip{ cursor: pointer; }
         .tg-allday-bar{
           position: absolute; height: 20px; border-radius: 4px; font-size: 10.5px; font-weight: 600;
           color: #fff; padding: 2px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
