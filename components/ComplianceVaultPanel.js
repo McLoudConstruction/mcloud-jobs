@@ -73,7 +73,8 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
   const uploadType = DOC_TYPE_BY_KEY[upload.doc_type];
 
   async function submitUpload(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (busy) return;
     const check = checkComplianceFile(upload.file);
     if (!check.ok) { setError(check.error); return; }
     if (uploadType.needsExpiry && !upload.expires_at) { setError('An expiration date is required for this document.'); return; }
@@ -264,7 +265,10 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
         {!showUpload ? (
           <button type="button" className="btn btn-sm" onClick={() => setShowUpload(true)}>+ Upload a document</button>
         ) : (
-          <form onSubmit={submitUpload} style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel)' }}>
+          // Not a <form>: this panel renders inside the Edit Subcontractor
+          // form, and a nested form's submit bubbles to that outer form's
+          // handler, which saves the company and closes the popup mid-upload.
+          <div style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel)' }}>
             <label style={{ fontSize: 11 }}>Document type</label>
             <select value={upload.doc_type} onChange={e => setUpload(u => ({ ...u, doc_type: e.target.value }))}>
               {COMPLIANCE_DOC_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -288,10 +292,10 @@ export default function ComplianceVaultPanel({ companyId, onChanged, onViewDoc }
               </>
             )}
             <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-              <button className="btn btn-primary btn-sm" type="submit" disabled={busy}>{busy ? 'Uploading…' : 'Upload & approve'}</button>
+              <button className="btn btn-primary btn-sm" type="button" onClick={submitUpload} disabled={busy}>{busy ? 'Uploading…' : 'Upload & approve'}</button>
               <button className="btn btn-sm" type="button" onClick={() => { setShowUpload(false); setUpload(EMPTY_UPLOAD); }}>Cancel</button>
             </div>
-          </form>
+          </div>
         )}
       </div>
 
