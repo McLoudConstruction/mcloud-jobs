@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
@@ -104,6 +105,7 @@ function RouteHistory({ staffId, onChanged, onSaved, onStartDriving }) {
       {history.map(r => {
         const stops = r.stops || [];
         const visited = stops.filter(s => s.visited_at).length;
+        const skipped = stops.filter(s => s.skipped_at && !s.visited_at).length;
         const isOpen = openId === r.id;
         return (
           <div key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
@@ -116,10 +118,11 @@ function RouteHistory({ staffId, onChanged, onSaved, onStartDriving }) {
                 style={{ flex: 1, cursor: 'pointer', fontSize: 13 }}
               >
                 <div style={{ fontWeight: 600 }}>{isOpen ? '▾' : '▸'} {formatWhen(r.created_at)} — {stops.length} stop{stops.length === 1 ? '' : 's'}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{visited} visited{r.start_label ? ` · from ${r.start_label}` : ''}{r.end_label ? ` · to ${r.end_label}` : ''}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{visited} visited{skipped > 0 ? ` · ${skipped} skipped` : ''}{r.start_label ? ` · from ${r.start_label}` : ''}{r.end_label ? ` · to ${r.end_label}` : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span className={`badge ${r.status === 'completed' ? 'badge-approved' : r.status === 'saved' ? 'badge-scheduled' : ''}`}>{STATUS_LABELS[r.status] || r.status}</span>
+                <Link href={`/sales/routes/${r.id}`} className="btn btn-sm">View Route</Link>
                 {r.status === 'active' && (
                   <button type="button" className="btn btn-sm" disabled={busyId === r.id} onClick={() => handleSave(r)}>
                     {busyId === r.id ? 'Saving…' : 'Save Route'}
@@ -163,7 +166,7 @@ function RouteHistory({ staffId, onChanged, onSaved, onStartDriving }) {
                       {formatAddress(s) && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{formatAddress(s)}</div>}
                     </div>
                     <span className={`badge ${s.visited_at ? 'badge-approved' : ''}`} style={{ flexShrink: 0, fontSize: 10.5 }}>
-                      {s.visited_at ? `Visited ${formatStopTime(s.visited_at)}` : 'Not visited'}
+                      {s.visited_at ? `Visited ${formatStopTime(s.visited_at)}` : s.skipped_at ? 'Skipped' : 'Not visited'}
                     </span>
                   </div>
                 ))}
@@ -189,9 +192,21 @@ export default function RouteBuilderPage() {
   // (which remounts and resumes the now-active route) opens Drive Mode.
   // It only needs to be true for that one remount.
   const [pendingDrive, setPendingDrive] = useState(false);
+  // Arriving from a route overview (Start Driving) with ?drive=1 opens Drive
+  // Mode once. The flag is read on the first client render, held until the
+  // builder has mounted, then cleared along with the query string so a
+  // refresh does not reopen Drive Mode.
+  const [driveFromLink, setDriveFromLink] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('drive') === '1'
+  );
   const [flash, setFlash] = useState('');
 
   useEffect(() => { if (pendingDrive) setPendingDrive(false); }, [pendingDrive]);
+  useEffect(() => {
+    if (!driveFromLink || loading || !session) return;
+    setDriveFromLink(false);
+    window.history.replaceState({}, '', '/sales/routes');
+  }, [driveFromLink, loading, session]);
   useEffect(() => {
     if (!flash) return;
     const t = setTimeout(() => setFlash(''), 7000);
@@ -221,7 +236,7 @@ export default function RouteBuilderPage() {
           key={`combined-${refreshKey}`}
           onRouteChanged={bumpRefresh}
           onRouteSaved={handleRouteSaved}
-          autoStartDriving={pendingDrive}
+          autoStartDriving={pendingDrive || driveFromLink}
         />
         {flash && <div style={{ fontSize: 13, fontWeight: 600, color: '#4f9a63', margin: '0 0 12px' }}>{flash}</div>}
         <RouteHistory

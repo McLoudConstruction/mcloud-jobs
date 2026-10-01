@@ -11,6 +11,9 @@ import RouteBuilderModal from '../../components/RouteBuilderModal';
 import ManualRouteBuilderModal from '../../components/ManualRouteBuilderModal';
 import { useCompanyForecast, WeatherRibbon } from '../../components/dashboard/WeatherWidgets';
 import NotificationsCard from '../../components/dashboard/NotificationsCard';
+import TodoCard from '../../components/dashboard/TodoCard';
+import SavedRoutesCard from '../../components/dashboard/SavedRoutesCard';
+import { canAccessPath } from '../../lib/permissions';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
 
@@ -86,7 +89,7 @@ function StatGroup({ label, tiles, isMobile }) {
 }
 
 export default function DashboardPage() {
-  const { session, loading } = useRequireAuth();
+  const { session, loading, role } = useRequireAuth();
   const { settings } = useSettings();
   const router = useRouter();
   const [jobs, setJobs] = useState([]);
@@ -367,6 +370,13 @@ export default function DashboardPage() {
                 </div>
               );
             })()}
+
+            {canAccessPath(role, '/sales') && (show('todo_list') || show('saved_routes')) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginBottom: 20, alignItems: 'start' }}>
+                {show('todo_list') && <TodoCard />}
+                {show('saved_routes') && <SavedRoutesCard />}
+              </div>
+            )}
 
             {show('job_counts_by_stage') && (
               <div className="card">

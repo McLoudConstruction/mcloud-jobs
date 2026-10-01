@@ -8,9 +8,13 @@ import { findOrCreatePropertyForRouteStop } from '../lib/contactSync';
 import { useDragReorder } from '../lib/useDragReorder';
 import { PROPERTY_TYPES } from '../lib/constants';
 import {
-  getActiveRoute, startRoute, updateRouteStops, finishRoute, cancelRoute,
+  getActiveRoute, startRoute, updateRouteStops, updateRouteTiming, finishRoute, cancelRoute,
   saveRoute, shelveRoute, getCurrentLocation, haversineMiles,
 } from '../lib/salesRoutes';
+import {
+  DEFAULT_DWELL_MINUTES, isPending, routeStopsOf, legsByStop, buildTimeline,
+  formatClock, formatMinutes, timeStringToToday, dateToTimeString,
+} from '../lib/routeTiming';
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
   MAPBOX_MAX_POINTS, VISIT_BUCKETS, visitBucket, daysSince,
@@ -33,6 +37,14 @@ const EMPTY = { type: 'FeatureCollection', features: [] };
 
 function stripKey({ key, ...rest }) {
   return rest;
+}
+
+// Default leave time for a new route: now, rounded up to the next 5 minutes.
+function roundedNowTime() {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);
+  return dateToTimeString(d);
 }
 
 function stopLngLat(s) {
@@ -124,6 +136,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
   const [locating, setLocating] = useState(null); // { done, total }
   const [leftMin, setLeftMin] = useState(false); // 'Visible on map' card minimized
   const [rightMin, setRightMin] = useState(false); // 'Route' card minimized
+  const [defaultDwell, setDefaultDwell] = useState(DEFAULT_DWELL_MINUTES); // minutes planned at each stop
+  const [departTime, setDepartTime] = useState(roundedNowTime); // 'HH:MM' the route leaves the start
 
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
@@ -157,9 +171,14 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
         if (!cancelled && active && (active.stops || []).length > 0) {
           setRoute(active);
           setStops(active.stops);
+          setDefaultDwell(active.default_dwell_minutes ?? DEFAULT_DWELL_MINUTES);
+          if (active.depart_time) setDepartTime(String(active.depart_time).slice(0, 5));
           setAutoOrder(false); // never reshuffle a route already in progress
           // Coming from "Start Driving" on a saved route: go straight to Drive Mode.
-          if (autoStartDriving) setDriving(true);
+          if (autoStartDriving) {
+            setDriving(true);
+            if (!active.stops.some(x => x.visited_at)) setDepartTime(roundedNowTime());
+          }
           if (active.start_lat != null && active.start_lng != null) {
             setStartPoint({ lat: Number(active.start_lat), lng: Number(active.start_lng) });
             setStartInput(active.start_label || 'Your current location');
@@ -369,7 +388,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
     if (!map || !mapboxgl) return;
     const pts = [
       ...(startRef.current ? [[startRef.current.lng, startRef.current.lat]] : []),
-      ...stopsRef.current.filter(stopHasCoords).map(stopLngLat),
+      ...routeStopsOf(stopsRef.current).map(stopLngLat),
     ];
     if (pts.length === 0) return;
     if (pts.length === 1) { map.easeTo({ center: pts[0], zoom: 15, duration: 500 }); return; }
@@ -389,7 +408,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
   // ── Property points ──────────────────────────────────────────────────
   useEffect(() => {
     if (!mapReady) return;
-    const onRoute = new Set(stops.map(s => s.property_id).filter(Boolean));
+    const onRoute = new Set(stops.filter(s => !s.skipped_at).map(s => s.property_id).filter(Boolean));
     mapRef.current.getSource('props')?.setData({
       type: 'FeatureCollection',
       features: shownProps.map(p => ({
@@ -472,7 +491,9 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
 
   // ── Ordering ─────────────────────────────────────────────────────────
   // Visited stops stay first as history; only what is left gets ordered,
-  // leaving from the last visited stop (or the start, if set).
+  // leaving from the last visited stop (or the start, if set). Skipped
+  // stops are off this route: they sit at the end, are never ordered, and
+  // are left out of the route line and the time estimate.
   function anchorFor(list, startOverride) {
     const lastVisited = [...list].reverse().find(s => s.visited_at && stopHasCoords(s));
     if (lastVisited) return stopPoint(lastVisited);
@@ -482,22 +503,35 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
 
   function arrange(list, startOverride) {
     const visited = list.filter(s => s.visited_at);
-    const todo = list.filter(s => !s.visited_at);
-    return [...visited, ...orderStops(anchorFor(list, startOverride), todo)];
+    const todo = list.filter(isPending);
+    const skipped = list.filter(s => s.skipped_at && !s.visited_at);
+    return [...visited, ...orderStops(anchorFor(list, startOverride), todo), ...skipped];
   }
 
   const addStop = useCallback(async (stop, fromMap) => {
     setError('');
     setNotice('');
     const current = stopsRef.current;
-    if (current.some(s => sameStop(s, stop))) {
-      setNotice(`${stop.property_name || 'That spot'} is already on this route.`);
-      return;
+    const duplicate = current.find(s => sameStop(s, stop));
+    if (duplicate && duplicate.skipped_at && !duplicate.visited_at) {
+      // Added again after being skipped: bring the skipped stop back.
+      const at = current.indexOf(duplicate);
+      await restoreSkippedStop(at);
+      const message = `${duplicate.property_name || 'That stop'} is back on this route.`;
+      setNotice(message);
+      return { status: 'restored', message };
+    }
+    if (duplicate) {
+      const message = `${stop.property_name || 'That spot'} is already on this route.`;
+      setNotice(message);
+      return { status: 'duplicate', message };
     }
     const hasStart = !!startRef.current;
-    if (current.length + (hasStart ? 1 : 0) >= MAPBOX_MAX_POINTS) {
-      setNotice(`A route can have at most ${MAPBOX_MAX_POINTS - (hasStart ? 1 : 0)} stops${hasStart ? ' with a starting location' : ''}.`);
-      return;
+    const liveCount = current.filter(s => !s.skipped_at).length;
+    if (liveCount + (hasStart ? 1 : 0) >= MAPBOX_MAX_POINTS) {
+      const message = `A route can have at most ${MAPBOX_MAX_POINTS - (hasStart ? 1 : 0)} stops${hasStart ? ' with a starting location' : ''}.`;
+      setNotice(message);
+      return { status: 'limit', message };
     }
     try {
       let toAdd = stop;
@@ -508,7 +542,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
       }
       const latest = stopsRef.current;
       const visited = latest.filter(s => s.visited_at);
-      const todo = latest.filter(s => !s.visited_at);
+      const todo = latest.filter(isPending);
+      const skipped = latest.filter(s => s.skipped_at && !s.visited_at);
       const anchor = anchorFor(latest);
       let nextTodo;
       if (autoOrder) {
@@ -518,9 +553,11 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
         nextTodo = [...todo.slice(0, idx), toAdd, ...todo.slice(idx)];
       }
       fitAfterRouteRef.current = !fromMap; // don't move the map while picking from it
-      await persistStops([...visited, ...nextTodo]);
+      await persistStops([...visited, ...nextTodo, ...skipped]);
+      return { status: 'added', message: `Added ${toAdd.property_name || 'the stop'} to the route.` };
     } catch (err) {
       setError(err.message);
+      return { status: 'error', message: err.message };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, autoOrder, persistStops, resolveStop]);
@@ -628,12 +665,12 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
 
   // ── Derived: route points, drawn route, totals ────────────────────────
   const routePoints = useMemo(
-    () => [...(startPoint ? [startPoint] : []), ...stops.filter(stopHasCoords).map(stopPoint)],
+    () => [...(startPoint ? [startPoint] : []), ...routeStopsOf(stops).map(stopPoint)],
     [startPoint, stops]
   );
   const routeKey = useMemo(() => pointsKey(routePoints), [routePoints]);
   const roadInSync = !!roadRoute && roadRoute.key === routeKey;
-  const allPlaced = stops.every(stopHasCoords);
+  const allPlaced = stops.filter(s => !s.skipped_at).every(stopHasCoords);
 
   // Keep the road route in sync with the ordered stops (debounced; a newer
   // edit supersedes an older request).
@@ -689,6 +726,56 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
 
   const legs = roadInSync && followRoads && allPlaced && roadRoute.legs.length === routePoints.length - 1 ? roadRoute.legs : null;
 
+  // Drive time lined up with each stop, plus time at each stop and an
+  // arrival estimate for every stop still ahead.
+  const legByStop = useMemo(() => legsByStop(stops, legs, !!startPoint), [stops, legs, startPoint]);
+  const timeline = useMemo(
+    () => buildTimeline({
+      stops, legs, hasStart: !!startPoint, defaultDwell,
+      departAt: timeStringToToday(departTime),
+    }),
+    [stops, legs, startPoint, defaultDwell, departTime]
+  );
+
+  // What Drive Mode shows about timing: when the next stop is reached, and
+  // when the whole route should wrap up.
+  const driveEta = useMemo(() => {
+    const nextIndex = stops.findIndex(isPending);
+    const row = nextIndex >= 0 ? timeline.rows[nextIndex] : null;
+    return {
+      nextArrival: row ? row.arrive : null,
+      nextDriveSeconds: row ? row.driveSeconds : null,
+      nextDwellMinutes: row ? row.dwellMinutes : null,
+      finishAt: timeline.finishAt,
+      remainingMinutes: timeline.totalMinutes,
+    };
+  }, [stops, timeline]);
+
+  // Keep the saved route's timing in step: planned time at each stop, leave
+  // time, and the latest road distance and drive time (so the Dashboard can
+  // show a total without asking Mapbox again).
+  const savedTimingRef = useRef('');
+  useEffect(() => {
+    if (!route?.id) return undefined;
+    const meters = roadInSync && followRoads && roadRoute.meters != null ? Math.round(roadRoute.meters) : undefined;
+    const seconds = roadInSync && followRoads && roadRoute.seconds != null ? Math.round(roadRoute.seconds) : undefined;
+    const signature = `${route.id}|${defaultDwell}|${departTime}|${meters ?? ''}|${seconds ?? ''}`;
+    if (savedTimingRef.current === '') {
+      // First pass after the route loaded: values already came from the row.
+      savedTimingRef.current = `${route.id}|${defaultDwell}|${departTime}|${route.est_meters != null ? Math.round(route.est_meters) : ''}|${route.est_drive_seconds != null ? Math.round(route.est_drive_seconds) : ''}`;
+    }
+    if (savedTimingRef.current === signature) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        await updateRouteTiming(route.id, { defaultDwell, departTime, estMeters: meters, estSeconds: seconds });
+        savedTimingRef.current = signature;
+      } catch (err) {
+        setError(err.message);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [route, defaultDwell, departTime, roadInSync, roadRoute, followRoads]);
+
   // ── Pins ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapReady) return undefined;
@@ -702,10 +789,13 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
           .setLngLat([startPoint.lng, startPoint.lat]).addTo(map)
       );
     }
-    stops.forEach((s, i) => {
+    let shown = 0;
+    stops.forEach((s) => {
+      if (s.skipped_at) return;
+      shown += 1;
       if (!stopHasCoords(s)) return;
       stopMarkersRef.current.push(
-        new mapboxgl.Marker({ element: pinElement(s.visited_at ? '✓' : String(i + 1), s.visited_at ? 'visited' : 'stop', `${i + 1}. ${s.property_name}`) })
+        new mapboxgl.Marker({ element: pinElement(s.visited_at ? '✓' : String(shown), s.visited_at ? 'visited' : 'stop', `${shown}. ${s.property_name}`) })
           .setLngLat(stopLngLat(s)).addTo(map)
       );
     });
@@ -847,6 +937,18 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
     window.open(`https://www.google.com/maps/dir/${parts.map(a => encodeURIComponent(a)).join('/')}`, '_blank');
   }
 
+  // Timing written with a new route: time at each stop, leave time, and the
+  // road distance and drive time when the drawn route matches the stops.
+  function currentTiming() {
+    const haveRoad = roadInSync && followRoads;
+    return {
+      defaultDwell,
+      departTime,
+      estMeters: haveRoad && roadRoute.meters != null ? Math.round(roadRoute.meters) : null,
+      estSeconds: haveRoad && roadRoute.seconds != null ? Math.round(roadRoute.seconds) : null,
+    };
+  }
+
   async function saveAndStart() {
     if (stops.length === 0) { setError('Add at least one stop from the map or type one in.'); return; }
     setSaving(true);
@@ -869,6 +971,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
             end: null,
             stops: resolved,
             autoOrdered: autoOrder,
+            timing: currentTiming(),
           })
         : { id: null, status: 'active', stops: resolved };
       setRoute(saved);
@@ -905,6 +1008,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
         end: null,
         stops: resolved,
         autoOrdered: autoOrder,
+        timing: currentTiming(),
       });
       resetAll();
       if (onRouteSaved) onRouteSaved(resolved.length);
@@ -966,9 +1070,10 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
     if (stops.length === 0) return;
     setMarking(true);
     const nowIso = new Date().toISOString();
-    const ids = stops.map(s => s.property_id).filter(Boolean);
+    // Skipped stops were not visited, so they stay skipped.
+    const ids = stops.filter(isPending).map(s => s.property_id).filter(Boolean);
     if (ids.length) await recordVisit(ids, nowIso);
-    await persistStops(stops.map(s => ({ ...s, visited_at: s.visited_at || nowIso })));
+    await persistStops(stops.map(s => (isPending(s) ? { ...s, visited_at: nowIso } : s)));
     setMarking(false);
   }
   async function unmarkStopVisited(index) {
@@ -976,25 +1081,57 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
     await persistStops(stops.map((s, i) => (i === index ? { ...s, visited_at: null } : s)));
   }
 
-  async function markAllVisited() {
-    if (stops.length === 0) return;
-    setMarking(true);
-    const nowIso = new Date().toISOString();
-    const ids = stops.map(s => s.property_id).filter(Boolean);
-    if (ids.length) {
-      await supabase.from('properties').update({ last_visited_at: nowIso }).in('id', ids);
-      const idSet = new Set(ids);
-      setAllProps(prev => prev.map(p => (idSet.has(p.id) ? { ...p, last_visited_at: nowIso } : p)));
-    }
-    await persistStops(stops.map(s => ({ ...s, visited_at: s.visited_at || nowIso })));
-    setMarking(false);
+  // Skip Stop drops the stop from THIS route only. It is kept on the route
+  // record (marked skipped, parked at the end) so the day's history is
+  // accurate, but it leaves the route line, the time estimate and the list
+  // of stops still to do. Its property is untouched, so it is still there
+  // for the next route. It is not pushed later in the same route.
+  async function skipStop(index) {
+    const stop = stopsRef.current[index];
+    if (!stop || stop.visited_at || stop.skipped_at) return;
+    const latest = stopsRef.current;
+    const visited = latest.filter(s => s.visited_at);
+    const todo = latest.filter((s, i) => i !== index && isPending(s));
+    const skipped = latest.filter(s => s.skipped_at && !s.visited_at);
+    fitAfterRouteRef.current = false;
+    await persistStops([...visited, ...todo, ...skipped, { ...stop, skipped_at: new Date().toISOString() }]);
   }
 
-  async function skipStop(index) {
-    if (stops.length < 2) return;
-    const stop = stops[index];
-    await persistStops([...stops.filter((_, i) => i !== index), stop]);
+  // Brings a skipped stop back into the route, slotted in where it adds the
+  // least driving.
+  async function restoreSkippedStop(index) {
+    const latest = stopsRef.current;
+    const stop = latest[index];
+    if (!stop || !stop.skipped_at) return;
+    const revived = { ...stop, skipped_at: null };
+    const visited = latest.filter(s => s.visited_at);
+    const todo = latest.filter((s, i) => i !== index && isPending(s));
+    const skipped = latest.filter((s, i) => i !== index && s.skipped_at && !s.visited_at);
+    const at = cheapestInsertionIndex(anchorFor(latest), todo, revived);
+    fitAfterRouteRef.current = false;
+    await persistStops([...visited, ...todo.slice(0, at), revived, ...todo.slice(at), ...skipped]);
   }
+
+  // Time at a stop: a number of minutes for that stop only, or blank to go
+  // back to the route's default.
+  function setStopDwell(index, value) {
+    const raw = String(value).trim();
+    const minutes = raw === '' ? null : Math.max(0, Math.min(600, Math.round(Number(raw))));
+    if (raw !== '' && !Number.isFinite(minutes)) return;
+    fitAfterRouteRef.current = false;
+    persistStops(stopsRef.current.map((s, i) => (i === index ? { ...s, dwell_minutes: minutes } : s)));
+  }
+
+  // Opening Drive Mode on a route nothing has been visited on yet means you
+  // are leaving now, so the leave time becomes now (arrival estimates then
+  // hold steady instead of starting in the past).
+  function startDriving() {
+    if (!stopsRef.current.some(x => x.visited_at)) setDepartTime(roundedNowTime());
+    setDriving(true);
+  }
+
+  // Quick Add from Drive Mode: the stop slots in where it adds the least driving.
+  const quickAddStop = useCallback(async (stop) => addStop(stop, true), [addStop]);
 
   function resetAll() {
     setRoute(null);
@@ -1030,13 +1167,15 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
     return hideChrome ? loadingBody : <div className="card"><h3>Create Sales Route</h3>{loadingBody}</div>;
   }
 
-  const remainingCount = stops.filter(s => !s.visited_at).length;
+  const remainingCount = stops.filter(isPending).length;
+  const liveStops = stops.filter(s => !s.skipped_at);
+  const skippedCount = stops.length - liveStops.length;
 
   const summary = totals && !routeBusy ? (
     <span>
       <strong>{totals.approx ? '~' : ''}{formatMiles(totals.miles)} mi</strong>
       {totals.seconds != null ? ` · ${formatDuration(totals.seconds)} drive` : ' straight-line'}
-      {` · ${stops.length} stop${stops.length === 1 ? '' : 's'}`}
+      {` · ${liveStops.length} stop${liveStops.length === 1 ? '' : 's'}`}
     </span>
   ) : routeBusy ? (
     <span style={{ color: 'var(--ink-soft)' }}>Updating route…</span>
@@ -1045,6 +1184,18 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
       {stops.length === 0 ? 'Tap + on a property, or tap the map, to add stops.' : 'Add a start or a second stop to build the route.'}
     </span>
   );
+
+  // Drive plus time at each stop for what is still ahead. Drive time is only
+  // known once the road route has loaded; until then just the on-site time.
+  const haveDrive = !!legs || timeline.driveSeconds > 0;
+  const timeSummary = remainingCount > 0 ? (
+    <span>
+      <strong>{formatMinutes(timeline.totalMinutes)}</strong>
+      {haveDrive ? ' total' : ' on site'}
+      {haveDrive ? ` (${formatMinutes(Math.round(timeline.driveSeconds / 60))} driving, ${formatMinutes(timeline.dwellMinutes)} at stops)` : ''}
+      {timeline.finishAt ? ` · done around ${formatClock(timeline.finishAt)}` : ''}
+    </span>
+  ) : null;
 
   const body = (
     <>
@@ -1084,7 +1235,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
 
       {isActive && stops.length > 0 && (
         <div style={{ fontSize: 12, color: '#a17c3f', marginBottom: 10 }}>
-          Route in progress: {remainingCount} of {stops.length} stop{stops.length === 1 ? '' : 's'} left. Tap the map to add more.
+          Route in progress: {remainingCount} of {liveStops.length} stop{liveStops.length === 1 ? '' : 's'} left{skippedCount > 0 ? `, ${skippedCount} skipped` : ''}. Tap the map to add more.
         </div>
       )}
 
@@ -1261,6 +1412,37 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
           {!rightMin && (
           <div className="mrb-body">
           <div style={{ fontSize: 13, minHeight: 20 }}>{summary}</div>
+          {timeSummary && <div style={{ fontSize: 12.5 }}>{timeSummary}</div>}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={inlineFieldStyle}>
+              Time at each stop
+              <input
+                type="number"
+                min="0"
+                max="600"
+                step="5"
+                inputMode="numeric"
+                aria-label="Minutes planned at each stop"
+                value={defaultDwell}
+                onChange={e => setDefaultDwell(e.target.value === '' ? '' : Number(e.target.value))}
+                onBlur={() => { if (defaultDwell === '' || !Number.isFinite(Number(defaultDwell))) setDefaultDwell(DEFAULT_DWELL_MINUTES); }}
+                style={smallNumberStyle}
+              />
+              min
+            </label>
+            {!stops.some(s => s.visited_at) && (
+              <label style={inlineFieldStyle}>
+                Leave at
+                <input
+                  type="time"
+                  aria-label="Time the route leaves the start"
+                  value={departTime}
+                  onChange={e => setDepartTime(e.target.value)}
+                  style={{ ...smallNumberStyle, width: 'auto' }}
+                />
+              </label>
+            )}
+          </div>
           {!isActive && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {homeAddress
@@ -1296,50 +1478,89 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
               </div>
             )}
             {stops.map((s, i) => {
-              const leg = legs ? legs[startPoint ? i : i - 1] : null;
+              const leg = legByStop[i];
+              const row = timeline.rows[i];
               const over = stopsDrag.overIndex === i && stopsDrag.dragIndex !== null && stopsDrag.dragIndex !== i;
+              const skipped = !!s.skipped_at && !s.visited_at;
+              const position = stops.slice(0, i + 1).filter(x => !x.skipped_at).length;
               return (
                 <div
                   key={s.key || `${s.property_id}-${i}`}
                   data-drag-row={i}
                   className={`mrb-stop${over ? ' over' : ''}`}
                   style={{
-                    display: 'flex', gap: 8, alignItems: 'center', padding: '9px 0', borderTop: '1px solid var(--line)',
+                    padding: '9px 0', borderTop: '1px solid var(--line)',
                     opacity: stopsDrag.dragIndex === i ? 0.4 : 1,
                   }}
                 >
-                  <button
-                    type="button"
-                    aria-label="Drag to reorder"
-                    onPointerDown={e => stopsDrag.handlePointerDown(e, i)}
-                    onPointerMove={stopsDrag.handlePointerMove}
-                    onPointerUp={stopsDrag.handlePointerUp}
-                    style={dragHandleStyle}
-                  >⠿</button>
-                  <span style={{ ...badgeStyle, background: s.visited_at ? '#5a7d5a' : INK }}>{s.visited_at ? '✓' : i + 1}</span>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => focusStop(i)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') focusStop(i); }}
-                    style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 600, textDecoration: s.visited_at ? 'line-through' : 'none', opacity: s.visited_at ? 0.6 : 1 }}>{s.property_name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                      {formatStopAddress(s) || 'No address, not shown on the map'}
-                      {leg && leg.meters != null ? ` · ${formatMiles(metersToMiles(leg.meters))} mi, ${formatDuration(leg.seconds)} from previous` : ''}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      aria-label="Drag to reorder"
+                      onPointerDown={e => stopsDrag.handlePointerDown(e, i)}
+                      onPointerMove={stopsDrag.handlePointerMove}
+                      onPointerUp={stopsDrag.handlePointerUp}
+                      style={dragHandleStyle}
+                    >⠿</button>
+                    <span style={{ ...badgeStyle, background: skipped ? '#8a8a84' : s.visited_at ? '#5a7d5a' : INK }}>{skipped ? 'x' : s.visited_at ? '✓' : position}</span>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => focusStop(i)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') focusStop(i); }}
+                      style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, textDecoration: s.visited_at || skipped ? 'line-through' : 'none', opacity: s.visited_at || skipped ? 0.6 : 1 }}>{s.property_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                        {skipped ? 'Skipped on this route' : (formatStopAddress(s) || 'No address, not shown on the map')}
+                        {!skipped && leg && leg.meters != null ? ` · ${formatMiles(metersToMiles(leg.meters))} mi, ${formatDuration(leg.seconds)} from previous` : ''}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 140 }}>
+                      {skipped ? (
+                        <button type="button" className="btn btn-sm" onClick={() => restoreSkippedStop(i)}>Restore</button>
+                      ) : (
+                        <>
+                          <button type="button" className="btn btn-sm" aria-label="Move up" disabled={i === 0} onClick={() => moveStop(i, i - 1)}>▲</button>
+                          <button type="button" className="btn btn-sm" aria-label="Move down" disabled={i === stops.length - 1} onClick={() => moveStop(i, i + 1)}>▼</button>
+                          {isActive && (s.visited_at ? (
+                            <button type="button" className="btn btn-sm" onClick={() => unmarkStopVisited(i)}>Undo</button>
+                          ) : (
+                            <>
+                              <button type="button" className="btn btn-sm" onClick={() => markStopVisited(i)}>Visited</button>
+                              <button type="button" className="btn btn-sm" title="Take this stop off this route" onClick={() => skipStop(i)}>Skip</button>
+                            </>
+                          ))}
+                        </>
+                      )}
+                      <button type="button" className="btn btn-sm btn-danger" aria-label={`Remove ${s.property_name}`} onClick={() => removeStop(i)}>×</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 120 }}>
-                    <button type="button" className="btn btn-sm" aria-label="Move up" disabled={i === 0} onClick={() => moveStop(i, i - 1)}>▲</button>
-                    <button type="button" className="btn btn-sm" aria-label="Move down" disabled={i === stops.length - 1} onClick={() => moveStop(i, i + 1)}>▼</button>
-                    {isActive && (s.visited_at ? (
-                      <button type="button" className="btn btn-sm" onClick={() => unmarkStopVisited(i)}>Undo</button>
-                    ) : (
-                      <button type="button" className="btn btn-sm" onClick={() => markStopVisited(i)}>Visited</button>
-                    ))}
-                    <button type="button" className="btn btn-sm btn-danger" aria-label={`Remove ${s.property_name}`} onClick={() => removeStop(i)}>×</button>
-                  </div>
+                  {!skipped && !s.visited_at && (
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', paddingLeft: 74, marginTop: 5, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                      {row && row.arrive && <span>Arrive about <strong style={{ color: 'inherit' }}>{formatClock(row.arrive)}</strong></span>}
+                      <label style={{ ...inlineFieldStyle, fontSize: 11.5, gap: 4 }}>
+                        Time at stop
+                        <input
+                          key={`${s.key || s.property_id || i}-${s.dwell_minutes ?? 'd'}`}
+                          type="number"
+                          min="0"
+                          max="600"
+                          step="5"
+                          inputMode="numeric"
+                          aria-label={`Minutes at ${s.property_name}`}
+                          defaultValue={s.dwell_minutes ?? ''}
+                          placeholder={String(defaultDwell === '' ? DEFAULT_DWELL_MINUTES : defaultDwell)}
+                          onBlur={e => {
+                            const v = e.target.value;
+                            if (String(s.dwell_minutes ?? '') !== v.trim()) setStopDwell(i, v);
+                          }}
+                          style={{ ...smallNumberStyle, width: 52, padding: '2px 4px', fontSize: 11.5 }}
+                        />
+                        min
+                      </label>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1433,7 +1654,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
           </>
         ) : (
           <>
-            <button className="btn btn-primary btn-sm" onClick={() => setDriving(true)}>Start Driving →</button>
+            <button className="btn btn-primary btn-sm" onClick={startDriving}>Start Driving →</button>
             <button className="btn btn-sm" onClick={saveActiveForLater} disabled={saving}>{saving ? 'Saving…' : 'Save Route'}</button>
             <button className="btn btn-sm" onClick={openInMaps}>Open Full Route in Google Maps</button>
             <button className="btn btn-sm" onClick={markAllVisited} disabled={marking}>{marking ? 'Marking…' : 'Mark All Visited'}</button>
@@ -1448,10 +1669,16 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
         <DriveModeOverlay
           stops={stops}
           endLabel={route?.end_label || null}
+          staffId={staffId}
+          routeId={route?.id || null}
+          properties={savedProps}
+          eta={driveEta}
           onExit={() => setDriving(false)}
           onMarkVisited={async (index) => { await markStopVisited(index); }}
           onUndoVisit={async (index) => { await unmarkStopVisited(index); }}
           onSkip={skipStop}
+          onUnskip={restoreSkippedStop}
+          onQuickAdd={quickAddStop}
           onFinish={handleFinishRoute}
         />
       )}
@@ -1466,6 +1693,8 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
   );
 }
 
+const inlineFieldStyle = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, margin: 0 };
+const smallNumberStyle = { width: 60, padding: '4px 6px', fontSize: 12.5, borderRadius: 5 };
 const toggleStyle = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer', margin: 0 };
 const badgeStyle = {
   flex: 'none', width: 24, height: 24, borderRadius: '50%', color: '#fff',

@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import DriveModePropertyInfo from './DriveModePropertyInfo';
+import DriveModeQuickActions from './DriveModeQuickActions';
 import { getPreferredMapsProvider, setPreferredMapsProvider, mapsUrlFor } from '../lib/salesRoutes';
+import { isPending, formatClock, formatMinutes } from '../lib/routeTiming';
 
 // Same Google Font ('Big Shoulders', not the separate 'Big Shoulders
 // Display' family) and same @import-in-a-<style>-tag approach already
@@ -24,7 +26,10 @@ function formatAddress(p) {
 // iOS Safari doesn't support requestFullscreen() on a plain element (only
 // on <video>), and this app is used installed as a PWA, so a fixed,
 // inset:0 layer is the one approach that actually works everywhere.
-export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisited, onUndoVisit, onSkip, onFinish }) {
+export default function DriveModeOverlay({
+  stops, endLabel, staffId, routeId, properties, eta,
+  onExit, onMarkVisited, onUndoVisit, onSkip, onUnskip, onQuickAdd, onFinish,
+}) {
   const [mounted, setMounted] = useState(false);
   const [provider, setProvider] = useState('apple');
 
@@ -35,9 +40,12 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
 
   if (!mounted) return null;
 
-  const currentIndex = stops.findIndex(s => !s.visited_at);
+  // Skipped stops are off this route, so they do not count toward "Stop X of Y".
+  const currentIndex = stops.findIndex(isPending);
   const current = currentIndex === -1 ? null : stops[currentIndex];
-  const remainingCount = stops.filter(s => !s.visited_at).length;
+  const liveStops = stops.filter(s => !s.skipped_at);
+  const remainingCount = stops.filter(isPending).length;
+  const position = current ? liveStops.indexOf(current) + 1 : 0;
   const address = current ? formatAddress(current) : '';
   // All stops visited, but there's a saved end location — that becomes
   // the final "next stop" rather than jumping straight to a completion
@@ -45,12 +53,18 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
   // view), it only surfaces here once the real stops are done.
   const showEndAsNext = !current && !!endLabel;
 
-  // The stop just before wherever we are now is the most recently marked
-  // visited one (Drive Mode always advances one stop at a time in order),
-  // so "undo" always means "un-mark that one" — for the accidental tap on
-  // the "Mark Visited" button while still driving to the next stop.
-  const lastVisitedIndex = currentIndex === -1 ? stops.length - 1 : currentIndex - 1;
-  const canUndo = lastVisitedIndex >= 0 && !!stops[lastVisitedIndex]?.visited_at;
+  // Undo always means "un-mark the most recently visited stop", for the
+  // accidental tap on "Mark Visited" while still driving to the next stop.
+  const lastVisitedIndex = stops.map(s => !!s.visited_at).lastIndexOf(true);
+  const canUndo = lastVisitedIndex >= 0;
+
+  // The stop skipped most recently can be put back.
+  let lastSkippedIndex = -1;
+  stops.forEach((s, i) => {
+    if (!s.skipped_at || s.visited_at) return;
+    if (lastSkippedIndex === -1 || new Date(s.skipped_at) > new Date(stops[lastSkippedIndex].skipped_at)) lastSkippedIndex = i;
+  });
+  const canUnskip = lastSkippedIndex >= 0 && !!onUnskip;
 
   function changeProvider(p) {
     setProvider(p);
@@ -64,7 +78,7 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
 
       {current ? (
         <div style={contentStyle}>
-          <div style={progressStyle}>Stop {currentIndex + 1} of {stops.length}</div>
+          <div style={progressStyle}>Stop {position} of {liveStops.length}</div>
           <div style={headlineStyle}>Next Stop</div>
           <div style={nameStyle}>{current.property_name}</div>
           {(current.property_type || current.management_company) && (
@@ -79,22 +93,50 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
           ) : (
             <div style={{ ...addressStyle, opacity: 0.55, textDecoration: 'none' }}>No address on file</div>
           )}
+          {eta && eta.nextArrival && (
+            <div style={etaStyle}>
+              Arrive about {formatClock(eta.nextArrival)}
+              {eta.nextDriveSeconds != null ? ` · ${formatMinutes(eta.nextDriveSeconds / 60)} drive` : ''}
+              {eta.nextDwellMinutes ? ` · ${formatMinutes(eta.nextDwellMinutes)} planned at the stop` : ''}
+            </div>
+          )}
 
           <div style={actionsStyle}>
             <button className="btn btn-primary" style={bigButtonStyle} onClick={() => onMarkVisited(currentIndex)}>
               {remainingCount === 1 ? 'Mark Visited & Finish' : 'Mark Visited & Next →'}
             </button>
-            {onSkip && remainingCount > 1 && (
-              <button type="button" style={skipButtonStyle} onClick={() => onSkip(currentIndex)}>
-                Skip Stop — Come Back Later
-              </button>
+            {onSkip && (
+              <>
+                <button type="button" style={skipButtonStyle} onClick={() => onSkip(currentIndex)}>
+                  Skip Stop
+                </button>
+                <div style={skipHintStyle}>Takes it off this route only. It stays in your property list.</div>
+              </>
             )}
             {canUndo && (
               <button type="button" style={undoLinkStyle} onClick={() => onUndoVisit(lastVisitedIndex)}>
                 ↺ Undo visit to {stops[lastVisitedIndex].property_name}
               </button>
             )}
+            {canUnskip && (
+              <button type="button" style={undoLinkStyle} onClick={() => onUnskip(lastSkippedIndex)}>
+                ↺ Put {stops[lastSkippedIndex].property_name} back on the route
+              </button>
+            )}
           </div>
+          {eta && eta.finishAt && remainingCount > 1 && (
+            <div style={{ ...etaStyle, marginTop: 18 }}>
+              {remainingCount} stops left · route done around {formatClock(eta.finishAt)}
+            </div>
+          )}
+          <DriveModeQuickActions
+            stop={current}
+            stops={stops}
+            staffId={staffId}
+            routeId={routeId}
+            properties={properties}
+            onQuickAdd={onQuickAdd}
+          />
           <DriveModePropertyInfo key={current.property_id || currentIndex} stop={current} />
         </div>
       ) : showEndAsNext ? (
@@ -113,12 +155,18 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
                 ↺ Undo visit to {stops[lastVisitedIndex].property_name}
               </button>
             )}
+            {canUnskip && (
+              <button type="button" style={undoLinkStyle} onClick={() => onUnskip(lastSkippedIndex)}>
+                ↺ Put {stops[lastSkippedIndex].property_name} back on the route
+              </button>
+            )}
           </div>
+          <DriveModeQuickActions stop={null} stops={stops} staffId={staffId} routeId={routeId} properties={properties} onQuickAdd={onQuickAdd} />
         </div>
       ) : (
         <div style={contentStyle}>
           <div style={headlineStyle}>Route Complete</div>
-          <div style={nameStyle}>Every stop is marked visited.</div>
+          <div style={nameStyle}>Every stop is visited or skipped.</div>
           <div style={actionsStyle}>
             <button className="btn btn-primary" style={bigButtonStyle} onClick={onFinish}>Finish Route</button>
             {canUndo && (
@@ -126,7 +174,13 @@ export default function DriveModeOverlay({ stops, endLabel, onExit, onMarkVisite
                 ↺ Undo visit to {stops[lastVisitedIndex].property_name}
               </button>
             )}
+            {canUnskip && (
+              <button type="button" style={undoLinkStyle} onClick={() => onUnskip(lastSkippedIndex)}>
+                ↺ Put {stops[lastSkippedIndex].property_name} back on the route
+              </button>
+            )}
           </div>
+          <DriveModeQuickActions stop={null} stops={stops} staffId={staffId} routeId={routeId} properties={properties} onQuickAdd={onQuickAdd} />
         </div>
       )}
 
@@ -173,6 +227,8 @@ const skipButtonStyle = {
   background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
   color: '#f3ede0', fontSize: 14, fontWeight: 600, cursor: 'pointer',
 };
+const etaStyle = { marginTop: 14, fontSize: 14, color: 'rgba(243,237,224,0.78)', maxWidth: 420 };
+const skipHintStyle = { marginTop: 6, fontSize: 11.5, color: 'rgba(255,255,255,0.5)', textAlign: 'center' };
 const undoLinkStyle = {
   display: 'block', width: '100%', marginTop: 14, padding: '10px 0',
   background: 'none', border: 'none', color: 'rgba(255,255,255,0.55)',
