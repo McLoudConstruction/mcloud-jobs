@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
+import { VERTICAL_KEYS, verticalLabel } from '../../../lib/verticals';
 
 const TABS = ['Today', 'Prospects', 'Sequences', 'Activity', 'Settings'];
 
@@ -142,7 +143,7 @@ function ProspectsTab({ properties, enrollments, sequences, onChanged, setError 
   const [notice, setNotice] = useState('');
 
   const enrolledIds = useMemo(() => new Set(enrollments.filter(e => ['active', 'paused'].includes(e.status)).map(e => e.property_id)), [enrollments]);
-  const verticals = useMemo(() => [...new Set(properties.map(p => p.prospect_vertical).filter(Boolean))].sort(), [properties]);
+  const verticals = useMemo(() => [...new Set([...VERTICAL_KEYS, ...properties.map(p => p.prospect_vertical).filter(Boolean)])].sort(), [properties]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -216,7 +217,7 @@ function ProspectsTab({ properties, enrollments, sequences, onChanged, setError 
           <select value={vertical} onChange={e => setVertical(e.target.value)} style={{ width: 'auto' }}>
             <option value="">All verticals</option>
             <option value="__none">No vertical set</option>
-            {verticals.map(v => <option key={v} value={v}>{v}</option>)}
+            {verticals.map(v => <option key={v} value={v}>{verticalLabel(v)}</option>)}
           </select>
           <select value={tier} onChange={e => setTier(e.target.value)} style={{ width: 'auto' }}>
             <option value="">All tiers</option>
@@ -270,7 +271,7 @@ function ProspectsTab({ properties, enrollments, sequences, onChanged, setError 
               <tr key={p.id} onClick={() => toggle(p.id)}>
                 <td><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} onClick={e => e.stopPropagation()} style={{ width: 'auto' }} /></td>
                 <td>{p.property_name}{p.do_not_contact && <span className="badge badge-lost" style={{ marginLeft: 6 }}>DNC</span>}</td>
-                <td>{p.prospect_vertical || ''}</td>
+                <td>{verticalLabel(p.prospect_vertical)}</td>
                 <td>{p.prospect_tier || ''}</td>
                 <td>{p.property_city || ''}</td>
                 <td>{p.contact_name || ''}</td>

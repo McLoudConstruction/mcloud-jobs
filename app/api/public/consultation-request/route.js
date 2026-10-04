@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { VERTICAL_KEYS, verticalLabel } from '../../../../lib/verticals';
 
 // The marketing site lives on a different domain than jobs.mcloudconstruction.com,
 // so this needs real CORS handling — browsers block cross-origin responses
@@ -70,6 +71,22 @@ export async function POST(request) {
     const project = (body.project || '').trim();
     const message = (body.message || '').trim();
 
+    // Attribution from the website (which industry page, which campaign).
+    // This endpoint is public, so everything is length-limited and the
+    // vertical must be one of ours; anything else is dropped, not rejected,
+    // because a bad tag should never cost us the lead.
+    const clean = (value, max) => String(value || '').trim().slice(0, max) || null;
+    const leadVertical = VERTICAL_KEYS.includes(body.vertical) ? body.vertical : null;
+    const attribution = {
+      source: 'website',
+      lead_vertical: leadVertical,
+      utm_source: clean(body.utm_source, 100),
+      utm_medium: clean(body.utm_medium, 100),
+      utm_campaign: clean(body.utm_campaign, 100),
+      landing_path: clean(body.landing_path, 200),
+      referrer: clean(body.referrer, 200),
+    };
+
     if (!name || !email) {
       return Response.json({ error: 'Name and email are required.' }, { status: 400, headers });
     }
@@ -95,6 +112,7 @@ export async function POST(request) {
       project: project || null,
       notes: message || null,
       stage: 'prospecting',
+      ...attribution,
     }).select().single();
 
     if (leadError) {
@@ -125,7 +143,7 @@ export async function POST(request) {
 
     await supabase.from('notifications').insert({
       job_id: null,
-      message: `New website consultation request from ${name}${company ? ` (${company})` : ''} — ${projectType} project. Reply to ${email}${phone ? ` or call ${phone}` : ''}.${uploadedCount ? ` (${uploadedCount} photo${uploadedCount === 1 ? '' : 's'} attached)` : ''}`,
+      message: `New website consultation request from ${name}${company ? ` (${company})` : ''} — ${projectType} project${leadVertical ? ` (${verticalLabel(leadVertical)} page)` : ''}. Reply to ${email}${phone ? ` or call ${phone}` : ''}.${uploadedCount ? ` (${uploadedCount} photo${uploadedCount === 1 ? '' : 's'} attached)` : ''}`,
     });
 
     return Response.json({ ok: true, leadId: lead.id }, { headers });

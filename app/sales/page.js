@@ -11,6 +11,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import BidWalkScheduler from '../../components/BidWalkScheduler';
 import OpportunityPhotosPanel from '../../components/OpportunityPhotosPanel';
 import { formatPhone } from '../../lib/constants';
+import { verticalLabel } from '../../lib/verticals';
 
 // Stage -> badge color, reusing the site's existing badge palette rather
 // than inventing new colors just for this page's mobile cards.
@@ -427,6 +428,14 @@ export default function SalesDashboardPage() {
                       the list. */}
                   {expanded && (
                     <div className="opp-card-details">
+                      {(o.lead_vertical || o.source === 'website') && (
+                        <div className="opp-card-detail-line">
+                          Source: {o.source === 'website' ? 'Website' : o.source}
+                          {o.lead_vertical ? ` · ${verticalLabel(o.lead_vertical)} page` : ''}
+                          {o.utm_campaign ? ` · campaign ${o.utm_campaign}` : ''}
+                          {o.referrer ? ` · from ${o.referrer}` : ''}
+                        </div>
+                      )}
                       {o.stage === 'lost' && o.loss_reason && (
                         <div className="opp-card-detail-line">Loss reason: {o.loss_reason}</div>
                       )}
