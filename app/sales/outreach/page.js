@@ -50,6 +50,25 @@ const EMPTY_STEP = { step_type: 'email', delay_days: 3, subject: '', body_text: 
 function TodayTab({ properties, enrollments, settings, canToggle, onChanged, setError }) {
   const now = Date.now();
   const [toggling, setToggling] = useState(false);
+  const [todayCap, setTodayCap] = useState(null);
+  const paused = !!settings?.outreach_paused_at;
+
+  // Today's limit after warm-up (migration 152). Best effort: the page works without it.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.rpc('outreach_effective_cap').then(({ data, error }) => {
+      if (!cancelled && !error && typeof data === 'number') setTodayCap(data);
+    });
+    return () => { cancelled = true; };
+  }, [settings]);
+
+  async function resume() {
+    setError(''); setToggling(true);
+    const { error } = await supabase.rpc('outreach_resume');
+    setToggling(false);
+    if (error) { setError(error.message); return; }
+    onChanged();
+  }
   const due = properties
     .filter(p => p.next_action_at && new Date(p.next_action_at).getTime() <= now)
     .sort((a, b) => new Date(a.next_action_at) - new Date(b.next_action_at));
@@ -83,11 +102,22 @@ function TodayTab({ properties, enrollments, settings, canToggle, onChanged, set
 
   return (
     <>
+      {paused && (
+        <div className="card" style={{ fontSize: 13, borderLeft: '3px solid #b24a2a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <strong>Sending is paused.</strong> {settings.outreach_paused_reason || 'Too many emails bounced.'}
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>Task reminders and replies still show up below. Fix the addresses, then resume.</div>
+          </div>
+          {canToggle && (
+            <button type="button" className="btn btn-sm btn-primary" disabled={toggling} onClick={resume}>Resume sending</button>
+          )}
+        </div>
+      )}
       <div className="card" style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          Automatic outreach emails are <strong>{settings?.outreach_enabled ? 'ON' : 'OFF'}</strong>
+          Automatic outreach emails are <strong>{settings?.outreach_enabled ? (paused ? 'ON, but paused' : 'ON') : 'OFF'}</strong>
           {settings?.outreach_enabled
-            ? `. Up to ${settings.outreach_daily_limit ?? 20} a day, sent with the morning automations.`
+            ? `. Up to ${todayCap ?? settings.outreach_daily_limit ?? 20} a day${settings.outreach_warmup_enabled && todayCap != null && todayCap < (settings.outreach_daily_limit ?? 20) ? ` (warming up toward ${settings.outreach_daily_limit ?? 20})` : ''}, sent with the morning automations.`
             : '. No sequence emails will go out. Task reminders and replies still show up below.'}
         </div>
         {canToggle && (
@@ -594,6 +624,10 @@ function SettingsTab({ settings, onChanged, setError }) {
       outreach_from_name: settings.outreach_from_name || '',
       outreach_daily_limit: settings.outreach_daily_limit ?? 20,
       outreach_postal_address: settings.outreach_postal_address || '',
+      outreach_warmup_enabled: settings.outreach_warmup_enabled ?? true,
+      outreach_warmup_start: settings.outreach_warmup_start ?? 15,
+      outreach_warmup_step: settings.outreach_warmup_step ?? 5,
+      outreach_bounce_pause_pct: settings.outreach_bounce_pause_pct ?? 2,
     });
   }, [settings]);
 
@@ -625,12 +659,19 @@ function SettingsTab({ settings, onChanged, setError }) {
   async function save() {
     setError(''); setSaved(false); setSaving(true);
     const limit = Math.min(100, Math.max(1, parseInt(form.outreach_daily_limit, 10) || 20));
+    const warmStart = Math.min(100, Math.max(1, parseInt(form.outreach_warmup_start, 10) || 15));
+    const warmStep = Math.min(50, Math.max(0, parseInt(form.outreach_warmup_step, 10) || 0));
+    const bouncePct = Math.min(20, Math.max(0.5, parseFloat(form.outreach_bounce_pause_pct) || 2));
     const { error } = await supabase.from('app_settings').update({
       outreach_enabled: form.outreach_enabled,
       outreach_from_email: form.outreach_from_email.trim() || null,
       outreach_from_name: form.outreach_from_name.trim() || null,
       outreach_daily_limit: limit,
       outreach_postal_address: form.outreach_postal_address.trim() || null,
+      outreach_warmup_enabled: !!form.outreach_warmup_enabled,
+      outreach_warmup_start: warmStart,
+      outreach_warmup_step: warmStep,
+      outreach_bounce_pause_pct: bouncePct,
     }).eq('id', 1);
     setSaving(false);
     if (error) { setError(error.message); return; }
@@ -660,6 +701,23 @@ function SettingsTab({ settings, onChanged, setError }) {
         <div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 3 }}>Emails per day (1 to 100). Start low and raise it as replies come in.</div>
           <input type="number" min="1" max="100" value={form.outreach_daily_limit} onChange={e => setForm({ ...form, outreach_daily_limit: e.target.value })} style={{ width: 100 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="checkbox" checked={form.outreach_warmup_enabled} onChange={e => setForm({ ...form, outreach_warmup_enabled: e.target.checked })} style={{ width: 'auto' }} />
+            Warm up gradually (recommended for a new sending history)
+          </label>
+          {form.outreach_warmup_enabled && (
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 12, color: 'var(--ink-soft)' }}>
+              <label>Start at<br /><input type="number" min="1" max="100" value={form.outreach_warmup_start} onChange={e => setForm({ ...form, outreach_warmup_start: e.target.value })} style={{ width: 90 }} /></label>
+              <label>Add per week<br /><input type="number" min="0" max="50" value={form.outreach_warmup_step} onChange={e => setForm({ ...form, outreach_warmup_step: e.target.value })} style={{ width: 90 }} /></label>
+              <div style={{ alignSelf: 'flex-end', maxWidth: 300 }}>The daily limit above is the ceiling. The week count starts at your first outreach email.</div>
+            </div>
+          )}
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 3 }}>Pause sending automatically when more than this percent of recent emails bounce (needs at least 2 bounces)</div>
+          <input type="number" min="0.5" max="20" step="0.5" value={form.outreach_bounce_pause_pct} onChange={e => setForm({ ...form, outreach_bounce_pause_pct: e.target.value })} style={{ width: 100 }} /> %
         </div>
         <div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 3 }}>Business mailing address (shown in every email footer)</div>
@@ -696,7 +754,7 @@ export default function OutreachPage() {
         supabase.from('outreach_sequences').select('*').order('created_at', { ascending: false }),
         supabase.from('outreach_sequence_steps').select('*'),
         supabase.from('outreach_events').select('id, enrollment_id, event_type, detail, created_at').order('created_at', { ascending: false }).limit(60),
-        supabase.from('app_settings').select('outreach_enabled, outreach_from_email, outreach_from_name, outreach_daily_limit, outreach_postal_address').eq('id', 1).maybeSingle(),
+        supabase.from('app_settings').select('outreach_enabled, outreach_from_email, outreach_from_name, outreach_daily_limit, outreach_postal_address, outreach_warmup_enabled, outreach_warmup_start, outreach_warmup_step, outreach_bounce_pause_pct, outreach_paused_at, outreach_paused_reason').eq('id', 1).maybeSingle(),
       ]);
       for (const r of [seqRes, stepRes, evRes, setRes]) if (r.error) throw new Error(r.error.message);
       setData({ properties, enrollments, sequences: seqRes.data || [], steps: stepRes.data || [], events: evRes.data || [], settings: setRes.data });
