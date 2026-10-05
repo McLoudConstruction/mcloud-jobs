@@ -140,6 +140,7 @@ export default function ScheduleBoardPage() {
           <div className="tab-sections-pills">
             <Link href="/jobs/calendar" className="tab-section-btn" style={{ textDecoration: 'none' }}>Calendar</Link>
             <span className="tab-section-btn active">Crew board</span>
+            <Link href="/jobs/calendar/overview" className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tab-sections-pills">

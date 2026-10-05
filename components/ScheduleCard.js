@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PopupModal from './PopupModal';
+import FollowingPhasesModal from './FollowingPhasesModal';
+import { followerCandidates, finishDelta, linkSequentialPhases } from '../lib/scheduleCascade';
 import { recomputeSequentialDates, countWorkableDays, splitAtWeekends, insertPhaseChronologically } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
@@ -140,6 +142,8 @@ export default function ScheduleCard({ jobId, job }) {
   const [editPreferredStartDay, setEditPreferredStartDay] = useState('');
   const [editAllowWeekend, setEditAllowWeekend] = useState(false);
   const [editWorkLocation, setEditWorkLocation] = useState('indoor');
+  const [editDependsOn, setEditDependsOn] = useState('');
+  const [cascadePrompt, setCascadePrompt] = useState(null); // { anchor, delta, candidates } after a phase's finish moves
   const [view, setView] = useState('list'); // 'list' | 'timeline'
   const [addingPhase, setAddingPhase] = useState(false);
   const [newPhase, setNewPhase] = useState({ label: '', trade: '', start_date: '', duration_days: 1, preferred_start_day: '', allow_weekend_work: false, work_location: 'indoor' });
@@ -380,6 +384,7 @@ export default function ScheduleCard({ jobId, job }) {
         .eq('status', 'draft');
       if (publishError) throw publishError;
       await supabase.from('jobs').update({ schedule_stale_at: null }).eq('id', jobId);
+      await linkSequentialPhases(supabase, jobId);
       setDraft(null);
       await loadPhases();
     } catch (err) {
@@ -408,6 +413,32 @@ export default function ScheduleCard({ jobId, job }) {
     setEditPreferredStartDay(p.preferred_start_day || '');
     setEditAllowWeekend(!!p.allow_weekend_work);
     setEditWorkLocation(p.work_location || 'indoor');
+    setEditDependsOn(p.depends_on || '');
+  }
+
+  // After a phase's finish moves, offer the phases after it as a
+  // checklist instead of either ignoring them or dragging them all along.
+  // Nothing moves unless the user ticks it and confirms.
+  function offerCascade(before, after) {
+    const delta = finishDelta(before, after);
+    if (!delta || draft) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const candidates = followerCandidates(phases.map(p => (p.id === after.id ? after : p)), { ...after, start_date: before.start_date, end_date: before.end_date }, today)
+      .filter(c => c.phase.id !== after.id);
+    if (candidates.length === 0) return;
+    setCascadePrompt({ anchor: after, delta, candidates });
+  }
+
+  async function applyCascadeRows(rows) {
+    const results = await Promise.all(rows.map(p => supabase.from('job_phases').update({
+      start_date: p.start_date, end_date: p.end_date, duration_days: p.duration_days, source: 'manual', needs_review: false,
+    }).eq('id', p.id)));
+    const failed = results.find(r => r.error);
+    if (failed) throw failed.error;
+    const lastEnd = [...phases.filter(p => !rows.some(r => r.id === p.id)), ...rows].reduce((m, p) => (p.end_date > m ? p.end_date : m), '');
+    if (job?.scheduled_end_date && lastEnd) await supabase.from('jobs').update({ scheduled_end_date: lastEnd }).eq('id', jobId);
+    setCascadePrompt(null);
+    await loadPhases();
   }
 
   async function savePhaseEdit(phase) {
@@ -435,12 +466,14 @@ export default function ScheduleCard({ jobId, job }) {
       preferred_start_day: recomputed.preferred_start_day,
       allow_weekend_work: recomputed.allow_weekend_work,
       work_location: editWorkLocation,
+      depends_on: editDependsOn || null,
       source: 'manual',
       needs_review: false,
     }).eq('id', phase.id);
 
     setEditingId(null);
     await loadPhases();
+    offerCascade(phase, { ...phase, start_date: recomputed.start_date, end_date: recomputed.end_date, duration_days: recomputed.duration_days });
   }
 
   async function removeAllPhases() {
@@ -538,10 +571,12 @@ export default function ScheduleCard({ jobId, job }) {
   // the List view's duration field is. Never sets needs_review: you were
   // looking right at it when you dropped it.
   async function updatePhaseDates(phaseId, { start_date, end_date, duration_days }) {
+    const before = (draft || phases).find(p => p.id === phaseId);
     await supabase.from('job_phases').update({
       start_date, end_date, duration_days, source: 'manual', needs_review: false,
     }).eq('id', phaseId);
     await loadPhases();
+    if (before) offerCascade(before, { ...before, start_date, end_date, duration_days });
   }
 
   const totalDays = (!draft && phases.length > 0)
@@ -786,6 +821,13 @@ export default function ScheduleCard({ jobId, job }) {
                             {WORK_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}>
+                          Follows
+                          <select value={editDependsOn} onChange={e => setEditDependsOn(e.target.value)} style={{ fontSize: 12, padding: '2px 4px', maxWidth: 150 }}>
+                            <option value="">Nothing (independent)</option>
+                            {phases.filter(o => o.id !== p.id).map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                          </select>
+                        </label>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn btn-sm btn-primary" onClick={() => savePhaseEdit(p)}>Save</button>
@@ -846,6 +888,15 @@ export default function ScheduleCard({ jobId, job }) {
       )}
 
       {addPhaseModal}
+      {cascadePrompt && (
+        <FollowingPhasesModal
+          anchor={cascadePrompt.anchor}
+          delta={cascadePrompt.delta}
+          candidates={cascadePrompt.candidates}
+          onApply={(ids, rows) => applyCascadeRows(rows)}
+          onSkip={() => setCascadePrompt(null)}
+        />
+      )}
     </div>
   );
 }

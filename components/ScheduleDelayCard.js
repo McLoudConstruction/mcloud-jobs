@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { shiftPhases } from '../lib/scheduleConflicts';
+import { delayAnchor, followerCandidates, applyCascade } from '../lib/scheduleCascade';
 
 const CATEGORIES = [
   { key: 'weather', label: 'Weather' },
@@ -28,7 +28,8 @@ export default function ScheduleDelayCard({ jobId, job }) {
   const [phases, setPhases] = useState([]);
   const [delays, setDelays] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ from_date: todayStr(), workdays: 1, category: 'weather', internal_note: '', customer_note: '', notify_customer: true, notify_subs: true });
+  const [form, setForm] = useState({ phase_id: '', workdays: 1, category: 'weather', internal_note: '', customer_note: '', notify_customer: true, notify_subs: true });
+  const [picked, setPicked] = useState(null); // Set of follower ids; null = use the defaults for the chosen phase
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -50,18 +51,38 @@ export default function ScheduleDelayCard({ jobId, job }) {
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
 
+  const today = todayStr();
   const published = useMemo(() => phases.filter(p => p.status !== 'draft'), [phases]);
+  // Phases that can still slip: anything not already finished.
+  const openPhases = useMemo(() => published.filter(p => p.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date) || (a.sort_order ?? 0) - (b.sort_order ?? 0)), [published, today]);
+  // Default to the phase underway today, otherwise the next one to start.
+  const defaultPhaseId = useMemo(() => (openPhases.find(p => p.start_date <= today && p.end_date >= today) || openPhases[0])?.id || '', [openPhases, today]);
+  const phaseId = form.phase_id || defaultPhaseId;
+  const delayed = openPhases.find(p => p.id === phaseId) || null;
   const workdays = Math.max(1, Math.min(60, Math.round(Number(form.workdays)) || 1));
-  const preview = useMemo(() => shiftPhases(phases, form.from_date, workdays), [phases, form.from_date, workdays]);
+  const candidates = useMemo(() => (delayed ? followerCandidates(published, delayed, today) : []), [published, delayed, today]);
+  const followerIds = useMemo(() => picked || new Set(candidates.filter(c => c.checked).map(c => c.phase.id)), [picked, candidates]);
+  // What actually changes: the delayed phase, plus only the followers left ticked.
+  const preview = useMemo(() => {
+    if (!delayed) return [];
+    const anchor = delayAnchor(delayed, workdays, today);
+    return [anchor, ...applyCascade(candidates.map(c => c.phase), [...followerIds], workdays)];
+  }, [delayed, workdays, candidates, followerIds, today]);
   const totalDelayed = delays.reduce((s, d) => s + d.workdays_shifted, 0);
+
+  function togglePhaseFollower(id) {
+    const next = new Set(followerIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setPicked(next);
+  }
 
   function set(k, v) { setForm(prev => ({ ...prev, [k]: v })); }
 
   async function apply() {
     setError('');
-    if (!preview.length) { setError('No phases start on or after that date, so nothing would move.'); return; }
+    if (!delayed) { setError('Pick the phase that is delayed.'); return; }
     const publishedAffected = preview.filter(p => p.status !== 'draft').length;
-    const msg = `Move ${preview.length} schedule item${preview.length === 1 ? '' : 's'} back ${workdays} working day${workdays === 1 ? '' : 's'}?` +
+    const msg = `Delay ${delayed.label} by ${workdays} working day${workdays === 1 ? '' : 's'}${preview.length > 1 ? ` and move ${preview.length - 1} following phase${preview.length === 2 ? '' : 's'}` : ' (nothing after it moves)'}?` +
       `${form.notify_customer ? '\n• The customer will be notified.' : ''}${form.notify_subs ? '\n• Subs with an issued/accepted work order will be notified.' : ''}`;
     if (!window.confirm(msg)) return;
     setBusy(true);
@@ -80,19 +101,20 @@ export default function ScheduleDelayCard({ jobId, job }) {
         const lastEnd = nextPhases.reduce((m, p) => (p.end_date > m ? p.end_date : m), '');
         const firstStart = nextPhases.reduce((m, p) => (!m || p.start_date < m ? p.start_date : m), '');
         if (job?.scheduled_end_date) patch.scheduled_end_date = lastEnd;
-        if (job?.scheduled_start_date && form.from_date <= job.scheduled_start_date) patch.scheduled_start_date = firstStart;
+        if (job?.scheduled_start_date && delayed.start_date <= job.scheduled_start_date) patch.scheduled_start_date = firstStart;
         if (Object.keys(patch).length) await supabase.from('jobs').update(patch).eq('id', jobId);
       }
 
       const { error: logErr } = await supabase.rpc('log_schedule_delay', {
-        target_job_id: jobId, from_date_in: form.from_date, workdays_in: workdays, phases_shifted_in: preview.length,
+        target_job_id: jobId, from_date_in: delayed.start_date, workdays_in: workdays, phases_shifted_in: preview.length,
         category_in: form.category, internal_note_in: form.internal_note || null, customer_note_in: form.customer_note || null,
         notify_customer: form.notify_customer, notify_subs: form.notify_subs,
       });
       if (logErr) throw new Error(`The dates moved, but recording the delay failed: ${logErr.message}`);
       setDone(`Moved ${preview.length} item${preview.length === 1 ? '' : 's'} back ${workdays} working day${workdays === 1 ? '' : 's'}.${publishedAffected ? '' : ' (Only unpublished draft items were affected.)'}`);
       setOpen(false);
-      setForm(f => ({ ...f, internal_note: '', customer_note: '', workdays: 1 }));
+      setForm(f => ({ ...f, internal_note: '', customer_note: '', workdays: 1, phase_id: '' }));
+      setPicked(null);
       await load();
     } catch (e) {
       setError(e.message || String(e));
@@ -109,7 +131,7 @@ export default function ScheduleDelayCard({ jobId, job }) {
         <div>
           <h3 style={{ marginBottom: 2 }}>Schedule delays</h3>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-            {delays.length ? `${delays.length} logged · ${totalDelayed} working day${totalDelayed === 1 ? '' : 's'} of slip so far` : 'Weather day, late delivery, failed inspection? Push the schedule back and let everyone know in one step.'}
+            {delays.length ? `${delays.length} logged · ${totalDelayed} working day${totalDelayed === 1 ? '' : 's'} of slip so far` : 'Weather day, late delivery, failed inspection? Delay one phase, pick which phases after it move, and let everyone know in one step.'}
           </div>
         </div>
         <button className="btn btn-sm" onClick={() => { setOpen(o => !o); setDone(''); setError(''); }}>{open ? 'Cancel' : 'Log a delay'}</button>
@@ -119,8 +141,13 @@ export default function ScheduleDelayCard({ jobId, job }) {
       {open && (
         <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 12 }}>
           <div className="two-col">
-            <div><label>Delay starts (everything from this date on moves)</label><input type="date" value={form.from_date} onChange={e => set('from_date', e.target.value)} /></div>
-            <div><label>Push back by (working days)</label><input type="number" min="1" max="60" value={form.workdays} onChange={e => set('workdays', e.target.value)} /></div>
+            <div>
+              <label>Which phase is delayed?</label>
+              <select value={phaseId} onChange={e => { set('phase_id', e.target.value); setPicked(null); }}>
+                {openPhases.map(p => <option key={p.id} value={p.id}>{p.label} ({fmtDate(p.start_date)} to {fmtDate(p.end_date)})</option>)}
+              </select>
+            </div>
+            <div><label>Delayed by (working days)</label><input type="number" min="1" max="60" value={form.workdays} onChange={e => set('workdays', e.target.value)} /></div>
             <div>
               <label>Reason</label>
               <select value={form.category} onChange={e => set('category', e.target.value)}>
@@ -136,13 +163,42 @@ export default function ScheduleDelayCard({ jobId, job }) {
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400, cursor: 'pointer' }}><input type="checkbox" style={{ width: 'auto' }} checked={form.notify_customer} onChange={e => set('notify_customer', e.target.checked)} />Notify the customer</label>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400, cursor: 'pointer' }}><input type="checkbox" style={{ width: 'auto' }} checked={form.notify_subs} onChange={e => set('notify_subs', e.target.checked)} />Notify subs on this job</label>
           </div>
+          <label style={{ marginTop: 4 }}>Which following phases move with it?</label>
+          {candidates.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 }}>No phases come after this one, so only it moves.</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 8, margin: '4px 0 6px' }}>
+                <button type="button" className="btn btn-sm" onClick={() => setPicked(new Set(candidates.map(c => c.phase.id)))}>Select all</button>
+                <button type="button" className="btn btn-sm" onClick={() => setPicked(new Set())}>Select none</button>
+              </div>
+              <div style={{ border: '1px solid var(--line)', borderRadius: 6, background: 'var(--card-bg)', maxHeight: 260, overflowY: 'auto', marginBottom: 10 }}>
+                {candidates.map(c => {
+                  const p = c.phase;
+                  const on = followerIds.has(p.id);
+                  const next = preview.find(x => x.id === p.id);
+                  return (
+                    <label key={p.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 12px', borderBottom: '1px solid var(--line)', fontWeight: 400, cursor: 'pointer' }}>
+                      <input type="checkbox" style={{ width: 'auto', marginTop: 3 }} checked={on} onChange={() => togglePhaseFollower(p.id)} />
+                      <span style={{ flex: 1, fontSize: 12.5 }}>
+                        <b>{p.label}</b>{c.linked && <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> · linked</span>}
+                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                          {fmtDate(p.start_date)} to {fmtDate(p.end_date)}{on && next ? `  →  ${fmtDate(next.start_date)} to ${fmtDate(next.end_date)}` : '  (stays put)'}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 }}>
-            {preview.length
-              ? `${preview.length} item${preview.length === 1 ? '' : 's'} will move: ${preview.slice(0, 4).map(p => p.label).join(', ')}${preview.length > 4 ? '…' : ''}. New finish: ${fmtDate(phases.map(p => preview.find(x => x.id === p.id) || p).filter(p => p.status !== 'draft').reduce((m, p) => (p.end_date > m ? p.end_date : m), ''))}.`
-              : 'Nothing is scheduled on or after that date.'}
+            {delayed
+              ? `${delayed.label} ${delayed.start_date > today ? 'moves' : 'finishes'} ${workdays} working day${workdays === 1 ? '' : 's'} later${preview.length > 1 ? `, and ${preview.length - 1} following phase${preview.length === 2 ? '' : 's'} move${preview.length === 2 ? 's' : ''} with it` : ''}. New finish: ${fmtDate(published.map(p => preview.find(x => x.id === p.id) || p).reduce((m, p) => (p.end_date > m ? p.end_date : m), ''))}.`
+              : 'Nothing left to delay on this schedule.'}
           </div>
           {error && <div className="error-text" style={{ marginBottom: 8 }}>{error}</div>}
-          <button className="btn btn-primary btn-sm" onClick={apply} disabled={busy || !preview.length}>{busy ? 'Moving…' : 'Move the schedule'}</button>
+          <button className="btn btn-primary btn-sm" onClick={apply} disabled={busy || !preview.length}>{busy ? 'Moving…' : 'Apply delay'}</button>
         </div>
       )}
 

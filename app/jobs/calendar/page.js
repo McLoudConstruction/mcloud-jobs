@@ -1113,6 +1113,7 @@ export default function JobCalendarPage() {
         <div className="tab-sections-pills" style={{ marginBottom: 12 }}>
           <span className="tab-section-btn active">Calendar</span>
           <Link href="/jobs/calendar/board" className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
+          <Link href="/jobs/calendar/overview" className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
         </div>
         <div
           ref={sidebarRowRef}
