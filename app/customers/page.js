@@ -14,7 +14,7 @@ import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
-import { CONTACT_TYPES, formatPhone } from '../../lib/constants';
+import { CONTACT_TYPES, REAL_ESTATE_AGENT_TYPE, formatPhone } from '../../lib/constants';
 import { parseVCard } from '../../lib/vcard';
 import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
@@ -23,7 +23,7 @@ import { linkOrCreateCompanyByName, findPropertyIdByName } from '../../lib/conta
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
 const EMPTY_FORM = {
-  contact_type: '', first_name: '', last_name: '', management_company: '', position: '',
+  contact_type: '', first_name: '', last_name: '', management_company: '', position: '', team_office: '',
   contact_phone: '', contact_email: '', property: '', notes: '', automated_emails_opt_out: false,
   address_street: '', address_unit: '', address_city: '', address_state: '', address_zip: '',
   billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
@@ -36,6 +36,7 @@ const HEADER_MAP = {
   last_name: ['last name', 'lastname', 'last'],
   management_company: ['company', 'management company', 'organization', 'business'],
   position: ['position', 'title', 'job title'],
+  team_office: ['team/office', 'team / office', 'team office', 'team', 'office', 'brokerage office'],
   contact_phone: ['phone', 'contact phone', 'phone number', 'mobile'],
   contact_email: ['email', 'contact email', 'e-mail'],
   billing_email: ['billing email', 'invoice email'],
@@ -82,6 +83,7 @@ function contactExportColumns(customColumns) {
     { label: 'Last Name', value: c => c.last_name },
     { label: 'Company', value: c => c.management_company },
     { label: 'Position', value: c => c.position },
+    { label: 'Team/Office', value: c => c.team_office },
     { label: 'Phone', value: c => (c.contact_phone ? formatPhone(c.contact_phone) : '') },
     { label: 'Email', value: c => c.contact_email },
     { label: 'Billing Email', value: c => c.billing_email },
@@ -140,6 +142,7 @@ export default function CustomersPage() {
   }, [session, loadContacts]);
 
   const isHomeowner = form.contact_type === HOMEOWNER_TYPE;
+  const isRealEstateAgent = form.contact_type === REAL_ESTATE_AGENT_TYPE;
 
   function update(field, value) {
     if (field === 'contact_phone') value = formatPhone(value);
@@ -176,6 +179,8 @@ export default function CustomersPage() {
       ...form,
       name: [form.first_name, form.last_name].filter(Boolean).join(' '),
     };
+    // Team/Office only applies to real estate agents; clear it if the type changed.
+    if (!isRealEstateAgent) payload.team_office = '';
     if (isHomeowner) {
       payload.management_company = '';
       payload.billing_street = ''; payload.billing_unit = ''; payload.billing_city = '';
@@ -302,7 +307,7 @@ export default function CustomersPage() {
     if (typeFilter !== 'all' && c.contact_type !== typeFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return (c.name || '').toLowerCase().includes(q) || (c.management_company || '').toLowerCase().includes(q);
+    return (c.name || '').toLowerCase().includes(q) || (c.management_company || '').toLowerCase().includes(q) || (c.team_office || '').toLowerCase().includes(q);
   });
 
   function exportContacts() {
@@ -383,7 +388,7 @@ export default function CustomersPage() {
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
             {importResult}
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-              Recognized columns: Type, First Name, Last Name, Company, Position, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
+              Recognized columns: Type, First Name, Last Name, Company, Position, Team/Office, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
             </div>
           </div>
         )}
@@ -411,9 +416,17 @@ export default function CustomersPage() {
                   </div>
 
                   {!isHomeowner && (
-                    <div style={{ marginTop: 12 }}>
-                      <label>Company</label>
-                      <input value={form.management_company} onChange={e => update('management_company', e.target.value)} />
+                    <div className={isRealEstateAgent ? 'two-col' : undefined} style={{ marginTop: 12 }}>
+                      <div>
+                        <label>{isRealEstateAgent ? 'Brokerage' : 'Company'}</label>
+                        <input value={form.management_company} onChange={e => update('management_company', e.target.value)} placeholder={isRealEstateAgent ? 'e.g. Keller Williams' : undefined} />
+                      </div>
+                      {isRealEstateAgent && (
+                        <div>
+                          <label>Team/Office</label>
+                          <input value={form.team_office} onChange={e => update('team_office', e.target.value)} placeholder="e.g. The Smith Group, Lee's Summit office" />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -489,7 +502,7 @@ export default function CustomersPage() {
         </PopupModal>
 
         <div className="search-bar">
-          <input placeholder="Search by name or company…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="Search by name, company or team/office…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         <ScrollFadeRow trackClassName="stage-tabs">
@@ -510,7 +523,7 @@ export default function CustomersPage() {
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{c.name}</span>
                   <span className="entity-mobile-row-sub">
-                    {[c.management_company, c.position].filter(Boolean).join(' · ') || c.contact_type || 'No company on file'}
+                    {[c.management_company, c.team_office, c.position].filter(Boolean).join(' · ') || c.contact_type || 'No company on file'}
                   </span>
                 </span>
               </button>
@@ -531,6 +544,7 @@ export default function CustomersPage() {
               { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },
               { key: 'management_company', label: 'Company', defaultWidth: 170, render: c => c.management_company || '—' },
               { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },
+              { key: 'team_office', label: 'Team/Office', defaultWidth: 170, render: c => c.team_office || '—' },
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
               ...customColumns.map(col => ({
