@@ -5,6 +5,7 @@ import {
   listOpenTodos, createTodo, setTodoDone, moveTodo, deleteTodo, isEmailTodo,
   todayKey, addDaysKey, nextMondayKey, formatDueDate, formatDueTime,
 } from '../../lib/salesTodos';
+import SendEmailButton from '../SendEmailButton';
 
 const DAY_CHOICES = [
   { key: 'today', label: 'Today', value: () => todayKey() },
@@ -136,7 +137,7 @@ export default function TodoCard() {
         </div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {mailTo && (
-            <a className="btn btn-sm" href={`mailto:${mailTo}`} title={`Email ${item.contact.name || mailTo}`}>Email</a>
+            <SendEmailButton to={mailTo} name={item.contact.name || ''} property={item.property_name || ''} />
           )}
           {canPush && !done && (
             <button type="button" className="btn btn-sm" disabled={busyId === item.id} title="Move to tomorrow" onClick={() => run(item.id, () => moveTodo(item.id, addDaysKey(1)))}>Tomorrow</button>

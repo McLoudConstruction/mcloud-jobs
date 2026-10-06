@@ -7,6 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import EmailLogPanel from '../../components/EmailLogPanel';
+import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
@@ -281,6 +282,16 @@ export default function CompaniesPage() {
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save company')}</button>
             </div>
             </form>
+            {editingId && form.contact_email && (
+              <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <SendEmailButton
+                  to={form.contact_email}
+                  name={form.contact_name}
+                  company={form.company_name}
+                  label="Email company contact"
+                />
+              </div>
+            )}
             {editingId && <EmailLogPanel kind="company" recordId={editingId} />}
         </PopupModal>
 

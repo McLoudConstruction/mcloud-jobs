@@ -12,10 +12,11 @@ import ColorField from '../../components/ColorField';
 import FeatureSettingsPanels from '../../components/FeatureSettingsPanels';
 import HomeAddressCard from '../../components/HomeAddressCard';
 import EmailLoggingCard from '../../components/EmailLoggingCard';
+import EmailTemplatesCard from '../../components/EmailTemplatesCard';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Communications Log', 'Users'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -489,10 +490,14 @@ function SettingsPageInner() {
 
         {tab === 'Automation' && <FeatureSettingsPanels />}
 
+        {tab === 'Email Templates' && <EmailTemplatesCard />}
+
+        {tab !== 'Email Templates' && (
         <div className="section-actions" style={{ marginBottom: 20 }}>
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
           {tab === 'Cosmetic' && <button className="btn" onClick={resetToDefault}>Reset colors to default</button>}
         </div>
+        )}
 
         {tab === 'Integrations' && (
         <>

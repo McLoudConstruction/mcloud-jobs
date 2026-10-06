@@ -10,6 +10,7 @@ import DataTable from '../../components/DataTable';
 import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
 import EmailLogPanel from '../../components/EmailLogPanel';
+import SendEmailButton from '../../components/SendEmailButton';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
@@ -497,6 +498,17 @@ export default function PropertiesPage() {
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
             </div>
               </form>
+            {editingId && form.contact_email && (
+              <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <SendEmailButton
+                  to={form.contact_email}
+                  name={form.contact_name}
+                  company={form.management_company}
+                  property={form.property_name}
+                  label="Email property contact"
+                />
+              </div>
+            )}
             {editingId && <EmailLogPanel kind="property" recordId={editingId} />}
         </PopupModal>
 

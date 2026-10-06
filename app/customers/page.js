@@ -7,6 +7,7 @@ import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import EmailLogPanel from '../../components/EmailLogPanel';
+import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
@@ -473,6 +474,17 @@ export default function CustomersPage() {
               </div>
             )}
             </form>
+            {editingId && form.contact_email && (
+              <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <SendEmailButton
+                  to={form.contact_email}
+                  name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
+                  company={form.management_company}
+                  property={form.property}
+                  label="Email this contact"
+                />
+              </div>
+            )}
             {editingId && <EmailLogPanel kind="contact" recordId={editingId} />}
         </PopupModal>
 
