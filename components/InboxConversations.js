@@ -78,7 +78,10 @@ export default function InboxConversations({ session, jobId = null, job: scopedJ
   scopedJobRef.current = scopedJob;
 
   const load = useCallback(async () => {
-    let eq = supabase.from('email_messages').select('*').order('received_at', { ascending: false }).limit(1000);
+    // Mail pulled in by the CRM email log (source 'crm_sync') lives on the
+    // People, Property and Company records. It only joins the Inbox when it
+    // is tied to a job, so the Inbox is not flooded with every conversation.
+    let eq = supabase.from('email_messages').select('*').or('source.neq.crm_sync,job_id.not.is.null').order('received_at', { ascending: false }).limit(1000);
     let pq = supabase.from('job_questions').select('*').order('created_at', { ascending: false }).limit(1000);
     let sq = supabase.from('sub_messages').select('*, rfp_recipients(rfps(title, job_id))').order('created_at', { ascending: false }).limit(1000);
     if (jobId) { eq = eq.eq('job_id', jobId); pq = pq.eq('job_id', jobId); }

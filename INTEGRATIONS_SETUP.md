@@ -220,3 +220,36 @@ Console (Billing → Budgets & alerts) as cheap insurance against
 runaway usage. Without a key set, every field that would otherwise
 autocomplete just falls back to a plain text box — nothing breaks, you
 only lose the live lookup.
+
+---
+
+## 7. Email logging on People, Properties and Companies
+
+Logs sent and received email on the matching record, using the email
+addresses saved on it. Needs a connected Google or Microsoft account (section
+2 or 3 above) with mail access, and **migration 154**
+(`supabase-migration-154-crm-email-log.sql`, Supabase SQL Editor). Run the
+migration BEFORE deploying this code.
+
+1. Settings, Integrations, **Email logging**, pick how far back to read, then
+   **Turn on**. Press **Sync now** to start the first read. A long history is
+   read in pieces, so press it again until it says there is nothing more.
+2. After that it runs by itself with the daily sync.
+3. Open any Person, Property or Company and scroll to **Email log**.
+
+Good to know:
+
+- Only emails that involve an address saved on a record are stored. Anything
+  else in the mailbox is never saved.
+- A Person matches on their email and billing email. A Property matches on its
+  contact and the people linked to it. A Company matches on its contact, its
+  linked people and properties, and anyone at the company's own email domain.
+  Webmail domains (gmail.com and similar) never match a whole company.
+- Optional env vars. `INTERNAL_EMAIL_DOMAINS` (server) and
+  `NEXT_PUBLIC_INTERNAL_EMAIL_DOMAINS` (browser), both a comma separated list
+  such as `mcloudconstruction.com,mcloud.us`. They keep your own domains from
+  making internal email look like it belongs to a company. The connected
+  account's own domain is always excluded on the server.
+- Turning it off stops new syncing. Mail already logged stays on the records.
+- Mail synced this way stays out of the Messages inbox unless it carries a
+  `[Project #...]` tag, in which case it joins that job's thread.

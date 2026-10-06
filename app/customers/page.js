@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
+import EmailLogPanel from '../../components/EmailLogPanel';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
@@ -472,6 +473,7 @@ export default function CustomersPage() {
               </div>
             )}
             </form>
+            {editingId && <EmailLogPanel kind="contact" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">

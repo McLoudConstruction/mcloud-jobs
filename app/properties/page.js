@@ -9,6 +9,7 @@ import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
 import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
+import EmailLogPanel from '../../components/EmailLogPanel';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
@@ -496,6 +497,7 @@ export default function PropertiesPage() {
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
             </div>
               </form>
+            {editingId && <EmailLogPanel kind="property" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">

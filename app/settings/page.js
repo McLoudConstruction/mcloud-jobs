@@ -11,6 +11,7 @@ import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPa
 import ColorField from '../../components/ColorField';
 import FeatureSettingsPanels from '../../components/FeatureSettingsPanels';
 import HomeAddressCard from '../../components/HomeAddressCard';
+import EmailLoggingCard from '../../components/EmailLoggingCard';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 
@@ -529,6 +530,8 @@ function SettingsPageInner() {
           )}
           {integrationsLoading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 }}>Loading…</div>}
         </div>
+
+        <EmailLoggingCard />
 
         <div className="card">
           <h3>API keys</h3>
