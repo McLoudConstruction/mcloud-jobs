@@ -198,6 +198,9 @@ textarea.out { width: 100%; min-height: 160px; border: 1px solid var(--line); bo
 #cv3 { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .canvasWrap[data-mode="3d"] .scalebar { display: none; }
 
+/* the [hidden] attribute must win over any display rule (the hidden 3D canvas was covering the plan and swallowing taps) */
+[hidden] { display: none !important; }
+
 </style>
 <div class="wrap">
   <header class="top">
@@ -946,6 +949,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const ICONS = {
   select: '<path d="M6 3l12 8-5.5 1.5L9.5 19z"/>',
   wall: '<path d="M4 19L20 5" stroke-width="4.5"/>',
+  room: '<path d="M5 5h14v14H5z" stroke-width="3"/>',
   door: '<path d="M3 20h18M6 20V6M6 6a14 14 0 0 1 14 14"/>',
   window: '<path d="M3 9h18v6H3zM12 9v6"/>',
   item: '<circle cx="12" cy="12" r="7"/><path d="M12 8.5v7M8.5 12h7"/>',
@@ -1320,6 +1324,17 @@ function draw() {
     if (w) for (const e of [w.a, w.b]) { const q = W2S(e); ctx.fillStyle = C.sheet; ctx.strokeStyle = C.sel; ctx.lineWidth = 2; ctx.beginPath(); ctx.rect(q.x - 6, q.y - 6, 12, 12); ctx.fill(); ctx.stroke(); }
   }
   // drawing preview
+  if (tool === 'room') {
+    if (pending && curSnap) {
+      const a = W2S(pending), b = W2S(curSnap);
+      ctx.strokeStyle = C.sel; ctx.lineWidth = Math.max(2.5, opts.thick * view.s); ctx.globalAlpha = 0.55;
+      ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)); ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      halo(ctx, fmtFtIn(Math.abs(curSnap.x - pending.x)) + ' x ' + fmtFtIn(Math.abs(curSnap.y - pending.y)), (a.x + b.x) / 2, (a.y + b.y) / 2, C.sel, 13, true, true);
+    }
+    if (pending) { const a = W2S(pending); ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(a.x, a.y, 5, 0, Math.PI * 2); ctx.fill(); }
+    if (curSnap) { const q = W2S(curSnap); ctx.strokeStyle = C.sel; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(q.x, q.y, curSnap.node ? 8 : 5, 0, Math.PI * 2); ctx.stroke(); }
+  }
   if (tool === 'wall') {
     if (pending) {
       const a = W2S(pending);
@@ -1360,6 +1375,29 @@ function addWall(a, b) {
   if (dup) { toast('That wall already exists'); return false; }
   mutate(() => { state.walls.push({ id: uid(state, 'w'), a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, t: opts.thick, h: state.settings.wallH }); }, { panel: true });
   return true;
+}
+function addRoomRect(a, b) {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  if (x1 - x0 < 24 || y1 - y0 < 24) { toast('Room is too small. Pick corners at least 2 ft apart'); return false; }
+  const pts = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const key = (p, q) => ptKey(p.x, p.y) === ptKey(q[0], q[1]);
+  mutate(() => {
+    for (let i = 0; i < 4; i++) {
+      const p = pts[i], q = pts[(i + 1) % 4];
+      const dup = state.walls.some(w => (key(w.a, p) && key(w.b, q)) || (key(w.a, q) && key(w.b, p)));
+      if (!dup) state.walls.push({ id: uid(state, 'w'), a: { x: p[0], y: p[1] }, b: { x: q[0], y: q[1] }, t: opts.thick, h: state.settings.wallH });
+    }
+  }, { panel: true });
+  return true;
+}
+function addRoomTyped() {
+  const wI = $('#rmW'), dI = $('#rmD');
+  if (!pending || !wI || !dI) return;
+  const w = parseLen(wI.value), d = parseLen(dI.value);
+  if (!w || !d) { toast('Type a width and depth like 12\'6"'); (w ? dI : wI).focus(); return; }
+  const sx = 1, sy = 1; // typed rooms grow right and down from the corner you tapped
+  const b = { x: Math.round((pending.x + sx * w) * 100) / 100, y: Math.round((pending.y + sy * d) * 100) / 100 };
+  if (addRoomRect(pending, b)) { pending = null; curSnap = null; renderStrip(); draw(); toast('Room added'); }
 }
 function removeEntity(s) {
   if (!s) return;
@@ -1434,13 +1472,14 @@ cv.addEventListener('pointermove', e => {
     draw(); return;
   }
   if (!g) {
-    if (e.pointerType === 'mouse' && tool === 'wall') { curSnap = snapPt(S2W(p), { from: pending }); draw(); }
+    if (e.pointerType === 'mouse' && (tool === 'wall' || tool === 'room')) { curSnap = snapPt(S2W(p), { from: pending }); draw(); }
     return;
   }
   const dist = Math.hypot(p.x - g.start.x, p.y - g.start.y);
   if (dist > 6) g.moved = true;
   if (!g.moved) return;
   if (tool === 'wall') { curSnap = snapPt(S2W(p), { from: pending || snapPt(S2W(g.start)) }); draw(); return; }
+  if (tool === 'room') { if (!pending) { pending = snapPt(S2W(g.start)); g.dragRoom = true; } curSnap = snapPt(S2W(p)); draw(); return; }
   if (tool === 'select' && !g.mode) {
     if (g.node && sel && sel.type === 'wall') { g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true; }
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
@@ -1479,6 +1518,15 @@ function endPointer(e, cancel) {
     refresh();
     if (hit && hit.type === 'room') scrollToRoom(hit.id);
     return;
+  }
+  if (tool === 'room') {
+    const upW = S2W(p);
+    if (pending) {
+      const pt = snapPt(upW);
+      if (Math.hypot(pt.x - pending.x, pt.y - pending.y) < 1) { if (gg.dragRoom) { pending = null; } curSnap = null; renderStrip(); draw(); return; }
+      if (addRoomRect(pending, pt)) { pending = null; toast('Room added'); }
+    } else pending = snapPt(upW);
+    curSnap = null; renderStrip(); draw(); return;
   }
   if (tool === 'wall') {
     const upW = S2W(p);
@@ -1519,7 +1567,7 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- toolbar, context, strip ---------- */
-const TOOLS = [['select', 'Select'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['item', 'Item'], ['pan', 'Pan']];
+const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['item', 'Item'], ['pan', 'Pan']];
 function renderTools() {
   const viewGrp = '<div class="tgroup" role="group" aria-label="View">' +
     [['2d', 'plan', 'Plan'], ['3d', 'cube', '3D']].map(v => '<button class="tbtn" data-mode="' + v[0] + '" aria-pressed="' + (mode === v[0]) + '" type="button">' + icon(v[1]) + '<span>' + v[2] + '</span></button>').join('') + '</div>';
@@ -1547,6 +1595,9 @@ function renderCtx() {
     h += chipRow('Wall', [[4.5, 'Interior 4.5"'], [6, 'Exterior 6"'], [8, 'Thick 8"']], opts.thick, 'data-thick');
     h += '<span class="chips"><button type="button" class="chip-btn" data-ortho="1" aria-pressed="' + S.ortho + '">Straight lines</button></span>';
     h += '<span class="lbl">Snap</span><select id="snapSel" aria-label="Grid snap">' + [3, 6, 12].map(v => '<option value="' + v + '"' + (S.snap === v ? ' selected' : '') + '>' + v + ' in</option>').join('') + '</select>';
+  } else if (tool === 'room') {
+    h += chipRow('Walls', [[4.5, 'Interior 4.5"'], [6, 'Exterior 6"'], [8, 'Thick 8"']], opts.thick, 'data-thick');
+    h += '<span class="lbl">Snap</span><select id="snapSel" aria-label="Grid snap">' + [3, 6, 12].map(v => '<option value="' + v + '"' + (S.snap === v ? ' selected' : '') + '>' + v + ' in</option>').join('') + '</select>';
   } else if (tool === 'door') {
     h += chipRow('Type', [['door', 'Interior'], ['entry', 'Entry'], ['opening', 'Cased opening']], opts.doorKind, 'data-dkind');
     h += chipRow('Width', [[28, '28"'], [30, '30"'], [32, '32"'], [36, '36"'], [48, '48"']], opts.doorW, 'data-dw');
@@ -1561,6 +1612,7 @@ function renderCtx() {
 }
 const HINTS = {
   select: 'Tap a wall, door, item or room to edit it. Drag a corner handle to move a wall end. Drag on empty space to pan; pinch to zoom.',
+  room: 'Tap one corner, then the opposite corner, and all four walls are drawn. Or drag from corner to corner. You can also type the width and depth.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
   window: 'Tap on a wall to place a window.',
@@ -1570,7 +1622,11 @@ const HINTS = {
 function renderStrip() {
   const el = $('#strip');
   if (mode === '3d') { el.innerHTML = '<span class="hint">Drag to orbit, pinch or scroll to zoom, two fingers to pan. Tap a floor or wall to jump to that room. Change finishes in the Rooms tab and the view updates.</span>'; return; }
-  let h = '<span class="hint">' + esc(pending ? 'Start point set. Tap the end point, or type a length and choose a direction.' : HINTS[tool]) + '</span>';
+  let h = '<span class="hint">' + esc(pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
+  if (tool === 'room' && pending) {
+    h += '<span class="lenbox"><input id="rmW" class="mono" inputmode="text" autocomplete="off" placeholder="Width 12\'" aria-label="Room width"/><input id="rmD" class="mono" inputmode="text" autocomplete="off" placeholder="Depth 10\'" aria-label="Room depth"/>' +
+      '<button type="button" class="btn primary" id="rmAdd">Add room</button><button type="button" class="btn" id="doneBtn">Cancel</button></span>';
+  }
   if (tool === 'wall' && pending) {
     h += '<span class="lenbox"><input id="lenIn" class="mono" inputmode="text" autocomplete="off" placeholder="12\'6&quot;" aria-label="Wall length"/>' +
       ['left', 'up', 'down', 'right'].map(d => '<button type="button" class="dir" data-dir="' + d + '" aria-label="Draw ' + d + '">' + icon(d) + '</button>').join('') +
@@ -1600,6 +1656,7 @@ document.addEventListener('click', e => {
   const dw = e.target.closest('[data-dw]'); if (dw) { opts.doorW = parseFloat(dw.dataset.dw); renderCtx(); return; }
   const ww = e.target.closest('[data-ww]'); if (ww) { opts.winW = parseFloat(ww.dataset.ww); renderCtx(); return; }
   const it = e.target.closest('[data-item]'); if (it) { opts.item = it.dataset.item; renderCtx(); return; }
+  if (e.target.closest('#rmAdd')) { addRoomTyped(); return; }
   if (e.target.closest('#doneBtn')) { pending = null; curSnap = null; renderStrip(); draw(); return; }
   const dir = e.target.closest('[data-dir]');
   if (dir) { drawTyped(dir.dataset.dir); return; }
@@ -1625,6 +1682,7 @@ function drawTyped(dir) {
   if (addWall(pending, pt)) { pending = pt; renderStrip(); const i2 = $('#lenIn'); if (i2) i2.focus(); draw(); }
 }
 document.addEventListener('keydown', e => {
+  if ((e.target.id === 'rmW' || e.target.id === 'rmD') && e.key === 'Enter') { e.preventDefault(); if (e.target.id === 'rmW' && !$('#rmD').value) $('#rmD').focus(); else addRoomTyped(); return; }
   if (e.target.id === 'lenIn' && e.key === 'Enter') {
     e.preventDefault();
     let dir = 'right';
