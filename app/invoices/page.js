@@ -5,7 +5,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
 import { flattenJobFinancials } from '../../lib/jobFinancials';
-import { jobHref } from '../../lib/links';
+import { jobHref, billingDestination } from '../../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -103,7 +103,7 @@ export default function InvoicesDashboardPage() {
               <button
                 key={r.id}
                 className={`entity-mobile-row ${r.urgency === 0 ? 'row-settled' : ''}`}
-                onClick={() => window.location.href = jobHref(r.id, 'invoicing')}
+                onClick={() => window.location.href = jobHref(r.id, billingDestination(r.stage))}
               >
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{r.customer_name || 'Unnamed'}</span>
@@ -122,7 +122,7 @@ export default function InvoicesDashboardPage() {
         {rows.length > 0 && !isMobile && (
           <DataTable
             getRowKey={r => r.id}
-            onRowClick={r => window.location.href = jobHref(r.id, 'invoicing')}
+            onRowClick={r => window.location.href = jobHref(r.id, billingDestination(r.stage))}
             rows={rows}
             exportFileName="invoices"
             exportSheetName="Invoices"

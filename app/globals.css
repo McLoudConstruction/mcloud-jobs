@@ -880,6 +880,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .stage-tab:hover{ color: var(--ink); }
 .stage-tab.active{ background: transparent; color: var(--accent); border-color: var(--accent); font-weight: 700; }
+/* The tab for the stage this job is currently in gets a small dot, so
+   "where is this project right now" is visible even while browsing another
+   stage. The thin divider separates tab groups: home | project stages | always-on. */
+.stage-tab.is-current::after{ content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.stage-tabs-divider{ flex-shrink: 0; width: 1px; align-self: stretch; margin: 8px 0; background: var(--line); }
 
 .section-subnav{
   display: flex; gap: 22px; flex-wrap: nowrap;

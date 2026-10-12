@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
@@ -24,7 +24,7 @@ import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
 import {
-  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon, JobDashboardIcon,
+  OverviewIcon, PersonIcon, CalculatorIcon, JobDashboardIcon, InvoiceIcon,
   PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon,
 } from '../../../components/icons';
 
@@ -56,80 +56,80 @@ import PayAppsCard from '../../../components/PayAppsCard';
 import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
 import WarrantyCard from '../../../components/WarrantyCard';
-import { normalizeJobLink } from '../../../lib/links';
+import ProposalsCard from '../../../components/ProposalsCard';
+import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
+import FloorplanPanel from '../../../components/FloorplanPanel';
+import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
 
-// Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
-// at very different altitudes (a customer contact form next to internal
-// job costing) and showed post-approval content (Financials) on records
-// that are still just Estimates. Tabs now group by what they're actually
-// for, and a tab can offer `sections` for content that's related but
-// distinct enough to want its own toggle rather than being smashed
-// together. `hideWhen(job)` lets a tab stay out of the way until it's
-// actually earned relevance for this job's stage.
+// Job page structure (Oct 2026): tabs follow the life of a project instead
+// of the feature that produced the data.
+//   Sell      winning the work   - customer, scope, cost, pricing, estimate, floorplan
+//   Plan      getting ready      - budget, material selections, work orders
+//   Build     doing the work     - updates, change orders, job costs, draws, pay apps, waivers
+//   Closeout  finishing up       - punch list, warranty, final invoice, review request
+// plus tabs that matter at every stage (Overview, Schedule, Photos,
+// Documents, Messages). A job opens on the tab for the stage it is in; the
+// other stage tabs stay one click away because plans change mid-project.
+//
+// A tab can offer `sections` for content that is related but distinct
+// enough to want its own toggle. Every link into this page goes through
+// lib/links.js (JOB_DESTINATIONS), which is checked against this array at
+// build time (scripts/check-link-destinations.mjs) - add a section here and
+// a destination there, and old URLs are handled by normalizeJobLink().
 const TABS = [
-  { key: 'Overview', label: 'Overview', icon: OverviewIcon },
+  { key: 'Overview', label: 'Overview', icon: OverviewIcon, group: 'home' },
   {
-    key: 'Customer', label: 'Customer', icon: PersonIcon,
+    key: 'Sell', label: 'Sell', icon: CalculatorIcon, group: 'stage',
     sections: [
-      { key: 'details', label: 'Details' },
+      { key: 'details', label: 'Customer' },
       { key: 'portal', label: 'Portal & Notifications' },
-    ],
-  },
-  {
-    key: 'Estimate', label: 'Estimate', icon: CalculatorIcon,
-    sections: [
       { key: 'scope', label: 'Scope' },
       { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
+      { key: 'proposal', label: 'Estimate & Contract' },
+      { key: 'floorplan', label: 'Floorplan' },
     ],
   },
-  { key: 'Schedule', label: 'Schedule', icon: JobDashboardIcon },
   {
-    key: 'Financials', label: 'Financials', icon: FinanceIcon,
-    // Change Orders, Work Orders, Invoicing, and Receipts live here as
-    // sections (Sep 2026, take 2) rather than their own top-level tabs.
-    // They used to be split out specifically to avoid scrolling through
-    // one long stacked page — that's still true here: each section swaps
-    // the whole view instead of stacking, so nothing's lost, but the top
-    // tab row isn't carrying five finance-related entries side by side.
-    // Always visible regardless of job stage — no longer gated behind
-    // the opportunity-to-job transition (was `hideWhen: (job) =>
-    // isOpportunity(job)`).
+    key: 'Plan', label: 'Plan', icon: MaterialSelectionsTabIcon, group: 'stage',
     sections: [
-      { key: 'overview', label: 'Overview' },
       { key: 'budget', label: 'Budget' },
-      { key: 'change_orders', label: 'Change Orders' },
+      { key: 'approved', label: 'Approved Materials' },
+      { key: 'all', label: 'Selection Sheets' },
       { key: 'work_orders', label: 'Work Orders' },
-      { key: 'invoicing', label: 'Invoices' },
+    ],
+  },
+  {
+    key: 'Build', label: 'Build', icon: WorkOrderIcon, group: 'stage',
+    sections: [
+      { key: 'updates', label: 'Project Updates' },
+      { key: 'internal', label: 'Internal Updates' },
+      { key: 'change_orders', label: 'Change Orders' },
+      { key: 'job_costs', label: 'Job Costs' },
+      { key: 'draws', label: 'Draws' },
       { key: 'pay_apps', label: 'Pay Apps' },
       { key: 'waivers', label: 'Lien Waivers' },
-      { key: 'receipts', label: 'Job Costs' },
     ],
   },
   {
-    key: 'Closeout', label: 'Closeout', icon: WorkOrderIcon,
-    // Punch list and warranty (migration 137). Shown from Active onward — you
-    // start a punch list near the end of the work and warranty begins at completion.
-    hideWhen: (job) => !['active', 'completed', 'invoiced', 'paid'].includes(job.stage),
+    key: 'Closeout', label: 'Closeout', icon: InvoiceIcon, group: 'stage',
     sections: [
       { key: 'punch', label: 'Punch List' },
       { key: 'warranty', label: 'Warranty' },
+      { key: 'invoice', label: 'Final Invoice' },
+      { key: 'review', label: 'Review Request' },
     ],
   },
-  { key: 'Photos', label: 'Photos', icon: PhotosIcon },
-  { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon, sections: [
-    { key: 'approved', label: 'Approved Materials' },
-    { key: 'all', label: 'All Sheets' },
-  ] },
-  { key: 'Documents', label: 'Documents', icon: UpdatesTabIcon },
-  // Kept in TABS (so goToTab/#? URL params/the "land somewhere valid"
-  // safety effect all still work) but left out of the tab-button row
-  // below — each now has its own quick-access button up in the job
-  // header instead, so showing them again here was pure duplication.
-  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
-  { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
-  { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
-  { key: 'Email', label: 'Email', icon: MessagesIcon },
+  { key: 'Schedule', label: 'Schedule', icon: JobDashboardIcon, group: 'always' },
+  { key: 'Photos', label: 'Photos', icon: PhotosIcon, group: 'always' },
+  { key: 'Documents', label: 'Documents', icon: UpdatesTabIcon, group: 'always' },
+  {
+    key: 'Messages', label: 'Messages', icon: MessagesIcon, group: 'always',
+    sections: [
+      { key: 'messages', label: 'Customer Messages' },
+      { key: 'email', label: 'Email' },
+    ],
+  },
 ];
 
 export default function JobDetailPage() {
@@ -171,6 +171,12 @@ export default function JobDetailPage() {
   }, []);
   const [tab, setTab] = useState('Overview');
   const [section, setSection] = useState(null);
+  // Landing: a job opens on the tab for its current stage unless the URL
+  // names a destination. These refs carry what the URL said until the job
+  // has loaded and we know its stage.
+  const urlNamedTabRef = useRef(false);
+  const billingPendingRef = useRef(false);
+  const landedRef = useRef(false);
 
   // Central place to change tabs so section always lands somewhere valid:
   // explicit section if given, else that tab's first section, else none.
@@ -194,6 +200,13 @@ export default function JobDetailPage() {
     syncUrl(tab, sectionKey);
   }, [tab]);
 
+  // Navigate by destination name (see JOB_DESTINATIONS in lib/links.js), so
+  // nothing in this file needs to know which tab a feature lives under.
+  const goDest = useCallback((destination) => {
+    const d = JOB_DESTINATIONS[destination];
+    if (d) goToTab(d.tab, d.section);
+  }, [goToTab]);
+
   function syncUrl(tabKey, sectionKey) {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -209,18 +222,37 @@ export default function JobDetailPage() {
     // bookmarks (?tab=schedule, section=proposals) land somewhere real
     // instead of being silently ignored.
     const target = normalizeJobLink(TABS, params.get('tab'), params.get('section'));
-    if (target) goToTab(target.tab, target.section);
+    if (target) {
+      urlNamedTabRef.current = true;
+      billingPendingRef.current = target.stageAware === 'billing';
+      goToTab(target.tab, target.section);
+    }
   }, [goToTab]);
+
+  // Once the job has loaded: land on the right spot for its stage (unless
+  // the URL asked for somewhere specific), and settle old "billing" links
+  // onto draws or the final invoice depending on where the job is now.
+  useEffect(() => {
+    if (!job || landedRef.current) return;
+    landedRef.current = true;
+    if (billingPendingRef.current) {
+      billingPendingRef.current = false;
+      goDest(billingDestination(job.stage));
+      return;
+    }
+    if (urlNamedTabRef.current) return;
+    const landing = stageLanding(job.stage);
+    goToTab(landing.tab, landing.section);
+  }, [job, goToTab, goDest]);
 
   // A tab can disappear out from under the current selection — e.g. the
   // job just got approved and Financials was hidden while it was still
   // an opportunity. Land somewhere valid instead of a blank pane.
   useEffect(() => {
     if (!job) return;
-    const visible = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
-    const current = visible.find(t => t.key === tab);
+    const current = TABS.find(t => t.key === tab);
     if (!current) {
-      goToTab(visible[0]?.key || 'Overview');
+      goToTab('Overview');
     } else if (current.sections && !current.sections.some(s => s.key === section)) {
       setSection(current.sections[0].key);
     }
@@ -460,8 +492,11 @@ export default function JobDetailPage() {
   if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Overview</Link></div>;
   if (!job) return null;
 
-  const visibleTabs = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
-  const activeTabDef = visibleTabs.find(t => t.key === tab) || visibleTabs[0];
+  const activeTabDef = TABS.find(t => t.key === tab) || TABS[0];
+  const currentStageTab = stageTab(job.stage);
+  const afterOpportunity = phaseForStage(job.stage) !== 'opportunity';
+  const inFieldPhase = ['active', 'completed', 'invoiced', 'paid'].includes(job.stage);
+  const isDone = ['completed', 'invoiced', 'paid'].includes(job.stage);
 
   return (
     <AppShell>
@@ -522,13 +557,13 @@ export default function JobDetailPage() {
                 this row. */}
             {!isMobile && (
               <>
-                <button className="btn btn-sm" onClick={() => goToTab('Messages')} title="Messages" aria-label="Messages">
+                <button className="btn btn-sm" onClick={() => goDest('messages')} title="Messages" aria-label="Messages">
                   <MessagesIcon width={16} height={16} />
                 </button>
                 {(role === 'owner' || role === 'estimator') && (
                   <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
                 )}
-                <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
+                <button className="btn btn-sm" onClick={() => goDest('updates')}>
                   <ProjectFeedIcon width={16} height={16} /> Project Updates
                 </button>
                 <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
@@ -558,11 +593,11 @@ export default function JobDetailPage() {
               <PlusIcon width={24} height={24} />
             </button>
             <BottomSheet open={fabOpen} onClose={() => setFabOpen(false)} title="Quick actions">
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Internal Updates'); }}>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('internalUpdates'); }}>
                 <InternalUpdatesIcon className="more-sheet-icon" />
                 Internal Updates
               </button>
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Messages'); }}>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('messages'); }}>
                 <MessagesIcon className="more-sheet-icon" />
                 Messages
               </button>
@@ -572,7 +607,7 @@ export default function JobDetailPage() {
                   RFP
                 </button>
               )}
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goToTab('Project Updates'); }}>
+              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('updates'); }}>
                 <ProjectFeedIcon className="more-sheet-icon" />
                 Project Updates
               </button>
@@ -594,12 +629,25 @@ export default function JobDetailPage() {
           </div>
         )}
         <div className="stage-tabs">
-          {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
-            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
-              {t.icon && <t.icon width={16} height={16} />}
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t, i) => {
+            // A thin divider marks where one group of tabs ends (home | the
+            // four project stages | tabs that matter at every stage).
+            const startsGroup = i > 0 && TABS[i - 1].group !== t.group;
+            const isCurrentStage = t.group === 'stage' && t.key === currentStageTab;
+            return (
+              <Fragment key={t.key}>
+                {startsGroup && <span className="stage-tabs-divider" aria-hidden="true" />}
+                <button
+                  className={`stage-tab ${tab === t.key ? 'active' : ''} ${isCurrentStage ? 'is-current' : ''}`}
+                  onClick={() => goToTab(t.key)}
+                  title={isCurrentStage ? `This job is in ${STAGE_LABELS[job.stage]}` : undefined}
+                >
+                  {t.icon && <t.icon width={16} height={16} />}
+                  {t.label}
+                </button>
+              </Fragment>
+            );
+          })}
         </div>
 
         {activeTabDef?.sections && (
@@ -615,11 +663,11 @@ export default function JobDetailPage() {
                 </button>
               ))}
             </div>
-            {/* Centralized (Aug 2026): generating the estimate used to be a card
-                buried in the Pricing sidebar, invisible while on Scope. It's the
-                primary action for this whole tab, so it lives here instead —
-                reachable no matter which section is active. */}
-            {tab === 'Estimate' && (
+            {/* Generating the estimate is the primary action for the whole
+                estimating side of Sell, so it is reachable from Scope, Cost
+                and Pricing without hunting for it. (The Estimate & Contract
+                section carries the same buttons in its own card.) */}
+            {tab === 'Sell' && ['scope', 'cost', 'pricing'].includes(section) && (
               <div className="tab-sections-actions">
                 <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
                 {job.proposal_sent_at && (
@@ -633,8 +681,11 @@ export default function JobDetailPage() {
         {tab === 'Overview' && (
           <>
             <div className="overview-split">
-              <ProjectInfoCard job={job} onSave={saveJob} onTabChange={goToTab} />
-              <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
+              <ProjectInfoCard job={job} onSave={saveJob} onNavigate={goDest} />
+              <ProjectMilestonesCard job={job} jobId={id} onNavigate={goDest} />
+            </div>
+            <div style={{ marginTop: 20 }}>
+              <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
             </div>
             {(['new', 'inspected', 'proposal_delivered'].includes(job.stage) || job.stage === 'lost') && (
               <div className="card" style={{ marginTop: 20 }}>
@@ -674,18 +725,19 @@ export default function JobDetailPage() {
           </>
         )}
 
-        {tab === 'Customer' && section === 'details' && (
+        {/* ------------------------------ SELL ------------------------------ */}
+        {tab === 'Sell' && section === 'details' && (
           <CustomerInfoCard job={job} onSave={saveJob} />
         )}
 
-        {tab === 'Customer' && section === 'portal' && (
+        {tab === 'Sell' && section === 'portal' && (
           <>
             <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
             <NotificationSettingsCard job={job} onSave={saveJob} />
           </>
         )}
 
-        {tab === 'Estimate' && section === 'scope' && (
+        {tab === 'Sell' && section === 'scope' && (
           <>
             <ScopeCard job={job} jobId={id} onSave={saveJob} />
             <EstimateGroupsCard job={job} jobId={id} />
@@ -693,123 +745,47 @@ export default function JobDetailPage() {
           </>
         )}
 
-        {tab === 'Estimate' && section === 'cost' && (
+        {tab === 'Sell' && section === 'cost' && (
           <EstimateTab job={job} jobId={id} section="cost" />
         )}
 
-        {tab === 'Schedule' && (
-          <>
-            <ScheduleCard job={job} jobId={id} />
-            <ScheduleRiskBadge jobId={id} />
-            <ScheduleDelayCard jobId={id} job={job} />
-          </>
-        )}
-
-        {tab === 'Estimate' && section === 'pricing' && (
+        {tab === 'Sell' && section === 'pricing' && (
           <EstimateTab job={job} jobId={id} section="pricing">
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
         )}
 
-        {tab === 'Financials' && section === 'overview' && (
-          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
+        {tab === 'Sell' && section === 'proposal' && (
+          <>
+            <div className="card">
+              <h3>Estimate &amp; Contract</h3>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                Build the estimate document from the scope and pricing, send it, and once it is accepted prepare the contract.
+                {job.proposal_sent_at && <> Estimate sent {new Date(job.proposal_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.</>}
+                {job.contract_finalized_at && <> Contract finalized {new Date(job.contract_finalized_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.</>}
+              </div>
+              <div className="section-actions" style={{ marginTop: 0 }}>
+                <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
+                {job.proposal_sent_at && (
+                  <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
+                )}
+              </div>
+            </div>
+            <ProposalsCard job={job} jobId={id} onSave={saveJob} />
+          </>
         )}
 
-        {tab === 'Financials' && section === 'budget' && (
+        {tab === 'Sell' && section === 'floorplan' && (
+          <FloorplanPanel jobId={id} embedded />
+        )}
+
+        {/* ------------------------------ PLAN ------------------------------ */}
+        {tab === 'Plan' && section === 'budget' && (
           <BudgetCard jobId={id} job={job} />
         )}
 
-        {tab === 'Financials' && section === 'change_orders' && (
-          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
-        )}
-
-        {tab === 'Financials' && section === 'work_orders' && (
-          <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
-        )}
-
-        {tab === 'Financials' && section === 'invoicing' && (
-          <>
-            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
-              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
-            )}
-            <DrawsCard jobId={id} />
-            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
-              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-            ) : (
-              <div className="card">
-                <h3>Invoice</h3>
-                <div className="empty-state">
-                  The final invoice becomes available once this job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'Financials' && section === 'pay_apps' && (
-          <PayAppsCard jobId={id} job={job} changeOrders={changeOrders} />
-        )}
-
-        {tab === 'Financials' && section === 'waivers' && (
-          <LienWaiversCard jobId={id} job={job} />
-        )}
-
-        {tab === 'Financials' && section === 'receipts' && (
-          <ReceiptsCard jobId={id} />
-        )}
-
-        {tab === 'Closeout' && section === 'punch' && (
-          <div className="card">
-            <h3>Punch List</h3>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-              Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
-            </div>
-            <PunchItemsPanel jobId={id} kind="punch" />
-          </div>
-        )}
-
-        {tab === 'Closeout' && section === 'warranty' && (
-          <WarrantyCard jobId={id} job={job} />
-        )}
-
-        {tab === 'Photos' && (
-          <PhotoGallery jobId={id} title="Job Photos" />
-        )}
-
-        {tab === 'Internal Updates' && (
-          <InternalUpdatesPanel jobId={id} session={session} />
-        )}
-
-        {tab === 'Email' && (
-          <EmailThreadCard jobId={id} job={job} />
-        )}
-
-        {tab === 'Documents' && (
-          <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
-        )}
-
-        {tab === 'Project Updates' && (
-          <>
-            {phaseForStage(job.stage) !== 'opportunity' ? (
-              <>
-                <UpdatesCard jobId={id} updates={updates} onChanged={loadUpdates} session={session} />
-                {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-                  <ReviewRequestCard job={job} onSave={saveJob} />
-                )}
-              </>
-            ) : (
-              <div className="card">
-                <h3>Project Updates</h3>
-                <div className="empty-state">
-                  Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'Material Selections' && (
-          phaseForStage(job.stage) !== 'opportunity' ? (
+        {tab === 'Plan' && (section === 'approved' || section === 'all') && (
+          afterOpportunity ? (
             <JobMaterialSelectionsPanel jobId={id} job={job} section={section} />
           ) : (
             <div className="card">
@@ -821,8 +797,144 @@ export default function JobDetailPage() {
           )
         )}
 
-        {tab === 'Messages' && (
+        {tab === 'Plan' && section === 'work_orders' && (
+          <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
+        )}
+
+        {/* ------------------------------ BUILD ----------------------------- */}
+        {tab === 'Build' && section === 'updates' && (
+          afterOpportunity ? (
+            <UpdatesCard jobId={id} updates={updates} onChanged={loadUpdates} session={session} />
+          ) : (
+            <div className="card">
+              <h3>Project Updates</h3>
+              <div className="empty-state">
+                Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            </div>
+          )
+        )}
+
+        {tab === 'Build' && section === 'internal' && (
+          <InternalUpdatesPanel jobId={id} session={session} />
+        )}
+
+        {tab === 'Build' && section === 'change_orders' && (
+          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
+        )}
+
+        {tab === 'Build' && section === 'job_costs' && (
+          <ReceiptsCard jobId={id} />
+        )}
+
+        {tab === 'Build' && section === 'draws' && (
+          <>
+            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
+              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
+            )}
+            <DrawsCard jobId={id} />
+          </>
+        )}
+
+        {tab === 'Build' && section === 'pay_apps' && (
+          <PayAppsCard jobId={id} job={job} changeOrders={changeOrders} />
+        )}
+
+        {tab === 'Build' && section === 'waivers' && (
+          <LienWaiversCard jobId={id} job={job} />
+        )}
+
+        {/* ----------------------------- CLOSEOUT --------------------------- */}
+        {tab === 'Closeout' && section === 'punch' && (
+          inFieldPhase ? (
+            <div className="card">
+              <h3>Punch List</h3>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
+              </div>
+              <PunchItemsPanel jobId={id} kind="punch" />
+            </div>
+          ) : (
+            <div className="card">
+              <h3>Punch List</h3>
+              <div className="empty-state">
+                The punch list opens once work is underway (Active or later). This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            </div>
+          )
+        )}
+
+        {tab === 'Closeout' && section === 'warranty' && (
+          inFieldPhase ? (
+            <WarrantyCard jobId={id} job={job} />
+          ) : (
+            <div className="card">
+              <h3>Warranty</h3>
+              <div className="empty-state">
+                The warranty period starts when the job is marked Completed. This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            </div>
+          )
+        )}
+
+        {tab === 'Closeout' && section === 'invoice' && (
+          <>
+            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
+              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
+            )}
+            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
+              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
+            ) : (
+              <div className="card">
+                <h3>Final Invoice</h3>
+                <div className="empty-state">
+                  The final invoice becomes available once this job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
+                </div>
+                <div className="section-actions">
+                  <button className="btn btn-sm" onClick={() => goDest('draws')}>View progress draws →</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'Closeout' && section === 'review' && (
+          isDone ? (
+            <ReviewRequestCard job={job} onSave={saveJob} />
+          ) : (
+            <div className="card">
+              <h3>Review Request</h3>
+              <div className="empty-state">
+                The review request is available once the job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            </div>
+          )
+        )}
+
+        {/* ----------------------- AVAILABLE AT EVERY STAGE ----------------- */}
+        {tab === 'Schedule' && (
+          <>
+            <ScheduleCard job={job} jobId={id} />
+            <ScheduleRiskBadge jobId={id} />
+            <ScheduleDelayCard jobId={id} job={job} />
+            <BlackoutDatesCard jobId={id} />
+          </>
+        )}
+
+        {tab === 'Photos' && (
+          <PhotoGallery jobId={id} title="Job Photos" />
+        )}
+
+        {tab === 'Documents' && (
+          <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
+        )}
+
+        {tab === 'Messages' && section === 'messages' && (
           <JobMessagesCard jobId={id} job={job} />
+        )}
+
+        {tab === 'Messages' && section === 'email' && (
+          <EmailThreadCard jobId={id} job={job} />
         )}
       </div>
     </AppShell>

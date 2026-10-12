@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "check:links": "node scripts/check-links.mjs",
-    "prebuild": "node scripts/check-links.mjs",
+    "check:links": "node scripts/check-links.mjs && node scripts/check-link-destinations.mjs",
+    "prebuild": "node scripts/check-links.mjs && node scripts/check-link-destinations.mjs",
     "build": "next build",
     "start": "next start"
   },
