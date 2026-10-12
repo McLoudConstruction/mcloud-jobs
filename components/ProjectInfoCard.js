@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { phaseForStage } from '../lib/constants';
 import { aiFetch } from '../lib/aiFetch';
 
-export default function ProjectInfoCard({ job, onSave, onTabChange }) {
+export default function ProjectInfoCard({ job, onSave, onNavigate }) {
   const [form, setForm] = useState({
     job_type: job.job_type || '',
     expected_close_date: job.expected_close_date || '',
@@ -84,8 +84,8 @@ export default function ProjectInfoCard({ job, onSave, onTabChange }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <label>Scheduled start date</label>
-              {onTabChange && (
-                <button type="button" onClick={() => onTabChange('Customer', 'portal')}
+              {onNavigate && (
+                <button type="button" onClick={() => onNavigate('portal')}
                   style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
                   Edit automatic customer reminders
                 </button>

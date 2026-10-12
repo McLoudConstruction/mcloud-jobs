@@ -1,24 +1,27 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { billingDestination } from '../lib/links';
 
 // Ordered to roughly follow how a real job actually unfolds — pre-contract
 // decisions first, then everything that happens once work is underway.
 const ITEMS = [
-  { key: 'portal', label: 'Portal Access Granted', tab: 'Customer', section: 'portal' },
-  { key: 'scope', label: 'Scope of Work', tab: 'Estimate', section: 'scope' },
-  { key: 'estimate', label: 'Estimate Sent', tab: 'Estimate', section: 'pricing' },
-  { key: 'contract', label: 'Contract Signed', tab: 'Project Updates' },
-  { key: 'selections', label: 'Material Selections', tab: 'Material Selections' },
-  { key: 'workOrders', label: 'Work Orders Issued', tab: 'Financials', section: 'work_orders' },
-  { key: 'receipts', label: 'Receipts Logged', tab: 'Financials', section: 'receipts' },
-  { key: 'photos', label: 'Photos', tab: 'Photos' },
-  { key: 'updates', label: 'Progress Updates Sent', tab: 'Project Updates' },
-  { key: 'changeOrders', label: 'Change Orders Issued', tab: 'Financials', section: 'change_orders' },
-  { key: 'invoicing', label: 'Invoicing', tab: 'Financials', section: 'invoicing' },
+  { key: 'portal', label: 'Portal Access Granted', dest: 'portal' },
+  { key: 'scope', label: 'Scope of Work', dest: 'scope' },
+  { key: 'estimate', label: 'Estimate Sent', dest: 'proposals' },
+  { key: 'contract', label: 'Contract Signed', dest: 'contract' },
+  { key: 'selections', label: 'Material Selections', dest: 'selections' },
+  { key: 'workOrders', label: 'Work Orders Issued', dest: 'workOrders' },
+  { key: 'receipts', label: 'Receipts Logged', dest: 'jobCosts' },
+  { key: 'photos', label: 'Photos', dest: 'photos' },
+  { key: 'updates', label: 'Progress Updates Sent', dest: 'updates' },
+  { key: 'changeOrders', label: 'Change Orders Issued', dest: 'changeOrders' },
+  // Billing lives in two places (draws while building, the final invoice at
+  // closeout), so this one picks by the job's current stage.
+  { key: 'invoicing', label: 'Invoicing', dest: job => billingDestination(job.stage) },
 ];
 
-export default function ProjectMilestonesCard({ job, jobId, onTabChange }) {
+export default function ProjectMilestonesCard({ job, jobId, onNavigate }) {
   const [counts, setCounts] = useState({});
 
   const load = useCallback(async () => {
@@ -90,7 +93,7 @@ export default function ProjectMilestonesCard({ job, jobId, onTabChange }) {
           const count = counts[item.key];
           const showCount = ['selections', 'workOrders', 'receipts', 'photos', 'updates', 'changeOrders', 'invoicing'].includes(item.key);
           return (
-            <button key={item.key} className="milestone-row" onClick={() => onTabChange?.(item.tab, item.section)}>
+            <button key={item.key} className="milestone-row" onClick={() => onNavigate?.(typeof item.dest === 'function' ? item.dest(job) : item.dest)}>
               <span className={`milestone-check ${done ? 'milestone-check-done' : ''}`}>{done ? '✓' : ''}</span>
               <span className="milestone-label">{item.label}</span>
               {showCount && count > 0 && <span className="milestone-count">{count}</span>}
