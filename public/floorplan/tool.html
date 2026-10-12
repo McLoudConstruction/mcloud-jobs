@@ -227,6 +227,37 @@ details.sched .ck { margin-top: 4px; }
 .cmprow { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--sheet); font-size: 13px; }
 .cmprow span { color: var(--muted); font-size: 12px; }
 
+/* ===== Embedded in McLoudJobs: look native ===== */
+/* match the host document's color-scheme so the frame stays transparent */
+html.host, html.host[data-theme="dark"] { color-scheme: normal; }
+html.host body { background: transparent; padding: 0 0 20px; font-size: 13.5px; }
+html.host .wrap { max-width: none; gap: 12px; }
+html.host .brand { display: none; }
+html.host .top { display: block; }
+html.host .sum { width: 100%; gap: 6px 36px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+html.host .sum .k { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
+html.host .sum .v { font-family: var(--font-body); font-size: 17px; font-weight: 700; color: var(--ink); }
+html.host .mono { font-family: var(--font-body); }
+html.host .canvasWrap, html.host .panel, html.host .strip, html.host .insp { border-radius: 8px; }
+html.host .tgroup { border-radius: 8px; }
+html.host .tbtn, html.host .chip-btn, html.host .ltab, html.host .btn, html.host .ctx select, html.host .lenbox input { border-radius: 5px; }
+html.host .layouts .lbl, html.host .ctx .lbl { font-weight: 600; }
+html.host .ltab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+html.host .tabs { position: static; margin: 10px 12px 0; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+html.host .tab { min-height: 34px; padding: 6px 12px; border: 0; border-right: 1px solid var(--line); border-radius: 0; font-family: var(--font-body); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+html.host .tab:last-child { border-right: 0; }
+html.host .tab:hover { color: var(--ink); background: var(--sheet); }
+html.host .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+html.host .tab[aria-selected="true"] .n { background: rgba(255,255,255,.25); color: #fff; }
+html.host .pane h3 { font-family: var(--font-body); font-size: 12.5px; letter-spacing: 0.08em; color: var(--accent); border-left: 3px solid var(--accent); padding-left: 10px; margin-top: 10px; }
+html.host .insp { border-color: var(--accent); }
+html.host .insp-h strong { font-family: var(--font-body); font-size: 15px; letter-spacing: 0; text-transform: none; }
+html.host .btn.primary { color: var(--accent-ink); }
+html.host { --fph: 800px; }
+html.host .canvasWrap { height: clamp(440px, calc(var(--fph) - 340px), 760px) !important; }
+html.host .panel { position: static; max-height: none; }
+html.host body { overflow-y: hidden; }
+
 </style>
 <div class="wrap">
   <header class="top">
@@ -3633,6 +3664,49 @@ if (EMBED) {
   });
   window.parent.postMessage({ type: 'fp:ready' }, '*');
 }
+
+/* ===== Host fit: when embedded in McLoudJobs, wear its colors, type and theme ===== */
+function hostFit() {
+  if (!EMBED) return;
+  let P;
+  try { P = window.parent.document.documentElement; if (!P) return; } catch (e) { return; }
+  const cs = window.parent.getComputedStyle(P), g = n => cs.getPropertyValue(n).trim();
+  const dark = P.getAttribute('data-theme') === 'dark';
+  const hex = c => { const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c || ''); if (!m) return null; let h = m[1]; if (h.length === 3) h = h.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16)); };
+  const mix = (a, b, t) => { const A = hex(a), B = hex(b); if (!A || !B) return a; return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+  const card = g('--card-bg'), panel = g('--panel'), ink = g('--ink'), soft = g('--ink-soft'), line = g('--panel-line') || g('--line'), accent = g('--accent'), gold = g('--gold');
+  if (!hex(card) || !hex(ink)) return; // host tokens missing: keep the tool's own look
+  const root = document.documentElement, set = (k, v) => { if (v) root.style.setProperty(k, v); };
+  set('--bg', g('--bg')); set('--surface', panel || card); set('--surface2', mix(panel || card, ink, 0.06)); set('--sheet', card);
+  set('--ink', ink); set('--muted', soft); set('--line', line);
+  set('--accent', accent); set('--accent-ink', '#ffffff'); set('--accent-soft', mix(card, accent, dark ? 0.28 : 0.14));
+  set('--sel', gold || accent); set('--wall', ink);
+  set('--grid', mix(card, ink, 0.07)); set('--grid-major', mix(card, ink, 0.17));
+  const ff = g('--font-family'); if (ff) { set('--font-body', ff); set('--font-display', ff); }
+  root.classList.add('host');
+  // the iframe itself: no frame of its own, so the page reads as one surface
+  try { const fe = window.frameElement; if (fe) { fe.style.border = '0'; fe.style.borderRadius = '0'; fe.style.background = 'transparent'; fe.style.marginTop = '10px'; fe.style.minHeight = '0'; } } catch (e) { /* ignore */ }
+  root.setAttribute('data-theme', dark ? 'dark' : 'light'); // switches the semantic palette (good/warn/info, room tints)
+  if (typeof themeChanged === 'function') themeChanged();
+}
+/* the frame grows with its content, so the job page scrolls as one page and the sheet height follows the browser window */
+function hostSize() {
+  try {
+    const fe = window.frameElement, w = document.querySelector('.wrap'); if (!fe || !w) return;
+    document.documentElement.style.setProperty('--fph', window.parent.innerHeight + 'px');
+    const h = Math.ceil(w.getBoundingClientRect().height + 24);
+    if (Math.abs((parseInt(fe.style.height, 10) || 0) - h) > 2) fe.style.height = h + 'px';
+  } catch (e) { /* ignore */ }
+}
+try {
+  if (EMBED) {
+    hostFit();
+    new ResizeObserver(hostSize).observe(document.querySelector('.wrap'));
+    window.parent.addEventListener('resize', () => { hostSize(); try { resize(); } catch (e) { /* ignore */ } });
+    hostSize();
+    new MutationObserver(hostFit).observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+} catch (e) { /* ignore */ }
 
 boot();
 
