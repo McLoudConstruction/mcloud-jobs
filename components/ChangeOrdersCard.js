@@ -8,8 +8,10 @@ import { aiFetch } from '../lib/aiFetch';
 const REASON_CATEGORY_KEYS = Object.keys(CHANGE_ORDER_REASON_CATEGORIES);
 const EMPTY_FORM = { description: '', amount: '', co_date: new Date().toISOString().slice(0, 10), reason_category: '', reason: '' };
 
-export default function ChangeOrdersCard({ jobId, changeOrders, onChanged }) {
+export default function ChangeOrdersCard({ jobId, changeOrders, onChanged, autoOpen }) {
   const [showForm, setShowForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setShowForm(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

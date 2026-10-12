@@ -20,11 +20,13 @@ function formatAction(a) {
 
 const EMPTY_FORM = { company_id: '', trade: '', description: '', amount: '' };
 
-export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress }) {
+export default function WorkOrdersCard({ jobId, scopeItems = [], projectAddress, autoOpen }) {
   const [workOrders, setWorkOrders] = useState([]);
   const [subcontractors, setSubcontractors] = useState([]);
   const [tradeActions, setTradeActions] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setShowForm(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedScope, setSelectedScope] = useState([]);
   const [saving, setSaving] = useState(false);

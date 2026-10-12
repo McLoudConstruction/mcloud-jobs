@@ -55,7 +55,7 @@ function fmtTimestamp(iso) {
   return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export default function InternalUpdatesPanel({ jobId, session }) {
+export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
   const createdByEmail = session?.user?.email || null;
   const { isOnline, pendingCount, failedCount, pending, sync } = useOfflineSync(jobId);
   const { settings } = useSettings();
@@ -79,6 +79,8 @@ export default function InternalUpdatesPanel({ jobId, session }) {
   const [postError, setPostError] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setFormOpen(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [expandedId, setExpandedId] = useState(null);
 
   // Editing an already-posted update. Kept separate from the draft state

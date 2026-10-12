@@ -2278,3 +2278,23 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 .camera-review-controls .btn{ min-width: 120px; text-align: center; justify-content: center; }
+
+/* ---------- Job page: Quick actions menu ---------- */
+.quick-actions{ position: relative; display: inline-block; }
+.quick-actions-menu{
+  position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 30;
+  min-width: 250px; max-height: 70vh; overflow-y: auto;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18); padding: 4px 0;
+}
+.quick-actions-group + .quick-actions-group{ border-top: 1px solid var(--line); }
+.quick-actions-heading{
+  padding: 8px 14px 4px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+}
+.quick-actions-heading.is-current{ color: var(--accent); font-weight: 600; }
+.quick-actions-item{
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 8px 14px; font: inherit; font-size: 12.5px; color: var(--heading); cursor: pointer;
+}
+.quick-actions-item:hover:not(:disabled){ background: var(--panel); }
+.quick-actions-item:disabled{ opacity: .55; cursor: default; }

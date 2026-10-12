@@ -7,6 +7,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import BottomSheet from '../../../components/BottomSheet';
+import JobQuickActions, { buildQuickActions } from '../../../components/JobQuickActions';
 import PhotoGallery from '../../../components/PhotoGallery';
 import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
 import JobCostSummary from '../../../components/JobCostSummary';
@@ -182,6 +183,9 @@ export default function JobDetailPage() {
   const urlNamedTabRef = useRef(false);
   const billingPendingRef = useRef(false);
   const landedRef = useRef(false);
+  // Which destination should open with its "new" form already showing
+  // (set by Quick actions or a ?new=1 link; cleared by any other navigation).
+  const [autoOpen, setAutoOpen] = useState(null);
 
   // Central place to change tabs so section always lands somewhere valid:
   // explicit section if given, else that tab's first section, else none.
@@ -195,6 +199,7 @@ export default function JobDetailPage() {
     const resolvedSection = sectionKey || target.sections?.[0]?.key || null;
     setTab(tabKey);
     setSection(resolvedSection);
+    setAutoOpen(null);
     syncUrl(tabKey, resolvedSection);
   }, []);
 
@@ -202,6 +207,7 @@ export default function JobDetailPage() {
   // Invoicing/Receipts sub-nav) without changing the tab itself.
   const goToSection = useCallback((sectionKey) => {
     setSection(sectionKey);
+    setAutoOpen(null);
     syncUrl(tab, sectionKey);
   }, [tab]);
 
@@ -212,10 +218,17 @@ export default function JobDetailPage() {
     if (d) goToTab(d.tab, d.section);
   }, [goToTab]);
 
+  // Same, but the destination opens with its "new ..." form ready to fill in.
+  const goCreate = useCallback((destination) => {
+    goDest(destination);
+    setAutoOpen(destination);
+  }, [goDest]);
+
   function syncUrl(tabKey, sectionKey) {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     params.set('tab', tabKey);
+    params.delete('new');
     if (sectionKey) params.set('section', sectionKey); else params.delete('section');
     router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   }
@@ -231,6 +244,12 @@ export default function JobDetailPage() {
       urlNamedTabRef.current = true;
       billingPendingRef.current = target.stageAware === 'billing';
       goToTab(target.tab, target.section);
+      // ?new=1 (jobHref(id, dest, { new: 1 })) opens that destination's create form.
+      if (params.get('new')) {
+        const resolved = target.section || TABS.find(t => t.key === target.tab)?.sections?.[0]?.key || null;
+        const name = Object.keys(JOB_DESTINATIONS).find(k => JOB_DESTINATIONS[k].tab === target.tab && (JOB_DESTINATIONS[k].section || null) === resolved);
+        if (name) setAutoOpen(name);
+      }
     }
   }, [goToTab]);
 
@@ -499,10 +518,15 @@ export default function JobDetailPage() {
 
   const activeTabDef = TABS.find(t => t.key === tab) || TABS[0];
   const currentStageTab = stageTab(job.stage);
+
   const afterOpportunity = phaseForStage(job.stage) !== 'opportunity';
   const inFieldPhase = ['active', 'completed', 'invoiced', 'paid'].includes(job.stage);
   const isDone = ['completed', 'invoiced', 'paid'].includes(job.stage);
-
+  const quickGroups = buildQuickActions({
+    job, role, stageTab: currentStageTab, afterOpportunity, inFieldPhase, isDone,
+    inviting, go: goDest, create: goCreate, push: (href) => router.push(href),
+    onRfp: () => setRfpPanelOpen(true), onInvite: invitePortal,
+  });
   return (
     <AppShell>
       <div className="container">
@@ -560,22 +584,7 @@ export default function JobDetailPage() {
                 shortcuts that duplicate their own tabs — on mobile these
                 move into the ever-present FAB below instead of crowding
                 this row. */}
-            {!isMobile && (
-              <>
-                <button className="btn btn-sm" onClick={() => goDest('messages')} title="Messages" aria-label="Messages">
-                  <MessagesIcon width={16} height={16} />
-                </button>
-                {(role === 'owner' || role === 'estimator') && (
-                  <button className="btn btn-sm" onClick={() => setRfpPanelOpen(true)}>RFP</button>
-                )}
-                <button className="btn btn-sm" onClick={() => goDest('updates')}>
-                  <ProjectFeedIcon width={16} height={16} /> Project Updates
-                </button>
-                <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
-                  {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
-                </button>
-              </>
-            )}
+            {!isMobile && <JobQuickActions groups={quickGroups} />}
             {/* Stage Advance dropped on mobile — it's an easy accidental
                 tap on a small screen next to Close Lost/Reopen, and the
                 job's stage badge is already visible right above. */}
@@ -598,28 +607,16 @@ export default function JobDetailPage() {
               <PlusIcon width={24} height={24} />
             </button>
             <BottomSheet open={fabOpen} onClose={() => setFabOpen(false)} title="Quick actions">
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('internalUpdates'); }}>
-                <InternalUpdatesIcon className="more-sheet-icon" />
-                Internal Updates
-              </button>
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('messages'); }}>
-                <MessagesIcon className="more-sheet-icon" />
-                Messages
-              </button>
-              {(role === 'owner' || role === 'estimator') && (
-                <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); setRfpPanelOpen(true); }}>
-                  <ProjectFeedIcon className="more-sheet-icon" />
-                  RFP
-                </button>
-              )}
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); goDest('updates'); }}>
-                <ProjectFeedIcon className="more-sheet-icon" />
-                Project Updates
-              </button>
-              <button type="button" className="more-sheet-link" onClick={() => { setFabOpen(false); invitePortal(); }} disabled={inviting}>
-                <PersonIcon className="more-sheet-icon" />
-                {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
-              </button>
+              {quickGroups.map(g => (
+                <div key={g.key}>
+                  <div className={`quick-actions-heading ${g.current ? 'is-current' : ''}`}>{g.label}</div>
+                  {g.items.map(item => (
+                    <button key={item.key} type="button" className="more-sheet-link" disabled={item.disabled} onClick={() => { setFabOpen(false); item.run(); }}>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
             </BottomSheet>
           </>
         )}
@@ -803,13 +800,13 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Plan' && section === 'work_orders' && (
-          <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
+          <WorkOrdersCard autoOpen={autoOpen === 'workOrders'} jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
         )}
 
         {/* ------------------------------ BUILD ----------------------------- */}
         {tab === 'Build' && section === 'updates' && (
           afterOpportunity ? (
-            <UpdatesCard jobId={id} updates={updates} onChanged={loadUpdates} session={session} />
+            <UpdatesCard autoOpen={autoOpen === 'updates'} jobId={id} updates={updates} onChanged={loadUpdates} session={session} />
           ) : (
             <div className="card">
               <h3>Project Updates</h3>
@@ -821,15 +818,15 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Build' && section === 'internal' && (
-          <InternalUpdatesPanel jobId={id} session={session} />
+          <InternalUpdatesPanel autoOpen={autoOpen === 'internalUpdates'} jobId={id} session={session} />
         )}
 
         {tab === 'Build' && section === 'change_orders' && (
-          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
+          <ChangeOrdersCard autoOpen={autoOpen === 'changeOrders'} jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
         )}
 
         {tab === 'Build' && section === 'job_costs' && (
-          <ReceiptsCard jobId={id} />
+          <ReceiptsCard jobId={id} autoOpen={autoOpen === 'jobCosts'} />
         )}
 
         {tab === 'Build' && section === 'draws' && (
@@ -837,7 +834,7 @@ export default function JobDetailPage() {
             {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
               <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
             )}
-            <DrawsCard jobId={id} />
+            <DrawsCard jobId={id} autoOpen={autoOpen === 'draws'} />
           </>
         )}
 
@@ -846,7 +843,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Build' && section === 'waivers' && (
-          <LienWaiversCard jobId={id} job={job} />
+          <LienWaiversCard autoOpen={autoOpen === 'waivers'} jobId={id} job={job} />
         )}
 
         {/* ----------------------------- CLOSEOUT --------------------------- */}
@@ -857,7 +854,7 @@ export default function JobDetailPage() {
               <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
                 Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
               </div>
-              <PunchItemsPanel jobId={id} kind="punch" />
+              <PunchItemsPanel jobId={id} kind="punch" autoOpen={autoOpen === 'punch'} />
             </div>
           ) : (
             <div className="card">

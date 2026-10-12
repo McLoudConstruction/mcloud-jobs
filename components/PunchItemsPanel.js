@@ -12,12 +12,14 @@ const EMPTY = { title: '', description: '', location: '', assigned_company_id: '
 
 // Staff view of punch items (kind 'punch') or warranty claims (kind 'warranty')
 // on one job. Used by the Closeout tab's Punch List and Warranty sections.
-export default function PunchItemsPanel({ jobId, kind, onChanged }) {
+export default function PunchItemsPanel({ jobId, kind, onChanged, autoOpen }) {
   const isWarranty = kind === 'warranty';
   const [items, setItems] = useState([]);
   const [subs, setSubs] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setShowForm(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState(EMPTY);
   const [filter, setFilter] = useState('open');
   const [busy, setBusy] = useState(false);

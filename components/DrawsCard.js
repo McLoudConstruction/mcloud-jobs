@@ -11,9 +11,11 @@ function fmtMoney(v) {
 const STATUS_LABELS = { not_sent: 'Not Sent', sent: 'Sent', paid: 'Paid' };
 const EMPTY_FORM = { description: '', amount: '' };
 
-export default function DrawsCard({ jobId }) {
+export default function DrawsCard({ jobId, autoOpen }) {
   const [draws, setDraws] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setShowForm(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

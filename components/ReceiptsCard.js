@@ -12,7 +12,7 @@ function fmtMoney(v) {
 const EMPTY_RECEIPT_FORM = { vendor_name: '', amount: '', receipt_date: new Date().toISOString().slice(0, 10), category: 'materials', payment_status: 'paid', notes: '' };
 const EMPTY_MANUAL_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
 
-export default function ReceiptsCard({ jobId }) {
+export default function ReceiptsCard({ jobId, autoOpen }) {
   const [receipts, setReceipts] = useState([]);
   const [costs, setCosts] = useState([]);
   const [urls, setUrls] = useState({});
@@ -27,6 +27,8 @@ export default function ReceiptsCard({ jobId }) {
   const fileInputRef = useRef(null);
 
   const [showManualForm, setShowManualForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) setShowManualForm(true); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM);
   const [savingManual, setSavingManual] = useState(false);
 

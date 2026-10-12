@@ -16,8 +16,10 @@ function fmtDateTime(v) {
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export default function UpdatesCard({ jobId, updates, onChanged, session }) {
+export default function UpdatesCard({ jobId, updates, onChanged, session, autoOpen }) {
   const [showForm, setShowForm] = useState(false);
+  // Opened by the job's Quick actions menu / a ?new=1 link.
+  useEffect(() => { if (autoOpen) openForm(); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState({
     update_date: new Date().toISOString().slice(0, 10),
     work_completed: '', upcoming_work: '', issues_notes: '', next_steps: '', estimated_completion: '',
