@@ -56,14 +56,13 @@ import PayAppsCard from '../../../components/PayAppsCard';
 import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
 import WarrantyCard from '../../../components/WarrantyCard';
-import ProposalsCard from '../../../components/ProposalsCard';
 import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
 import FloorplanPanel from '../../../components/FloorplanPanel';
 import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
 
 // Job page structure (Oct 2026): tabs follow the life of a project instead
 // of the feature that produced the data.
-//   Sell      winning the work   - customer, scope, cost, pricing, estimate, floorplan
+//   Sell      winning the work   - scope, cost, pricing, estimate, floorplan
 //   Plan      getting ready      - budget, material selections, work orders
 //   Build     doing the work     - updates, change orders, job costs, draws, pay apps, waivers
 //   Closeout  finishing up       - punch list, warranty, final invoice, review request
@@ -77,11 +76,17 @@ import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDest
 // build time (scripts/check-link-destinations.mjs) - add a section here and
 // a destination there, and old URLs are handled by normalizeJobLink().
 const TABS = [
-  { key: 'Overview', label: 'Overview', icon: OverviewIcon, group: 'home' },
+  {
+    key: 'Overview', label: 'Overview', icon: OverviewIcon, group: 'home',
+    sections: [
+      { key: 'summary', label: 'Summary' },
+      { key: 'customer', label: 'Customer' },
+      { key: 'financials', label: 'Financials' },
+    ],
+  },
   {
     key: 'Sell', label: 'Sell', icon: CalculatorIcon, group: 'stage',
     sections: [
-      { key: 'details', label: 'Customer' },
       { key: 'portal', label: 'Portal & Notifications' },
       { key: 'scope', label: 'Scope' },
       { key: 'cost', label: 'Cost' },
@@ -678,14 +683,11 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {tab === 'Overview' && (
+        {tab === 'Overview' && section === 'summary' && (
           <>
             <div className="overview-split">
               <ProjectInfoCard job={job} onSave={saveJob} onNavigate={goDest} />
               <ProjectMilestonesCard job={job} jobId={id} onNavigate={goDest} />
-            </div>
-            <div style={{ marginTop: 20 }}>
-              <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
             </div>
             {(['new', 'inspected', 'proposal_delivered'].includes(job.stage) || job.stage === 'lost') && (
               <div className="card" style={{ marginTop: 20 }}>
@@ -726,8 +728,12 @@ export default function JobDetailPage() {
         )}
 
         {/* ------------------------------ SELL ------------------------------ */}
-        {tab === 'Sell' && section === 'details' && (
+        {tab === 'Overview' && section === 'customer' && (
           <CustomerInfoCard job={job} onSave={saveJob} />
+        )}
+
+        {tab === 'Overview' && section === 'financials' && (
+          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
         )}
 
         {tab === 'Sell' && section === 'portal' && (
@@ -771,7 +777,6 @@ export default function JobDetailPage() {
                 )}
               </div>
             </div>
-            <ProposalsCard job={job} jobId={id} onSave={saveJob} />
           </>
         )}
 
