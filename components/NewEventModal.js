@@ -15,12 +15,13 @@ function todayISO() {
 // description, who on staff needs it on their calendar, and a date/time.
 // Saving inserts into schedule_events and hands the new row back via
 // onCreated so the calendar page can refresh without a full reload.
-export default function NewEventModal({ open, onClose, onCreated, defaultDate }) {
+export default function NewEventModal({ open, onClose, onCreated, defaultDate, defaultEventType = 'meeting', title = 'New Event' }) {
   const [projects, setProjects] = useState([]);
   const [staff, setStaff] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [projectId, setProjectId] = useState('');
-  const [eventType, setEventType] = useState('meeting');
+  const [eventType, setEventType] = useState(defaultEventType);
+  const [subPick, setSubPick] = useState('');
   const [description, setDescription] = useState('');
   const [assignedStaffIds, setAssignedStaffIds] = useState([]);
   const [invitedCompanyIds, setInvitedCompanyIds] = useState([]);
@@ -32,11 +33,14 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
   useEffect(() => {
     if (!open) return;
     setEventDate(defaultDate || todayISO());
+    setEventType(defaultEventType);
     Promise.all([
       supabase.from('opportunities').select('id, project, contact_name, company').order('created_at', { ascending: false }).limit(200),
       supabase.from('jobs').select('id, project_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
       supabase.from('staff_users').select('id, full_name, role').eq('status', 'active').order('full_name'),
-      supabase.from('companies').select('id, company_name').order('company_name'),
+      // Subcontractors only: the companies table also holds customers,
+      // suppliers, etc., none of whom have a Sub Portal calendar to invite to.
+      supabase.from('companies').select('id, company_name').eq('company_type', 'Subcontractor').order('company_name'),
     ]).then(([oppRes, jobRes, staffRes, companyRes]) => {
       const oppOptions = (oppRes.data || []).map(o => ({
         id: `opportunity:${o.id}`, label: o.project || o.contact_name || 'Untitled lead',
@@ -53,18 +57,23 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
       setStaff(staffRes.data || []);
       setCompanies(companyRes.data || []);
     });
-  }, [open, defaultDate]);
+  }, [open, defaultDate, defaultEventType]);
 
   function toggleStaff(id) {
     setAssignedStaffIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   }
-  function toggleCompany(id) {
-    setInvitedCompanyIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  function addCompany(id) {
+    if (!id) return;
+    setInvitedCompanyIds(prev => prev.includes(id) ? prev : [...prev, id]);
+    setSubPick('');
+  }
+  function removeCompany(id) {
+    setInvitedCompanyIds(prev => prev.filter(c => c !== id));
   }
 
   function reset() {
-    setProjectId(''); setEventType('meeting'); setDescription('');
-    setAssignedStaffIds([]); setInvitedCompanyIds([]); setEventTime(''); setError('');
+    setProjectId(''); setEventType(defaultEventType); setDescription('');
+    setAssignedStaffIds([]); setInvitedCompanyIds([]); setSubPick(''); setEventTime(''); setError('');
   }
 
   async function submit(e) {
@@ -93,7 +102,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
 
   return (
     <PopupModal open={open} onClose={() => { reset(); onClose(); }} maxWidth={480}>
-      <h3>New Event</h3>
+      <h3>{title}</h3>
       <form onSubmit={submit}>
         <label>Project (optional)</label>
         <SearchableSelect
@@ -140,26 +149,34 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate })
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>
               Shows this event on the invited company's own Sub Portal calendar.
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-              {companies.map(c => {
-                const active = invitedCompanyIds.includes(c.id);
-                return (
-                  <button
-                    type="button"
-                    key={c.id}
-                    onClick={() => toggleCompany(c.id)}
-                    style={{
-                      padding: '6px 12px', borderRadius: 16, fontSize: 12.5, cursor: 'pointer',
-                      border: `1px solid ${active ? 'var(--accent)' : 'var(--panel-line)'}`,
-                      background: active ? 'var(--accent)' : 'transparent',
-                      color: active ? '#fff' : 'var(--ink)',
-                    }}
-                  >
-                    {c.company_name}
-                  </button>
-                );
-              })}
-            </div>
+            <select value={subPick} onChange={e => addCompany(e.target.value)}>
+              <option value="">Select a subcontractor…</option>
+              {companies.filter(c => !invitedCompanyIds.includes(c.id)).map(c => (
+                <option key={c.id} value={c.id}>{c.company_name}</option>
+              ))}
+            </select>
+            {invitedCompanyIds.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                {invitedCompanyIds.map(id => {
+                  const c = companies.find(x => x.id === id);
+                  if (!c) return null;
+                  return (
+                    <button
+                      type="button"
+                      key={id}
+                      onClick={() => removeCompany(id)}
+                      aria-label={`Remove ${c.company_name}`}
+                      style={{
+                        padding: '6px 12px', borderRadius: 16, fontSize: 12.5, cursor: 'pointer',
+                        border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff',
+                      }}
+                    >
+                      {c.company_name} ×
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 

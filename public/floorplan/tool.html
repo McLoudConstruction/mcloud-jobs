@@ -402,7 +402,66 @@ const FINISHES = [
 
   { id: 'T-CASE', name: 'Casing 2-1/4 in, painted', cat: 'Trim', applies: 'casing', basis: 'LF', waste: 10, pack: { size: 8, unit: 'PC' },
     scope: 'Furnish and install 2-1/4 in painted wood casing at doors, windows and cased openings.',
-    req: [R('Prime and paint casing', 'LF', 'net', 1)] }
+    req: [R('Prime and paint casing', 'LF', 'net', 1)] },
+
+  /* ---- new cabinets, tops and bath finishes (remodel) ---- */
+  { id: 'K-BASE-STOCK', name: 'Base cabinets, stock', cat: 'Cabinets and tops', applies: 'cabinet', basis: 'LF', waste: 0,
+    scope: 'Furnish and install stock base cabinets, leveled and secured to the wall, with doors, drawers and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1.5)] },
+  { id: 'K-BASE-SEMI', name: 'Base cabinets, semi-custom', cat: 'Cabinets and tops', applies: 'cabinet', basis: 'LF', waste: 0,
+    scope: 'Furnish and install semi-custom base cabinets, leveled and secured to the wall, with doors, drawers and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1.5)] },
+  { id: 'K-BASE-CUSTOM', name: 'Base cabinets, custom', cat: 'Cabinets and tops', applies: 'cabinet', basis: 'LF', waste: 0,
+    scope: 'Furnish and install custom base cabinets built to the drawn run, leveled and secured to the wall, with doors, drawers and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1.5)] },
+  { id: 'K-WALL-STOCK', name: 'Wall cabinets, stock', cat: 'Cabinets and tops', applies: 'upper', basis: 'LF', waste: 0,
+    scope: 'Furnish and install stock wall cabinets, hung level and anchored to studs, with doors and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1)] },
+  { id: 'K-WALL-SEMI', name: 'Wall cabinets, semi-custom', cat: 'Cabinets and tops', applies: 'upper', basis: 'LF', waste: 0,
+    scope: 'Furnish and install semi-custom wall cabinets, hung level and anchored to studs, with doors and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1)] },
+  { id: 'K-WALL-CUSTOM', name: 'Wall cabinets, custom', cat: 'Cabinets and tops', applies: 'upper', basis: 'LF', waste: 0,
+    scope: 'Furnish and install custom wall cabinets built to the drawn run, hung level and anchored to studs, with doors and hardware.',
+    req: [R('Cabinet pulls or knobs', 'EA', 'net', 1)] },
+  { id: 'CT-LAM', name: 'Countertop, laminate', cat: 'Cabinets and tops', applies: 'counter', basis: 'SF', waste: 10,
+    scope: 'Furnish and install post-formed laminate countertop with sink cutout, sealed at the wall and sink.' },
+  { id: 'CT-BLOCK', name: 'Countertop, butcher block', cat: 'Cabinets and tops', applies: 'counter', basis: 'SF', waste: 10,
+    scope: 'Furnish and install butcher block countertop with sink cutout, sanded and sealed.' },
+  { id: 'CT-GRAN', name: 'Countertop, granite', cat: 'Cabinets and tops', applies: 'counter', basis: 'SF', waste: 10,
+    scope: 'Template, fabricate and install granite countertop with edge profile and sink cutout, sealed.' },
+  { id: 'CT-QTZ', name: 'Countertop, quartz', cat: 'Cabinets and tops', applies: 'counter', basis: 'SF', waste: 10,
+    scope: 'Template, fabricate and install quartz countertop with edge profile and sink cutout.' },
+  { id: 'BS-SUBWAY', name: 'Backsplash tile, 3x6 subway', cat: 'Walls', applies: 'backsplash', basis: 'SF', waste: 12, pack: { size: 10, unit: 'CTN' },
+    scope: 'Furnish and install 3x6 ceramic backsplash tile in thinset with grout, caulked at the counter.',
+    req: [R('Thinset mortar, 50 lb', 'BAG', 'net', 0.0125), R('Grout, 25 lb', 'BAG', 'net', 0.01)] },
+  { id: 'BS-MOSAIC', name: 'Backsplash tile, glass mosaic', cat: 'Walls', applies: 'backsplash', basis: 'SF', waste: 12, pack: { size: 10, unit: 'CTN' },
+    scope: 'Furnish and install glass mosaic backsplash tile in thinset with grout, caulked at the counter.',
+    req: [R('Thinset mortar, 50 lb', 'BAG', 'net', 0.0125), R('Grout, 25 lb', 'BAG', 'net', 0.01)] },
+  { id: 'VN-24', name: 'Vanity 24 in, with top and sink', cat: 'Cabinets and tops', applies: 'vanity', basis: 'EA', waste: 0,
+    scope: 'Furnish and install 24 in vanity cabinet with top and sink, connected to supply and drain.',
+    req: [R('Faucet, bath', 'EA', 'count', 1)] },
+  { id: 'VN-30', name: 'Vanity 30 in, with top and sink', cat: 'Cabinets and tops', applies: 'vanity', basis: 'EA', waste: 0,
+    scope: 'Furnish and install 30 in vanity cabinet with top and sink, connected to supply and drain.',
+    req: [R('Faucet, bath', 'EA', 'count', 1)] },
+  { id: 'VN-36', name: 'Vanity 36 in, with top and sink', cat: 'Cabinets and tops', applies: 'vanity', basis: 'EA', waste: 0,
+    scope: 'Furnish and install 36 in vanity cabinet with top and sink, connected to supply and drain.',
+    req: [R('Faucet, bath', 'EA', 'count', 1)] },
+  { id: 'VN-48', name: 'Vanity 48 in, with top and sink', cat: 'Cabinets and tops', applies: 'vanity', basis: 'EA', waste: 0,
+    scope: 'Furnish and install 48 in vanity cabinet with top and sink, connected to supply and drain.',
+    req: [R('Faucet, bath', 'EA', 'count', 1)] },
+  { id: 'VN-60D', name: 'Vanity 60 in double, with top and sinks', cat: 'Cabinets and tops', applies: 'vanity', basis: 'EA', waste: 0,
+    scope: 'Furnish and install 60 in double vanity cabinet with top and two sinks, connected to supply and drain.',
+    req: [R('Faucet, bath', 'EA', 'count', 2)] },
+  { id: 'MR-FRAMED', name: 'Vanity mirror, framed', cat: 'Cabinets and tops', applies: 'mirror', basis: 'EA', waste: 0,
+    scope: 'Furnish and install framed vanity mirror, anchored to the wall.' },
+  { id: 'MR-MED', name: 'Medicine cabinet, recessed', cat: 'Cabinets and tops', applies: 'mirror', basis: 'EA', waste: 0,
+    scope: 'Furnish and install recessed medicine cabinet with mirror door, framed into the wall.' },
+  { id: 'SH-FRAMELESS', name: 'Shower door, frameless glass', cat: 'Plumbing', applies: 'shower', basis: 'EA', waste: 0,
+    scope: 'Furnish and install frameless glass shower door with hardware, sealed.' },
+  { id: 'SH-FRAMED', name: 'Shower door, framed glass', cat: 'Plumbing', applies: 'shower', basis: 'EA', waste: 0,
+    scope: 'Furnish and install framed glass shower door with hardware, sealed.' },
+  { id: 'SH-CURTAIN', name: 'Curtain rod and liner', cat: 'Plumbing', applies: 'shower', basis: 'EA', waste: 0,
+    scope: 'Furnish and install tub curtain rod, curtain liner and rings.' }
 ];
 const FIN = {};
 FINISHES.forEach(f => { FIN[f.id] = f; });
@@ -424,8 +483,16 @@ const FIXTURES = {
     req: [R('P-trap and supply stops kit', 'KIT', 'count', 1)] },
   tub: { label: 'Tub / shower', cat: 'Plumbing', name: 'Tub / shower unit', scope: 'Furnish and install tub or shower unit with valve and trim, connected to supply and drain.', w: 60, d: 30 },
   sink: { label: 'Sink', cat: 'Plumbing', name: 'Kitchen sink with faucet', scope: 'Furnish and install kitchen sink with faucet, connected to supply and drain.', w: 33, d: 22,
-    req: [R('P-trap and supply stops kit', 'KIT', 'count', 1)] }
+    req: [R('P-trap and supply stops kit', 'KIT', 'count', 1)] },
+  /* Existing items that cannot move. Drawn on the sketch so the design works around them. They never enter the takeoff. */
+  post: { label: 'Support post', fixed: true, tag: 'POST', w: 6, d: 6 },
+  stack: { label: 'Plumbing stack', fixed: true, tag: 'STACK', w: 6, d: 6 },
+  panel: { label: 'Electrical panel', fixed: true, tag: 'PNL', w: 16, d: 6 },
+  hvac: { label: 'Furnace or water heater', fixed: true, tag: 'HVAC', w: 24, d: 24 },
+  chimney: { label: 'Chimney or flue', fixed: true, tag: 'FLUE', w: 16, d: 16 },
+  chase: { label: 'Duct chase', fixed: true, tag: 'CHASE', w: 12, d: 24 }
 };
+const FIXED_COL = '#A8471F';
 
 const ROOM_TYPES = {
   room: 'Not set', bedroom: 'Bedroom', bathroom: 'Bathroom', powder: 'Half bath', kitchen: 'Kitchen', living: 'Living / dining',
@@ -458,7 +525,7 @@ const TYPE_EXPECT = {
   restroom: { toilet: 1, vanity: 1, light: 1, outlet: 1, switch: 1 }
 };
 
-const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
+const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Cabinets and tops', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
 
 function defaultSettings() {
   return { wallH: 96, minOpenSF: 0, casingId: 'T-CASE', cleaning: true, dumpster: 1, snap: 6, ortho: true };
@@ -764,12 +831,22 @@ function buildTakeoff(state, an) {
     put('wall', roomWallNet(room, S));
     put('ceil', room.area);
     put('base', roomBaseLF(room));
+    // new cabinets and tops: run lengths are typed per room, vanities and tubs come from items placed on the plan
+    const cabLF = m.cabLF || 0;
+    put('cabinet', cabLF);
+    put('upper', m.uppLF || 0);
+    put('counter', cabLF * 25.5 / 12 + (m.ctrExtraSF || 0));
+    put('backsplash', cabLF * 18 / 12);
+    put('vanity', room.fix.vanity || 0);
+    put('mirror', room.fix.vanity || 0);
+    put('shower', room.fix.tub || 0);
     if (m.demoFloor) add('demo:floor', { name: 'Demo existing flooring', cat: 'Demo', unit: 'SF', source: 'Labor', wastePct: 0, pack: null, scope: 'Remove and dispose of existing flooring and underlayment, scrape adhesive, and prepare the substrate.' }, room, room.area);
     for (const kind of Object.keys(room.fix)) {
       const fx = FIXTURES[kind];
       const c = room.fix[kind];
-      if (!fx || c <= 0) continue;
-      add('fx:' + kind, { name: fx.name, cat: fx.cat, unit: 'EA', source: 'Counted', wastePct: 0, pack: null, scope: fx.scope }, room, c);
+      if (!fx || c <= 0 || fx.fixed) continue;
+      // a chosen vanity finish already prices the vanity, so skip the generic vanity line (its trap kit still applies below)
+      if (!(kind === 'vanity' && f.vanity)) add('fx:' + kind, { name: fx.name, cat: fx.cat, unit: 'EA', source: 'Counted', wastePct: 0, pack: null, scope: fx.scope }, room, c);
       for (const rq of fx.req || []) add('fxreq:' + kind + ':' + rq.name, { name: rq.name, cat: fx.cat, unit: rq.unit, source: 'Rule', wastePct: 0, pack: null, scope: 'Companion item for ' + fx.name + '.', host: fx.name }, room, c * rq.ratio);
     }
   }
@@ -830,7 +907,10 @@ function runChecks(state, an, tk) {
   for (const r of an.rooms) {
     const m = r.meta, name = m.name;
     const missing = slots.filter(([k]) => !(m.fin && m.fin[k]) && !(m.type === 'garage' && k === 'base')).map(s => s[1]);
-    if (missing.length) out.push({ sev: 'warn', roomId: m.id, text: name + ': no ' + missing.join(', ') + ' selected.' });
+    if (missing.length) out.push({ sev: 'info', roomId: m.id, text: name + ': no ' + missing.join(', ') + ' selected. Fine if that surface stays as it is.' });
+    const fixedHere = Object.keys(r.fix).filter(k => FIXTURES[k] && FIXTURES[k].fixed && r.fix[k] > 0).map(k => r.fix[k] + ' ' + FIXTURES[k].label.toLowerCase());
+    if (fixedHere.length) out.push({ sev: 'info', roomId: m.id, text: name + ': existing items to work around: ' + fixedHere.join(', ') + '.' });
+    if (m.type === 'kitchen' && !(m.fin && (m.fin.cabinet || m.fin.upper || m.fin.counter))) out.push({ sev: 'info', roomId: m.id, text: name + ': no new cabinets or countertop chosen yet.' });
     if (m.type === 'room') out.push({ sev: 'info', roomId: m.id, text: name + ': set a room type so the checklist can compare it to a typical scope.' });
     const exp = TYPE_EXPECT[m.type];
     if (exp) {
@@ -846,6 +926,8 @@ function runChecks(state, an, tk) {
     if (r.area < 20) out.push({ sev: 'info', roomId: m.id, text: name + ' is only ' + fmtNum(r.area, 1) + ' SF. Confirm the dimensions.' });
     if (r.area > 1500) out.push({ sev: 'info', roomId: m.id, text: name + ' is ' + fmtNum(r.area, 0) + ' SF. Confirm the dimensions.' });
   }
+  const fixedWalls = state.walls.filter(w => w.fixed).length;
+  if (fixedWalls) out.push({ sev: 'info', text: fixedWalls + ' wall' + (fixedWalls > 1 ? 's are' : ' is') + ' marked load bearing. Moving or opening ' + (fixedWalls > 1 ? 'them' : 'it') + ' needs an engineer and a temporary support plan.' });
   const demo = tk.lines.some(l => l.cat === 'Demo');
   if (an.rooms.length && !demo && !S.dumpster) out.push({ sev: 'info', text: 'No demo or haul-off lines. Remodel work usually needs both. Turn on demo per room, or set haul-off loads under Takeoff settings.' });
   else if (an.rooms.length && !demo) out.push({ sev: 'info', text: 'No demo lines yet. If this is a remodel, turn on "demo existing floor" for the rooms it applies to.' });
@@ -1215,6 +1297,15 @@ function drawFixture(ctx, f, selected) {
   ctx.strokeStyle = col; ctx.fillStyle = C.sheet; ctx.lineWidth = selected ? 2 : 1.2; ctx.lineJoin = 'round';
   const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); };
   const k = f.kind;
+  if (def.fixed) {
+    const w = def.w * s, d = def.d * s, fc = selected ? C.sel : FIXED_COL;
+    ctx.strokeStyle = fc; ctx.fillStyle = C.sheet; ctx.lineWidth = selected ? 2 : 1.6;
+    rr(-w / 2, -d / 2, w, d, 1); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w / 2, -d / 2); ctx.lineTo(w / 2, d / 2); ctx.moveTo(w / 2, -d / 2); ctx.lineTo(-w / 2, d / 2); ctx.stroke();
+    if (w >= 34) { ctx.rotate(-(f.rot || 0)); ctx.fillStyle = fc; ctx.font = '600 ' + Math.max(8, Math.min(11, w * 0.2)) + 'px ' + C.fMono; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(def.tag, 0, d / 2 + 3); }
+    ctx.restore();
+    return;
+  }
   if (k === 'outlet') {
     const r = Math.max(5, 3.5 * s);
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -1265,7 +1356,7 @@ function draw() {
   ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
   for (const w of state.walls) {
     const a = W2S(w.a), b = W2S(w.b);
-    ctx.strokeStyle = sel && sel.type === 'wall' && sel.id === w.id ? C.sel : C.wall;
+    ctx.strokeStyle = sel && sel.type === 'wall' && sel.id === w.id ? C.sel : (w.fixed ? FIXED_COL : C.wall);
     ctx.lineWidth = Math.max(2.5, w.t * view.s);
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
@@ -1604,7 +1695,8 @@ function renderCtx() {
   } else if (tool === 'window') {
     h += chipRow('Width', [[24, '24"'], [36, '36"'], [48, '48"'], [60, '60"'], [72, '72"']], opts.winW, 'data-ww');
   } else if (tool === 'item') {
-    h += chipRow('Place', Object.keys(FIXTURES).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
+    h += chipRow('New', Object.keys(FIXTURES).filter(k => !FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
+    h += chipRow('Existing', Object.keys(FIXTURES).filter(k => FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
   } else {
     h += '<span class="lbl">' + (tool === 'pan' ? 'Drag to move the sheet' : 'Tap to select') + '</span>';
   }
@@ -1612,11 +1704,11 @@ function renderCtx() {
 }
 const HINTS = {
   select: 'Tap a wall, door, item or room to edit it. Drag a corner handle to move a wall end. Drag on empty space to pan; pinch to zoom.',
-  room: 'Tap one corner, then the opposite corner, and all four walls are drawn. Or drag from corner to corner. You can also type the width and depth.',
+  room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
   window: 'Tap on a wall to place a window.',
-  item: 'Tap inside a room to place the selected item.',
+  item: 'Tap inside a room to place an item. Items under Existing are things that cannot move, like posts, stacks and the panel.',
   pan: 'Drag to move the sheet. Pinch or use + and - to zoom.'
 };
 function renderStrip() {
@@ -1704,7 +1796,8 @@ function renderInspector() {
       '<div class="fields">' +
       '<label class="f">Length<input class="mono" id="i-len" value="' + esc(fmtFtIn(L)) + '"></label>' +
       '<label class="f">Thickness<select id="i-th">' + [3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + v + ' in</option>').join('') + '</select></label>' +
-      '<label class="f">Height (in)<input class="mono" id="i-h" inputmode="decimal" value="' + w.h + '"></label></div>';
+      '<label class="f">Height (in)<input class="mono" id="i-h" inputmode="decimal" value="' + w.h + '"></label></div>' +
+      '<label class="check"><input type="checkbox" id="i-fixed"' + (w.fixed ? ' checked' : '') + '> Load bearing, do not move</label>';
   } else if (sel.type === 'opening') {
     const o = state.openings.find(x => x.id === sel.id); if (!o) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(OPENING_KINDS[o.kind].label) + '</strong><button type="button" class="btn danger" data-del="1">Delete</button></div>' +
@@ -1718,7 +1811,7 @@ function renderInspector() {
   } else if (sel.type === 'fixture') {
     const f = state.fixtures.find(x => x.id === sel.id); if (!f) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(FIXTURES[f.kind].label) + '</strong><span class="btnrow"><button type="button" class="btn" data-rot="1">Rotate 90&deg;</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
-      '<p class="note">Drag it on the plan to move it. Counts go to the room it sits in.</p>';
+      '<p class="note">' + (FIXTURES[f.kind].fixed ? 'Existing item that cannot move. It is shown on the plan and in Checks, and it is left out of the takeoff.' : 'Drag it on the plan to move it. Counts go to the room it sits in.') + '</p>';
   }
   el.hidden = false; el.innerHTML = h;
 }
@@ -1739,6 +1832,7 @@ $('#insp').addEventListener('change', e => {
       mutate(() => { moveNodeTo(w.b, { x: Math.round((w.a.x + g2.ux * L) * 100) / 100, y: Math.round((w.a.y + g2.uy * L) * 100) / 100 }); });
     } else if (id === 'i-th') mutate(() => { w.t = parseFloat(e.target.value); });
     else if (id === 'i-h') { const v = parseLen(e.target.value, 'in'); if (!v || v < 24) { toast('Height must be at least 24 in'); renderInspector(); return; } mutate(() => { w.h = v; }); }
+    else if (id === 'i-fixed') mutate(() => { w.fixed = e.target.checked; }, { panel: false });
   } else if (sel && sel.type === 'opening') {
     const o = state.openings.find(x => x.id === sel.id); if (!o) return;
     const num = () => parseLen(e.target.value, 'in');
@@ -1790,6 +1884,20 @@ function paneRooms() {
   const cards = AN.rooms.map(r => {
     const m = r.meta;
     const counts = Object.keys(r.fix).filter(k => r.fix[k] > 0).map(k => r.fix[k] + ' ' + FIXTURES[k].label.toLowerCase()).join(', ');
+    const showCab = ['kitchen', 'laundry', 'office', 'living', 'hall', 'room'].indexOf(m.type) >= 0;
+    const showBath = ['bathroom', 'powder', 'restroom', 'room'].indexOf(m.type) >= 0;
+    const numField = (label, key, ph) => '<label class="f">' + label + '<input class="mono" data-f="' + key + '" inputmode="decimal" placeholder="' + ph + '" value="' + (m[key] ? m[key] : '') + '"></label>';
+    const cabBlock = showCab ? '<h3>New cabinets and tops</h3><div class="grid2">' +
+      '<label class="f">Base cabinets<select data-f="fin.cabinet">' + finOptions('cabinet', m.fin.cabinet) + '</select></label>' + numField('Base run (LF)', 'cabLF', '0') +
+      '<label class="f">Wall cabinets<select data-f="fin.upper">' + finOptions('upper', m.fin.upper) + '</select></label>' + numField('Wall run (LF)', 'uppLF', '0') +
+      '<label class="f">Countertop<select data-f="fin.counter">' + finOptions('counter', m.fin.counter) + '</select></label>' + numField('Island or extra top (SF)', 'ctrExtraSF', '0') +
+      '<label class="f">Backsplash<select data-f="fin.backsplash">' + finOptions('backsplash', m.fin.backsplash) + '</select></label></div>' +
+      '<p class="note">Countertop is figured from the base run at 25.5 in deep, and backsplash at 18 in high.</p>' : '';
+    const bathBlock = showBath ? '<h3>New vanity and bath</h3><div class="grid2">' +
+      '<label class="f">Vanity<select data-f="fin.vanity">' + finOptions('vanity', m.fin.vanity) + '</select></label>' +
+      '<label class="f">Mirror<select data-f="fin.mirror">' + finOptions('mirror', m.fin.mirror) + '</select></label>' +
+      '<label class="f">Shower or tub door<select data-f="fin.shower">' + finOptions('shower', m.fin.shower) + '</select></label></div>' +
+      '<p class="note">Vanity, mirror and door quantities come from the vanities (' + (r.fix.vanity || 0) + ') and tub or shower items (' + (r.fix.tub || 0) + ') placed in this room.</p>' : '';
     return '<details class="room" data-room="' + m.id + '" data-sel="' + (sel && sel.type === 'room' && sel.id === m.id ? 1 : 0) + '"' + (openRooms.has(m.id) ? ' open' : '') + '>' +
       '<summary><span class="swatch" style="background:var(--t' + ((TINT[m.type] != null ? TINT[m.type] : 4) + 1) + ')"></span><span class="rname">' + esc(m.name) + '</span><span class="rmeta mono">' + fmtNum(r.area, 1) + ' SF</span></summary>' +
       '<div class="rbody">' +
@@ -1802,10 +1910,11 @@ function paneRooms() {
       '<label class="f">Base<select data-f="fin.base">' + finOptions('base', m.fin.base) + '</select></label>' +
       '<label class="f">Wall finish height<select data-f="wallFinH">' + [[0, 'Full height'], [48, '48 in'], [60, '60 in'], [72, '72 in'], [84, '84 in']].map(v => '<option value="' + v[0] + '"' + ((m.wallFinH || 0) === v[0] ? ' selected' : '') + '>' + v[1] + '</option>').join('') + '</select></label></div>' +
       '<label class="check"><input type="checkbox" data-f="demoFloor"' + (m.demoFloor ? ' checked' : '') + '> Demo existing floor</label>' +
+      cabBlock + bathBlock +
       '<div class="counts mono">Perimeter ' + fmtNum(r.perim, 1) + ' LF &middot; ' + r.doorCount + ' door' + (r.doorCount === 1 ? '' : 's') + ' &middot; ' + r.windowCount + ' window' + (r.windowCount === 1 ? '' : 's') + (counts ? ' &middot; ' + esc(counts) : '') + '</div>' +
       '</div></details>';
   }).join('');
-  return '<p class="note">Choose finishes for each room. Quantities come from the drawn walls, so changing a wall updates every number.</p>' + cards;
+  return '<p class="note">Sketch the room sizes, mark anything that cannot move, then choose the new finishes. Leave a finish blank to keep what is there. Quantities come from the drawn walls, so changing a wall updates every number.</p>' + cards;
 }
 function dec(unit) { return (unit === 'EA' || unit === 'KIT' || unit === 'PC' || unit === 'SHT') ? 0 : (unit === 'SF' || unit === 'LF' ? 1 : 2); }
 function lineCard(l) {
@@ -1925,6 +2034,7 @@ pane.addEventListener('change', e => {
     else if (f.indexOf('fin.') === 0) mutate(() => { m.fin[f.slice(4)] = t.value; });
     else if (f === 'wallFinH') mutate(() => { m.wallFinH = parseInt(t.value, 10) || 0; });
     else if (f === 'demoFloor') mutate(() => { m.demoFloor = t.checked; });
+    else if (f === 'cabLF' || f === 'uppLF' || f === 'ctrExtraSF') mutate(() => { const v = parseFloat(t.value); m[f] = v > 0 ? v : 0; });
     return;
   }
   if (t.dataset.s) {
@@ -2135,6 +2245,16 @@ function buildFixture3D(G, f) {
     boxAt(grp, wood, 33, 34, 22, 0, 17, 0, 0);
     boxAt(grp, solid('#6c6f72'), 34, 1.5, 23, 0, 34.8, 0, 0);
     boxAt(grp, solid('#c9cdd0', { roughness: 0.3 }), 24, 0.5, 15, 0, 35.5, 1, 0);
+  } else if (k === 'post') {
+    boxAt(grp, solid('#b9b3a5'), 6, 96, 6, 0, 48, 0, 0);
+  } else if (k === 'stack') {
+    boxAt(grp, solid('#8b9195'), 6, 96, 6, 0, 48, 0, 0);
+  } else if (k === 'hvac') {
+    boxAt(grp, solid('#c9cdd0', { roughness: 0.5 }), 24, 60, 24, 0, 30, 0, 0);
+  } else if (k === 'chimney') {
+    boxAt(grp, solid('#a8714f'), 16, 96, 16, 0, 48, 0, 0);
+  } else if (k === 'chase') {
+    boxAt(grp, solid('#d6d1c4'), 12, 96, 24, 0, 48, 0, 0);
   } else return;
   grp.position.set(f.x, 0, f.y);
   grp.rotation.y = -(f.rot || 0);

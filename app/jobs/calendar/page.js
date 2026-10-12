@@ -149,7 +149,7 @@ function assignLanes(jobsInWeek) {
 // 7-day-grid work skipped; it's real state now (the toggles actually hide
 // their overlay), not decoration.
 function CalendarSidebar({
-  monthDate, cursorDate, today, onSelectDay, onPrevMonth, onNextMonth, onNewEvent,
+  monthDate, cursorDate, today, onSelectDay, onPrevMonth, onNextMonth, onNewEvent, onScheduleConsultation,
   showJobs, setShowJobs, showBidWalks, setShowBidWalks, showScheduleEvents, setShowScheduleEvents, showTodos, setShowTodos, showPersonal, setShowPersonal,
   scheduleRequests, resolveRequest, resolvingRequestId,
 }) {
@@ -157,6 +157,7 @@ function CalendarSidebar({
   return (
     <div className="cal-sidebar">
       <button type="button" className="btn btn-primary cal-sidebar-create" onClick={onNewEvent}>+ New Event</button>
+      <button type="button" className="btn cal-sidebar-create" style={{ marginTop: 8 }} onClick={onScheduleConsultation}>Schedule Consultation</button>
 
       <div className="cal-mini">
         <div className="cal-mini-header">
@@ -282,6 +283,10 @@ export default function JobCalendarPage() {
   const [scheduleRequests, setScheduleRequests] = useState([]);
   const [resolvingRequestId, setResolvingRequestId] = useState(null);
   const [showNewEvent, setShowNewEvent] = useState(false);
+  // 'meeting' for a plain New Event; 'consultation' when opened from the
+  // Schedule Consultation button, which presets the type and popup title.
+  const [newEventType, setNewEventType] = useState('meeting');
+  const openNewEvent = (type = 'meeting') => { setNewEventType(type); setShowNewEvent(true); };
   const [previewEvent, setPreviewEvent] = useState(null);
   const [todoDayPreview, setTodoDayPreview] = useState(null); // 'YYYY-MM-DD' of the day whose To Do checklist is open
   const [deletingEvent, setDeletingEvent] = useState(false);
@@ -1134,7 +1139,8 @@ export default function JobCalendarPage() {
               onSelectDay={selectMiniDay}
               onPrevMonth={miniPrevMonth}
               onNextMonth={miniNextMonth}
-              onNewEvent={() => setShowNewEvent(true)}
+              onNewEvent={() => openNewEvent('meeting')}
+              onScheduleConsultation={() => openNewEvent('consultation')}
               showJobs={showJobs} setShowJobs={setShowJobs}
               showBidWalks={showBidWalks} setShowBidWalks={setShowBidWalks}
               showScheduleEvents={showScheduleEvents} setShowScheduleEvents={setShowScheduleEvents}
@@ -1152,7 +1158,10 @@ export default function JobCalendarPage() {
       {isMobile && (
         <MobileFab
           label="New Event"
-          items={[{ label: '+ New Event', primary: true, onClick: () => setShowNewEvent(true) }]}
+          items={[
+            { label: '+ New Event', primary: true, onClick: () => openNewEvent('meeting') },
+            { label: 'Schedule Consultation', onClick: () => openNewEvent('consultation') },
+          ]}
         />
       )}
 
@@ -1160,6 +1169,8 @@ export default function JobCalendarPage() {
         open={showNewEvent}
         onClose={() => setShowNewEvent(false)}
         onCreated={loadScheduleEvents}
+        defaultEventType={newEventType}
+        title={newEventType === 'consultation' ? 'Schedule Consultation' : 'New Event'}
         defaultDate={cursorDate ? `${cursorDate.getFullYear()}-${String(cursorDate.getMonth() + 1).padStart(2, '0')}-${String(cursorDate.getDate()).padStart(2, '0')}` : undefined}
       />
 
