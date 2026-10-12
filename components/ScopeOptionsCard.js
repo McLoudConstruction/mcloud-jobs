@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
+import { jobHref } from '../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return 'Not priced yet';
@@ -177,7 +178,7 @@ function ScopeOptionEditor({ option, jobId, isLocked, isPicked, isFirst, isLast,
           <span style={{ color: 'var(--ink-soft)' }}>Price: </span>
           <b>{fmtMoney(option.price)}</b>
         </div>
-        <Link href={`/jobs/${jobId}?tab=Estimate&section=cost&costOption=${option.id}`} className="btn btn-sm">
+        <Link href={jobHref(jobId, 'cost', { costOption: option.id })} className="btn btn-sm">
           {option.price ? 'Update cost & price' : 'Price on Cost tab'} →
         </Link>
       </div>

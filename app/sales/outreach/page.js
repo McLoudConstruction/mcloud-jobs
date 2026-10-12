@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { VERTICAL_KEYS, verticalLabel } from '../../../lib/verticals';
+import { settingsHref } from '../../../lib/links';
 
 const TABS = ['Today', 'Prospects', 'Sequences', 'Activity', 'Settings'];
 
@@ -728,7 +729,7 @@ function SettingsTab({ settings, onChanged, setError }) {
         <div style={{ fontSize: 12.5, color: '#a17c3f', margin: '14px 0 0' }}>
           Before emails can send:
           {problems.map(p => <div key={p}>• {p}</div>)}
-          {(google && (!google.connected || !google.canSend)) && <div style={{ marginTop: 4 }}><Link href="/settings?tab=Integrations">Open Integrations</Link></div>}
+          {(google && (!google.connected || !google.canSend)) && <div style={{ marginTop: 4 }}><Link href={settingsHref('Integrations')}>Open Integrations</Link></div>}
         </div>
       )}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>

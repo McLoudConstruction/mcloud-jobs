@@ -9,6 +9,7 @@ import { docFilename } from '../../../../../lib/docFilename';
 import ImageDropzone from '../../../../../components/ImageDropzone';
 import MaterialOptionCard from '../../../../../components/MaterialOptionCard';
 import DocBackLink from '../../../../../components/DocBackLink';
+import { jobHref } from '../../../../../lib/links';
 
 const EMPTY_OPTION = { brand: '', item: '', model_number: '', color: '' };
 
@@ -175,7 +176,7 @@ export default function MaterialSelectionPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={isAdmin ? `/jobs/${id}?tab=Project Updates` : '/customerportal/projects'} className="btn btn-sm" />
+        <DocBackLink fallbackHref={isAdmin ? jobHref(id, 'selections') : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isAdmin ? (
             <>

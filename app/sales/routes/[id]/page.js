@@ -13,6 +13,7 @@ import {
 import {
   DEFAULT_DWELL_MINUTES, buildTimeline, routeStopsOf, legsByStop, timeStringToToday, formatClock, formatMinutes,
 } from '../../../../lib/routeTiming';
+import { appHref } from '../../../../lib/links';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const INK = '#1C1B19';
@@ -252,7 +253,7 @@ export default function RouteOverviewPage() {
     setError('');
     try {
       if (route.status === 'saved') await activateSavedRoute(route);
-      router.push('/sales/routes?drive=1');
+      router.push(appHref('routeBuilder', { drive: 1 }));
     } catch (err) {
       setError(err.message || 'Could not start this route.');
       setStarting(false);

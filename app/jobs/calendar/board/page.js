@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../../../lib/useAuth';
 import AppShell from '../../../../components/AppShell';
 import { phaseBackground } from '../../../../lib/tradeColors';
 import { findConflicts } from '../../../../lib/scheduleConflicts';
+import { appHref, jobHref } from '../../../../lib/links';
 
 const DAYS = 28; // four weeks on screen
 const ACTIVE_STAGES = ['approved', 'scheduled', 'active'];
@@ -105,7 +106,7 @@ export default function ScheduleBoardPage() {
         for (const b of (data.blackouts || []).filter(x => x.job_id === j.id && inWindow(x.start_date, x.end_date))) {
           items.push({ key: 'b' + b.id, start: b.start_date, end: b.end_date, label: `Customer unavailable${b.reason ? ` — ${b.reason}` : ''}${b.status === 'needs_review' ? ' (needs review)' : ''}`, off: true });
         }
-        return { id: j.id, title: j.project_number ? `#${j.project_number} · ${j.customer_name || ''}` : (j.customer_name || 'Job'), sub: j.project_address, href: `/jobs/${j.id}?tab=Schedule`, items };
+        return { id: j.id, title: j.project_number ? `#${j.project_number} · ${j.customer_name || ''}` : (j.customer_name || 'Job'), sub: j.project_address, href: jobHref(j.id, 'schedule'), items };
       }).filter(r => r.items.length);
     }
     // by sub
@@ -138,9 +139,9 @@ export default function ScheduleBoardPage() {
       <div className="container container-wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           <div className="tab-sections-pills">
-            <Link href="/jobs/calendar" className="tab-section-btn" style={{ textDecoration: 'none' }}>Calendar</Link>
+            <Link href={appHref('calendar')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Calendar</Link>
             <span className="tab-section-btn active">Crew board</span>
-            <Link href="/jobs/calendar/overview" className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
+            <Link href={appHref('calendarOverview')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tab-sections-pills">
@@ -180,7 +181,7 @@ export default function ScheduleBoardPage() {
                   <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderTop: '1px solid var(--line)', fontSize: 12.5 }}>
                     <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: sev.color, background: sev.bg, whiteSpace: 'nowrap', marginTop: 1 }}>{sev.label}</span>
                     <span style={{ flex: 1 }}>{c.message}</span>
-                    {jobId && <Link href={`/jobs/${jobId}?tab=Schedule`} className="btn btn-sm">Open</Link>}
+                    {jobId && <Link href={jobHref(jobId, 'schedule')} className="btn btn-sm">Open</Link>}
                   </div>
                 );
               })}

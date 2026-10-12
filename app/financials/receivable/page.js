@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { flattenJobFinancials } from '../../../lib/jobFinancials';
+import { jobHref } from '../../../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -86,7 +87,7 @@ export default function ReceivablePage() {
           {sortedDraws.length > 0 && isMobile && (
             <div className="data-mobile-list">
               {sortedDraws.map(d => (
-                <div key={d.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`} style={{ cursor: 'pointer' }}>
+                <div key={d.id} className="data-mobile-row" onClick={() => window.location.href = jobHref(d.job_id, 'draws')} style={{ cursor: 'pointer' }}>
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{d.jobs?.customer_name || 'Unnamed'}</span>
                     <span className="data-mobile-row-sub">{d.jobs ? `#${d.jobs.project_number}` : '—'} · {d.description || 'Draw'} · {agingLabel(daysAgo(d.invoiced_at))}</span>
@@ -110,7 +111,7 @@ export default function ReceivablePage() {
                 </thead>
                 <tbody>
                   {sortedDraws.map(d => (
-                    <tr key={d.id} onClick={() => window.location.href = `/jobs/${d.job_id}?tab=Financials`}>
+                    <tr key={d.id} onClick={() => window.location.href = jobHref(d.job_id, 'draws')}>
                       <td>{d.jobs ? `#${d.jobs.project_number}` : '—'}</td>
                       <td>{d.jobs?.customer_name || 'Unnamed'}</td>
                       <td>{d.description || 'Draw'}</td>
@@ -130,7 +131,7 @@ export default function ReceivablePage() {
           {sortedJobs.length > 0 && isMobile && (
             <div className="data-mobile-list">
               {sortedJobs.map(j => (
-                <div key={j.id} className="data-mobile-row" onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`} style={{ cursor: 'pointer' }}>
+                <div key={j.id} className="data-mobile-row" onClick={() => window.location.href = jobHref(j.id, 'finalInvoice')} style={{ cursor: 'pointer' }}>
                   <span className="data-mobile-row-text">
                     <span className="data-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
                     <span className="data-mobile-row-sub">#{j.project_number} · {agingLabel(daysAgo(j.invoiced_at))}</span>
@@ -153,7 +154,7 @@ export default function ReceivablePage() {
                 </thead>
                 <tbody>
                   {sortedJobs.map(j => (
-                    <tr key={j.id} onClick={() => window.location.href = `/jobs/${j.id}?tab=Financials`}>
+                    <tr key={j.id} onClick={() => window.location.href = jobHref(j.id, 'finalInvoice')}>
                       <td>#{j.project_number}</td>
                       <td>{j.customer_name || 'Unnamed'}</td>
                       <td>{fmtMoney(j.invoice_amount)}</td>

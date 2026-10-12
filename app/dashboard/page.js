@@ -16,6 +16,7 @@ import SavedRoutesCard from '../../components/dashboard/SavedRoutesCard';
 import { canAccessPath } from '../../lib/permissions';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, formattedProjectNumber } from '../../lib/constants';
 import { flattenJobFinancials, isChangeOrderAccepted } from '../../lib/jobFinancials';
+import { appHref } from '../../lib/links';
 
 function fmtMoney(n) {
   if (!n) return '$0';
@@ -342,7 +343,7 @@ export default function DashboardPage() {
                 show('schedule_health') && {
                   key: 'schedule_health', label: 'Schedule', tiles: [
                     { label: 'Starting this week', value: stats.jobsStartingThisWeek.length, href: '/jobs' },
-                    { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: '/weather-risk' },
+                    { label: 'Weather-flagged phases', value: weatherRisk.flaggedCount, warn: weatherRisk.flaggedCount > 0, href: appHref('weatherRisk') },
                   ],
                 },
               ].filter(Boolean);

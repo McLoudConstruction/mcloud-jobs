@@ -14,6 +14,7 @@ import ProposalDocument from '../../../../components/ProposalDocument';
 import ScopeOptionsChooser from '../../../../components/ScopeOptionsChooser';
 import EstimateGroupsPicker from '../../../../components/EstimateGroupsPicker';
 import useEstimateGroupsPicker from '../../../../lib/useEstimateGroupsPicker';
+import { jobHref } from '../../../../lib/links';
 
 const STANDARD_EXCLUSIONS = [
   'A deposit of 50% of the total project investment is due up front before work begins, with the remaining balance due per the agreed payment schedule.',
@@ -118,7 +119,7 @@ export default function ProposalDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm" />
+        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? jobHref(id, 'proposals') : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}

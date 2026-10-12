@@ -6,6 +6,7 @@ import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
 import Link from 'next/link';
 import { STAGE_LABELS } from '../../lib/constants';
+import { appHref, jobHref } from '../../lib/links';
 
 const NEEDS_PRICING_STAGES = ['new', 'inspected', 'proposal_delivered'];
 
@@ -58,7 +59,7 @@ export default function EstimatingWorklistPage() {
       <div className="container">
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Estimating</h2>
-          <Link href="/estimating/assemblies" className="btn btn-sm">Assemblies</Link>
+          <Link href={appHref('assemblies')} className="btn btn-sm">Assemblies</Link>
         </div>
         <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '8px 0 16px' }}>
           Jobs that don't have a contract price set yet ({needsPricing.length}).
@@ -77,7 +78,7 @@ export default function EstimatingWorklistPage() {
               <button
                 key={j.id}
                 className="entity-mobile-row"
-                onClick={() => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
+                onClick={() => window.location.href = jobHref(j.id, 'pricing')}
               >
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{j.customer_name || 'Unnamed'}</span>
@@ -95,7 +96,7 @@ export default function EstimatingWorklistPage() {
         {filtered.length > 0 && !isMobile && (
           <DataTable
             getRowKey={j => j.id}
-            onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Estimate&section=pricing`}
+            onRowClick={j => window.location.href = jobHref(j.id, 'pricing')}
             rows={filtered}
             exportFileName="estimates"
             exportSheetName="Estimates"

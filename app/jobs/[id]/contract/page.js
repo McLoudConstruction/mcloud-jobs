@@ -11,6 +11,7 @@ import SignaturePad from '../../../../components/SignaturePad';
 import SignatureAuditTrail from '../../../../components/SignatureAuditTrail';
 import { generatePdfBase64, downloadPdf } from '../../../../lib/generatePdf';
 import { useSettings } from '../../../../lib/useSettings';
+import { jobHref } from '../../../../lib/links';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -151,7 +152,7 @@ export default function ContractDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm" />
+        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? jobHref(id, 'contract') : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {flash && <span style={{ fontSize: 12, color: '#3a6b45' }}>{flash}</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

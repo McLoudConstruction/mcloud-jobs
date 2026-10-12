@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../../../lib/useAuth';
 import AppShell from '../../../../components/AppShell';
 import { phaseBackground } from '../../../../lib/tradeColors';
 import { STAGE_LABELS } from '../../../../lib/constants';
+import { appHref, jobHref } from '../../../../lib/links';
 
 const ACTIVE_STAGES = ['approved', 'scheduled', 'active'];
 const ZOOMS = [
@@ -164,8 +165,8 @@ export default function ProjectOverviewPage() {
       <div className="container container-wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           <div className="tab-sections-pills">
-            <Link href="/jobs/calendar" className="tab-section-btn" style={{ textDecoration: 'none' }}>Calendar</Link>
-            <Link href="/jobs/calendar/board" className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
+            <Link href={appHref('calendar')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Calendar</Link>
+            <Link href={appHref('calendarBoard')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
             <span className="tab-section-btn active">Project overview</span>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -226,7 +227,7 @@ export default function ProjectOverviewPage() {
                   {scheduled.map(r => {
                     const j = r.job;
                     const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
-                    const href = `/jobs/${j.id}?tab=Schedule`;
+                    const href = jobHref(j.id, 'schedule');
                     return (
                       <div key={j.id} style={{ display: 'flex', borderBottom: '1px solid var(--line)' }}>
                         <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, zIndex: 3, background: 'var(--card-bg)', padding: '8px 12px', borderRight: '1px solid var(--line)', fontSize: 12 }}>
@@ -286,7 +287,7 @@ export default function ProjectOverviewPage() {
                 {unscheduled.map(r => (
                   <div key={r.job.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 0', borderTop: '1px solid var(--line)', fontSize: 12.5 }}>
                     <span><b>{r.job.project_number ? `#${r.job.project_number}` : 'Job'}</b>{r.job.customer_name ? ` · ${r.job.customer_name}` : ''} <span style={{ color: 'var(--ink-soft)' }}>· {STAGE_LABELS[r.job.stage] || r.job.stage}</span></span>
-                    <Link href={`/jobs/${r.job.id}?tab=Schedule`} className="btn btn-sm">Build schedule</Link>
+                    <Link href={jobHref(r.job.id, 'schedule')} className="btn btn-sm">Build schedule</Link>
                   </div>
                 ))}
               </div>

@@ -56,6 +56,7 @@ import PayAppsCard from '../../../components/PayAppsCard';
 import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
 import WarrantyCard from '../../../components/WarrantyCard';
+import { normalizeJobLink } from '../../../lib/links';
 
 // Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
 // at very different altitudes (a customer contact form next to internal
@@ -204,11 +205,11 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    const requestedTab = params.get('tab');
-    const requestedSection = params.get('section');
-    if (requestedTab && TABS.some(t => t.key === requestedTab)) {
-      goToTab(requestedTab, requestedSection);
-    }
+    // normalizeJobLink forgives case and retired section names, so old
+    // bookmarks (?tab=schedule, section=proposals) land somewhere real
+    // instead of being silently ignored.
+    const target = normalizeJobLink(TABS, params.get('tab'), params.get('section'));
+    if (target) goToTab(target.tab, target.section);
   }, [goToTab]);
 
   // A tab can disappear out from under the current selection — e.g. the

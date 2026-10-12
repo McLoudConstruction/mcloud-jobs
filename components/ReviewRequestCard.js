@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { buildReviewInviteEmail } from '../lib/emailTemplates';
 import { supabase } from '../lib/supabaseClient';
 import { reviewUrl, holdLabel, REVIEW_STATUS, starText, CATEGORY_LABELS } from '../lib/reviews';
+import { appHref } from '../lib/links';
 
 function fmt(v) {
   return v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -138,7 +139,7 @@ export default function ReviewRequestCard({ job, onSave }) {
             {review.publish_consent ? (review.published ? 'Published on the website.' : 'Customer allows public use — not published yet.') : 'Not cleared for public use.'}
             {review.google_prompted ? (review.google_clicked_at ? ' Opened the Google link.' : ' Offered Google.') : ''}
           </div>
-          <div style={{ marginTop: 8 }}><Link href="/reviews" style={{ fontSize: 12 }}>Manage reviews →</Link></div>
+          <div style={{ marginTop: 8 }}><Link href={appHref('reviews')} style={{ fontSize: 12 }}>Manage reviews →</Link></div>
         </div>
       ) : (
         <>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS, fmtBand } from '../lib/assemblies';
+import { appHref } from '../lib/links';
 
 // Lets an estimator pull a Low/Medium/High assembly's items straight into the
 // scope they're building. Purely additive — it hands items back to the
@@ -51,7 +52,7 @@ export default function AssemblyPicker({ onApply }) {
               </div>
             ))}
             {!templates.length && <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>No assemblies set up yet.</div>}
-            <Link href="/estimating/assemblies" style={{ fontSize: 11 }} onClick={() => setOpen(false)}>Manage assemblies →</Link>
+            <Link href={appHref('assemblies')} style={{ fontSize: 11 }} onClick={() => setOpen(false)}>Manage assemblies →</Link>
           </div>
         </div>
       )}

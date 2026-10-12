@@ -11,6 +11,7 @@ import DocBackLink from '../../../../../components/DocBackLink';
 import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import { projectNumber } from '../../../../../lib/constants';
 import ProposalDocument from '../../../../../components/ProposalDocument';
+import { jobHref } from '../../../../../lib/links';
 
 // Same document as /jobs/[id]/proposal, but for one specific saved
 // proposal instead of whichever one is currently Selected on the job —
@@ -85,7 +86,7 @@ export default function IndividualProposalDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={isAdmin ? `/jobs/${id}?tab=Estimate&section=proposals` : '/customerportal/projects'} className="btn btn-sm" />
+        <DocBackLink fallbackHref={isAdmin ? jobHref(id, 'proposals') : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isAdmin && isSelected && <span className="badge" style={{ marginRight: 4, background: '#3a6b45' }}>Selected</span>}
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>

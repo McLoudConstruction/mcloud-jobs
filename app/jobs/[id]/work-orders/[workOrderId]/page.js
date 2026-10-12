@@ -8,6 +8,7 @@ import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import { useSettings } from '../../../../../lib/useSettings';
 import DocBackLink from '../../../../../components/DocBackLink';
+import { jobHref } from '../../../../../lib/links';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -115,7 +116,7 @@ export default function WorkOrderDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={`/jobs/${id}?tab=Financials`} className="btn btn-sm" />
+        <DocBackLink fallbackHref={jobHref(id, 'workOrders')} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}

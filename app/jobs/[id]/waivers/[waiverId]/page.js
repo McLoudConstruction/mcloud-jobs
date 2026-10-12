@@ -11,6 +11,7 @@ import SignatureAuditTrail from '../../../../../components/SignatureAuditTrail';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useStaffAuth } from '../../../../../lib/staffAuthContext';
 import { WAIVER_TYPE_LABELS, WAIVER_STATUS } from '../../../../../lib/lienWaivers';
+import { jobHref } from '../../../../../lib/links';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -81,7 +82,7 @@ export default function LienWaiverDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={`/jobs/${id}`} className="btn btn-sm" />
+        <DocBackLink fallbackHref={jobHref(id, 'waivers')} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}

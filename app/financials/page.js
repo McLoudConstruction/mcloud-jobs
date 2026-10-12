@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { flattenJobFinancials } from '../../lib/jobFinancials';
 import AppShell from '../../components/AppShell';
 import DataTable from '../../components/DataTable';
+import { jobHref } from '../../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -181,10 +182,10 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Cash Collected This Year</h3>
             {jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'paid' && j.invoiced_at && new Date(j.invoiced_at).getFullYear() === now.getFullYear()).map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
+              <DrillRow key={j.id} href={jobHref(j.id, 'finalInvoice')} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
             ))}
             {draws.filter(d => d.status === 'paid' && d.paid_at && new Date(d.paid_at).getFullYear() === now.getFullYear()).map(d => (
-              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'}`} value={fmtMoney(d.amount)} />
+              <DrillRow key={d.id} href={d.job_id ? jobHref(d.job_id, 'draws') : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'}`} value={fmtMoney(d.amount)} />
             ))}
           </div>
         )}
@@ -193,7 +194,7 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Jobs Approved This Year</h3>
             {jobs.filter(j => j.approved_at && new Date(j.approved_at).getFullYear() === now.getFullYear()).map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.contract_price)} />
+              <DrillRow key={j.id} href={jobHref(j.id, 'jobFinancials')} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.contract_price)} />
             ))}
           </div>
         )}
@@ -206,7 +207,7 @@ export default function FinancialDashboardPage() {
               return (
                 <DrillRow
                   key={c.id}
-                  href={job ? `/jobs/${job.id}?tab=Financials` : undefined}
+                  href={job ? jobHref(job.id, 'changeOrders') : undefined}
                   label={`${job ? `#${job.project_number}` : 'Unknown job'} — ${c.description || c.category} (${c.status})`}
                   value={fmtMoney(c.amount)}
                 />
@@ -221,7 +222,7 @@ export default function FinancialDashboardPage() {
             {workOrders.filter(wo => wo.status !== 'paid').map(wo => (
               <DrillRow
                 key={wo.id}
-                href={wo.job_id ? `/jobs/${wo.job_id}?tab=Financials` : undefined}
+                href={wo.job_id ? jobHref(wo.job_id, 'workOrders') : undefined}
                 label={`${wo.companies?.company_name || 'Unknown company'} — ${wo.jobs ? `#${wo.jobs.project_number}` : ''} (${wo.status})`}
                 value={fmtMoney(wo.invoiced_amount ?? wo.amount)}
               />
@@ -232,7 +233,7 @@ export default function FinancialDashboardPage() {
             {receipts.filter(r => r.payment_status === 'unpaid').map(r => (
               <DrillRow
                 key={r.id}
-                href={r.job_id ? `/jobs/${r.job_id}?tab=Financials` : undefined}
+                href={r.job_id ? jobHref(r.job_id, 'jobCosts') : undefined}
                 label={`${r.vendor_name || 'Receipt'} — ${r.jobs ? `#${r.jobs.project_number}` : 'unlinked'} (unpaid)`}
                 value={fmtMoney(r.amount)}
               />
@@ -244,10 +245,10 @@ export default function FinancialDashboardPage() {
           <div className="card">
             <h3>Open Receivables</h3>
             {jobs.filter(j => !jobsWithDraws.has(j.id) && j.invoice_status === 'sent').map(j => (
-              <DrillRow key={j.id} href={`/jobs/${j.id}?tab=Financials`} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
+              <DrillRow key={j.id} href={jobHref(j.id, 'finalInvoice')} label={`#${j.project_number} — ${j.customer_name || 'Unnamed'}`} value={fmtMoney(j.invoice_amount)} />
             ))}
             {draws.filter(d => d.status === 'sent').map(d => (
-              <DrillRow key={d.id} href={d.job_id ? `/jobs/${d.job_id}?tab=Financials` : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'} (${d.jobs?.customer_name || ''})`} value={fmtMoney(d.amount)} />
+              <DrillRow key={d.id} href={d.job_id ? jobHref(d.job_id, 'draws') : undefined} label={`${d.jobs ? `#${d.jobs.project_number}` : ''} — ${d.description || 'Draw'} (${d.jobs?.customer_name || ''})`} value={fmtMoney(d.amount)} />
             ))}
           </div>
         )}
@@ -264,7 +265,7 @@ export default function FinancialDashboardPage() {
           {jobsOpen && jobRows.length > 0 && isMobile && (
             <div className="fin-job-list">
               {jobRows.map(j => (
-                <Link key={j.id} href={`/jobs/${j.id}?tab=Financials`} className="fin-job-row">
+                <Link key={j.id} href={jobHref(j.id, 'jobFinancials')} className="fin-job-row">
                   <div className="fin-job-row-top">
                     <span className="fin-job-row-name">#{j.project_number} — {j.customer_name || 'Unnamed'}</span>
                     <span className="fin-job-row-margin" style={{ color: j.marginPercent != null && j.marginPercent < 0 ? '#a13f3f' : undefined }}>
@@ -279,7 +280,7 @@ export default function FinancialDashboardPage() {
           {jobsOpen && jobRows.length > 0 && !isMobile && (
             <DataTable
               getRowKey={j => j.id}
-              onRowClick={j => window.location.href = `/jobs/${j.id}?tab=Financials`}
+              onRowClick={j => window.location.href = jobHref(j.id, 'jobFinancials')}
               rows={jobRows}
               exportFileName="job-financials"
               exportSheetName="Job Financials"

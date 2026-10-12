@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
+import { appHref } from '../../lib/links';
 
 // Floorplan sketch + takeoff. The drawing tool lives in /public/floorplan/tool.html
 // and talks to this page by postMessage (fp:ready / fp:load / fp:prefill / fp:changed).
@@ -168,7 +169,7 @@ export default function FloorplanPage() {
           <button className="btn btn-sm" disabled={busy} onClick={save}>Save</button>
           <button className="btn btn-sm" disabled={busy} onClick={addScope}>Add scope to job</button>
           <button className="btn btn-sm btn-primary" disabled={busy} onClick={sendToEstimate}>Send to estimate</button>
-          <Link href="/floorplan" className="btn btn-sm">Change job</Link>
+          <Link href={appHref('floorplan')} className="btn btn-sm">Change job</Link>
         </div>
         <iframe
           ref={frameRef}

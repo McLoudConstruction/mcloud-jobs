@@ -5,6 +5,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS, fmtBand } from '../../../lib/assemblies';
+import { appHref } from '../../../lib/links';
 
 // Reusable Low/Medium/High scope-item kits for Kitchen and Bath remodels.
 // Staff manage them here; applying one to an estimate happens from the Scope
@@ -60,7 +61,7 @@ export default function AssemblyTemplatesPage() {
   return (
     <AppShell>
       <div className="container container-wide">
-        <Breadcrumb href="/estimating" label="Estimating" />
+        <Breadcrumb href={appHref('estimating')} label="Estimating" />
         <div className="top-actions"><h2 style={{ margin: 0, color: 'var(--heading)' }}>Assemblies</h2></div>
         <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '4px 0 14px', maxWidth: 640 }}>
           Starting-point scope kits for Kitchen and Bath remodels. Apply one to a job from its Scope of Work, then tailor it to that project — the price band here is a rough starting point, not a quote.

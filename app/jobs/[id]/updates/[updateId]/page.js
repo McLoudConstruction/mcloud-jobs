@@ -9,6 +9,7 @@ import { docFilename } from '../../../../../lib/docFilename';
 import DocBackLink from '../../../../../components/DocBackLink';
 import { generatePdfBase64, downloadPdf } from '../../../../../lib/generatePdf';
 import { useSettings } from '../../../../../lib/useSettings';
+import { jobHref } from '../../../../../lib/links';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -89,7 +90,7 @@ export default function UpdateDocumentPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? `/jobs/${id}` : '/customerportal/projects'} className="btn btn-sm" />
+        <DocBackLink fallbackHref={session?.user?.app_metadata?.role === 'admin' ? jobHref(id, 'updates') : '/customerportal/projects'} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={downloadDocument} disabled={downloading}>
             {downloading ? 'Preparing…' : 'Download/Print Document'}

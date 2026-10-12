@@ -3,11 +3,12 @@ import { verifyState } from '../../../../../lib/integrations/oauthState';
 import { encrypt } from '../../../../../lib/integrations/crypto';
 import { getMicrosoftAccountEmail } from '../../../../../lib/integrations/microsoftCalendar';
 import { getAdminClient } from '../../../../../lib/supabaseAdmin';
+import { settingsHref } from '../../../../../lib/links';
 
 const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://jobs.mcloudconstruction.com';
 
 function settingsRedirect(params) {
-  return NextResponse.redirect(`${siteUrl()}/settings?tab=Integrations&${new URLSearchParams(params)}`);
+  return NextResponse.redirect(`${siteUrl()}${settingsHref('Integrations')}&${new URLSearchParams(params)}`);
 }
 
 export async function GET(request) {

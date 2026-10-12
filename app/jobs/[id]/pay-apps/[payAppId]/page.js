@@ -12,6 +12,7 @@ import SignatureAuditTrail from '../../../../../components/SignatureAuditTrail';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useStaffAuth } from '../../../../../lib/staffAuthContext';
 import { computePayApp, toCents, fromCents, fmtCents } from '../../../../../lib/payAppMath';
+import { jobHref } from '../../../../../lib/links';
 
 const LOGO_SRC = '/mcloud-logo.png';
 const STATUS = {
@@ -215,7 +216,7 @@ export default function PayApplicationPage() {
     if (!confirm('Delete this draft pay application?')) return;
     const { error: err } = await supabase.from('pay_applications').delete().eq('id', payAppId);
     if (err) { setError(err.message); return; }
-    window.location.href = `/jobs/${id}#Financials`;
+    window.location.href = jobHref(id, 'payApps');
   }
 
   async function downloadDocument() {
@@ -252,7 +253,7 @@ export default function PayApplicationPage() {
   return (
     <div>
       <div className="no-print doc-toolbar">
-        <DocBackLink fallbackHref={`/jobs/${id}`} className="btn btn-sm" />
+        <DocBackLink fallbackHref={jobHref(id, 'payApps')} className="btn btn-sm" />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {isDraft && <button className="btn btn-sm btn-danger" onClick={deleteDraft}>Delete draft</button>}
           {app.status === 'submitted' && <button className="btn btn-sm" onClick={() => setStatus('approved')} disabled={busy}>Mark approved by owner</button>}

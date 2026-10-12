@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
+import { jobHref } from '../../../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -87,7 +88,7 @@ export default function PayablePage() {
                 <div
                   key={wo.id}
                   className="data-mobile-row"
-                  onClick={() => { if (wo.job_id) window.location.href = `/jobs/${wo.job_id}?tab=Financials`; }}
+                  onClick={() => { if (wo.job_id) window.location.href = jobHref(wo.job_id, 'workOrders'); }}
                   style={{ cursor: wo.job_id ? 'pointer' : 'default' }}
                 >
                   <span className="data-mobile-row-text">
@@ -113,7 +114,7 @@ export default function PayablePage() {
                 </thead>
                 <tbody>
                   {workOrders.map(wo => (
-                    <tr key={wo.id} onClick={() => window.location.href = wo.job_id ? `/jobs/${wo.job_id}?tab=Financials` : '#'}>
+                    <tr key={wo.id} onClick={() => window.location.href = wo.job_id ? jobHref(wo.job_id, 'workOrders') : '#'}>
                       <td>{wo.companies?.company_name || 'Unknown'}</td>
                       <td>{wo.jobs ? `#${wo.jobs.project_number}` : '—'}</td>
                       <td>{WORK_ORDER_STATUS_LABELS[wo.status]}</td>
@@ -177,7 +178,7 @@ export default function PayablePage() {
                 <div
                   key={r.id}
                   className="data-mobile-row"
-                  onClick={() => { if (r.job_id) window.location.href = `/jobs/${r.job_id}?tab=Financials`; }}
+                  onClick={() => { if (r.job_id) window.location.href = jobHref(r.job_id, 'jobCosts'); }}
                   style={{ cursor: r.job_id ? 'pointer' : 'default' }}
                 >
                   <span className="data-mobile-row-text">
@@ -202,7 +203,7 @@ export default function PayablePage() {
                 </thead>
                 <tbody>
                   {receipts.map(r => (
-                    <tr key={r.id} onClick={() => window.location.href = r.job_id ? `/jobs/${r.job_id}?tab=Financials` : '#'}>
+                    <tr key={r.id} onClick={() => window.location.href = r.job_id ? jobHref(r.job_id, 'jobCosts') : '#'}>
                       <td>{r.vendor_name || '—'}</td>
                       <td>{r.jobs ? `#${r.jobs.project_number}` : '—'}</td>
                       <td>{fmtMoney(r.amount)}</td>

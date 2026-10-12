@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { listOpenRoutes } from '../../lib/salesRoutes';
 import { dwellFor, isPending, formatMinutes } from '../../lib/routeTiming';
+import { appHref } from '../../lib/links';
 
 function milesText(meters) {
   if (meters == null) return null;
@@ -52,7 +53,7 @@ export default function SavedRoutesCard() {
     <div className="card" style={{ marginBottom: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <h3 style={{ margin: 0 }}>Sales Routes{routes && routes.length > 0 ? ` (${routes.length})` : ''}</h3>
-        <Link href="/sales/routes" className="btn btn-sm">Build a route</Link>
+        <Link href={appHref('routeBuilder')} className="btn btn-sm">Build a route</Link>
       </div>
 
       {error && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 8 }}>{error}</div>}

@@ -15,6 +15,7 @@ import EmailLoggingCard from '../../components/EmailLoggingCard';
 import EmailTemplatesCard from '../../components/EmailTemplatesCard';
 import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
+import { settingsHref } from '../../lib/links';
 
 const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users'];
 
@@ -102,7 +103,7 @@ function SettingsPageInner() {
     const err = searchParams.get('error');
     if (connected) showFlash(`Connected to ${connected}.`);
     if (err) setError(err);
-    if (connected || err) router.replace('/settings?tab=Integrations');
+    if (connected || err) router.replace(settingsHref('Integrations'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 

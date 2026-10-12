@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
+import { appHref } from '../lib/links';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -247,7 +248,7 @@ export default function EstimateGroupsCard({ job, jobId }) {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
           <h4 style={{ margin: '0 0 4px' }}>What the customer didn't pick</h4>
           <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            Save anything worth following up on to the <Link href="/deferred-scope">deferred scope bucket</Link>, or discard it.
+            Save anything worth following up on to the <Link href={appHref('deferredScope')}>deferred scope bucket</Link>, or discard it.
           </div>
           {declinedScopeOptions.map(o => (
             <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>

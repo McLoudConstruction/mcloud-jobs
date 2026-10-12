@@ -7,6 +7,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import AppShell from '../../../../components/AppShell';
 import RfpMessageThread from '../../../../components/RfpMessageThread';
 import { RFP_STATUS_LABELS, RFP_RECIPIENT_STATUS_LABELS, projectLabel } from '../../../../lib/constants';
+import { appHref } from '../../../../lib/links';
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -96,7 +97,7 @@ export default function RfpDetailPage() {
     <AppShell>
       <div className="container container-wide" style={{ paddingTop: 24 }}>
         <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between', display: 'flex' }}>
-          <Link href="/subcontractors/rfps" className="btn btn-sm">← Back</Link>
+          <Link href={appHref('rfps')} className="btn btn-sm">← Back</Link>
           <span className={`badge badge-${rfp.status}`}>{RFP_STATUS_LABELS[rfp.status]}</span>
         </div>
 

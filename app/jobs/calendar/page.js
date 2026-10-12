@@ -10,6 +10,7 @@ import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
 import { setTodoDone, deleteTodo } from '../../../lib/salesTodos';
 import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber, subPortalJobHeading, SCHEDULE_REQUEST_STATUS_LABELS } from '../../../lib/constants';
+import { appHref, jobHref } from '../../../lib/links';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MINI_DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -1117,8 +1118,8 @@ export default function JobCalendarPage() {
       <div className="container container-wide" style={!isMobile && view !== 'month' ? { paddingBottom: 0 } : undefined}>
         <div className="tab-sections-pills" style={{ marginBottom: 12 }}>
           <span className="tab-section-btn active">Calendar</span>
-          <Link href="/jobs/calendar/board" className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
-          <Link href="/jobs/calendar/overview" className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
+          <Link href={appHref('calendarBoard')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Crew board</Link>
+          <Link href={appHref('calendarOverview')} className="tab-section-btn" style={{ textDecoration: 'none' }}>Project overview</Link>
         </div>
         <div
           ref={sidebarRowRef}
@@ -1206,7 +1207,7 @@ export default function JobCalendarPage() {
                   <button className="btn btn-sm btn-danger" disabled={updatingTodo} onClick={() => deleteTodoFromCalendar(previewEvent.todo)}>Delete</button>
                 </>
               ) : previewEvent._blackout ? (
-                <Link className="btn btn-sm" href={`/jobs/${previewEvent.job_id}?tab=Schedule`}>Review on the job</Link>
+                <Link className="btn btn-sm" href={jobHref(previewEvent.job_id, 'schedule')}>Review on the job</Link>
               ) : (
                 <button className="btn btn-sm btn-danger" disabled={deletingEvent} onClick={() => deleteScheduleEvent(previewEvent.id)}>
                   {deletingEvent ? 'Deleting…' : 'Delete'}

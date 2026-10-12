@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import { formattedProjectNumber } from '../../lib/constants';
+import { jobHref } from '../../lib/links';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -70,7 +71,7 @@ export default function WeatherRiskPage() {
                       ⚠ Risk on {fmtDate(f.date)}: {f.reasons.join(' ')}
                     </div>
                   </div>
-                  <Link href={`/jobs/${f.jobId}?tab=schedule`} className="btn btn-sm" style={{ flexShrink: 0 }}>
+                  <Link href={jobHref(f.jobId, 'schedule')} className="btn btn-sm" style={{ flexShrink: 0 }}>
                     View schedule →
                   </Link>
                 </div>
