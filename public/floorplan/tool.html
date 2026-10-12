@@ -201,6 +201,32 @@ textarea.out { width: 100%; min-height: 160px; border: 1px solid var(--line); bo
 /* the [hidden] attribute must win over any display rule (the hidden 3D canvas was covering the plan and swallowing taps) */
 [hidden] { display: none !important; }
 
+/* layouts */
+.layouts { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.layouts .lbl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ltabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.ltab { min-height: 36px; padding: 4px 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.ltab[aria-selected="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+.ltab i { font-style: normal; font-family: var(--font-mono); font-size: 11px; opacity: 0.8; margin-left: 4px; }
+
+/* design tab */
+.sw { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.swb { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; position: relative; overflow: hidden; background: var(--surface); }
+.swb[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--sheet), 0 0 0 4px var(--accent); }
+.swb.custom { background: conic-gradient(#e85d5d, #e8c25d, #5de88a, #5dc4e8, #8a5de8, #e85d5d); }
+.swb.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.grid2 .f.wide { grid-column: 1 / -1; }
+.f .fl { font-size: 12px; color: var(--muted); }
+.f .fl b { color: var(--ink); font-weight: 600; }
+details.sched { margin-top: 6px; }
+details.sched summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+details.sched .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+details.sched .ck { margin-top: 4px; }
+.muted { color: var(--muted); font-size: 12px; }
+.cmp { display: flex; flex-direction: column; gap: 6px; }
+.cmprow { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--sheet); font-size: 13px; }
+.cmprow span { color: var(--muted); font-size: 12px; }
+
 </style>
 <div class="wrap">
   <header class="top">
@@ -209,6 +235,7 @@ textarea.out { width: 100%; min-height: 160px; border: 1px solid var(--line); bo
   </header>
   <div class="layout">
     <section class="stage" aria-label="Plan sheet">
+      <div class="layouts" id="layouts"></div>
       <div class="tools" id="tools"></div>
       <div class="ctx" id="ctx"></div>
       <div class="canvasWrap" id="canvasWrap">
@@ -525,13 +552,13 @@ const TYPE_EXPECT = {
   restroom: { toilet: 1, vanity: 1, light: 1, outlet: 1, switch: 1 }
 };
 
-const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Cabinets and tops', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
+const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Cabinets and tops', 'Built-ins', 'Appliances', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
 
 function defaultSettings() {
   return { wallH: 96, minOpenSF: 0, casingId: 'T-CASE', cleaning: true, dumpster: 1, snap: 6, ortho: true };
 }
 function newState() {
-  return { v: 1, example: false, walls: [], openings: [], fixtures: [], rooms: [], nextId: 1, nextRoom: 1, prices: {}, waste: {}, manual: [], settings: defaultSettings() };
+  return { v: 1, example: false, walls: [], openings: [], fixtures: [], blocks: [], layouts: [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }], activeLayout: 'L1', rooms: [], nextId: 1, nextRoom: 1, prices: {}, waste: {}, manual: [], settings: defaultSettings() };
 }
 function uid(state, prefix) { return prefix + (state.nextId++); }
 
@@ -851,6 +878,24 @@ function buildTakeoff(state, an) {
     }
   }
 
+  // design blocks: cabinets, tops, fixtures, built-ins, lighting
+  for (const b of (typeof BLOCKS !== 'undefined' && state.blocks) || []) {
+    if (!BLOCKS[b.kind]) continue;
+    const room = an.rooms.find(r => pointInPoly(b, r.poly)) || null;
+    for (const d of blockLines(b)) {
+      add(d.key, { name: d.name, cat: d.cat, unit: d.unit, source: d.unit === 'EA' ? 'Counted' : 'Computed', wastePct: d.waste || 0, pack: d.pack || null, scope: d.scope || '', finishId: d.finishId }, room, d.qty);
+      for (const rq of d.req || []) add('req:' + d.key + ':' + rq[0], { name: rq[0], cat: d.cat, unit: rq[1], source: 'Rule', wastePct: 0, pack: null, scope: 'Companion item for ' + d.name + '.', host: d.name }, room, d.qty * rq[2]);
+    }
+  }
+  // what this concept removes compared with the existing layout
+  const dd = typeof demoDiff === 'function' ? demoDiff(state) : null;
+  if (dd) {
+    add('demo:wall', { name: 'Demo non-load-bearing walls', cat: 'Demo', unit: 'LF', source: 'Labor', wastePct: 0, pack: null, scope: 'Remove wall framing, drywall and trim, cap or reroute utilities in the wall, and patch adjoining surfaces.' }, null, dd.wallLF);
+    add('demo:bearing', { name: 'Load-bearing wall removal: engineer, beam and temporary shoring', cat: 'Allowances', unit: 'EA', source: 'Allowance', wastePct: 0, pack: null, scope: 'Engineered load-bearing wall removal including temporary shoring, new beam or header, posts and permit.' }, null, dd.bearing);
+    add('demo:cab', { name: 'Demo existing cabinets', cat: 'Demo', unit: 'LF', source: 'Labor', wastePct: 0, pack: null, scope: 'Disconnect, remove and dispose of existing cabinets and tops.' }, null, dd.cabLF);
+    for (const k of Object.keys(dd.gone)) add('demo:gone:' + k, { name: 'Remove existing ' + k.toLowerCase(), cat: 'Demo', unit: 'EA', source: 'Labor', wastePct: 0, pack: null, scope: 'Disconnect, remove and dispose of the existing ' + k.toLowerCase() + ' and cap utilities.' }, null, dd.gone[k]);
+  }
+
   // openings: doors, windows, casing
   const casing = FIN[S.casingId];
   for (const o of state.openings) {
@@ -926,6 +971,7 @@ function runChecks(state, an, tk) {
     if (r.area < 20) out.push({ sev: 'info', roomId: m.id, text: name + ' is only ' + fmtNum(r.area, 1) + ' SF. Confirm the dimensions.' });
     if (r.area > 1500) out.push({ sev: 'info', roomId: m.id, text: name + ' is ' + fmtNum(r.area, 0) + ' SF. Confirm the dimensions.' });
   }
+  if (typeof designChecks === 'function') for (const c of designChecks(state, an)) out.push(c);
   const fixedWalls = state.walls.filter(w => w.fixed).length;
   if (fixedWalls) out.push({ sev: 'info', text: fixedWalls + ' wall' + (fixedWalls > 1 ? 's are' : ' is') + ' marked load bearing. Moving or opening ' + (fixedWalls > 1 ? 'them' : 'it') + ' needs an engineer and a temporary support plan.' });
   const demo = tk.lines.some(l => l.cat === 'Demo');
@@ -1020,6 +1066,773 @@ if (typeof module !== 'undefined') {
   module.exports = { fmtFtIn, parseLen, analyze, buildTakeoff, runChecks, exampleState, newState, FINISHES, FIN, roomWallNet, roomBaseLF, exportScopeText, exportTakeoffJSON, labelPoint, pointInPoly, segDist, autoRot, fmtNum };
 }
 
+/* ===== Design blocks: cabinets, fixtures, furniture, built-ins, lighting =====
+   Pure data and logic (no DOM). A block is { id, kind, x, y, rot, w, d, h, opts }.
+   x,y is the center in plan inches. rot is degrees clockwise; at rot 0 the back faces up
+   (north) and the front faces down (south). Each kind describes itself as "parts":
+   boxes and cylinders in local coordinates (x right, z toward the front, y up). The same
+   parts draw the top-down symbol in 2D and the model in 3D, so the two always agree. */
+
+const PAL = {
+  cab: [['White', '#f1efe9'], ['Bone', '#e6dfcf'], ['Greige', '#cfc8bb'], ['Sage', '#a8b5a0'], ['Forest green', '#34503f'], ['Navy', '#2f3f5b'], ['Slate blue', '#5d7184'], ['Charcoal', '#3b3e42'], ['Black', '#232323'], ['Natural oak', '#c49a6c'], ['Walnut', '#6b4a33'], ['Cherry', '#7a3f2c']],
+  stone: [['Absolute Black', '#1d1d1f'], ['Uba Tuba', '#2f3a33'], ['Blue Pearl', '#46566d'], ['Steel Grey', '#6c7075'], ['Santa Cecilia', '#c9a173'], ['Kashmir White', '#cfc9bd'], ['Bianco Antico', '#d9d6cf'], ['Carrara', '#ecebe8'], ['Calacatta', '#f3f1ec'], ['Taj Mahal', '#e4d6bd']],
+  wood: [['Natural maple', '#d8b98a'], ['Honey oak', '#c49a6c'], ['Walnut', '#6b4a33'], ['Espresso', '#3d2b22'], ['Whitewash', '#e6dfd2'], ['Gray oak', '#8e8a82']],
+  metal: [['Chrome', '#cfd3d6'], ['Brushed nickel', '#b3b0a9'], ['Matte black', '#25272a'], ['Brushed brass', '#b99a55'], ['Bronze', '#4d3a2d'], ['Stainless', '#c4c6c8']],
+  tile: [['White', '#f1f1ee'], ['Warm white', '#ebe5d8'], ['Gray', '#b9bcbe'], ['Charcoal', '#4a4d50'], ['Sage', '#a5b5a2'], ['Navy', '#33465f'], ['Terracotta', '#b8683f'], ['Black', '#26282a']],
+  fabric: [['Oatmeal', '#d9cfbd'], ['Cream', '#efe9dc'], ['Gray', '#8f9296'], ['Charcoal', '#46484b'], ['Navy', '#2f3f5b'], ['Olive', '#6f7253'], ['Rust', '#a0522d'], ['Blush', '#d7b6ad'], ['Leather tan', '#9a6a43'], ['Black', '#232323']],
+  paint: [['Warm white', '#f1ede4'], ['Greige', '#cfc8bb'], ['Sage', '#a8b5a0'], ['Navy', '#2f3f5b'], ['Blush', '#e6cfc6'], ['Charcoal', '#4a4c4f']],
+  appl: [['Stainless', '#c4c6c8'], ['Black stainless', '#4a4d50'], ['White', '#f3f3f1'], ['Black', '#232323'], ['Slate', '#6a6e72']],
+  fix: [['White', '#f6f6f4'], ['Bone', '#ebe5d6'], ['Black', '#2a2b2d'], ['Matte gray', '#9a9d9f']]
+};
+const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+function hexShade(h, f) {
+  const c = hexRGB(h).map(v => Math.max(0, Math.min(255, Math.round(v * f))));
+  return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function palName(pal, hex) { const hit = (PAL[pal] || []).find(p => p[1].toLowerCase() === String(hex).toLowerCase()); return hit ? hit[0] : String(hex).toUpperCase(); }
+
+/* option helpers. role lets a design concept restyle every block that has a matching option */
+const CH = (k, label, v, def, role) => ({ k, label, t: 'choice', v, def, role });
+const CL = (k, label, pal, def, role) => ({ k, label, t: 'color', pal, def, role });
+const SUPPLY = (def) => CH('supply', 'Supplied by', [['gc', 'Contractor'], ['owner', 'Owner']], def);
+
+const GRADES = [['stock', 'Stock'], ['semi', 'Semi-custom'], ['custom', 'Custom']];
+const DOOR_STYLES = [['shaker', 'Shaker'], ['flat', 'Flat slab'], ['raised', 'Raised panel'], ['glass', 'Glass front'], ['beadboard', 'Beadboard']];
+const PULLS = [['bar', 'Bar pull'], ['knob', 'Knob'], ['cup', 'Cup pull'], ['none', 'Push-to-open']];
+const TOP_MATS = [['none', 'No top'], ['laminate', 'Laminate'], ['butcher', 'Butcher block'], ['granite', 'Granite'], ['quartz', 'Quartz']];
+const EDGES = [['eased', 'Eased'], ['bullnose', 'Bullnose'], ['ogee', 'Ogee'], ['mitered', 'Mitered waterfall']];
+const STYLE_ROLE = 'cabStyle';
+const CT_FIN = { laminate: 'CT-LAM', butcher: 'CT-BLOCK', granite: 'CT-GRAN', quartz: 'CT-QTZ' };
+const topPal = m => (m === 'butcher' ? 'wood' : 'stone');
+const topDef = m => (m === 'butcher' ? '#c49a6c' : m === 'laminate' ? '#d9d6cf' : m === 'quartz' ? '#ecebe8' : '#1d1d1f');
+const topColor = (o) => o.topColor || topDef(o.top);
+
+/* ---------- parts helpers ---------- */
+const bx = (x, z, w, d, y0, y1, c, o) => ({ s: 'box', x, z, w, d, y0, y1, c, o });
+const cy = (x, z, w, d, y0, y1, c, o) => ({ s: 'cyl', x, z, w, d, y0, y1, c, o });
+const METAL = { rough: 0.3, metal: 0.8 };
+
+/* faces on the front of a cabinet: doors or drawers, with pulls */
+function cabFronts(b, o, zf, y0, y1, config) {
+  const P = [], w = b.w, cabC = o.color, trim = hexShade(cabC, 0.9), pullC = o.hwFinish || '#b3b0a9';
+  const n = Math.max(1, Math.round(w / 18));
+  const rows = config === 'drawers' ? 3 : 1;
+  const fh = (y1 - y0) / rows;
+  for (let r = 0; r < rows; r++) {
+    const cols = rows > 1 ? 1 : n;
+    const cw = (w - 1) / cols;
+    for (let i = 0; i < cols; i++) {
+      const cx = -w / 2 + 0.5 + cw * (i + 0.5);
+      const ya = y0 + r * fh + 0.4, yb = y0 + (r + 1) * fh - 0.4;
+      P.push(bx(cx, zf + 0.35, cw - 0.6, 0.7, ya, yb, o.style === 'glass' ? hexShade(cabC, 0.95) : cabC));
+      if (o.style === 'shaker' || o.style === 'raised' || o.style === 'beadboard') P.push(bx(cx, zf + 0.75, Math.max(2, cw - 5), 0.2, ya + 2, yb - 2, trim));
+      if (o.style === 'glass') P.push(bx(cx, zf + 0.75, Math.max(2, cw - 5), 0.2, ya + 2, yb - 2, '#9fc0cf', { opacity: 0.55, rough: 0.1 }));
+      if (o.pull !== 'none') {
+        const px = rows > 1 ? cx : (n > 1 ? (i % 2 === 0 ? cx + cw / 2 - 2.5 : cx - cw / 2 + 2.5) : cx + cw / 2 - 2.5);
+        const py = rows > 1 ? (ya + yb) / 2 + (fh * 0.2) : (y1 > 40 ? y0 + 6 : y1 - 3.5);
+        if (o.pull === 'knob') P.push(cy(px, zf + 1.4, 1.4, 1.4, py - 0.7, py + 0.7, pullC, METAL));
+        else P.push(bx(px, zf + 1.4, rows > 1 ? Math.min(6, cw * 0.4) : 0.6, 0.9, py - (rows > 1 ? 0.3 : 2.5), py + (rows > 1 ? 0.3 : 2.5), pullC, METAL));
+      }
+    }
+  }
+  return P;
+}
+const cabOpts = (extra) => [
+  CH('grade', 'Cabinet line', GRADES, 'semi'),
+  CH('style', 'Door style', DOOR_STYLES, 'shaker', STYLE_ROLE),
+  CL('color', 'Cabinet color', 'cab', '#f1efe9', 'cabColor'),
+  CH('pull', 'Hardware', PULLS, 'bar', 'pull'),
+  CL('hwFinish', 'Hardware finish', 'metal', '#b3b0a9', 'metal')
+].concat(extra || []);
+const topOpts = [
+  CH('top', 'Countertop', TOP_MATS, 'quartz', 'topMat'),
+  CL('topColor', 'Top color', 'stone', '#ecebe8', 'topColor'),
+  CH('edge', 'Edge', EDGES, 'eased')
+];
+
+const BLOCKS = {
+  /* ----- kitchen and bath cabinetry ----- */
+  base: {
+    label: 'Base cabinet', cat: 'Cabinetry', w: 30, d: 24, h: 34.5, sizes: [12, 15, 18, 21, 24, 30, 33, 36, 42, 48], mount: 'wall', supply: 'gc', host: true,
+    opts: cabOpts([CH('config', 'Layout', [['doors', 'Doors'], ['drawers', 'Drawer stack'], ['sink', 'Sink base'], ['trash', 'Trash pull-out']], 'doors')]
+      .concat(topOpts, [CH('splash', 'Backsplash', [['none', 'None'], ['subway', '3x6 subway tile'], ['mosaic', 'Glass mosaic']], 'none', 'splash'), CL('splashColor', 'Splash color', 'tile', '#f1f1ee', 'tileColor')])),
+    parts(b, o) {
+      const w = b.w, d = b.d, P = [bx(0, -0.4, w, d - 3, 4, 33), bx(0, d / 2 - 4, w - 1, 3, 0, 4, '#2b2b2b')];
+      P[0].c = o.color;
+      P.push(...cabFronts(b, o, d / 2 - 1.5, 5, 33, o.config === 'drawers' ? 'drawers' : 'doors'));
+      if (o.top !== 'none') P.push(bx(0, 0.75, w + 0.4, d + 1.5, 33, 34.5, topColor(o), { rough: o.top === 'granite' || o.top === 'quartz' ? 0.25 : 0.7 }));
+      if (o.splash !== 'none') P.push(bx(0, -d / 2 + 0.3, w, 0.6, 34.5, 52.5, o.splashColor, { rough: 0.3 }));
+      return P;
+    },
+    lines(b, o) { return cabLines(b, o, 'base'); }
+  },
+  upper: {
+    label: 'Wall cabinet', cat: 'Cabinetry', w: 30, d: 12, h: 36, sizes: [12, 15, 18, 21, 24, 30, 33, 36, 42], mount: 'wall', supply: 'gc', elev: 54,
+    opts: cabOpts([CH('height', 'Height', [[30, '30 in'], [36, '36 in'], [42, '42 in']], '36'), CH('uclight', 'Under-cabinet light', [['none', 'None'], ['2700', 'LED 2700K warm'], ['3000', 'LED 3000K soft'], ['4000', 'LED 4000K neutral']], 'none')]),
+    parts(b, o) {
+      const h = +o.height || b.h, y0 = 54, y1 = y0 + h, w = b.w, d = b.d;
+      const P = [bx(0, -0.4, w, d - 1, y0, y1, o.color)];
+      P.push(...cabFronts(b, o, d / 2 - 0.5, y0 + 0.4, y1 - 0.4, 'doors'));
+      if (o.uclight !== 'none') P.push(bx(0, 1, w - 3, 1, y0 - 0.5, y0, '#fff2c8', { glow: true }));
+      return P;
+    },
+    lines(b, o) { return cabLines(b, o, 'upper'); }
+  },
+  tall: {
+    label: 'Tall / pantry cabinet', cat: 'Cabinetry', w: 24, d: 24, h: 90, sizes: [18, 24, 30, 36], mount: 'wall', supply: 'gc',
+    opts: cabOpts([CH('height', 'Height', [[84, '84 in'], [90, '90 in'], [96, '96 in']], '90')]),
+    parts(b, o) {
+      const h = +o.height || b.h, w = b.w, d = b.d;
+      const P = [bx(0, -0.4, w, d - 1, 4, h, o.color), bx(0, d / 2 - 4, w - 1, 3, 0, 4, '#2b2b2b')];
+      P.push(...cabFronts(b, o, d / 2 - 0.5, 5, h - 0.4, 'doors'));
+      return P;
+    },
+    lines(b, o) { return cabLines(b, o, 'tall'); }
+  },
+  island: {
+    label: 'Kitchen island', cat: 'Cabinetry', w: 72, d: 38, h: 34.5, sizes: [48, 60, 72, 84, 96, 108, 120], mount: 'free', supply: 'gc', host: true,
+    opts: cabOpts([CH('seats', 'Seating overhang', [['none', 'None'], ['one', 'One side'], ['two', 'Two sides']], 'one'), CH('config', 'Layout', [['doors', 'Doors'], ['drawers', 'Drawer stacks']], 'doors')]
+      .concat(topOpts)),
+    parts(b, o) {
+      const w = b.w, d = b.d, ov = o.seats === 'none' ? 0 : o.seats === 'two' ? 12 : 12;
+      const P = [bx(0, -ov / 2 * (o.seats === 'two' ? 0 : 1), w - 2, d - ov * (o.seats === 'two' ? 2 : 1) - 2, 4, 33, o.color), bx(0, 0, w - 3, d - 3, 0, 4, '#2b2b2b')];
+      P.push(...cabFronts(b, o, d / 2 - ov - 1.2, 5, 33, o.config));
+      if (o.top !== 'none') P.push(bx(0, 0, w, d, 33, 35.5, topColor(o), { rough: o.top === 'butcher' || o.top === 'laminate' ? 0.7 : 0.25 }));
+      return P;
+    },
+    lines(b, o) { return cabLines(b, o, 'island'); }
+  },
+  ksink: {
+    label: 'Kitchen sink + faucet', cat: 'Plumbing', w: 33, d: 22, h: 8, mount: 'host', supply: 'gc', overlay: true,
+    opts: [
+      CH('style', 'Sink style', [['single', 'Single bowl undermount'], ['double', 'Double bowl 60/40'], ['farm', 'Farmhouse apron front'], ['bar', 'Bar / prep sink'], ['dropin', 'Drop-in']], 'single', 'sinkStyle'),
+      CH('mat', 'Sink material', [['stainless', 'Stainless steel'], ['fireclay', 'Fireclay white'], ['composite', 'Black composite'], ['copper', 'Hammered copper']], 'stainless'),
+      CH('faucet', 'Faucet style', [['pulldown', 'Pull-down'], ['bridge', 'Bridge'], ['gooseneck', 'High gooseneck'], ['wall', 'Wall mount'], ['touchless', 'Touchless']], 'pulldown', 'faucetStyle'),
+      CL('metal', 'Faucet finish', 'metal', '#b3b0a9', 'metal'),
+      CH('disposal', 'Garbage disposal', [['yes', 'Yes'], ['no', 'No']], 'yes'),
+      CH('soap', 'Soap dispenser', [['yes', 'Yes'], ['no', 'No']], 'no')
+    ],
+    parts(b, o) {
+      const w = b.w, d = b.d, bc = { stainless: '#b7babd', fireclay: '#f4f2ec', composite: '#2a2b2d', copper: '#a7683f' }[o.mat] || '#b7babd';
+      const P = [], dark = hexShade(bc, 0.78), mc = o.metal;
+      const bowl = (x, bw, bd) => { P.push(bx(x, 1, bw, bd, 33.4, 36.05, bc, { rough: 0.3, metal: o.mat === 'stainless' || o.mat === 'copper' ? 0.6 : 0 })); P.push(bx(x, 1, bw - 2, bd - 2, 33.2, 36.15, dark, { rough: 0.5 })); };
+      if (o.style === 'double') { bowl(-w * 0.2, w * 0.55, d - 5); bowl(w * 0.3, w * 0.32, d - 5); }
+      else if (o.style === 'bar') bowl(0, w * 0.7, d * 0.75);
+      else bowl(0, w - 6, d - 5);
+      if (o.style === 'farm') P.push(bx(0, d / 2 - 0.5, w - 3, 1.4, 22, 36, bc, { rough: 0.25 }));
+      const fz = -d / 2 + 2.2;
+      if (o.faucet === 'wall') P.push(bx(0, -d / 2 + 0.5, 1.5, 5, 46, 47.5, mc, METAL));
+      else {
+        P.push(cy(0, fz, 2, 2, 36, 36.6, mc, METAL));
+        const tall = o.faucet === 'gooseneck' ? 18 : o.faucet === 'bridge' ? 12 : 10;
+        P.push(cy(0, fz, 1.3, 1.3, 36.6, 36.6 + tall, mc, METAL));
+        P.push(bx(0, fz + 3, 1.1, 6, 36.6 + tall - 1, 36.6 + tall, mc, METAL));
+        if (o.faucet === 'bridge') P.push(cy(0, fz, 8, 1.2, 40, 41, mc, METAL));
+      }
+      if (o.soap === 'yes') P.push(cy(w * 0.42, fz, 1.1, 1.1, 36, 40, mc, METAL));
+      return P;
+    },
+    lines(b, o) { return sinkLines(b, o); }
+  },
+  vanity: {
+    label: 'Bath vanity', cat: 'Cabinetry', w: 36, d: 21, h: 34, sizes: [24, 30, 36, 48, 60, 72], mount: 'wall', supply: 'gc', host: true,
+    opts: [
+      CH('vstyle', 'Vanity style', [['shaker', 'Shaker cabinet'], ['flat', 'Flat slab'], ['furniture', 'Furniture legs'], ['floating', 'Floating'], ['open', 'Open shelf']], 'shaker', STYLE_ROLE),
+      CL('color', 'Vanity color', 'cab', '#cfc8bb', 'cabColor'),
+      CH('pull', 'Hardware', PULLS, 'bar', 'pull'),
+      CL('hwFinish', 'Hardware finish', 'metal', '#b3b0a9', 'metal'),
+      CH('top', 'Vanity top', [['cultured', 'Cultured marble'], ['quartz', 'Quartz'], ['granite', 'Granite'], ['laminate', 'Laminate'], ['butcher', 'Wood']], 'quartz', 'topMat'),
+      CL('topColor', 'Top color', 'stone', '#ecebe8', 'topColor'),
+      CH('sinks', 'Sinks', [['1', 'Single'], ['2', 'Double']], '1'),
+      CH('sinkType', 'Sink type', [['under', 'Undermount'], ['vessel', 'Vessel bowl'], ['integral', 'Integral top']], 'under', 'sinkStyle'),
+      CH('faucet', 'Faucet style', [['widespread', 'Widespread'], ['single', 'Single hole'], ['wall', 'Wall mount'], ['vessel', 'Tall vessel']], 'single', 'faucetStyle'),
+      CL('metal', 'Faucet finish', 'metal', '#b3b0a9', 'metal'),
+      CH('mirror', 'Mirror', [['none', 'None'], ['framed', 'Framed mirror'], ['medicine', 'Medicine cabinet'], ['round', 'Round mirror'], ['led', 'LED backlit mirror']], 'framed')
+    ],
+    parts(b, o) {
+      const w = b.w, d = b.d, floating = o.vstyle === 'floating', legs = o.vstyle === 'furniture', y0 = floating ? 16 : legs ? 8 : 4;
+      const P = [];
+      if (o.vstyle === 'open') { P.push(bx(0, -0.4, w, d - 1, 28, 32, o.color)); P.push(bx(0, -0.4, w - 1, d - 1, 8, 9, o.color)); }
+      else P.push(bx(0, -0.4, w, d - 1, y0, 32, o.color));
+      if (!floating && !legs) P.push(bx(0, d / 2 - 4, w - 1, 3, 0, 4, '#2b2b2b'));
+      if (legs) for (const sx of [-1, 1]) P.push(bx(sx * (w / 2 - 2), d / 2 - 3, 2, 2, 0, 8, hexShade(o.color, 0.8)));
+      if (o.vstyle !== 'open') P.push(...cabFronts(b, Object.assign({}, o, { style: o.vstyle === 'flat' || floating ? 'flat' : 'shaker' }), d / 2 - 1.5, y0 + 1, 31.5, w > 40 && o.sinks === '1' ? 'drawers' : 'doors'));
+      P.push(bx(0, 0.5, w + 0.6, d + 0.8, 32, 34, topColor(o), { rough: o.top === 'cultured' ? 0.15 : 0.3 }));
+      const ns = o.sinks === '2' ? 2 : 1;
+      for (let i = 0; i < ns; i++) {
+        const sx = ns === 2 ? (i ? 1 : -1) * w * 0.25 : 0, fz = -d / 2 + 3;
+        if (o.sinkType === 'vessel') { P.push(cy(sx, 2, 15, 15, 34, 39, '#f6f6f4', { rough: 0.15 })); }
+        else P.push(bx(sx, 1.5, Math.min(18, w / ns - 5), d - 8, 33.7, 34.1, '#f6f6f4', { rough: 0.15 }));
+        const fh = o.faucet === 'vessel' ? 10 : o.faucet === 'wall' ? 0 : 5;
+        if (o.faucet === 'wall') P.push(bx(sx, -d / 2 + 1, 1.5, 5, 40, 41.5, o.metal, METAL));
+        else { P.push(cy(sx, fz, 1.4, 1.4, 34, 34 + fh, o.metal, METAL)); P.push(bx(sx, fz + 2, 1.1, 4, 34 + fh - 1, 34 + fh, o.metal, METAL)); }
+      }
+      if (o.mirror !== 'none') {
+        const mw = Math.min(w - 4, ns === 2 ? w * 0.42 : w - 6);
+        for (let i = 0; i < ns; i++) {
+          const sx = ns === 2 ? (i ? 1 : -1) * w * 0.25 : 0;
+          if (o.mirror === 'round') P.push(cy(sx, -d / 2 + 0.4, 24, 0.8, 44, 68, '#c9dde6', { rough: 0.05, metal: 0.4 }));
+          else P.push(bx(sx, -d / 2 + 0.4, mw, 0.8, 44, 70, o.mirror === 'medicine' ? '#d9e4ea' : '#c9dde6', { rough: 0.05, metal: 0.4, glow: o.mirror === 'led' }));
+        }
+      }
+      return P;
+    },
+    lines(b, o) { return vanityLines(b, o); }
+  },
+  toilet: {
+    label: 'Toilet', cat: 'Plumbing', w: 20, d: 28, h: 30, mount: 'wall', supply: 'gc',
+    opts: [CH('tstyle', 'Style', [['two', 'Two-piece'], ['one', 'One-piece'], ['wall', 'Wall-hung'], ['bidet', 'With bidet seat']], 'two'), CH('shape', 'Bowl', [['elong', 'Elongated'], ['round', 'Round']], 'elong'), CL('color', 'Color', 'fix', '#f6f6f4')],
+    parts(b, o) {
+      const c = o.color, P = [];
+      P.push(bx(0, -b.d / 2 + 4, 19, 8, o.tstyle === 'wall' ? 10 : 14, 29, c, { rough: 0.15 }));
+      P.push(cy(0, 2, 14.5, o.shape === 'round' ? 16 : 19, o.tstyle === 'wall' ? 10 : 0, 16, c, { rough: 0.15 }));
+      if (o.tstyle === 'two') P.push(bx(0, -b.d / 2 + 4, 20, 8.5, 28.5, 29.5, hexShade(c, 0.97)));
+      return P;
+    },
+    lines(b, o) { return [{ key: 'blk:toilet:' + o.tstyle + ':' + o.color, name: 'Toilet, ' + ({ two: 'two-piece', one: 'one-piece', wall: 'wall-hung with carrier', bidet: 'with bidet seat' }[o.tstyle]) + ', ' + (o.shape === 'round' ? 'round' : 'elongated') + ', ' + palName('fix', o.color), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install toilet with seat, supply line and wax ring, connected and tested.', req: [['Wax ring and supply line kit', 'KIT', 1]] }]; }
+  },
+  tub: {
+    label: 'Tub (freestanding or built-in)', cat: 'Plumbing', w: 60, d: 30, h: 22, sizes: [54, 60, 66, 72], mount: 'wall', supply: 'gc',
+    opts: [
+      CH('type', 'Tub type', [['alcove', 'Built-in alcove'], ['dropin', 'Drop-in with deck'], ['clawfoot', 'Freestanding clawfoot'], ['oval', 'Freestanding oval'], ['slipper', 'Freestanding slipper']], 'alcove'),
+      CL('color', 'Tub color', 'fix', '#f6f6f4'),
+      CH('filler', 'Filler', [['spout', 'Wall spout'], ['deck', 'Deck mount'], ['floor', 'Floor-mounted freestanding']], 'spout'),
+      CL('metal', 'Fixture finish', 'metal', '#b3b0a9', 'metal'),
+      CH('surround', 'Wall surround', [['none', 'None'], ['tile', 'Tile to ceiling'], ['acrylic', 'Acrylic panels']], 'tile'),
+      CL('tileColor', 'Surround tile', 'tile', '#f1f1ee', 'tileColor'),
+      CH('door', 'Shower enclosure', [['none', 'None'], ['curtain', 'Curtain and rod'], ['frameless', 'Frameless glass'], ['framed', 'Framed glass']], 'curtain')
+    ],
+    parts(b, o) {
+      const w = b.w, d = b.d, c = o.color, P = [], free = o.type === 'clawfoot' || o.type === 'oval' || o.type === 'slipper';
+      if (free) {
+        P.push(cy(0, 0, w, d, o.type === 'clawfoot' ? 6 : 0, 24, c, { rough: 0.15 }));
+        P.push(cy(0, 0, w - 5, d - 5, 20, 24.2, hexShade(c, 0.93), { rough: 0.2 }));
+        if (o.type === 'clawfoot') for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) P.push(cy(sx * (w / 2 - 6), sz * (d / 2 - 6), 4, 4, 0, 6, o.metal, METAL));
+        if (o.filler === 'floor') { P.push(cy(w / 2 - 3, 0, 1.6, 1.6, 0, 30, o.metal, METAL)); }
+      } else {
+        P.push(bx(0, 0, w, d, 0, o.type === 'dropin' ? 20 : 19, c, { rough: 0.15 }));
+        P.push(bx(0, 0, w - 6, d - 6, 17, 19.2, hexShade(c, 0.93), { rough: 0.2 }));
+        if (o.type === 'dropin') P.push(bx(0, 0, w + 2, d + 2, 19, 20.5, hexShade(o.tileColor, 0.95)));
+      }
+      if (o.filler !== 'floor') P.push(bx(-w / 2 + 6, -d / 2 + 1, 2, 4, 26, 28, o.metal, METAL));
+      return P;
+    },
+    lines(b, o) { return tubLines(b, o); }
+  },
+  shower: {
+    label: 'Walk-in shower', cat: 'Plumbing', w: 48, d: 36, h: 84, sizes: [36, 42, 48, 60], mount: 'wall', supply: 'gc',
+    opts: [
+      CH('base', 'Shower floor', [['tile', 'Tiled with linear drain'], ['pan', 'Acrylic pan'], ['curbless', 'Curbless tile']], 'tile'),
+      CH('wallTile', 'Wall tile', [['subway', '3x6 subway'], ['large', '12x24 large format'], ['mosaic', 'Mosaic accent'], ['slab', 'Porcelain slab']], 'large'),
+      CL('tileColor', 'Tile color', 'tile', '#ebe5d8', 'tileColor'),
+      CH('door', 'Glass', [['frameless', 'Frameless glass door'], ['panel', 'Fixed glass panel only'], ['framed', 'Framed glass door'], ['curtain', 'Curtain']], 'frameless'),
+      CH('head', 'Shower head', [['fixed', 'Fixed wall'], ['rain', 'Ceiling rain head'], ['combo', 'Rain head + handheld'], ['bodyspray', 'Body sprays']], 'combo', 'faucetStyle'),
+      CL('metal', 'Fixture finish', 'metal', '#b3b0a9', 'metal'),
+      CH('niche', 'Recessed niche', [['yes', 'Yes'], ['no', 'No']], 'yes'),
+      CH('bench', 'Built-in bench', [['yes', 'Yes'], ['no', 'No']], 'no')
+    ],
+    parts(b, o) {
+      const w = b.w, d = b.d, P = [];
+      P.push(bx(0, 0, w, d, 0, 1, o.tileColor, { rough: 0.4 }));
+      P.push(bx(0, -d / 2 + 0.5, w, 1, 1, 84, hexShade(o.tileColor, 0.97), { rough: 0.3 }));
+      P.push(bx(-w / 2 + 0.5, 0, 1, d, 1, 84, hexShade(o.tileColor, 0.97), { rough: 0.3 }));
+      if (o.bench === 'yes') P.push(bx(w / 2 - 9, 0, 18, d - 2, 1, 18, hexShade(o.tileColor, 0.92)));
+      if (o.door !== 'curtain') P.push(bx(0, d / 2 - 0.3, w, 0.6, o.base === 'pan' ? 4 : 1, 78, '#bcd8e3', { opacity: 0.35, rough: 0.05 }));
+      if (o.base === 'tile') P.push(bx(0, d / 2 - 6, w - 6, 1.5, 1, 1.4, '#9a9d9f', METAL));
+      P.push(cy(-w / 2 + 6, -d / 2 + 2, 1.2, 1.2, 70, 84, o.metal, METAL));
+      P.push(bx(-w / 2 + 6, -d / 2 + 5, 1, 7, 83, 84, o.metal, METAL));
+      return P;
+    },
+    lines(b, o) { return showerLines(b, o); }
+  }
+};
+
+/* ----- built-ins, appliances, furniture, lighting (continues the BLOCKS catalog) ----- */
+const FSTYLES = [['modern', 'Modern'], ['traditional', 'Traditional'], ['farmhouse', 'Farmhouse'], ['midcentury', 'Mid-century'], ['industrial', 'Industrial']];
+const furnOpts = (colPal, colDef) => [CH('fstyle', 'Design style', FSTYLES, 'modern', 'furnStyle'), CL('color', colPal === 'wood' ? 'Wood tone' : 'Color', colPal, colDef, colPal === 'wood' ? 'woodTone' : 'fabric'), SUPPLY('owner')];
+const legsFor = (o, w, d, h) => o.fstyle === 'midcentury' ? 'tapered' : o.fstyle === 'industrial' ? 'metal' : o.fstyle === 'farmhouse' ? 'block' : o.fstyle === 'traditional' ? 'turned' : 'slim';
+const legParts = (o, w, d, h, c) => { const k = legsFor(o), t = k === 'block' ? 3.5 : 1.8, P = []; for (const sx of [-1, 1]) for (const sz of [-1, 1]) P.push(bx(sx * (w / 2 - 2.5), sz * (d / 2 - 2.5), t, t, 0, h, k === 'metal' ? '#2b2b2b' : c)); return P; };
+
+Object.assign(BLOCKS, {
+  shelf: {
+    label: 'Built-in shelving', cat: 'Built-ins', w: 72, d: 14, h: 96, sizes: [24, 36, 48, 60, 72, 96, 120], mount: 'wall', supply: 'gc',
+    opts: [
+      CH('layout', 'Layout', [['open', 'Open shelves'], ['cab', 'Cabinets below, open above'], ['doors', 'Cabinets below, glass doors above'], ['floating', 'Floating shelves']], 'cab'),
+      CH('height', 'Height', [[84, '7 ft'], [96, '8 ft'], [108, '9 ft']], '96'),
+      CH('shelves', 'Shelves', [[3, '3'], [4, '4'], [5, '5'], [6, '6']], '4'),
+      CL('color', 'Paint or stain', 'cab', '#f1efe9', 'cabColor'),
+      CH('trim', 'Face frame / crown', [['plain', 'Plain'], ['crown', 'Crown molding'], ['panel', 'Paneled backs']], 'crown'),
+      CH('led', 'Integrated lighting', [['none', 'None'], ['2700', 'LED strips, 2700K warm'], ['3000', 'LED strips, 3000K soft'], ['4000', 'LED strips, 4000K']], '2700', 'ledTemp'),
+      CH('pull', 'Hardware', PULLS, 'knob', 'pull'), CL('hwFinish', 'Hardware finish', 'metal', '#b3b0a9', 'metal')
+    ],
+    parts(b, o) {
+      const w = b.w, d = b.d, H = +o.height || 96, n = +o.shelves || 4, c = o.color, P = [];
+      const below = o.layout === 'cab' || o.layout === 'doors', yb = below ? 34 : 0;
+      if (o.layout === 'floating') { for (let i = 0; i < n; i++) P.push(bx(0, d / 2 - 5, w, 10, 30 + i * ((H - 36) / Math.max(1, n - 1)), 31.5 + i * ((H - 36) / Math.max(1, n - 1)), c)); return P; }
+      P.push(bx(-w / 2 + 0.75, 0, 1.5, d, 0, H, c), bx(w / 2 - 0.75, 0, 1.5, d, 0, H, c), bx(0, -d / 2 + 0.4, w, 0.8, 0, H, hexShade(c, o.trim === 'panel' ? 0.9 : 0.96)));
+      if (below) { P.push(bx(0, 0, w - 3, d, 4, yb, c)); P.push(...cabFronts(Object.assign({}, b, { w: w - 3 }), Object.assign({ style: 'shaker' }, o), d / 2 - 1, 5, yb - 0.5, 'doors')); P.push(bx(0, 0, w, d + 1, yb, yb + 1.5, hexShade(c, 0.95))); }
+      const top = H, span = top - (below ? yb + 1.5 : 4);
+      for (let i = 0; i <= n; i++) P.push(bx(0, 0, w - 3, d - 0.5, (below ? yb + 1.5 : 4) + (i / n) * span - 0.6, (below ? yb + 1.5 : 4) + (i / n) * span + 0.6, c));
+      if (o.layout === 'doors') P.push(bx(0, d / 2 - 0.4, w - 3, 0.5, yb + 2, H - 1, '#9fc0cf', { opacity: 0.4, rough: 0.05 }));
+      if (o.trim === 'crown') P.push(bx(0, 0, w + 1, d + 1.5, H, H + 4, hexShade(c, 0.97)));
+      if (o.led !== 'none') for (let i = 1; i < n; i++) P.push(bx(0, d / 2 - 1.5, w - 4, 0.6, (below ? yb + 1.5 : 4) + (i / n) * span - 1.2, (below ? yb + 1.5 : 4) + (i / n) * span - 0.6, '#fff2c8', { glow: true }));
+      return P;
+    },
+    lines(b, o) { return shelfLines(b, o); }
+  },
+  seat: {
+    label: 'Window seat / bench', cat: 'Built-ins', w: 60, d: 18, h: 18, sizes: [36, 48, 60, 72, 96], mount: 'wall', supply: 'gc',
+    opts: [CL('color', 'Paint or stain', 'cab', '#f1efe9', 'cabColor'), CH('storage', 'Storage', [['drawers', 'Drawers'], ['lift', 'Lift-top'], ['open', 'Open cubbies']], 'drawers'), CL('cushion', 'Cushion fabric', 'fabric', '#d9cfbd', 'fabric'), CH('pull', 'Hardware', PULLS, 'knob', 'pull'), CL('hwFinish', 'Hardware finish', 'metal', '#b3b0a9', 'metal')],
+    parts(b, o) { const w = b.w, d = b.d; return [bx(0, 0, w, d, 0, 16, o.color), ...cabFronts(b, Object.assign({ style: 'shaker' }, o), d / 2 - 0.5, 1, 15.5, o.storage === 'drawers' ? 'drawers' : 'doors'), bx(0, 0, w - 1, d - 1, 16, 19, o.cushion, { rough: 0.95 })]; },
+    lines(b, o) { return [{ key: 'blk:seat:' + o.storage + ':' + o.color, name: 'Built-in window seat, ' + o.storage + ' storage, ' + palName('cab', o.color), cat: 'Built-ins', unit: 'LF', qty: b.w / 12, scope: 'Furnish and install built-in window seat with ' + o.storage + ' storage, painted or stained, with cushion support.' }]; }
+  },
+  closet: {
+    label: 'Closet system', cat: 'Built-ins', w: 72, d: 24, h: 84, sizes: [48, 60, 72, 96, 120], mount: 'wall', supply: 'gc',
+    opts: [CH('type', 'System', [['reach', 'Rod and shelf'], ['double', 'Double hang'], ['custom', 'Custom with drawers and shoe shelves']], 'double'), CL('color', 'Finish', 'cab', '#f1efe9', 'cabColor'), CH('led', 'Integrated lighting', [['none', 'None'], ['3000', 'LED bar, 3000K'], ['4000', 'LED bar, 4000K']], 'none', 'ledTemp')],
+    parts(b, o) { const w = b.w, d = b.d, P = [bx(0, -d / 2 + 0.5, w, 1, 0, 84, o.color, { opacity: 0.9 }), bx(0, -d / 2 + 6, w, 12, 80, 81.5, o.color)]; P.push(cy(0, 0, w - 4, 1.2, o.type === 'double' ? 40 : 66, o.type === 'double' ? 41.2 : 67.2, '#c4c6c8', METAL)); if (o.type === 'double') P.push(cy(0, 0, w - 4, 1.2, 76, 77.2, '#c4c6c8', METAL)); if (o.type === 'custom') for (let i = 0; i < 3; i++) P.push(bx(-w / 2 + 12, d / 2 - 6, 24, 12, 4 + i * 11, 14 + i * 11, hexShade(o.color, 0.96))); if (o.led !== 'none') P.push(bx(0, 0, w - 6, 1, 82, 82.6, '#fff2c8', { glow: true })); return P; },
+    lines(b, o) { const t = { reach: 'Closet system, rod and shelf', double: 'Closet system, double hang', custom: 'Custom closet system with drawers' }[o.type]; return [{ key: 'blk:closet:' + o.type + ':' + o.color, name: t + ', ' + palName('cab', o.color), cat: 'Built-ins', unit: 'LF', qty: b.w / 12, scope: 'Furnish and install ' + t.toLowerCase() + ' including rods, shelving and hardware.' }].concat(o.led !== 'none' ? [{ key: 'blk:led:closet:' + o.led, name: 'Closet LED bar light, ' + o.led + 'K', cat: 'Electrical', unit: 'EA', qty: 1, scope: 'Furnish and install LED bar light, wired and switched.' }] : []); }
+  },
+  /* appliances */
+  fridge: {
+    label: 'Refrigerator', cat: 'Appliances', w: 36, d: 30, h: 70, sizes: [30, 33, 36, 42, 48], mount: 'wall', supply: 'gc',
+    opts: [CH('type', 'Type', [['french', 'French door'], ['side', 'Side by side'], ['top', 'Top freezer'], ['column', 'Built-in column'], ['counter', 'Counter-depth']], 'french'), CL('color', 'Finish', 'appl', '#c4c6c8', 'appliance'), SUPPLY('gc')],
+    parts(b, o) { return [bx(0, -1, b.w, b.d - 2, 1, 69, o.color, { rough: 0.35, metal: 0.5 }), bx(0, b.d / 2 - 1.5, 0.5, 0.8, 40, 66, '#6a6e72'), bx(b.w * 0.15, b.d / 2 - 1.2, 0.8, 1, 8, 28, '#6a6e72')]; },
+    lines(b, o) { return applLines(b, o, 'Refrigerator, ' + ({ french: 'French door', side: 'side by side', top: 'top freezer', column: 'built-in column', counter: 'counter-depth' }[o.type]) + ', ' + b.w + ' in'); }
+  },
+  range: {
+    label: 'Range / cooktop', cat: 'Appliances', w: 30, d: 26, h: 36, sizes: [24, 30, 36, 48], mount: 'wall', supply: 'gc',
+    opts: [CH('type', 'Type', [['gas', 'Gas range'], ['elec', 'Electric range'], ['induction', 'Induction range'], ['pro', 'Pro-style dual fuel']], 'gas'), CL('color', 'Finish', 'appl', '#c4c6c8', 'appliance'), SUPPLY('gc')],
+    parts(b, o) { const P = [bx(0, 0, b.w, b.d, 0, 35, o.color, { rough: 0.35, metal: 0.5 }), bx(0, 0, b.w, b.d, 35, 36, '#26282a')]; const n = b.w >= 36 ? 6 : 4; for (let i = 0; i < n; i++) { const col = i % 2, row = Math.floor(i / 2); P.push(cy(-b.w * 0.22 + col * b.w * 0.44 + (n === 6 && row === 2 ? 0 : 0), -b.d * 0.2 + row * (b.d * 0.4 / Math.max(1, Math.ceil(n / 2) - 1)), 6, 6, 36, 37, '#6a6e72', METAL)); } return P; },
+    lines(b, o) { return applLines(b, o, ({ gas: 'Gas range', elec: 'Electric range', induction: 'Induction range', pro: 'Pro-style dual fuel range' }[o.type]) + ', ' + b.w + ' in'); }
+  },
+  dishwasher: {
+    label: 'Dishwasher', cat: 'Appliances', w: 24, d: 24, h: 34, mount: 'wall', supply: 'gc',
+    opts: [CL('color', 'Finish', 'appl', '#c4c6c8', 'appliance'), CH('type', 'Type', [['std', 'Standard'], ['panel', 'Panel-ready'], ['drawer', 'Drawer']], 'std'), SUPPLY('gc')],
+    parts(b, o) { return [bx(0, 0, b.w, b.d, 0, 34, o.type === 'panel' ? '#cfc8bb' : o.color, { rough: 0.35, metal: 0.5 })]; },
+    lines(b, o) { return applLines(b, o, 'Dishwasher, ' + ({ std: 'standard', panel: 'panel-ready', drawer: 'drawer' }[o.type])); }
+  },
+  hood: {
+    label: 'Range hood', cat: 'Appliances', w: 30, d: 20, h: 30, sizes: [30, 36, 42, 48], mount: 'wall', supply: 'gc', elev: 60, overlay: true,
+    opts: [CH('type', 'Style', [['wall', 'Wall-mount chimney'], ['insert', 'Custom hood insert'], ['island', 'Island canopy'], ['micro', 'Over-range microwave']], 'wall'), CL('color', 'Finish', 'appl', '#c4c6c8', 'appliance'), SUPPLY('gc')],
+    parts(b, o) { return [bx(0, 0, b.w, b.d, 60, 72, o.color, { rough: 0.3, metal: 0.5 }), bx(0, -b.d / 2 + 4, 10, 8, 72, 96, o.color, { rough: 0.3, metal: 0.5 })]; },
+    lines(b, o) { return applLines(b, o, 'Range hood, ' + ({ wall: 'wall-mount chimney', insert: 'custom insert', island: 'island canopy', micro: 'over-range microwave' }[o.type]) + ', ' + b.w + ' in', 'Furnish and install range hood with vent duct to the exterior, wired and tested.'); }
+  },
+  washer: { label: 'Washer', cat: 'Appliances', w: 27, d: 30, h: 38, mount: 'wall', supply: 'owner', opts: [CL('color', 'Finish', 'appl', '#f3f3f1', 'appliance'), SUPPLY('owner')], parts(b, o) { return [bx(0, 0, b.w, b.d, 0, 38, o.color, { rough: 0.3 }), cy(0, b.d / 2 - 1, 17, 1, 12, 29, '#6a8da0', { opacity: 0.6 })]; }, lines(b, o) { return applLines(b, o, 'Washer'); } },
+  dryer: { label: 'Dryer', cat: 'Appliances', w: 27, d: 30, h: 38, mount: 'wall', supply: 'owner', opts: [CL('color', 'Finish', 'appl', '#f3f3f1', 'appliance'), SUPPLY('owner')], parts(b, o) { return [bx(0, 0, b.w, b.d, 0, 38, o.color, { rough: 0.3 }), cy(0, b.d / 2 - 1, 17, 1, 12, 29, '#8a9399', { opacity: 0.6 })]; }, lines(b, o) { return applLines(b, o, 'Dryer'); } },
+  /* furniture: design only, never in the takeoff */
+  bed: {
+    label: 'Bed', cat: 'Furniture', w: 60, d: 80, h: 40, sizes: [39, 54, 60, 76], mount: 'wall', supply: 'owner', furn: true, sizeNames: { 39: 'Twin', 54: 'Full', 60: 'Queen', 76: 'King' },
+    opts: furnOpts('wood', '#6b4a33').concat([CH('head', 'Headboard', [['panel', 'Paneled'], ['uph', 'Upholstered'], ['slat', 'Slat'], ['none', 'None']], 'uph'), CL('bedding', 'Bedding', 'fabric', '#efe9dc', 'fabric')]),
+    parts(b, o) { const w = b.w, d = b.d, P = [bx(0, 0, w, d, 8, 15, o.color), ...legParts(o, w, d, 8, o.color), bx(0, 2, w - 2, d - 6, 15, 24, o.bedding, { rough: 0.95 }), bx(-w * 0.22, -d / 2 + 10, w * 0.38, 12, 24, 29, '#ffffff', { rough: 0.95 }), bx(w * 0.22, -d / 2 + 10, w * 0.38, 12, 24, 29, '#ffffff', { rough: 0.95 })]; if (o.head !== 'none') P.push(bx(0, -d / 2 + 1.5, w + 2, 3, 8, o.head === 'uph' ? 52 : 46, o.head === 'uph' ? '#8f9296' : o.color)); return P; },
+    lines() { return []; }
+  },
+  nightstand: { label: 'Nightstand', cat: 'Furniture', w: 24, d: 18, h: 26, mount: 'wall', supply: 'owner', furn: true, opts: furnOpts('wood', '#6b4a33'), parts(b, o) { return [bx(0, 0, b.w, b.d, 6, 26, o.color), ...legParts(o, b.w, b.d, 6, o.color), bx(0, b.d / 2 + 0.2, b.w - 3, 0.4, 14, 22, hexShade(o.color, 0.85))]; }, lines() { return []; } },
+  dresser: { label: 'Dresser', cat: 'Furniture', w: 60, d: 20, h: 34, sizes: [36, 48, 60, 72], mount: 'wall', supply: 'owner', furn: true, opts: furnOpts('wood', '#6b4a33'), parts(b, o) { const P = [bx(0, 0, b.w, b.d, 6, 34, o.color), ...legParts(o, b.w, b.d, 6, o.color)]; for (let i = 0; i < 3; i++) P.push(bx(0, b.d / 2 + 0.2, b.w - 3, 0.4, 8 + i * 8.5, 15 + i * 8.5, hexShade(o.color, 0.88))); return P; }, lines() { return []; } },
+  sofa: {
+    label: 'Sofa', cat: 'Furniture', w: 84, d: 38, h: 34, sizes: [60, 72, 84, 96, 108], mount: 'wall', supply: 'owner', furn: true,
+    opts: furnOpts('fabric', '#8f9296').concat([CH('sofaType', 'Type', [['sofa', 'Sofa'], ['sectional', 'Sectional (L)'], ['chaise', 'With chaise']], 'sofa')]),
+    parts(b, o) { const w = b.w, d = b.d, c = o.color, P = [bx(0, 0, w, d, 6, 17, c, { rough: 0.95 }), bx(0, -d / 2 + 5, w, 10, 17, 34, c, { rough: 0.95 }), bx(-w / 2 + 4, 0, 8, d, 17, 26, hexShade(c, 0.95), { rough: 0.95 }), bx(w / 2 - 4, 0, 8, d, 17, 26, hexShade(c, 0.95), { rough: 0.95 }), ...legParts(o, w, d, 6, '#3d2b22')]; if (o.sofaType !== 'sofa') P.push(bx(w / 2 - 17, d / 2 + 18, 34, 36, 6, 17, c, { rough: 0.95 })); return P; },
+    lines() { return []; }
+  },
+  chair: { label: 'Armchair', cat: 'Furniture', w: 32, d: 34, h: 34, mount: 'free', supply: 'owner', furn: true, opts: furnOpts('fabric', '#d9cfbd'), parts(b, o) { const c = o.color; return [bx(0, 0, b.w, b.d, 6, 17, c, { rough: 0.95 }), bx(0, -b.d / 2 + 4, b.w, 8, 17, 34, c, { rough: 0.95 }), bx(-b.w / 2 + 3, 0, 6, b.d, 17, 25, hexShade(c, 0.95)), bx(b.w / 2 - 3, 0, 6, b.d, 17, 25, hexShade(c, 0.95)), ...legParts(o, b.w, b.d, 6, '#3d2b22')]; }, lines() { return []; } },
+  coffee: {
+    label: 'Coffee / side table', cat: 'Furniture', w: 48, d: 24, h: 17, sizes: [24, 36, 48, 54], mount: 'free', supply: 'owner', furn: true,
+    opts: furnOpts('wood', '#6b4a33').concat([CH('shape', 'Shape', [['rect', 'Rectangle'], ['round', 'Round'], ['oval', 'Oval']], 'rect')]),
+    parts(b, o) { const w = b.w, d = b.d, top = o.shape === 'rect' ? bx(0, 0, w, d, 15, 17, o.color) : cy(0, 0, w, o.shape === 'round' ? w : d, 15, 17, o.color); return [top, ...legParts(o, w * 0.9, d * 0.9, 15, o.color)]; },
+    lines() { return []; }
+  },
+  dining: {
+    label: 'Dining table + chairs', cat: 'Furniture', w: 72, d: 38, h: 30, sizes: [48, 60, 72, 84, 96], mount: 'free', supply: 'owner', furn: true,
+    opts: furnOpts('wood', '#6b4a33').concat([CH('shape', 'Shape', [['rect', 'Rectangle'], ['round', 'Round'], ['oval', 'Oval']], 'rect'), CH('seats', 'Chairs', [[4, '4'], [6, '6'], [8, '8']], '6'), CL('chairColor', 'Chair color', 'fabric', '#d9cfbd', 'fabric')]),
+    parts(b, o) { const w = b.w, d = o.shape === 'round' ? b.w : b.d, P = [o.shape === 'rect' ? bx(0, 0, w, d, 28, 30, o.color) : cy(0, 0, w, d, 28, 30, o.color), ...legParts(o, w * 0.85, d * 0.85, 28, o.color)], n = +o.seats || 6; for (let i = 0; i < n; i++) { const side = i % 2 ? 1 : -1, col = Math.floor(i / 2), cols = Math.ceil(n / 2), cx = -w / 2 + w * (col + 0.5) / cols; P.push(bx(cx, side * (d / 2 + 8), 16, 16, 0, 18, o.chairColor), bx(cx, side * (d / 2 + 15), 16, 2, 18, 36, o.chairColor)); } return P; },
+    lines() { return []; }
+  },
+  desk: { label: 'Desk', cat: 'Furniture', w: 60, d: 28, h: 30, sizes: [42, 48, 60, 72], mount: 'wall', supply: 'owner', furn: true, opts: furnOpts('wood', '#d8b98a'), parts(b, o) { return [bx(0, 0, b.w, b.d, 28, 30, o.color), ...legParts(o, b.w * 0.95, b.d * 0.9, 28, o.color)]; }, lines() { return []; } },
+  rug: { label: 'Area rug', cat: 'Furniture', w: 96, d: 120, h: 0.6, sizes: [60, 96, 108, 120], mount: 'free', supply: 'owner', furn: true, noClash: true, opts: [CL('color', 'Color', 'fabric', '#d9cfbd', 'fabric'), CH('shape', 'Shape', [['rect', 'Rectangle'], ['round', 'Round']], 'rect'), SUPPLY('owner')], parts(b, o) { return [o.shape === 'round' ? cy(0, 0, b.w, b.w, 0, 0.6, o.color, { rough: 1 }) : bx(0, 0, b.w, b.d, 0, 0.6, o.color, { rough: 1 })]; }, lines() { return []; } },
+  bookcase: { label: 'Freestanding bookcase', cat: 'Furniture', w: 36, d: 12, h: 72, sizes: [24, 30, 36, 48], mount: 'wall', supply: 'owner', furn: true, opts: furnOpts('wood', '#6b4a33'), parts(b, o) { const P = [bx(-b.w / 2 + 0.75, 0, 1.5, b.d, 0, 72, o.color), bx(b.w / 2 - 0.75, 0, 1.5, b.d, 0, 72, o.color), bx(0, -b.d / 2 + 0.3, b.w, 0.6, 0, 72, hexShade(o.color, 0.9))]; for (let i = 0; i <= 5; i++) P.push(bx(0, 0, b.w - 3, b.d - 0.5, i * 14.4, i * 14.4 + 1, o.color)); return P; }, lines() { return []; } },
+  tv: { label: 'TV console', cat: 'Furniture', w: 60, d: 18, h: 24, sizes: [48, 60, 72], mount: 'wall', supply: 'owner', furn: true, opts: furnOpts('wood', '#6b4a33'), parts(b, o) { return [bx(0, 0, b.w, b.d, 6, 24, o.color), ...legParts(o, b.w, b.d, 6, o.color), bx(0, -b.d / 2 + 2, b.w * 0.6, 2, 26, 56, '#151515', { rough: 0.1 })]; }, lines() { return []; } },
+  /* lighting: integrated and decorative */
+  pendant: {
+    label: 'Pendant light', cat: 'Lighting', w: 14, d: 14, h: 14, sizes: [10, 14, 18, 24], mount: 'ceil', supply: 'gc', overlay: true, noClash: true,
+    opts: [CH('lstyle', 'Style', [['globe', 'Globe'], ['drum', 'Drum'], ['cone', 'Cone / dome'], ['lantern', 'Lantern'], ['linear', 'Linear bar']], 'globe', 'lightStyle'), CL('metal', 'Finish', 'metal', '#25272a', 'metal'), CH('temp', 'Color temperature', [['2700', '2700K warm'], ['3000', '3000K soft'], ['4000', '4000K neutral']], '2700', 'ledTemp'), CH('drop', 'Drop from ceiling', [[24, '24 in'], [30, '30 in'], [36, '36 in'], [48, '48 in']], '30'), CH('dim', 'Dimmable', [['yes', 'Yes'], ['no', 'No']], 'yes')],
+    parts(b, o) { const drop = +o.drop || 30, top = 96, bot = top - drop; const sh = o.lstyle === 'linear' ? bx(0, 0, 36, 4, bot, bot + 4, o.metal, METAL) : o.lstyle === 'drum' ? cy(0, 0, b.w, b.w, bot, bot + b.w * 0.6, o.metal, METAL) : o.lstyle === 'cone' ? cy(0, 0, b.w, b.w, bot, bot + b.w * 0.55, o.metal, METAL) : cy(0, 0, b.w, b.w, bot, bot + b.w, '#fff6dc', { glow: true, opacity: 0.9 }); return [cy(0, 0, 1, 1, bot + (o.lstyle === 'linear' ? 4 : b.w * 0.6), top, o.metal, METAL), sh, cy(0, 0, b.w * 0.45, b.w * 0.45, bot - 0.5, bot + 0.5, '#fff2c8', { glow: true })]; },
+    lines(b, o) { return [{ key: 'blk:pendant:' + o.lstyle + ':' + o.metal + ':' + o.temp, name: 'Pendant light, ' + o.lstyle + ', ' + palName('metal', o.metal) + ', ' + o.temp + 'K', cat: 'Electrical', unit: 'EA', qty: 1, scope: 'Furnish and install pendant light with ' + o.drop + ' in drop on new or existing box' + (o.dim === 'yes' ? ', with dimmer' : '') + '.' }]; }
+  },
+  recessed: {
+    label: 'Recessed light', cat: 'Lighting', w: 6, d: 6, h: 1, mount: 'ceil', supply: 'gc', overlay: true, noClash: true,
+    opts: [CH('size', 'Size', [['4', '4 in'], ['6', '6 in'], ['wafer', 'Slim wafer']], '6'), CH('temp', 'Color temperature', [['2700', '2700K warm'], ['3000', '3000K soft'], ['4000', '4000K neutral']], '3000', 'ledTemp'), CH('trim', 'Trim', [['white', 'White'], ['black', 'Black'], ['gimbal', 'Adjustable gimbal']], 'white')],
+    parts(b, o) { return [cy(0, 0, o.size === '4' ? 4.5 : 6.5, o.size === '4' ? 4.5 : 6.5, 95.5, 96, o.trim === 'black' ? '#222' : '#fffdf2', { glow: true })]; },
+    lines(b, o) { return [{ key: 'blk:recessed:' + o.size + ':' + o.temp + ':' + o.trim, name: 'Recessed LED light, ' + (o.size === 'wafer' ? 'slim wafer' : o.size + ' in') + ', ' + o.temp + 'K, ' + o.trim + ' trim', cat: 'Electrical', unit: 'EA', qty: 1, scope: 'Furnish and install recessed LED light, wired and trimmed.' }]; }
+  },
+  sconce: {
+    label: 'Wall sconce', cat: 'Lighting', w: 8, d: 6, h: 10, mount: 'wall', supply: 'gc', overlay: true, noClash: true, elev: 60,
+    opts: [CH('lstyle', 'Style', [['cylinder', 'Cylinder'], ['arm', 'Swing arm'], ['globe', 'Globe'], ['picture', 'Picture light']], 'cylinder', 'lightStyle'), CL('metal', 'Finish', 'metal', '#b99a55', 'metal'), CH('temp', 'Color temperature', [['2700', '2700K warm'], ['3000', '3000K soft']], '2700', 'ledTemp')],
+    parts(b, o) { return [bx(0, -b.d / 2 + 1, 3, 2, 60, 64, o.metal, METAL), cy(0, -b.d / 2 + 4, 5, 5, 62, 70, '#fff6dc', { glow: true })]; },
+    lines(b, o) { return [{ key: 'blk:sconce:' + o.lstyle + ':' + o.metal + ':' + o.temp, name: 'Wall sconce, ' + o.lstyle + ', ' + palName('metal', o.metal) + ', ' + o.temp + 'K', cat: 'Electrical', unit: 'EA', qty: 1, scope: 'Furnish and install wall sconce on new or existing box.' }]; }
+  },
+  cove: {
+    label: 'Cove / toe-kick LED run', cat: 'Lighting', w: 96, d: 3, h: 2, sizes: [48, 72, 96, 144, 192], mount: 'wall', supply: 'gc', overlay: true, noClash: true,
+    opts: [CH('where', 'Location', [['cove', 'Ceiling cove'], ['toe', 'Toe-kick'], ['shelf', 'Shelf edge'], ['mirror', 'Behind mirror']], 'cove'), CH('temp', 'Color temperature', [['2700', '2700K warm'], ['3000', '3000K soft'], ['4000', '4000K neutral'], ['rgb', 'Tunable white']], '3000', 'ledTemp')],
+    parts(b, o) { const y = o.where === 'toe' ? 1 : o.where === 'shelf' ? 50 : o.where === 'mirror' ? 48 : 95; return [bx(0, 0, b.w, 2, y, y + 1, '#fff2c8', { glow: true })]; },
+    lines(b, o) { return [{ key: 'blk:cove:' + o.where + ':' + o.temp, name: 'LED strip lighting, ' + ({ cove: 'ceiling cove', toe: 'toe-kick', shelf: 'shelf edge', mirror: 'behind mirror' }[o.where]) + ', ' + o.temp + (o.temp === 'rgb' ? '' : 'K'), cat: 'Electrical', unit: 'LF', qty: b.w / 12, scope: 'Furnish and install LED strip in aluminum channel with diffuser, driver and dimmer.' }]; }
+  },
+  vlight: {
+    label: 'Vanity light bar', cat: 'Lighting', w: 30, d: 5, h: 5, sizes: [18, 24, 30, 36, 48], mount: 'wall', supply: 'gc', overlay: true, noClash: true, elev: 72,
+    opts: [CH('lstyle', 'Style', [['bar', 'Bar'], ['globes', 'Globe bar'], ['sconces', 'Flanking sconces']], 'bar', 'lightStyle'), CL('metal', 'Finish', 'metal', '#b3b0a9', 'metal'), CH('temp', 'Color temperature', [['2700', '2700K warm'], ['3000', '3000K soft'], ['4000', '4000K']], '3000', 'ledTemp')],
+    parts(b, o) { return [bx(0, -b.d / 2 + 1, b.w, 2, 72, 74, o.metal, METAL), bx(0, -b.d / 2 + 2.5, b.w - 2, 2.5, 72.5, 74, '#fff6dc', { glow: true })]; },
+    lines(b, o) { return [{ key: 'blk:vlight:' + o.lstyle + ':' + o.metal + ':' + o.temp, name: 'Vanity light, ' + o.lstyle + ', ' + b.w + ' in, ' + palName('metal', o.metal) + ', ' + o.temp + 'K', cat: 'Electrical', unit: 'EA', qty: 1, scope: 'Furnish and install vanity light fixture on new or existing box.' }]; }
+  }
+});
+
+/* group blocks for the placement palette */
+const BLOCK_GROUPS = [['Kitchen', ['base', 'upper', 'tall', 'island', 'ksink', 'hood', 'range', 'fridge', 'dishwasher']], ['Bath', ['vanity', 'toilet', 'tub', 'shower', 'vlight']], ['Built-ins', ['shelf', 'seat', 'closet']], ['Furniture', ['bed', 'nightstand', 'dresser', 'sofa', 'chair', 'coffee', 'dining', 'desk', 'bookcase', 'tv', 'rug']], ['Lighting', ['pendant', 'recessed', 'sconce', 'cove']], ['Laundry', ['washer', 'dryer']]];
+
+/* ----- design logic: options, concepts, placement geometry, takeoff lines, checks, layouts ----- */
+const LABEL = (opts, k, v) => { const o = opts.find(x => x.k === k); if (!o || !o.v) return String(v); const hit = o.v.find(p => String(p[0]) === String(v)); return hit ? hit[1] : String(v); };
+
+/* a block's effective options: stored choices over the catalog defaults */
+function bopts(b) {
+  const def = BLOCKS[b.kind], out = {};
+  for (const o of def.opts) out[o.k] = b.opts && b.opts[o.k] != null ? b.opts[o.k] : o.def;
+  return out;
+}
+function optLabel(b, k) { const def = BLOCKS[b.kind], o = bopts(b); return LABEL(def.opts, k, o[k]); }
+
+/* design concepts restyle every option whose role matches. Values can be a list of candidates:
+   each option takes the first candidate it actually offers. */
+const STYLE_PRESETS = {
+  modern: { name: 'Modern', cabStyle: ['flat'], cabColor: ['#f1efe9'], pull: ['none', 'bar'], metal: ['#25272a'], topMat: ['quartz'], topColor: { stone: '#f3f1ec', wood: '#d8b98a' }, splash: ['none', 'mosaic'], tileColor: ['#f1f1ee'], sinkStyle: ['single', 'under'], faucetStyle: ['pulldown', 'single', 'wall', 'fixed'], woodTone: ['#d8b98a'], furnStyle: ['modern'], fabric: ['#8f9296'], lightStyle: ['linear', 'bar', 'drum'], ledTemp: ['3000'], appliance: ['#c4c6c8'] },
+  transitional: { name: 'Transitional', cabStyle: ['shaker'], cabColor: ['#cfc8bb'], pull: ['bar'], metal: ['#b3b0a9'], topMat: ['quartz'], topColor: { stone: '#ecebe8', wood: '#c49a6c' }, splash: ['subway'], tileColor: ['#f1f1ee'], sinkStyle: ['single', 'under'], faucetStyle: ['pulldown', 'widespread'], woodTone: ['#c49a6c'], furnStyle: ['modern'], fabric: ['#d9cfbd'], lightStyle: ['drum', 'globe', 'bar'], ledTemp: ['3000'], appliance: ['#c4c6c8'] },
+  farmhouse: { name: 'Farmhouse', cabStyle: ['shaker', 'beadboard'], cabColor: ['#e6dfcf'], pull: ['knob'], metal: ['#4d3a2d'], topMat: ['butcher', 'granite'], topColor: { stone: '#d9d6cf', wood: '#c49a6c' }, splash: ['subway'], tileColor: ['#f1f1ee'], sinkStyle: ['farm', 'under'], faucetStyle: ['bridge', 'widespread'], woodTone: ['#c49a6c'], furnStyle: ['farmhouse'], fabric: ['#d9cfbd'], lightStyle: ['lantern', 'globe', 'cylinder'], ledTemp: ['2700'], appliance: ['#f3f3f1'] },
+  traditional: { name: 'Traditional', cabStyle: ['raised'], cabColor: ['#e6dfcf', '#6b4a33'], pull: ['cup', 'knob'], metal: ['#b99a55'], topMat: ['granite'], topColor: { stone: '#c9a173', wood: '#6b4a33' }, splash: ['subway'], tileColor: ['#ebe5d8'], sinkStyle: ['double', 'under'], faucetStyle: ['widespread', 'bridge'], woodTone: ['#6b4a33'], furnStyle: ['traditional'], fabric: ['#9a6a43'], lightStyle: ['lantern', 'cylinder', 'arm'], ledTemp: ['2700'], appliance: ['#c4c6c8'] },
+  industrial: { name: 'Industrial', cabStyle: ['flat'], cabColor: ['#3b3e42'], pull: ['bar'], metal: ['#25272a'], topMat: ['butcher', 'quartz'], topColor: { stone: '#6c7075', wood: '#6b4a33' }, splash: ['none'], tileColor: ['#4a4d50'], sinkStyle: ['single', 'under'], faucetStyle: ['gooseneck', 'wall'], woodTone: ['#3d2b22'], furnStyle: ['industrial'], fabric: ['#46484b'], lightStyle: ['cone', 'linear', 'globe'], ledTemp: ['3000'], appliance: ['#4a4d50'] },
+  midcentury: { name: 'Mid-century', cabStyle: ['flat'], cabColor: ['#c49a6c'], pull: ['cup', 'none'], metal: ['#b99a55'], topMat: ['laminate', 'quartz'], topColor: { stone: '#e4d6bd', wood: '#c49a6c' }, splash: ['mosaic'], tileColor: ['#a5b5a2'], sinkStyle: ['single', 'under'], faucetStyle: ['single', 'pulldown'], woodTone: ['#c49a6c'], furnStyle: ['midcentury'], fabric: ['#a0522d'], lightStyle: ['globe', 'cone', 'cylinder'], ledTemp: ['2700'], appliance: ['#c4c6c8'] },
+  coastal: { name: 'Coastal', cabStyle: ['shaker', 'beadboard'], cabColor: ['#f1efe9'], pull: ['knob', 'bar'], metal: ['#b3b0a9'], topMat: ['quartz'], topColor: { stone: '#ecebe8', wood: '#e6dfd2' }, splash: ['subway'], tileColor: ['#a5b5a2'], sinkStyle: ['farm', 'single'], faucetStyle: ['bridge', 'single'], woodTone: ['#e6dfd2'], furnStyle: ['farmhouse'], fabric: ['#efe9dc'], lightStyle: ['globe', 'lantern'], ledTemp: ['2700'], appliance: ['#c4c6c8'] }
+};
+const STYLE_LIST = Object.keys(STYLE_PRESETS).map(k => [k, STYLE_PRESETS[k].name]);
+
+function applyStyleToBlock(b, styleId) {
+  const P = STYLE_PRESETS[styleId], def = BLOCKS[b.kind];
+  if (!P || !def) return 0;
+  b.opts = b.opts || {};
+  let n = 0;
+  const cur = bopts(b);
+  for (const o of def.opts) {
+    if (!o.role || P[o.role] == null) continue;
+    let cands = P[o.role];
+    if (o.role === 'topColor' && !Array.isArray(cands)) cands = [cands[topPal(cur.top)] || cands.stone];
+    for (const c of cands) {
+      const ok = o.t === 'color' ? /^#[0-9a-f]{6}$/i.test(c) : o.v.some(p => String(p[0]) === String(c));
+      if (ok) { if (String(b.opts[o.k]) !== String(c)) n++; b.opts[o.k] = c; break; }
+    }
+    if (o.role === 'topMat') Object.assign(cur, { top: b.opts[o.k] });
+  }
+  return n;
+}
+
+function newBlock(state, kind, x, y, style) {
+  const def = BLOCKS[kind];
+  const b = { id: uid(state, 'b'), kind, x, y, rot: 0, w: def.w, d: def.d, h: def.h, opts: {} };
+  if (style) applyStyleToBlock(b, style);
+  return b;
+}
+
+/* ---------- geometry ---------- */
+const rad = deg => (deg || 0) * Math.PI / 180;
+function localToWorld(b, lx, lz) { const t = rad(b.rot), c = Math.cos(t), s = Math.sin(t); return { x: b.x + lx * c - lz * s, y: b.y + lx * s + lz * c }; }
+function blockCorners(b) { const hw = b.w / 2, hd = b.d / 2; return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(p => localToWorld(b, p[0], p[1])); }
+function fixtureCorners(f) { const def = FIXTURES[f.kind], t = f.rot || 0, c = Math.cos(t), s = Math.sin(t), hw = def.w / 2, hd = def.d / 2; return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(p => ({ x: f.x + p[0] * c - p[1] * s, y: f.y + p[0] * s + p[1] * c })); }
+function overlapDepth(A, B) {
+  let min = Infinity;
+  for (const P of [A, B]) for (let i = 0; i < 4; i++) {
+    const a = P[i], b2 = P[(i + 1) % 4], nx = -(b2.y - a.y), ny = b2.x - a.x, L = Math.hypot(nx, ny) || 1;
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const p of A) { const v = (p.x * nx + p.y * ny) / L; a0 = Math.min(a0, v); a1 = Math.max(a1, v); }
+    for (const p of B) { const v = (p.x * nx + p.y * ny) / L; b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
+    const o = Math.min(a1, b1) - Math.max(a0, b0);
+    if (o <= 0) return 0;
+    min = Math.min(min, o);
+  }
+  return min;
+}
+/* wall-mounted blocks sit flush against the nearest wall face, back to the wall */
+function snapToWall(b, state) {
+  const def = BLOCKS[b.kind];
+  if (!def || def.mount !== 'wall') return false;
+  let best = null, bd = 30;
+  for (const w of state.walls) {
+    const sd = segDist({ x: b.x, y: b.y }, w.a, w.b);
+    if (sd.d - w.t / 2 < bd) { bd = sd.d - w.t / 2; best = { w, sd }; }
+  }
+  if (!best) return false;
+  const w = best.w, dx = w.b.x - w.a.x, dy = w.b.y - w.a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  let nx = -uy, ny = ux;
+  if ((b.x - best.sd.x) * nx + (b.y - best.sd.y) * ny < 0) { nx = -nx; ny = -ny; }
+  // the front faces along the normal, away from the wall. rot 0 has the front toward +y.
+  b.rot = Math.round(((Math.atan2(-nx, ny) * 180 / Math.PI) + 360) % 360 * 10) / 10 % 360;
+  const along = (b.x - w.a.x) * ux + (b.y - w.a.y) * uy;
+  const off = w.t / 2 + b.d / 2;
+  let a2 = Math.max(b.w / 2, Math.min(L - b.w / 2, Math.round(along / 3) * 3));
+  if (L < b.w) a2 = along;
+  b.x = Math.round((w.a.x + ux * a2 + nx * off) * 100) / 100;
+  b.y = Math.round((w.a.y + uy * a2 + ny * off) * 100) / 100;
+  return true;
+}
+/* sinks drop onto the cabinet under them */
+function hostAt(state, x, y, exclId) {
+  for (let i = state.blocks.length - 1; i >= 0; i--) {
+    const h = state.blocks[i];
+    if (h.id === exclId || !BLOCKS[h.kind].host) continue;
+    const t = rad(h.rot), c = Math.cos(t), s = Math.sin(t), dx = x - h.x, dy = y - h.y;
+    const lx = dx * c + dy * s, lz = -dx * s + dy * c;
+    if (Math.abs(lx) <= h.w / 2 + 4 && Math.abs(lz) <= h.d / 2 + 4) return { h, lx, lz };
+  }
+  return null;
+}
+function snapToHost(b, state) {
+  const hit = hostAt(state, b.x, b.y, b.id);
+  if (!hit) return false;
+  const h = hit.h, def = BLOCKS[b.kind];
+  b.rot = h.rot;
+  const lx = Math.max(-h.w / 2 + b.w / 2, Math.min(h.w / 2 - b.w / 2, Math.round(hit.lx / 3) * 3));
+  const p = localToWorld(h, h.w < b.w ? 0 : lx, 0);
+  b.x = Math.round(p.x * 100) / 100; b.y = Math.round(p.y * 100) / 100;
+  if (def.mount === 'host') b.host = h.id;
+  return true;
+}
+
+/* ---------- takeoff lines (descriptors; the engine turns them into takeoff lines) ---------- */
+const finLine = (id, qty, nameSuffix, keyExtra, extra) => {
+  const f = FIN[id];
+  if (!f) return null;
+  return Object.assign({ key: 'blk:' + id + ':' + keyExtra, name: f.name + (nameSuffix ? ', ' + nameSuffix : ''), cat: f.cat, unit: f.basis, qty, scope: f.scope + (extra && extra.addScope ? ' ' + extra.addScope : ''), waste: f.waste, pack: f.pack || null, finishId: id, req: (f.req || []).filter(r => !/pulls or knobs/i.test(r.name)).map(r => [r.name, r.unit, r.ratio]) }, extra && extra.over);
+};
+const topLine = (b, o, areaSF) => {
+  if (!o.top || o.top === 'none' || areaSF <= 0) return null;
+  const id = CT_FIN[o.top] || CT_FIN.quartz;
+  const col = palName(topPal(o.top), topColor(o)), edge = LABEL(BLOCKS[b.kind].opts, 'edge', o.edge || 'eased');
+  return finLine(id, areaSF, col + (o.edge ? ', ' + edge.toLowerCase() + ' edge' : ''), topColor(o) + ':' + (o.edge || ''), { addScope: 'Color: ' + col + '.' + (o.edge ? ' Edge: ' + edge.toLowerCase() + '.' : '') });
+};
+function pullReq(o, qty) { return o.pull && o.pull !== 'none' ? [['Cabinet ' + ({ bar: 'bar pulls', knob: 'knobs', cup: 'cup pulls' }[o.pull]) + ', ' + palName('metal', o.hwFinish), 'EA', qty]] : []; }
+function cabLines(b, o, kind) {
+  const out = [], lf = b.w / 12, sty = LABEL(BLOCKS[b.kind].opts, 'style', o.style), col = palName('cab', o.color), gr = o.grade || 'semi';
+  const detail = sty + ', ' + col;
+  if (kind === 'base' || kind === 'island') {
+    const l = finLine({ stock: 'K-BASE-STOCK', semi: 'K-BASE-SEMI', custom: 'K-BASE-CUSTOM' }[gr], lf, detail, o.style + ':' + o.color, { addScope: 'Door style: ' + sty + '. Color: ' + col + '.' });
+    if (l) { l.req = pullReq(o, lf * 1.5); out.push(l); }
+    const area = kind === 'island' ? (b.w * b.d) / 144 : (b.w * 25.5) / 144;
+    const t = topLine(b, o, area); if (t) out.push(t);
+    if (kind === 'base' && o.splash && o.splash !== 'none') { const s = finLine(o.splash === 'subway' ? 'BS-SUBWAY' : 'BS-MOSAIC', (b.w * 18) / 144, palName('tile', o.splashColor), o.splashColor, { addScope: 'Tile color: ' + palName('tile', o.splashColor) + '.' }); if (s) out.push(s); }
+  } else if (kind === 'upper') {
+    const l = finLine({ stock: 'K-WALL-STOCK', semi: 'K-WALL-SEMI', custom: 'K-WALL-CUSTOM' }[gr], lf, detail + ', ' + (o.height || 36) + ' in high', o.style + ':' + o.color + ':' + (o.height || 36), { addScope: 'Door style: ' + sty + '. Color: ' + col + '.' });
+    if (l) { l.req = pullReq(o, lf * 1); out.push(l); }
+    if (o.uclight && o.uclight !== 'none') out.push({ key: 'blk:uclight:' + o.uclight, name: 'Under-cabinet LED lighting, ' + o.uclight + 'K', cat: 'Electrical', unit: 'LF', qty: Math.max(0, b.w - 3) / 12, scope: 'Furnish and install under-cabinet LED strip with driver and switch.' });
+  } else if (kind === 'tall') {
+    out.push({ key: 'blk:tall:' + gr + ':' + o.style + ':' + o.color + ':' + o.height + ':' + b.w, name: 'Tall cabinet ' + b.w + ' in x ' + (o.height || 90) + ' in, ' + LABEL(BLOCKS.base.opts, 'grade', gr).toLowerCase() + ', ' + detail, cat: 'Cabinets and tops', unit: 'EA', qty: 1, scope: 'Furnish and install tall pantry or utility cabinet, plumb and anchored, with doors and hardware. Door style: ' + sty + '. Color: ' + col + '.', req: pullReq(o, 2) });
+  }
+  return out;
+}
+function sinkLines(b, o) {
+  const st = LABEL(BLOCKS.ksink.opts, 'style', o.style), ma = LABEL(BLOCKS.ksink.opts, 'mat', o.mat), fa = LABEL(BLOCKS.ksink.opts, 'faucet', o.faucet), mf = palName('metal', o.metal);
+  const out = [
+    { key: 'blk:ksink:' + o.style + ':' + o.mat, name: 'Kitchen sink, ' + st.toLowerCase() + ', ' + ma.toLowerCase(), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install ' + st.toLowerCase() + ' kitchen sink in ' + ma.toLowerCase() + ', with drain and basket strainer, connected to waste.', req: [['P-trap and supply stops kit', 'KIT', 1]] },
+    { key: 'blk:kfaucet:' + o.faucet + ':' + o.metal, name: 'Kitchen faucet, ' + fa.toLowerCase() + ', ' + mf, cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install ' + fa.toLowerCase() + ' kitchen faucet in ' + mf.toLowerCase() + ', connected and tested.' }
+  ];
+  if (o.disposal === 'yes') out.push({ key: 'blk:disposal', name: 'Garbage disposal, 3/4 HP', cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install garbage disposal with cord and switch or air switch.' });
+  if (o.soap === 'yes') out.push({ key: 'blk:soap:' + o.metal, name: 'Soap dispenser, ' + mf, cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install deck-mounted soap dispenser.' });
+  return out;
+}
+function vanityLines(b, o) {
+  const n = o.sinks === '2' ? 2 : 1, vs = LABEL(BLOCKS.vanity.opts, 'vstyle', o.vstyle), col = palName('cab', o.color), tm = LABEL(BLOCKS.vanity.opts, 'top', o.top);
+  const tc = palName(o.top === 'butcher' ? 'wood' : 'stone', topColor(o));
+  const out = [
+    { key: 'blk:vanity:' + b.w + ':' + o.vstyle + ':' + o.color, name: 'Vanity cabinet ' + b.w + ' in, ' + vs.toLowerCase() + ', ' + col, cat: 'Cabinets and tops', unit: 'EA', qty: 1, scope: 'Furnish and install ' + b.w + ' in ' + vs.toLowerCase() + ' vanity cabinet, ' + col + ', plumb and anchored, with hardware.', req: pullReq(o, 2).concat([['P-trap and supply stops kit', 'KIT', n]]) },
+    { key: 'blk:vtop:' + o.top + ':' + b.w + ':' + o.topColor + ':' + n, name: 'Vanity top ' + b.w + ' in, ' + tm.toLowerCase() + ', ' + tc + ', ' + n + ' sink cutout' + (n > 1 ? 's' : ''), cat: 'Cabinets and tops', unit: 'EA', qty: 1, scope: 'Furnish and install ' + tm.toLowerCase() + ' vanity top, ' + tc + ', with ' + n + ' sink cutout' + (n > 1 ? 's' : '') + ' and backsplash, sealed at the wall.' }
+  ];
+  if (o.sinkType !== 'integral') out.push({ key: 'blk:vsink:' + o.sinkType, name: 'Bath sink, ' + LABEL(BLOCKS.vanity.opts, 'sinkType', o.sinkType).toLowerCase(), cat: 'Plumbing', unit: 'EA', qty: n, scope: 'Furnish and install ' + LABEL(BLOCKS.vanity.opts, 'sinkType', o.sinkType).toLowerCase() + ' bath sink with drain, connected to waste.' });
+  out.push({ key: 'blk:vfaucet:' + o.faucet + ':' + o.metal, name: 'Bath faucet, ' + LABEL(BLOCKS.vanity.opts, 'faucet', o.faucet).toLowerCase() + ', ' + palName('metal', o.metal), cat: 'Plumbing', unit: 'EA', qty: n, scope: 'Furnish and install bath faucet in ' + palName('metal', o.metal).toLowerCase() + ', connected and tested.' });
+  if (o.mirror !== 'none') {
+    const mn = o.mirror === 'medicine' ? 1 : n, ml = LABEL(BLOCKS.vanity.opts, 'mirror', o.mirror);
+    out.push({ key: 'blk:vmirror:' + o.mirror, name: ml + (o.mirror === 'led' ? ', hardwired' : ''), cat: 'Cabinets and tops', unit: 'EA', qty: mn, scope: 'Furnish and install ' + ml.toLowerCase() + ', anchored to the wall' + (o.mirror === 'led' || o.mirror === 'medicine' ? ' with power connection' : '') + '.' });
+  }
+  return out;
+}
+function tubLines(b, o) {
+  const free = o.type === 'clawfoot' || o.type === 'oval' || o.type === 'slipper', tn = LABEL(BLOCKS.tub.opts, 'type', o.type), out = [];
+  out.push({ key: 'blk:tub:' + o.type + ':' + b.w + 'x' + b.d + ':' + o.color, name: 'Tub, ' + tn.toLowerCase() + ', ' + b.w + ' x ' + b.d + ' in, ' + palName('fix', o.color), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install ' + tn.toLowerCase() + ' tub ' + b.w + ' x ' + b.d + ' in with overflow and drain, set and connected' + (free ? ', including floor reinforcement check' : '') + '.' });
+  out.push({ key: 'blk:tubfill:' + o.filler + ':' + o.metal, name: 'Tub filler and valve, ' + LABEL(BLOCKS.tub.opts, 'filler', o.filler).toLowerCase() + ', ' + palName('metal', o.metal), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install tub filler and valve trim in ' + palName('metal', o.metal).toLowerCase() + ', rough-in and test.' });
+  if (!free && o.surround === 'tile') out.push({ key: 'blk:tubtile:' + o.tileColor, name: 'Tub surround wall tile, ' + palName('tile', o.tileColor), cat: 'Walls', unit: 'SF', qty: ((b.w + 2 * b.d) * 72) / 144, scope: 'Furnish and install tub surround tile over waterproof backer, grouted and sealed. Color: ' + palName('tile', o.tileColor) + '.', waste: 12, pack: { size: 10, unit: 'CTN' }, req: [['Thinset mortar, 50 lb', 'BAG', 0.0125], ['Grout, 25 lb', 'BAG', 0.01], ['Cement backer board 3x5', 'SHT', 0.067]] });
+  if (!free && o.surround === 'acrylic') out.push({ key: 'blk:tubpanel', name: 'Tub surround, acrylic panels', cat: 'Walls', unit: 'EA', qty: 1, scope: 'Furnish and install acrylic tub wall panels, sealed.' });
+  const dl = { frameless: 'SH-FRAMELESS', framed: 'SH-FRAMED', curtain: 'SH-CURTAIN' }[o.door];
+  if (dl && FIN[dl] && !free) out.push(finLine(dl, 1, '', 'tub', {}));
+  return out;
+}
+function showerLines(b, o) {
+  const out = [], wallSF = ((b.w + 2 * b.d) * 96) / 144, floorSF = (b.w * b.d) / 144, tc = palName('tile', o.tileColor);
+  const wt = LABEL(BLOCKS.shower.opts, 'wallTile', o.wallTile), tileReq = [['Thinset mortar, 50 lb', 'BAG', 0.0125], ['Grout, 25 lb', 'BAG', 0.01]];
+  out.push({ key: 'blk:shwall:' + o.wallTile + ':' + o.tileColor, name: 'Shower wall tile, ' + wt.toLowerCase() + ', ' + tc, cat: 'Walls', unit: 'SF', qty: wallSF, scope: 'Furnish and install ' + wt.toLowerCase() + ' shower wall tile over waterproofing, grouted and sealed. Color: ' + tc + '.', waste: 12, pack: { size: 10, unit: 'CTN' }, req: tileReq });
+  out.push({ key: 'blk:shproof', name: 'Shower waterproofing membrane', cat: 'Walls', unit: 'SF', qty: wallSF + floorSF, scope: 'Furnish and install waterproofing membrane on shower walls and floor, flood tested.', waste: 10 });
+  if (o.base === 'pan') out.push({ key: 'blk:shpan:' + b.w + 'x' + b.d, name: 'Shower pan ' + b.w + ' x ' + b.d + ' in, acrylic', cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install acrylic shower pan, set in mortar bed with drain.' });
+  else out.push({ key: 'blk:shfloor:' + o.base + ':' + o.tileColor, name: 'Shower floor tile and ' + (o.base === 'tile' ? 'linear drain' : 'curbless slope') + ', ' + tc, cat: 'Flooring', unit: 'SF', qty: floorSF, scope: 'Furnish and install sloped mortar bed, ' + (o.base === 'tile' ? 'linear drain' : 'curbless entry') + ' and floor tile, grouted and sealed. Color: ' + tc + '.', waste: 12, pack: { size: 10, unit: 'CTN' }, req: tileReq });
+  if (o.door !== 'curtain') out.push({ key: 'blk:shglass:' + o.door, name: 'Shower glass, ' + LABEL(BLOCKS.shower.opts, 'door', o.door).toLowerCase(), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install ' + LABEL(BLOCKS.shower.opts, 'door', o.door).toLowerCase() + ', field measured, sealed.' });
+  out.push({ key: 'blk:shhead:' + o.head + ':' + o.metal, name: 'Shower valve and head set, ' + LABEL(BLOCKS.shower.opts, 'head', o.head).toLowerCase() + ', ' + palName('metal', o.metal), cat: 'Plumbing', unit: 'EA', qty: 1, scope: 'Furnish and install shower valve and ' + LABEL(BLOCKS.shower.opts, 'head', o.head).toLowerCase() + ' trim in ' + palName('metal', o.metal).toLowerCase() + ', rough-in and test.' });
+  if (o.niche === 'yes') out.push({ key: 'blk:shniche', name: 'Recessed shower niche', cat: 'Walls', unit: 'EA', qty: 1, scope: 'Frame, waterproof and tile a recessed shower niche.' });
+  if (o.bench === 'yes') out.push({ key: 'blk:shbench', name: 'Built-in shower bench', cat: 'Walls', unit: 'EA', qty: 1, scope: 'Frame, waterproof and tile a built-in shower bench.' });
+  return out;
+}
+function shelfLines(b, o) {
+  const lf = b.w / 12, n = +o.shelves || 4, lay = LABEL(BLOCKS.shelf.opts, 'layout', o.layout), col = palName('cab', o.color);
+  const out = [{ key: 'blk:shelf:' + o.layout + ':' + o.height + ':' + o.color + ':' + o.trim, name: 'Built-in shelving, ' + lay.toLowerCase() + ', ' + (o.height / 12) + ' ft, ' + col, cat: 'Built-ins', unit: 'LF', qty: lf, scope: 'Furnish and build ' + lay.toLowerCase() + ' built-in shelving ' + (o.height / 12) + ' ft high, ' + (o.trim === 'crown' ? 'with crown molding, ' : o.trim === 'panel' ? 'with paneled backs, ' : '') + 'painted or stained ' + col + ', scribed to walls and ceiling.', req: o.layout === 'cab' || o.layout === 'doors' ? pullReq(o, Math.max(2, Math.round(lf * 1.2))) : [] }];
+  if (o.led && o.led !== 'none') out.push({ key: 'blk:shled:' + o.led, name: 'Integrated LED strip lighting, ' + o.led + 'K', cat: 'Electrical', unit: 'LF', qty: lf * Math.max(1, n - 1), scope: 'Furnish and install LED strip lighting concealed in the shelving, with driver and dimmer.' });
+  return out;
+}
+function applLines(b, o, name, scope) {
+  if (o.supply === 'owner') return [];
+  return [{ key: 'blk:appl:' + name + ':' + o.color, name: name + ', ' + palName('appl', o.color), cat: 'Appliances', unit: 'EA', qty: 1, scope: scope || 'Set and connect appliance, level and test.' }];
+}
+
+/* every takeoff-bearing line for one block */
+function blockLines(b) {
+  const def = BLOCKS[b.kind];
+  if (!def || def.furn) return [];
+  const o = bopts(b);
+  return (def.lines(b, o) || []).filter(Boolean);
+}
+function blockSpec(b) {
+  const def = BLOCKS[b.kind], o = bopts(b), bits = [];
+  for (const d of def.opts) {
+    if (d.k === 'supply') continue;
+    if (d.t === 'color') bits.push(d.label + ': ' + palName(d.pal, o[d.k]));
+    else bits.push(d.label + ': ' + LABEL(def.opts, d.k, o[d.k]));
+  }
+  return bits;
+}
+
+/* ---------- checks for the design ---------- */
+function vrange(b) { const d = BLOCKS[b.kind], o = bopts(b), e = d.elev || 0; return [e, e + (+o.height || b.h || 30)]; }
+function designChecks(state, an) {
+  const out = [], bl = state.blocks || [];
+  const nm = b => BLOCKS[b.kind].label.toLowerCase() + ' (' + fmtFtIn(b.w) + ')';
+  const solidB = bl.filter(b => !BLOCKS[b.kind].overlay && !BLOCKS[b.kind].noClash);
+  for (let i = 0; i < solidB.length; i++) for (let j = i + 1; j < solidB.length; j++) {
+    const a = solidB[i], c = solidB[j];
+    if (Math.hypot(a.x - c.x, a.y - c.y) > (a.w + a.d + c.w + c.d) / 2) continue;
+    const va = vrange(a), vc = vrange(c);
+    if (va[1] <= vc[0] || vc[1] <= va[0]) continue;
+    if (overlapDepth(blockCorners(a), blockCorners(c)) > 1.5) out.push({ sev: 'warn', text: 'The ' + nm(a) + ' overlaps the ' + nm(c) + '. Move one so they sit side by side.' });
+  }
+  for (const b of solidB) for (const f of state.fixtures) {
+    if (!FIXTURES[f.kind].fixed) continue;
+    if (overlapDepth(blockCorners(b), fixtureCorners(f)) > 1) out.push({ sev: 'warn', text: 'The ' + nm(b) + ' sits on an immovable item (' + FIXTURES[f.kind].label.toLowerCase() + '). Move the item with a plan for it, or move the block.' });
+  }
+  for (const f of state.fixtures) if (FIXTURES[f.kind].fixed && f.moved) out.push({ sev: 'info', text: FIXTURES[f.kind].label + ' was unlocked for relocation. Plan for the plumber, electrician or engineer before pricing.' });
+  for (const b of bl) {
+    const def = BLOCKS[b.kind];
+    if (def.mount === 'ceil') continue;
+    const inRoom = an.rooms.some(r => pointInPoly(b, r.poly));
+    if (!inRoom && !def.overlay) out.push({ sev: 'info', text: 'The ' + nm(b) + ' is outside every room, so it is not counted in a room. It still counts in the takeoff.' });
+    if (def.mount === 'host' && !hostAt(state, b.x, b.y, b.id)) out.push({ sev: 'warn', text: 'The ' + nm(b) + ' is not on a cabinet. Drag it onto a base cabinet or island.' });
+  }
+  const sinks = bl.filter(b => b.kind === 'ksink').length, sinkBases = bl.filter(b => b.kind === 'base' && bopts(b).config === 'sink').length;
+  if (sinks && !sinkBases) out.push({ sev: 'info', text: 'A kitchen sink is placed but no base cabinet is set to "Sink base". Set the layout on the cabinet under it.' });
+  for (const r of an.rooms) {
+    const m = r.meta, inside = bl.filter(b => pointInPoly(b, r.poly));
+    if (m.type === 'kitchen' && bl.length && !inside.some(b => b.kind === 'base' || b.kind === 'island')) out.push({ sev: 'info', roomId: m.id, text: m.name + ': kitchen has no base cabinets placed yet.' });
+    if ((m.type === 'bathroom' || m.type === 'powder') && bl.length && !inside.some(b => b.kind === 'toilet')) out.push({ sev: 'info', roomId: m.id, text: m.name + ': no toilet placed in this bath.' });
+    if (inside.some(b => b.kind === 'vanity') && (r.fix.vanity || 0) > 0) out.push({ sev: 'info', roomId: m.id, text: m.name + ': has a vanity block and a vanity item. Use one or the other so it is not counted twice.' });
+  }
+  return out;
+}
+
+/* ---------- layouts: Existing plus any number of concepts ---------- */
+const LAYOUT_KEYS = ['walls', 'openings', 'fixtures', 'rooms', 'blocks'];
+function pickLayout(state) { const o = {}; for (const k of LAYOUT_KEYS) o[k] = state[k]; return o; }
+function ensureLayouts(state) {
+  if (!Array.isArray(state.blocks)) state.blocks = [];
+  if (!Array.isArray(state.layouts) || !state.layouts.length) { state.layouts = [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }]; state.activeLayout = 'L1'; }
+  if (!state.layouts.some(l => l.id === state.activeLayout)) state.activeLayout = state.layouts[0].id;
+  for (const l of state.layouts) if (l.id !== state.activeLayout && l.data) { for (const k of LAYOUT_KEYS) if (!Array.isArray(l.data[k])) l.data[k] = []; }
+  return state;
+}
+function activeLayout(state) { return state.layouts.find(l => l.id === state.activeLayout); }
+function switchLayout(state, id) {
+  const to = state.layouts.find(l => l.id === id);
+  if (!to || id === state.activeLayout) return false;
+  const from = activeLayout(state);
+  from.data = pickLayout(state);
+  const d = to.data || { walls: [], openings: [], fixtures: [], rooms: [], blocks: [] };
+  for (const k of LAYOUT_KEYS) state[k] = d[k] || [];
+  to.data = null; state.activeLayout = id;
+  return true;
+}
+function newLayoutId(state) { let n = state.layouts.length + 1; while (state.layouts.some(l => l.id === 'L' + n)) n++; return 'L' + n; }
+function addConcept(state, name, fromId, style) {
+  const src = fromId === state.activeLayout ? pickLayout(state) : (state.layouts.find(l => l.id === fromId) || {}).data;
+  const data = JSON.parse(JSON.stringify(src || { walls: [], openings: [], fixtures: [], rooms: [], blocks: [] }));
+  for (const k of LAYOUT_KEYS) if (!Array.isArray(data[k])) data[k] = [];
+  const L = { id: newLayoutId(state), name: name, kind: 'new', data, style: style || '' };
+  if (style) for (const b of data.blocks) applyStyleToBlock(b, style);
+  state.layouts.push(L);
+  return L;
+}
+function removeLayout(state, id) {
+  if (state.layouts.length < 2) return false;
+  const L = state.layouts.find(l => l.id === id);
+  if (!L) return false;
+  if (id === state.activeLayout) switchLayout(state, state.layouts.find(l => l.id !== id).id);
+  state.layouts = state.layouts.filter(l => l.id !== id);
+  if (state.estimateLayout === id) state.estimateLayout = '';
+  return true;
+}
+function estimateLayoutId(state) {
+  if (state.estimateLayout && state.layouts.some(l => l.id === state.estimateLayout)) return state.estimateLayout;
+  const nw = state.layouts.find(l => l.kind === 'new');
+  return nw ? nw.id : state.activeLayout;
+}
+/* run fn against any layout as if it were the active one */
+function withLayout(state, id, fn) {
+  if (id === state.activeLayout) return fn(state);
+  const L = state.layouts.find(l => l.id === id);
+  if (!L || !L.data) return null;
+  const tmp = Object.assign({}, state);
+  tmp._lid = id; tmp._activeContent = pickLayout(state);
+  for (const k of LAYOUT_KEYS) tmp[k] = L.data[k];
+  const res = fn(tmp);
+  L.data.rooms = tmp.rooms;
+  state.nextId = tmp.nextId; state.nextRoom = tmp.nextRoom;
+  return res;
+}
+function layoutSummary(state, id) {
+  return withLayout(state, id, st => {
+    const an = analyze(st), tk = buildTakeoff(st, an);
+    return { rooms: an.rooms.length, blocks: st.blocks.length, area: an.rooms.reduce((s, r) => s + r.area, 0), lines: tk.lines.length, total: tk.total, priced: tk.priced, unpriced: tk.unpriced };
+  });
+}
+
+/* what the concept changes compared to Existing: demo quantities */
+function demoDiff(state) {
+  const lid = state._lid || state.activeLayout;
+  const cur = state.layouts.find(l => l.id === lid);
+  if (!cur || cur.kind === 'existing') return null;
+  const ex = state.layouts.find(l => l.kind === 'existing');
+  if (!ex || ex.id === lid) return null;
+  const exData = ex.data || state._activeContent;
+  if (!exData) return null;
+  const cw = state.walls, key = (a, b) => ptKey(a.x, a.y) + '|' + ptKey(b.x, b.y);
+  const have = new Set(); cw.forEach(w => { have.add(key(w.a, w.b)); have.add(key(w.b, w.a)); });
+  let lf = 0, bearing = 0;
+  for (const w of exData.walls) if (!have.has(key(w.a, w.b))) { if (w.fixed) bearing++; else lf += Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) / 12; }
+  const near = (list, e) => list.some(c => c.kind === e.kind && Math.hypot(c.x - e.x, c.y - e.y) < 8);
+  let cabLF = 0;
+  for (const b of exData.blocks) if (['base', 'upper', 'tall', 'island'].includes(b.kind) && !near(state.blocks, b)) cabLF += b.w / 12;
+  const gone = {};
+  for (const f of exData.fixtures) if (['toilet', 'vanity', 'tub', 'sink'].includes(f.kind) && !near(state.fixtures, f)) gone[FIXTURES[f.kind].label] = (gone[FIXTURES[f.kind].label] || 0) + 1;
+  for (const b of exData.blocks) if (['vanity', 'toilet', 'tub', 'shower', 'ksink'].includes(b.kind) && !near(state.blocks, b)) gone[BLOCKS[b.kind].label] = (gone[BLOCKS[b.kind].label] || 0) + 1;
+  return { wallLF: lf, bearing, cabLF, gone };
+}
+
+if (typeof module !== 'undefined' && module.exports) { /* exports are added by the build for node tests */ }
+
 /* ===== App: state, canvas, input, panels ===== */
 'use strict';
 
@@ -1046,6 +1859,7 @@ const ICONS = {
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   plan: '<path d="M4 4h16v16H4zM4 12h16M12 4v16"/>',
+  block: '<path d="M4 9h16v10H4zM4 9l3-4h10l3 4M9 13h6"/>',
   cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>'
 };
 const icon = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>';
@@ -1063,14 +1877,21 @@ function loadState() {
   } catch (e) { /* storage unavailable */ }
   return exampleState();
 }
-let state = loadState();
+let state = ensureLayouts(loadState());
 let AN, TK, CK;
+function estimateTakeoff() {
+  const eid = estimateLayoutId(state);
+  const tk = eid === state.activeLayout ? TK : withLayout(state, eid, st => buildTakeoff(st, analyze(st)));
+  const out = JSON.parse(exportTakeoffJSON(state, tk || TK));
+  out.layout = (state.layouts.find(l => l.id === eid) || {}).name || '';
+  return out;
+}
 function recompute() { AN = analyze(state); TK = buildTakeoff(state, AN); CK = runChecks(state, AN, TK); }
 let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: JSON.parse(exportTakeoffJSON(state, TK)), summary: { rooms: AN.rooms.length, floorSF: Math.round(AN.rooms.reduce((a, r) => a + r.area, 0)), checks: CK.length } }, '*'); } catch (e) { /* ignore */ } return; }
+    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: AN.rooms.length, floorSF: Math.round(AN.rooms.reduce((a, r) => a + r.area, 0)), checks: CK.length } }, '*'); } catch (e) { /* ignore */ } return; }
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }, 300);
 }
@@ -1091,14 +1912,14 @@ let cssW = 0, cssH = 0, dpr = 1, C = null;
 const undoStack = [], redoStack = [];
 const snapshot = () => JSON.stringify(state);
 function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 120) undoStack.shift(); redoStack.length = 0; }
-function restore(json) { state = JSON.parse(json); state.settings = Object.assign(defaultSettings(), state.settings || {}); }
+function restore(json) { state = JSON.parse(json); state.settings = Object.assign(defaultSettings(), state.settings || {}); ensureLayouts(state); }
 function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); pending = null; afterHistory(); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); pending = null; afterHistory(); }
 function afterHistory() { recompute(); fixSel(); scheduleSave(); refresh(); }
 function fixSel() {
   if (!sel) return;
   const ok = (sel.type === 'wall' && state.walls.some(w => w.id === sel.id)) || (sel.type === 'opening' && state.openings.some(o => o.id === sel.id)) ||
-    (sel.type === 'fixture' && state.fixtures.some(f => f.id === sel.id)) || (sel.type === 'room' && state.rooms.some(r => r.id === sel.id));
+    (sel.type === 'fixture' && state.fixtures.some(f => f.id === sel.id)) || (sel.type === 'block' && state.blocks.some(b => b.id === sel.id)) || (sel.type === 'room' && state.rooms.some(r => r.id === sel.id));
   if (!ok) sel = null;
 }
 function mutate(fn, o) {
@@ -1161,6 +1982,8 @@ function hitTest(p) {
     const r = Math.max(13 / s, Math.max(def.w, def.d) / 2);
     if (Math.hypot(f.x - w.x, f.y - w.y) <= r) return { type: 'fixture', id: f.id };
   }
+  const hb = hitBlock(w);
+  if (hb) return hb;
   for (const o of state.openings) {
     const wl = state.walls.find(x => x.id === o.wallId);
     if (!wl) continue;
@@ -1352,6 +2175,15 @@ function draw() {
     r.poly.forEach((p, i) => { const q = W2S(p); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); });
     ctx.closePath(); ctx.fillStyle = C.tint[TINT[r.meta.type] != null ? TINT[r.meta.type] : 4]; ctx.fill();
   }
+  // existing walls as a faint underlay while designing a concept
+  if (ghost) {
+    const act = activeLayout(state), ex = state.layouts.find(l => l.kind === 'existing');
+    if (act && act.kind === 'new' && ex && ex.data) {
+      ctx.save(); ctx.globalAlpha = 0.4; ctx.strokeStyle = C.muted; ctx.setLineDash([7, 5]); ctx.lineCap = 'butt';
+      for (const w of ex.data.walls) { const a = W2S(w.a), b = W2S(w.b); ctx.lineWidth = Math.max(1.5, w.t * view.s * 0.5); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
   // walls
   ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
   for (const w of state.walls) {
@@ -1379,6 +2211,8 @@ function draw() {
       ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
     }
   }
+  // design blocks
+  drawBlocks(ctx);
   // fixtures
   for (const f of state.fixtures) drawFixture(ctx, f, sel && sel.type === 'fixture' && sel.id === f.id);
 
@@ -1479,6 +2313,13 @@ function addRoomRect(a, b) {
       if (!dup) state.walls.push({ id: uid(state, 'w'), a: { x: p[0], y: p[1] }, b: { x: q[0], y: q[1] }, t: opts.thick, h: state.settings.wallH });
     }
   }, { panel: true });
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, r = AN.rooms.find(q => q.poly && pointInPoly({ x: cx, y: cy }, q.poly));
+  if (r && r.meta && (opts.rname || (opts.rtype && opts.rtype !== 'room'))) {
+    if (opts.rtype && opts.rtype !== 'room') r.meta.type = opts.rtype;
+    const nm = (opts.rname || '').trim() || (opts.rtype && opts.rtype !== 'room' ? ROOM_TYPES[opts.rtype] : '');
+    if (nm) r.meta.name = nm;
+    opts.rname = ''; scheduleSave(); refresh({ panel: true });
+  }
   return true;
 }
 function addRoomTyped() {
@@ -1490,12 +2331,14 @@ function addRoomTyped() {
   const b = { x: Math.round((pending.x + sx * w) * 100) / 100, y: Math.round((pending.y + sy * d) * 100) / 100 };
   if (addRoomRect(pending, b)) { pending = null; curSnap = null; renderStrip(); draw(); toast('Room added'); }
 }
+function fixtureLocked(f) { const a = activeLayout(state); return !!(f && FIXTURES[f.kind] && FIXTURES[f.kind].fixed && a && a.kind !== 'existing' && !f.moved); }
 function removeEntity(s) {
   if (!s) return;
   mutate(() => {
     if (s.type === 'wall') { state.walls = state.walls.filter(w => w.id !== s.id); state.openings = state.openings.filter(o => o.wallId !== s.id); }
     else if (s.type === 'opening') state.openings = state.openings.filter(o => o.id !== s.id);
     else if (s.type === 'fixture') state.fixtures = state.fixtures.filter(f => f.id !== s.id);
+    else if (s.type === 'block') state.blocks = state.blocks.filter(b => b.id !== s.id);
   });
   sel = null; refresh();
 }
@@ -1573,7 +2416,9 @@ cv.addEventListener('pointermove', e => {
   if (tool === 'room') { if (!pending) { pending = snapPt(S2W(g.start)); g.dragRoom = true; } curSnap = snapPt(S2W(p)); draw(); return; }
   if (tool === 'select' && !g.mode) {
     if (g.node && sel && sel.type === 'wall') { g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true; }
+    else if (g.hit && g.hit.type === 'fixture' && fixtureLocked(state.fixtures.find(x => x.id === g.hit.id))) { g.mode = 'pan'; toast('Immovable item. Select it and tick "Allow moving in this concept" to relocate it.'); }
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
+    else if (g.hit && g.hit.type === 'block') { g.mode = 'block'; sel = g.hit; pushUndo(); const bb = blockById(g.hit.id); g.grab = bb ? { x: bb.x - S2W(p).x, y: bb.y - S2W(p).y } : { x: 0, y: 0 }; if (tab !== 'design') { tab = 'design'; renderPanel(); } }
     else if (g.hit && g.hit.type === 'opening') { g.mode = 'opening'; sel = g.hit; pushUndo(); }
     else g.mode = 'pan';
   }
@@ -1582,6 +2427,10 @@ cv.addEventListener('pointermove', e => {
     const np = snapPt(S2W(p), { excl: g.cur });
     moveNodeTo(g.cur, np); g.cur = { x: np.x, y: np.y };
     clampOpenings(); recompute(); updateSummary(); draw();
+  } else if (g.mode === 'block') {
+    const b = blockById(g.hit.id), w = S2W(p);
+    if (b) { b.x = Math.round((w.x + g.grab.x) / 3) * 3; b.y = Math.round((w.y + g.grab.y) / 3) * 3; snapBlock(b); }
+    recompute(); draw();
   } else if (g.mode === 'fixture') {
     const f = state.fixtures.find(x => x.id === g.hit.id), w = S2W(p);
     f.x = Math.round(w.x / 3) * 3; f.y = Math.round(w.y / 3) * 3;
@@ -1601,11 +2450,12 @@ function endPointer(e, cancel) {
   if (!g || cancel) { g = null; return; }
   const gg = g; g = null;
   if (tool === 'select') {
-    if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
+    if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
     const hit = gg.hit || hitTest(p);
     sel = hit;
     if (hit && hit.type === 'room') { openRooms.add(hit.id); if (tab !== 'rooms') { tab = 'rooms'; } }
+    if (hit && hit.type === 'block') tab = 'design';
     refresh();
     if (hit && hit.type === 'room') scrollToRoom(hit.id);
     return;
@@ -1637,6 +2487,7 @@ function endPointer(e, cancel) {
   if (tool === 'door') placeOpening(p, opts.doorKind);
   else if (tool === 'window') placeOpening(p, 'window');
   else if (tool === 'item') placeFixture(p);
+  else if (tool === 'block') placeBlockAt(p);
 }
 cv.addEventListener('pointerup', e => endPointer(e, false));
 cv.addEventListener('pointercancel', e => endPointer(e, true));
@@ -1658,7 +2509,7 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- toolbar, context, strip ---------- */
-const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['item', 'Item'], ['pan', 'Pan']];
+const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['item', 'Item'], ['block', 'Design'], ['pan', 'Pan']];
 function renderTools() {
   const viewGrp = '<div class="tgroup" role="group" aria-label="View">' +
     [['2d', 'plan', 'Plan'], ['3d', 'cube', '3D']].map(v => '<button class="tbtn" data-mode="' + v[0] + '" aria-pressed="' + (mode === v[0]) + '" type="button">' + icon(v[1]) + '<span>' + v[2] + '</span></button>').join('') + '</div>';
@@ -1694,6 +2545,8 @@ function renderCtx() {
     h += chipRow('Width', [[28, '28"'], [30, '30"'], [32, '32"'], [36, '36"'], [48, '48"']], opts.doorW, 'data-dw');
   } else if (tool === 'window') {
     h += chipRow('Width', [[24, '24"'], [36, '36"'], [48, '48"'], [60, '60"'], [72, '72"']], opts.winW, 'data-ww');
+  } else if (tool === 'block') {
+    h += ctxBlock();
   } else if (tool === 'item') {
     h += chipRow('New', Object.keys(FIXTURES).filter(k => !FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
     h += chipRow('Existing', Object.keys(FIXTURES).filter(k => FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
@@ -1708,6 +2561,7 @@ const HINTS = {
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
   window: 'Tap on a wall to place a window.',
+  block: 'Pick a block above, then tap the plan to place it. Cabinets and furniture snap flush to the nearest wall. Sinks drop onto a cabinet. Select a block to change its style, colors and size.',
   item: 'Tap inside a room to place an item. Items under Existing are things that cannot move, like posts, stacks and the panel.',
   pan: 'Drag to move the sheet. Pinch or use + and - to zoom.'
 };
@@ -1715,6 +2569,10 @@ function renderStrip() {
   const el = $('#strip');
   if (mode === '3d') { el.innerHTML = '<span class="hint">Drag to orbit, pinch or scroll to zoom, two fingers to pan. Tap a floor or wall to jump to that room. Change finishes in the Rooms tab and the view updates.</span>'; return; }
   let h = '<span class="hint">' + esc(pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
+  if (tool === 'room') {
+    h += '<span class="lenbox"><input id="rmName" autocomplete="off" placeholder="Name (Kitchen, Primary bath)" value="' + esc(opts.rname || '') + '" aria-label="Room name for the next room"/><select id="rmType" aria-label="Room type for the next room">' +
+      Object.keys(ROOM_TYPES).map(k => '<option value="' + k + '"' + ((opts.rtype || 'room') === k ? ' selected' : '') + '>' + ROOM_TYPES[k] + '</option>').join('') + '</select></span>';
+  }
   if (tool === 'room' && pending) {
     h += '<span class="lenbox"><input id="rmW" class="mono" inputmode="text" autocomplete="off" placeholder="Width 12\'" aria-label="Room width"/><input id="rmD" class="mono" inputmode="text" autocomplete="off" placeholder="Depth 10\'" aria-label="Room depth"/>' +
       '<button type="button" class="btn primary" id="rmAdd">Add room</button><button type="button" class="btn" id="doneBtn">Cancel</button></span>';
@@ -1761,7 +2619,9 @@ document.addEventListener('click', e => {
     if (z.dataset.zoom === 'fit') { fitView(); draw(); } else zoomAt(z.dataset.zoom === 'in' ? 1.3 : 1 / 1.3, cssW / 2, cssH / 2);
   }
 });
+document.addEventListener('input', e => { if (e.target.id === 'rmName') opts.rname = e.target.value; });
 document.addEventListener('change', e => {
+  if (e.target.id === 'rmType') { opts.rtype = e.target.value; return; }
   if (e.target.id === 'snapSel') { state.settings.snap = parseInt(e.target.value, 10); scheduleSave(); }
 });
 function drawTyped(dir) {
@@ -1808,10 +2668,14 @@ function renderInspector() {
       (o.kind === 'window' ? '<label class="f">Sill (in)<input class="mono" id="o-sill" inputmode="decimal" value="' + o.sill + '"></label>' : '') +
       '<label class="f">Center from wall start<input class="mono" id="o-off" value="' + esc(fmtFtIn(o.offset)) + '"></label></div>' +
       (o.kind === 'door' || o.kind === 'entry' ? '<div class="btnrow"><button type="button" class="btn" data-flip="hinge">Flip hinge</button><button type="button" class="btn" data-flip="side">Flip swing</button></div>' : '');
+  } else if (sel.type === 'block') {
+    const b = blockById(sel.id); if (!b) { el.hidden = true; return; }
+    h = blockInspector(b);
   } else if (sel.type === 'fixture') {
     const f = state.fixtures.find(x => x.id === sel.id); if (!f) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(FIXTURES[f.kind].label) + '</strong><span class="btnrow"><button type="button" class="btn" data-rot="1">Rotate 90&deg;</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
-      '<p class="note">' + (FIXTURES[f.kind].fixed ? 'Existing item that cannot move. It is shown on the plan and in Checks, and it is left out of the takeoff.' : 'Drag it on the plan to move it. Counts go to the room it sits in.') + '</p>';
+      '<p class="note">' + (FIXTURES[f.kind].fixed ? 'Existing item that cannot move. It is shown on the plan and in Checks, and it is left out of the takeoff.' : 'Drag it on the plan to move it. Counts go to the room it sits in.') + '</p>' +
+      (FIXTURES[f.kind].fixed && activeLayout(state).kind !== 'existing' ? '<label class="check"><input type="checkbox" id="f-moved"' + (f.moved ? ' checked' : '') + '> Allow moving in this concept (adds a relocation check)</label>' : '');
   }
   el.hidden = false; el.innerHTML = h;
 }
@@ -1857,7 +2721,7 @@ function updateSummary() {
 }
 
 /* ---------- panels ---------- */
-const TABS = [['rooms', 'Rooms'], ['takeoff', 'Takeoff'], ['checks', 'Checks'], ['export', 'Export']];
+const TABS = [['rooms', 'Rooms'], ['design', 'Design'], ['takeoff', 'Takeoff'], ['checks', 'Checks'], ['export', 'Export']];
 function renderTabs() {
   const warns = CK ? CK.filter(c => c.sev === 'warn').length : 0;
   $('#tabs').innerHTML = TABS.map(t => '<button class="tab" role="tab" type="button" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + (t[0] === 'checks' && warns ? '<span class="n">' + warns + '</span>' : '') + '</button>').join('');
@@ -1866,12 +2730,14 @@ function renderPanel() {
   renderTabs();
   const el = $('#pane');
   if (tab === 'rooms') el.innerHTML = paneRooms();
+  else if (tab === 'design') el.innerHTML = paneDesign();
   else if (tab === 'takeoff') el.innerHTML = paneTakeoff();
   else if (tab === 'checks') el.innerHTML = paneChecks();
   else el.innerHTML = paneExport();
 }
 function refresh(o) {
   o = o || {};
+  renderLayouts();
   updateSummary(); draw(); renderInspector(); updateHistoryBtns();
   if (o.panel !== false) renderPanel(); else renderTabs();
   if (mode === '3d') rebuild3D();
@@ -1983,7 +2849,7 @@ function scrollToRoom(id) {
   setTimeout(() => { const el = $('details[data-room="' + id + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 30);
 }
 function loadNew(st) {
-  pushUndo(); state = st; pending = null; sel = null;
+  pushUndo(); state = ensureLayouts(st); pending = null; sel = null;
   recompute(); scheduleSave(); fitView(); refresh();
 }
 
@@ -2087,6 +2953,249 @@ function boot() {
   try { new MutationObserver(themeChanged).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { readColors(); draw(); });
 }
+
+/* ---------- layouts: Existing and design concepts ---------- */
+let ghost = true;
+const CONCEPT_NAMES = 'ABCDEFGH';
+function renderLayouts() {
+  const el = $('#layouts');
+  if (!el) return;
+  const act = activeLayout(state);
+  el.innerHTML = '<span class="lbl">Layout</span><span class="ltabs" role="tablist">' + state.layouts.map(l => '<button type="button" role="tab" class="ltab" data-layout="' + l.id + '" aria-selected="' + (l.id === state.activeLayout) + '">' + esc(l.name) + (l.kind === 'new' && l.id === estimateLayoutId(state) && state.layouts.length > 1 ? ' <i title="Used for the estimate">$</i>' : '') + '</button>').join('') + '</span>' +
+    '<button type="button" class="chip-btn" id="addConcept">+ New concept</button>' +
+    (act.kind === 'new' ? '<button type="button" class="chip-btn" data-ghost="1" aria-pressed="' + ghost + '">Show existing walls</button>' : '');
+}
+function doSwitch(id) {
+  if (!switchLayout(state, id)) return;
+  sel = null; pending = null; curSnap = null;
+  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+}
+function makeConcept(fromId, style) {
+  pushUndo();
+  const n = state.layouts.filter(l => l.kind === 'new').length;
+  const base = fromId || (state.layouts.find(l => l.kind === 'existing') || state.layouts[0]).id;
+  const L = addConcept(state, 'Concept ' + (CONCEPT_NAMES[n] || (n + 1)), base, style || '');
+  switchLayout(state, L.id);
+  sel = null; pending = null; tab = 'design';
+  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+  toast('Started ' + L.name + ' from ' + (state.layouts.find(l => l.id === base) || {}).name);
+}
+document.addEventListener('click', e => {
+  const lt = e.target.closest('[data-layout]');
+  if (lt) { doSwitch(lt.dataset.layout); return; }
+  if (e.target.closest('#addConcept')) { makeConcept(); return; }
+  if (e.target.closest('[data-ghost]')) { ghost = !ghost; renderLayouts(); draw(); }
+});
+
+/* ===== Design UI: palette, 2D symbols, inspector, Design tab ===== */
+opts.bgroup = 'Kitchen'; opts.bkind = 'base';
+const activeStyle = () => (activeLayout(state) || {}).style || '';
+const isCeil = b => BLOCKS[b.kind] && BLOCKS[b.kind].mount === 'ceil';
+
+function ctxBlock() {
+  const grp = BLOCK_GROUPS.find(g => g[0] === opts.bgroup) || BLOCK_GROUPS[0];
+  if (grp[1].indexOf(opts.bkind) < 0) opts.bkind = grp[1][0];
+  return chipRow('Add', BLOCK_GROUPS.map(g => [g[0], g[0]]), grp[0], 'data-bgroup') +
+    chipRow('', grp[1].map(k => [k, BLOCKS[k].label]), opts.bkind, 'data-bkind') +
+    '<span class="lbl">Style for new</span><select id="newStyle" aria-label="Design style for new blocks"><option value="">Default</option>' + STYLE_LIST.map(s => '<option value="' + s[0] + '"' + (activeStyle() === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('') + '</select>';
+}
+
+/* ---------- drawing ---------- */
+function drawBlock(ctx, b, selected) {
+  const def = BLOCKS[b.kind];
+  if (!def) return;
+  const o = bopts(b), s = view.s, c0 = W2S(b), hi = (def.elev || 0) >= 50 && b.kind !== 'pendant';
+  const parts = def.parts(b, o).slice().sort((p, q) => p.y1 - q.y1);
+  ctx.save(); ctx.translate(c0.x, c0.y); ctx.rotate(rad(b.rot)); ctx.scale(s, s); ctx.lineJoin = 'round';
+  for (const p of parts) {
+    if (p.w * s < 0.7 && p.d * s < 0.7) continue;
+    const a = (p.o && p.o.opacity != null ? p.o.opacity : 1) * (hi ? 0.55 : 1);
+    ctx.globalAlpha = a; ctx.fillStyle = p.c;
+    ctx.beginPath();
+    if (p.s === 'cyl') ctx.ellipse(p.x, p.z, Math.max(0.01, p.w / 2), Math.max(0.01, p.d / 2), 0, 0, Math.PI * 2);
+    else ctx.rect(p.x - p.w / 2, p.z - p.d / 2, p.w, p.d);
+    ctx.fill();
+    if (p.w * s >= 2 || p.d * s >= 2) { ctx.globalAlpha = 0.5; ctx.strokeStyle = C.ink; ctx.lineWidth = 1 / s; if (hi) ctx.setLineDash([4 / s, 3 / s]); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  ctx.globalAlpha = 1;
+  if (selected) { ctx.strokeStyle = C.sel; ctx.lineWidth = 2.2 / s; ctx.setLineDash([6 / s, 4 / s]); ctx.strokeRect(-b.w / 2 - 1.5, -b.d / 2 - 1.5, b.w + 3, b.d + 3); ctx.setLineDash([]); }
+  ctx.restore();
+  if (b.w * s > 40 && Math.min(b.w, b.d) * s > 16 && !isCeil(b)) {
+    const txt = b.name ? b.name : (def.cat === 'Furniture' ? def.label : def.label.split(' ')[0] + ' ' + Math.round(b.w) + '"');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    halo(ctx, txt, c0.x, c0.y, C.muted, Math.max(8, Math.min(11, s * 5)), true, false);
+  }
+}
+function drawBlocks(ctx) {
+  const order = state.blocks.map((b, i) => [b, i]).sort((p, q) => {
+    const ra = rankOf(p[0]), rb = rankOf(q[0]);
+    return ra !== rb ? ra - rb : p[1] - q[1];
+  });
+  for (const [b] of order) drawBlock(ctx, b, sel && sel.type === 'block' && sel.id === b.id);
+}
+function rankOf(b) { const d = BLOCKS[b.kind]; return d.mount === 'ceil' ? 4 : d.overlay ? (d.elev ? 3 : 2) : (d.elev || 0) >= 50 ? 3 : 1; }
+
+function hitBlock(w) {
+  const s = view.s, m = 6 / s;
+  const order = state.blocks.map((b, i) => [b, i]).sort((p, q) => { const ra = rankOf(p[0]), rb = rankOf(q[0]); return ra !== rb ? rb - ra : q[1] - p[1]; });
+  for (const [b] of order) {
+    const t = rad(b.rot), c = Math.cos(t), sn = Math.sin(t), dx = w.x - b.x, dy = w.y - b.y;
+    const lx = dx * c + dy * sn, lz = -dx * sn + dy * c;
+    if (Math.abs(lx) <= b.w / 2 + m && Math.abs(lz) <= b.d / 2 + m) return { type: 'block', id: b.id };
+  }
+  return null;
+}
+
+/* ---------- placing and editing ---------- */
+function snapBlock(b) {
+  const def = BLOCKS[b.kind];
+  if (def.mount === 'wall') snapToWall(b, state);
+  else if (def.mount === 'host') snapToHost(b, state);
+}
+function placeBlockAt(p) {
+  const w = S2W(p), def = BLOCKS[opts.bkind];
+  if (!def) return;
+  const b = newBlock(state, opts.bkind, Math.round(w.x / 3) * 3, Math.round(w.y / 3) * 3, activeStyle());
+  snapBlock(b);
+  if (def.mount === 'host' && !hostAt(state, b.x, b.y, b.id)) toast('Drop this on a base cabinet or island');
+  mutate(() => { state.blocks.push(b); });
+  sel = { type: 'block', id: b.id }; tab = 'design'; refresh();
+}
+const blockById = id => state.blocks.find(b => b.id === id);
+function dupBlock(b) {
+  const c = JSON.parse(JSON.stringify(b)); c.id = uid(state, 'b');
+  const t = rad(b.rot); c.x += Math.cos(t) * (b.w + 0.5); c.y += Math.sin(t) * (b.w + 0.5);
+  mutate(() => { state.blocks.push(c); });
+  sel = { type: 'block', id: c.id }; refresh();
+}
+function blockInspector(b) {
+  const def = BLOCKS[b.kind];
+  return '<div class="insp-h"><strong>' + esc(def.label) + '</strong><span class="btnrow"><button type="button" class="btn" data-brot="-90" aria-label="Rotate left">&#8634; 90&deg;</button><button type="button" class="btn" data-brot="90" aria-label="Rotate right">&#8635; 90&deg;</button><button type="button" class="btn" data-bdup="1">Duplicate</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
+    '<div class="fields">' +
+    '<label class="f">Width (in)<input class="mono" id="b-w" inputmode="decimal" list="bsz" value="' + b.w + '"></label>' +
+    '<label class="f">Depth (in)<input class="mono" id="b-d" inputmode="decimal" value="' + b.d + '"></label>' +
+    '<label class="f">Label<input id="b-name" placeholder="e.g. Pantry" value="' + esc(b.name || '') + '"></label></div>' +
+    '<datalist id="bsz">' + (def.sizes || []).map(v => '<option value="' + v + '">').join('') + '</datalist>' +
+    '<p class="note">Drag it on the plan to move it. ' + (def.mount === 'wall' ? 'It snaps flush to the nearest wall and lines up against the next block. ' : def.mount === 'host' ? 'Drop it on a cabinet and it sits on top. ' : '') + 'All choices (style, colors, finish) are in the Design tab.</p>';
+}
+
+/* ---------- Design tab ---------- */
+function swatches(k, pal, cur) {
+  const list = PAL[pal] || [];
+  const inList = list.some(p => p[1].toLowerCase() === String(cur).toLowerCase());
+  return '<span class="sw">' + list.map(p => '<button type="button" class="swb" data-bc="' + k + '" data-v="' + p[1] + '" title="' + esc(p[0]) + '" aria-label="' + esc(p[0]) + '" aria-pressed="' + (p[1].toLowerCase() === String(cur).toLowerCase()) + '" style="background:' + p[1] + '"></button>').join('') +
+    '<label class="swb custom" title="Custom color" aria-pressed="' + !inList + '" style="' + (!inList ? 'background:' + cur : '') + '"><input type="color" data-bcc="' + k + '" value="' + cur + '" aria-label="Custom color"></label></span>';
+}
+function optionsHTML(b) {
+  const def = BLOCKS[b.kind], o = bopts(b);
+  let h = '<div class="grid2">';
+  for (const d of def.opts) {
+    if (d.t === 'color') h += '<div class="f wide"><span class="fl">' + esc(d.label) + ': <b>' + esc(palName(d.pal, o[d.k])) + '</b></span>' + swatches(d.k, d.pal, o[d.k]) + '</div>';
+    else h += '<label class="f">' + esc(d.label) + '<select data-bo="' + d.k + '">' + d.v.map(v => '<option value="' + v[0] + '"' + (String(v[0]) === String(o[d.k]) ? ' selected' : '') + '>' + esc(v[1]) + '</option>').join('') + '</select></label>';
+  }
+  return h + '</div>';
+}
+function paneDesign() {
+  const act = activeLayout(state), others = state.layouts.length > 1;
+  let h = '';
+  if (act.kind === 'existing') {
+    h += '<p class="note"><b>Existing layout.</b> Sketch the rooms as they are now, name them, and mark anything that cannot move (posts, stacks, panel, load-bearing walls). Then tap <b>+ New concept</b> to design the remodel on a copy.</p>';
+  } else {
+    h += '<h3>' + esc(act.name) + '</h3><div class="grid2"><label class="f">Concept name<input data-lname="1" value="' + esc(act.name) + '"></label>' +
+      '<div class="f"><span class="fl">Estimate</span><button type="button" class="btn' + (estimateLayoutId(state) === act.id ? ' primary' : '') + '" data-lest="1">' + (estimateLayoutId(state) === act.id ? 'This concept feeds the estimate' : 'Use this concept for the estimate') + '</button></div></div>' +
+      '<p class="note">Design concept. Restyle every block in this layout at once, then adjust anything you like.</p><div class="chips">' +
+      STYLE_LIST.map(s => '<button type="button" class="chip-btn" data-restyle="' + s[0] + '" aria-pressed="' + (act.style === s[0]) + '">' + s[1] + '</button>').join('') + '</div>' +
+      '<div class="btnrow" style="margin-top:8px"><button type="button" class="btn" data-ldup="1">Duplicate concept</button>' + (others ? '<button type="button" class="btn danger" data-ldel="1">Delete concept</button>' : '') + '</div>';
+  }
+  const b = sel && sel.type === 'block' ? blockById(sel.id) : null;
+  if (b) {
+    const def = BLOCKS[b.kind];
+    h += '<h3>' + esc(def.label) + ' ' + esc(fmtFtIn(b.w)) + (b.name ? ' &middot; ' + esc(b.name) : '') + '</h3>' + optionsHTML(b) +
+      (def.cat === 'Cabinetry' || def.cat === 'Built-ins' ? '<div class="btnrow" style="margin-top:8px"><button type="button" class="btn" data-matchcab="1">Match these cabinet choices to all cabinets</button></div>' : '') +
+      (def.furn ? '<p class="note">Furniture is part of the design only. It is not in the takeoff.</p>' : '');
+  } else if (state.blocks.length === 0) {
+    h += '<p class="note">No blocks yet. Pick the <b>Design</b> tool, choose Kitchen, Bath, Built-ins, Furniture or Lighting, then tap the plan. Every block has its own styles and colors.</p>';
+  } else h += '<p class="note">Tap a block on the plan to change its style, colors and finishes.</p>';
+  // schedule
+  if (state.blocks.length) {
+    h += '<h3>Selections schedule</h3>';
+    const groups = {};
+    for (const x of state.blocks) (groups[BLOCKS[x.kind].cat] = groups[BLOCKS[x.kind].cat] || []).push(x);
+    for (const cat of Object.keys(groups)) {
+      h += '<details class="sched"' + (groups[cat].some(x => sel && sel.id === x.id) ? ' open' : '') + '><summary>' + esc(cat) + ' <span class="n">' + groups[cat].length + '</span></summary>' +
+        groups[cat].map(x => '<button type="button" class="ck info" data-bsel="' + x.id + '"><span class="t"><b>' + esc(BLOCKS[x.kind].label) + ' ' + esc(fmtFtIn(x.w)) + (x.name ? ' (' + esc(x.name) + ')' : '') + '</b><br><span class="muted">' + esc(blockSpec(x).slice(0, 4).join(' · ')) + '</span></span></button>').join('') + '</details>';
+    }
+  }
+  if (others) {
+    h += '<h3>Compare layouts</h3><div class="cmp">';
+    for (const l of state.layouts) {
+      const sm = layoutSummary(state, l.id);
+      if (!sm) continue;
+      h += '<div class="cmprow"><b>' + esc(l.name) + (l.id === estimateLayoutId(state) && l.kind === 'new' ? ' ($)' : '') + '</b><span>' + sm.rooms + ' rooms, ' + sm.blocks + ' blocks, ' + sm.lines + ' takeoff lines' + (sm.priced ? ', ' + fmtMoney(sm.total) + ' priced' : '') + (sm.unpriced ? ', ' + sm.unpriced + ' unpriced' : '') + '</span></div>';
+    }
+    h += '</div>';
+  }
+  return h;
+}
+
+/* ---------- events ---------- */
+function setBlockOpt(b, k, v) {
+  mutate(() => {
+    b.opts = b.opts || {}; b.opts[k] = v;
+    if (k === 'top') { const pal = topPal(v), cur = b.opts.topColor; if (!cur || !(PAL[pal] || []).some(p => p[1].toLowerCase() === String(cur).toLowerCase())) b.opts.topColor = topDef(v); }
+    if (k === 'type' && b.kind === 'tub') { /* freestanding tubs ignore the surround */ }
+  }, { panel: false });
+  renderPanel();
+}
+document.addEventListener('click', e => {
+  const bg = e.target.closest('[data-bgroup]'); if (bg) { opts.bgroup = bg.dataset.bgroup; opts.bkind = ''; renderCtx(); return; }
+  const bk = e.target.closest('[data-bkind]'); if (bk) { opts.bkind = bk.dataset.bkind; renderCtx(); return; }
+  const rs = e.target.closest('[data-restyle]');
+  if (rs) {
+    const L = activeLayout(state); pushUndo();
+    L.style = rs.dataset.restyle; let n = 0;
+    for (const b of state.blocks) n += applyStyleToBlock(b, L.style);
+    recompute(); scheduleSave(); refresh(); toast('Applied ' + STYLE_PRESETS[L.style].name + ' to ' + state.blocks.length + ' blocks'); return;
+  }
+  if (e.target.closest('[data-lest]')) { mutate(() => { state.estimateLayout = activeLayout(state).id; }); return; }
+  if (e.target.closest('[data-ldup]')) { makeConcept(state.activeLayout, activeLayout(state).style); return; }
+  if (e.target.closest('[data-ldel]')) { if (window.confirm('Delete "' + activeLayout(state).name + '"? This cannot be undone.')) { pushUndo(); removeLayout(state, state.activeLayout); sel = null; recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh(); } return; }
+  const bs = e.target.closest('[data-bsel]'); if (bs) { sel = { type: 'block', id: bs.dataset.bsel }; refresh(); return; }
+  const sw = e.target.closest('[data-bc]');
+  if (sw && sel && sel.type === 'block') { const b = blockById(sel.id); if (b) setBlockOpt(b, sw.dataset.bc, sw.dataset.v); return; }
+  if (e.target.closest('[data-matchcab]') && sel && sel.type === 'block') {
+    const src = blockById(sel.id), so = bopts(src), roles = { cabStyle: 1, cabColor: 1, pull: 1, metal: 1 };
+    pushUndo(); let n = 0;
+    for (const t of state.blocks) {
+      const d = BLOCKS[t.kind]; if (t.id === src.id || (d.cat !== 'Cabinetry' && d.cat !== 'Built-ins')) continue;
+      t.opts = t.opts || {};
+      for (const od of d.opts) {
+        if (!roles[od.role] || od.role === 'metal' && od.k !== 'hwFinish') continue;
+        const sd = BLOCKS[src.kind].opts.find(x => x.role === od.role && (od.role !== 'metal' || x.k === 'hwFinish'));
+        if (!sd) continue;
+        const v = so[sd.k];
+        if (od.t === 'color' || od.v.some(p => String(p[0]) === String(v))) { t.opts[od.k] = v; n++; }
+      }
+    }
+    recompute(); scheduleSave(); refresh(); toast('Matched ' + n + ' choices'); return;
+  }
+  const br = e.target.closest('[data-brot]');
+  if (br && sel && sel.type === 'block') { const b = blockById(sel.id); mutate(() => { b.rot = ((b.rot || 0) + parseInt(br.dataset.brot, 10) + 360) % 360; }, { panel: false }); return; }
+  if (e.target.closest('[data-bdup]') && sel && sel.type === 'block') { dupBlock(blockById(sel.id)); return; }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'newStyle') { const L = activeLayout(state); L.style = t.value; scheduleSave(); return; }
+  if (t.dataset && t.dataset.lname) { const L = activeLayout(state); mutate(() => { L.name = t.value.trim() || L.name; }); return; }
+  if (t.id === 'f-moved' && sel && sel.type === 'fixture') { const f = state.fixtures.find(x => x.id === sel.id); if (f) mutate(() => { f.moved = t.checked; }, { panel: false }); return; }
+  if (!sel || sel.type !== 'block') return;
+  const b = blockById(sel.id); if (!b) return;
+  if (t.dataset.bo) { setBlockOpt(b, t.dataset.bo, t.value); return; }
+  if (t.dataset.bcc) { setBlockOpt(b, t.dataset.bcc, t.value); return; }
+  if (t.id === 'b-w') { const v = parseLen(t.value, 'in'); if (!v || v < 3 || v > 400) { toast('Width must be 3 to 400 in'); renderInspector(); return; } mutate(() => { b.w = v; snapBlock(b); }, { panel: false }); renderInspector(); }
+  else if (t.id === 'b-d') { const v = parseLen(t.value, 'in'); if (!v || v < 1 || v > 400) { toast('Depth must be 1 to 400 in'); renderInspector(); return; } mutate(() => { b.d = v; snapBlock(b); }, { panel: false }); renderInspector(); }
+  else if (t.id === 'b-name') mutate(() => { b.name = t.value.trim(); }, { panel: false });
+});
 
 /* ===== 3D view: reads the same model as the 2D plan ===== */
 let mode = '2d';
@@ -2353,7 +3462,29 @@ function build3D() {
     else if (f.kind === 'light') { if (v3.ceil) { const d = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.4, 16), solid('#fffdf2', { emissive: new THREE.Color('#fff4cc') })); d.position.set(f.x, state.settings.wallH - 0.3, f.y); G.add(d); } }
     else buildFixture3D(G, f);
   }
+  buildBlocks3D(G);
   return G;
+}
+
+/* design blocks: the same parts that draw the 2D symbol, extruded */
+function buildBlocks3D(G) {
+  if (typeof BLOCKS === 'undefined' || !state.blocks) return;
+  for (const b of state.blocks) {
+    const def = BLOCKS[b.kind]; if (!def) continue;
+    if (def.mount === 'ceil' && !v3.ceil && b.kind !== 'pendant') continue;
+    const grp = new THREE.Group();
+    grp.position.set(b.x, 0, b.y); grp.rotation.y = -rad(b.rot || 0);
+    for (const p of def.parts(b, bopts(b))) {
+      const h = p.y1 - p.y0; if (h <= 0.01 || p.w <= 0.01 || p.d <= 0.01) continue;
+      const o = p.o || {}, ex = { roughness: o.rough != null ? o.rough : 0.75, metalness: o.metal || 0 };
+      if (o.opacity != null && o.opacity < 1) { ex.transparent = true; ex.opacity = o.opacity; ex.depthWrite = o.opacity > 0.6; }
+      if (o.glow) { ex.emissive = new THREE.Color(p.c); ex.emissiveIntensity = 0.8; }
+      const geo = p.s === 'cyl' ? new THREE.CylinderGeometry(p.w / 2, p.d / 2, h, 20) : new THREE.BoxGeometry(p.w, h, p.d);
+      const m = new THREE.Mesh(geo, solid(p.c, ex));
+      m.position.set(p.x, p.y0 + h / 2, p.z); grp.add(m);
+    }
+    G.add(grp);
+  }
 }
 
 /* ---------- renderer and camera ---------- */
@@ -2380,7 +3511,7 @@ function frame3D(preset) {
   const b = AN.bbox || { minx: 0, miny: 0, maxx: 240, maxy: 180 };
   v3.tx = (b.minx + b.maxx) / 2; v3.tz = (b.miny + b.maxy) / 2;
   const span = Math.max(b.maxx - b.minx, b.maxy - b.miny, 120);
-  if (preset === 'top') { v3.ph = 0.03; v3.th = -Math.PI / 2; v3.r = span * 1.5; }
+  if (preset === 'top') { v3.ph = 0.03; v3.th = Math.PI / 2; v3.r = span * 1.5; }
   else if (preset === 'low') { v3.ph = 1.28; v3.th = -0.9; v3.r = span * 1.05; }
   else { v3.ph = 0.95; v3.th = -0.75; v3.r = span * 1.45; }
 }
@@ -2486,7 +3617,7 @@ if (EMBED) {
     if (m.type === 'fp:load') {
       var s = m.plan && Array.isArray(m.plan.walls) ? m.plan : newState();
       state = Object.assign(newState(), s, { settings: Object.assign(defaultSettings(), s.settings || {}) });
-      state.example = false;
+      state.example = false; ensureLayouts(state);
       undoStack.length = 0; redoStack.length = 0; sel = null; pending = null;
       recompute(); view.init = false; refresh();
       if (typeof resize === 'function') resize();
@@ -2506,5 +3637,4 @@ if (EMBED) {
 boot();
 
 </script>
-
 </body></html>
