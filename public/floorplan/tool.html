@@ -265,12 +265,34 @@ html.host body { overflow-y: hidden; }
 html.host .top { display: flex; align-items: stretch; gap: 10px; }
 html.host .sum { flex: 1; width: auto; }
 html.host .fsbtn { align-self: center; }
-html.fs body { background: var(--bg); padding: 10px 14px 14px; overflow: auto; }
-html.fs .wrap { max-width: none; gap: 8px; }
-html.fs .canvasWrap { height: calc(100vh - 292px) !important; min-height: 280px; }
-html.fs .panel { position: sticky; top: 0; max-height: calc(100vh - 28px); overflow: auto; }
-@media (min-width: 980px) { html.fs .layout { grid-template-columns: minmax(0, 1fr) 420px; } }
-html.fs .sum { padding-block: 6px; }
+.hud, .dock { display: contents; }
+.fsonly { display: none; }
+/* full screen: the sheet is the whole window and every control floats on top of it. Nothing scrolls. */
+html.fs, html.fs body { height: 100%; overflow: hidden; }
+html.fs body { background: var(--bg); padding: 0; }
+html.fs .wrap, html.fs .layout, html.fs .stage { display: block; max-width: none; gap: 0; }
+html.fs .canvasWrap { position: fixed; inset: 0; z-index: 1; height: 100vh !important; min-height: 0; border: 0; border-radius: 0; }
+html.fs .hud { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; position: fixed; z-index: 5; top: 10px; left: 10px; max-width: calc(100vw - 20px); pointer-events: none; }
+html.fs .dock { display: flex; flex-direction: column-reverse; gap: 6px; position: fixed; z-index: 5; left: 10px; bottom: 10px; width: min(560px, calc(100vw - 20px)); pointer-events: none; }
+html.fs .hud > *, html.fs .dock > * { pointer-events: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.28); padding: 6px 8px; }
+html.fs .hud > :empty, html.fs .ctx:empty { display: none; }
+html.fs .dock .insp[hidden] { display: none; }
+html.fs .tools { padding: 4px; }
+html.fs .tgroup { border: 0; background: transparent; padding: 0; }
+html.fs .dock .strip { min-height: 0; padding: 6px 10px; font-size: 12.5px; }
+html.fs .dock .insp { max-height: 46vh; overflow: auto; }
+html.fs .top { position: fixed; z-index: 6; top: 10px; right: 10px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.28); }
+html.fs .sum { width: auto; flex: none; gap: 4px 18px; padding: 0 6px; background: transparent; border: 0; border-radius: 0; }
+html.fs .sum .v { font-size: 14px; }
+html.fs .fsonly { display: inline-flex; }
+html.fs .panel { position: fixed; z-index: 5; top: 66px; right: 10px; bottom: 10px; width: min(410px, calc(100vw - 20px)); max-height: none; overflow: auto; box-shadow: 0 4px 18px rgba(0,0,0,.28); }
+html.fs.fs-nopanel .panel { display: none; }
+html.fs .zoom { top: auto; bottom: 56px; right: 12px; }
+html.fs:not(.fs-nopanel) .zoom { right: 430px; }
+html.fs .scalebar { bottom: 12px; left: auto; right: 12px; }
+html.fs:not(.fs-nopanel) .scalebar { right: 430px; }
+html.fs .layouts .lbl { display: none; }
+@media (max-width: 760px) { html.fs .sum { display: none; } html.fs .panel { top: auto; height: 46vh; } html.fs:not(.fs-nopanel) .zoom { right: 12px; } }
 
 </style>
 <div class="wrap">
@@ -278,12 +300,15 @@ html.fs .sum { padding-block: 6px; }
     <div class="brand"><h1>Floorplan Takeoff</h1><span class="badge" id="exBadge" hidden>Example plan</span></div>
     <div class="sum" id="sum"></div>
     <button type="button" class="btn fsbtn" id="fsBtn" aria-pressed="false" title="Fill the whole window (Esc to exit)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Full screen</span></button>
+    <button type="button" class="btn fsbtn fsonly" id="panelBtn" aria-pressed="true" title="Show or hide the side panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M14.5 4.5v15"/></svg><span>Panel</span></button>
   </header>
   <div class="layout">
     <section class="stage" aria-label="Plan sheet">
-      <div class="layouts" id="layouts"></div>
-      <div class="tools" id="tools"></div>
-      <div class="ctx" id="ctx"></div>
+      <div class="hud" id="hud">
+        <div class="layouts" id="layouts"></div>
+        <div class="tools" id="tools"></div>
+        <div class="ctx" id="ctx"></div>
+      </div>
       <div class="canvasWrap" id="canvasWrap">
         <canvas id="cv" aria-label="Floor plan drawing area"></canvas>
         <canvas id="cv3" hidden aria-label="3D view of the plan"></canvas>
@@ -295,8 +320,10 @@ html.fs .sum { padding-block: 6px; }
         <div class="scalebar" id="scalebar"></div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </div>
-      <div class="strip" id="strip"></div>
-      <div class="insp" id="insp" hidden></div>
+      <div class="dock" id="dock">
+        <div class="strip" id="strip"></div>
+        <div class="insp" id="insp" hidden></div>
+      </div>
     </section>
     <section class="panel" aria-label="Rooms, takeoff, checks and export">
       <div class="tabs" id="tabs" role="tablist"></div>
@@ -572,6 +599,8 @@ const FIXTURES = {
 };
 const FIXED_COL = '#A8471F';
 
+/* heated (conditioned) area: porches and garages are off by default, any room can be overridden */
+function isHeated(m) { return m.heated != null ? !!m.heated : !(m.type === 'porch' || m.type === 'garage'); }
 const ROOM_TYPES = {
   room: 'Not set', bedroom: 'Bedroom', bathroom: 'Bathroom', powder: 'Half bath', kitchen: 'Kitchen', living: 'Living / great room', dining: 'Dining', entry: 'Entry / foyer', pantry: 'Pantry', utility: 'Utility', porch: 'Porch (covered)',
   laundry: 'Laundry', hall: 'Hall', closet: 'Closet', office: 'Office', garage: 'Garage', restroom: 'Restroom (commercial)'
@@ -897,10 +926,10 @@ function buildTakeoff(state, an) {
     }
   };
 
-  let totalArea = 0;
+  let totalArea = 0, heatedSF = 0;
   for (const room of an.rooms) {
     const m = room.meta, f = m.fin || {};
-    totalArea += room.area;
+    totalArea += room.area; if (isHeated(m)) heatedSF += room.area;
     const put = (slot, qty) => {
       const fin = FIN[f[slot]];
       if (!fin) return;
@@ -997,7 +1026,7 @@ function buildTakeoff(state, an) {
     if (sa !== sb) return sa - sb;
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
-  return { lines, total, priced, unpriced, totalArea };
+  return { lines, total, priced, unpriced, totalArea, heatedSF };
 }
 
 /* ---------- checks ---------- */
@@ -1950,7 +1979,7 @@ let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: AN.rooms.length, floorSF: Math.round(AN.rooms.reduce((a, r) => a + r.area, 0)), checks: CK.length } }, '*'); } catch (e) { /* ignore */ } return; }
+    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: AN.rooms.length, heatedSF: Math.round(AN.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0)), floorSF: Math.round(AN.rooms.reduce((a, r) => a + r.area, 0)), checks: CK.length } }, '*'); } catch (e) { /* ignore */ } return; }
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }, 300);
 }
@@ -2095,13 +2124,15 @@ function resize() {
 function fitView() {
   if (!cssW) return;
   const b = AN && AN.bbox ? AN.bbox : { minx: 0, miny: 0, maxx: 240, maxy: 180 };
-  const pad = 36;
+  const pad = 36, I = fitInsets ? fitInsets() : { t: 0, r: 0, b: 0, l: 0 };
   const bw = Math.max(b.maxx - b.minx, 60), bh = Math.max(b.maxy - b.miny, 60);
-  const s = Math.max(0.15, Math.min(8, Math.min((cssW - pad * 2) / bw, (cssH - pad * 2) / bh)));
+  const aw = cssW - I.l - I.r - pad * 2, ah = cssH - I.t - I.b - pad * 2;
+  const s = Math.max(0.15, Math.min(8, Math.min(aw / bw, ah / bh)));
   view.s = s;
-  view.ox = (cssW - bw * s) / 2 - b.minx * s;
-  view.oy = (cssH - bh * s) / 2 - b.miny * s;
+  view.ox = I.l + pad + (aw - bw * s) / 2 - b.minx * s;
+  view.oy = I.t + pad + (ah - bh * s) / 2 - b.miny * s;
 }
+let fitInsets = null; // full screen sets this so the plan fits in the clear area between the floating controls
 function zoomAt(f, cx, cy) {
   const ns = Math.max(0.15, Math.min(10, view.s * f));
   const w = S2W({ x: cx, y: cy });
@@ -2479,6 +2510,19 @@ function moveNodeTo(oldPt, newPt) {
     if (ptKey(w.b.x, w.b.y) === k) { w.b.x = newPt.x; w.b.y = newPt.y; }
   }
 }
+/* move whole walls: walls attached at their ends stretch to follow, and walls that end partway along them are carried too */
+function shiftWalls(ids, dx, dy) {
+  if (!dx && !dy) return;
+  const set = new Set(ids), moved = state.walls.filter(w => set.has(w.id)), keys = new Set();
+  moved.forEach(w => { keys.add(ptKey(w.a.x, w.a.y)); keys.add(ptKey(w.b.x, w.b.y)); });
+  const targets = new Set();
+  for (const w of state.walls) for (const e of [w.a, w.b]) {
+    if (keys.has(ptKey(e.x, e.y))) targets.add(e);
+    else if (!set.has(w.id) && moved.some(m => segDist(e, m.a, m.b).d < 0.75)) targets.add(e);
+  }
+  const r2 = v => Math.round(v * 100) / 100;
+  targets.forEach(e => { e.x = r2(e.x + dx); e.y = r2(e.y + dy); });
+}
 function placeOpening(p, kind) {
   const w = S2W(p);
   let best = null, bd = 26 / view.s;
@@ -2553,10 +2597,37 @@ cv.addEventListener('pointermove', e => {
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
     else if (g.hit && g.hit.type === 'block') { g.mode = 'block'; sel = g.hit; pushUndo(); const bb = blockById(g.hit.id); g.grab = bb ? { x: bb.x - S2W(p).x, y: bb.y - S2W(p).y } : { x: 0, y: 0 }; if (tab !== 'design') { tab = 'design'; renderPanel(); } }
     else if (g.hit && g.hit.type === 'opening') { g.mode = 'opening'; sel = g.hit; pushUndo(); }
+    else if (g.hit && g.hit.type === 'wall' && sel && sel.type === 'wall' && sel.id === g.hit.id) {
+      const wl = state.walls.find(x => x.id === g.hit.id), gm = wallGeom(wl);
+      g.mode = 'wallmove'; pushUndo(); g.mv = { ids: [wl.id], nx: -gm.uy, ny: gm.ux, tx: 0, ty: 0, fx: [], bl: [] };
+      toast('Pulling the wall. Walls attached to it stretch to follow.');
+    } else if (g.hit && g.hit.type === 'room' && sel && sel.type === 'room' && sel.id === g.hit.id) {
+      const rm = AN.rooms.find(x => x.meta.id === g.hit.id);
+      if (rm) {
+        g.mode = 'roommove'; pushUndo();
+        g.mv = { meta: rm.meta.id, ids: Array.from(new Set(rm.edges.map(e => e.seg.wallId))), tx: 0, ty: 0,
+          fx: state.fixtures.filter(f => pointInPoly(f, rm.poly)).map(f => f.id), bl: state.blocks.filter(b => pointInPoly(b, rm.poly)).map(b => b.id) };
+        toast('Moving the room. Walls shared with other rooms stretch to follow.');
+      } else g.mode = 'pan';
+    }
     else g.mode = 'pan';
   }
   if (g.mode === 'pan') { view.ox = g.ox + (p.x - g.start.x); view.oy = g.oy + (p.y - g.start.y); draw(); }
-  else if (g.mode === 'node') {
+  else if (g.mode === 'wallmove' || g.mode === 'roommove') {
+    const q = S2W(p), s0 = S2W(g.start), st = state.settings.snap || 6, mv = g.mv;
+    let dx = q.x - s0.x, dy = q.y - s0.y;
+    if (g.mode === 'wallmove') { const t = Math.round((dx * mv.nx + dy * mv.ny) / st) * st; dx = t * mv.nx; dy = t * mv.ny; }
+    else { dx = Math.round(dx / st) * st; dy = Math.round(dy / st) * st; }
+    const ddx = dx - mv.tx, ddy = dy - mv.ty;
+    if (ddx || ddy) {
+      shiftWalls(mv.ids, ddx, ddy);
+      const r2 = v => Math.round(v * 100) / 100;
+      for (const f of state.fixtures) if (mv.fx.indexOf(f.id) >= 0) { f.x = r2(f.x + ddx); f.y = r2(f.y + ddy); }
+      for (const b of state.blocks) if (mv.bl.indexOf(b.id) >= 0) { b.x = r2(b.x + ddx); b.y = r2(b.y + ddy); }
+      if (mv.meta) { const mm = state.rooms.find(x => x.id === mv.meta); if (mm && mm.labelPt) { mm.labelPt = { x: mm.labelPt.x + ddx, y: mm.labelPt.y + ddy }; } }
+      mv.tx = dx; mv.ty = dy; recompute(); draw();
+    }
+  } else if (g.mode === 'node') {
     const np = snapPt(S2W(p), { excl: g.cur });
     moveNodeTo(g.cur, np); g.cur = { x: np.x, y: np.y };
     clampOpenings(); recompute(); updateSummary(); draw();
@@ -2584,7 +2655,7 @@ function endPointer(e, cancel) {
   const gg = g; g = null;
   if (tool === 'trace') { if (ulMode === 'scale' && !gg.moved && UL) { ulPts.push(S2W(p)); if (ulPts.length > 2) ulPts = [ulPts[2]]; renderStrip(); draw(); } return; }
   if (tool === 'select') {
-    if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
+    if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block' || gg.mode === 'wallmove' || gg.mode === 'roommove') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
     const hit = gg.hit || hitTest(p);
     sel = hit;
@@ -2693,7 +2764,7 @@ function renderCtx() {
   $('#ctx').innerHTML = h;
 }
 const HINTS = {
-  select: 'Tap a wall, door, item or room to edit it. Drag a corner handle to move a wall end. Drag on empty space to pan; pinch to zoom.',
+  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull the whole wall (attached walls stretch), or drag a corner handle for one end. With a room selected, drag it to move the whole room. Drag empty space to pan.',
   room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
@@ -2853,6 +2924,7 @@ function updateSummary() {
   const lf = state.walls.filter(w => !isZone(w)).reduce((s, w) => s + wallGeom(w).L, 0) / 12;
   $('#sum').innerHTML =
     '<div><span class="k">Floor area</span><span class="v">' + fmtNum(floor, 0) + ' SF</span></div>' +
+    '<div><span class="k">Heated area</span><span class="v">' + fmtNum(AN.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0), 0) + ' SF</span></div>' +
     '<div><span class="k">Rooms</span><span class="v">' + AN.rooms.length + '</span></div>' +
     '<div><span class="k">Wall run</span><span class="v">' + fmtNum(lf, 0) + ' LF</span></div>' +
     '<div><span class="k">Priced total</span><span class="v">' + (TK && TK.priced ? fmtMoney(TK.total) : 'not priced') + '</span></div>';
@@ -2915,9 +2987,10 @@ function paneRooms() {
       '<label class="f">Base<select data-f="fin.base">' + finOptions('base', m.fin.base) + '</select></label>' +
       '<label class="f">Wall finish height<select data-f="wallFinH">' + [[0, 'Full height'], [48, '48 in'], [60, '60 in'], [72, '72 in'], [84, '84 in']].map(v => '<option value="' + v[0] + '"' + ((m.wallFinH || 0) === v[0] ? ' selected' : '') + '>' + v[1] + '</option>').join('') + '</select></label></div>' +
       '<label class="f">Ceiling height<input class="mono" data-f="ceilH" placeholder="Default ' + esc(fmtFtIn(state.settings.wallH)) + ' (type 10, 9-4, 15)" value="' + (m.ceilH ? esc(fmtFtIn(m.ceilH)) : '') + '"></label>' +
+      '<label class="check"><input type="checkbox" data-f="heated"' + (isHeated(m) ? ' checked' : '') + '> Count toward heated square footage' + (m.heated == null && !isHeated(m) ? ' (off by default for ' + esc((ROOM_TYPES[m.type] || '').toLowerCase()) + ')' : '') + '</label>' +
       '<label class="check"><input type="checkbox" data-f="demoFloor"' + (m.demoFloor ? ' checked' : '') + '> Demo existing floor</label>' +
       cabBlock + bathBlock +
-      '<div class="counts mono">Perimeter ' + fmtNum(r.perim, 1) + ' LF &middot; ' + r.doorCount + ' door' + (r.doorCount === 1 ? '' : 's') + ' &middot; ' + r.windowCount + ' window' + (r.windowCount === 1 ? '' : 's') + (counts ? ' &middot; ' + esc(counts) : '') + '</div>' +
+      '<div class="counts mono">' + (isHeated(m) ? 'Heated' : 'Unheated') + ' &middot; Perimeter ' + fmtNum(r.perim, 1) + ' LF &middot; ' + r.doorCount + ' door' + (r.doorCount === 1 ? '' : 's') + ' &middot; ' + r.windowCount + ' window' + (r.windowCount === 1 ? '' : 's') + (counts ? ' &middot; ' + esc(counts) : '') + '</div>' +
       '</div></details>';
   }).join('');
   return '<p class="note">Sketch the room sizes, mark anything that cannot move, then choose the new finishes. Leave a finish blank to keep what is there. Quantities come from the drawn walls, so changing a wall updates every number.</p>' + cards;
@@ -3040,6 +3113,7 @@ pane.addEventListener('change', e => {
     else if (f.indexOf('fin.') === 0) mutate(() => { m.fin[f.slice(4)] = t.value; });
     else if (f === 'wallFinH') mutate(() => { m.wallFinH = parseInt(t.value, 10) || 0; });
     else if (f === 'ceilH') { const v = t.value.trim() ? parseLen(t.value) : 0; if (t.value.trim() && (!v || v < 60)) { toast('Could not read that height. Try 10 or 9-4'); return; } mutate(() => { m.ceilH = v || 0; }); }
+    else if (f === 'heated') mutate(() => { m.heated = t.checked; }, { panel: false });
     else if (f === 'demoFloor') mutate(() => { m.demoFloor = t.checked; });
     else if (f === 'cabLF' || f === 'uppLF' || f === 'ctrExtraSF') mutate(() => { const v = parseFloat(t.value); m[f] = v > 0 ? v : 0; });
     return;
@@ -3884,12 +3958,18 @@ try {
 
 /* ===== Full screen: the whole tool fills the window; Esc or the button gets you back ===== */
 let FS = false, fsSaved = null, fsBodyOverflow = '';
-function fsRefit() {
-  setTimeout(() => { try { resize(); if (mode === '3d') { size3D(); render3D(); } draw(); hostSize(); } catch (e) { /* ignore */ } }, 60);
+function fsInsets() {
+  const r = id => { const e = document.getElementById(id); return e && e.getClientRects().length ? e.getBoundingClientRect() : null; };
+  const hud = r('hud'), dock = r('dock'), top = r('fsBtn'), pan = document.querySelector('.panel');
+  const pr = pan && pan.getClientRects().length ? pan.getBoundingClientRect() : null;
+  return { t: Math.max(hud ? hud.bottom : 0, 60) + 6, l: 12, b: dock && dock.height ? innerHeight - dock.top + 6 : 12, r: pr ? innerWidth - pr.left + 6 : 66 };
+}
+function fsRefit(fit) {
+  setTimeout(() => { try { resize(); if (fit) fitView(); if (mode === '3d') { size3D(); render3D(); } draw(); hostSize(); } catch (e) { /* ignore */ } }, 60);
 }
 function setFS(on) {
   if (on === FS) return;
-  FS = on;
+  FS = on; fitInsets = on ? fsInsets : null;
   document.documentElement.classList.toggle('fs', on);
   const btn = $('#fsBtn'); if (btn) { btn.setAttribute('aria-pressed', on); btn.querySelector('span').textContent = on ? 'Exit full screen' : 'Full screen'; }
   let fe = null;
@@ -3910,9 +3990,12 @@ function setFS(on) {
       else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     } catch (e) { /* ignore */ }
   }
-  fsRefit();
+  fsRefit(!UL);
 }
-document.addEventListener('click', e => { if (e.target.closest('#fsBtn')) setFS(!FS); });
+document.addEventListener('click', e => {
+  if (e.target.closest('#fsBtn')) setFS(!FS);
+  else if (e.target.closest('#panelBtn')) { const off = document.documentElement.classList.toggle('fs-nopanel'); e.target.closest('#panelBtn').setAttribute('aria-pressed', !off); fsRefit(true); }
+});
 const fsKey = e => { if (e.key === 'Escape' && FS) { const t = e.target; if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) && t.id) return; setFS(false); } };
 document.addEventListener('keydown', fsKey);
 try { if (EMBED) window.parent.document.addEventListener('keydown', fsKey); } catch (e) { /* ignore */ }
