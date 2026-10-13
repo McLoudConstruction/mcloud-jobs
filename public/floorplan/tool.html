@@ -294,6 +294,11 @@ html.fs:not(.fs-nopanel) .scalebar { right: 430px; }
 html.fs .layouts .lbl { display: none; }
 @media (max-width: 760px) { html.fs .sum { display: none; } html.fs .panel { top: auto; height: 46vh; } html.fs:not(.fs-nopanel) .zoom { right: 12px; } }
 
+.brk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.brk .lbl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.brk .btnrow { align-items: center; }
+.brk .lenbox input { width: 150px; }
+
 </style>
 <div class="wrap">
   <header class="top">
@@ -1994,6 +1999,7 @@ let tab = 'rooms';
 const openRooms = new Set();
 const opts = { thick: 4.5, doorKind: 'door', doorW: 32, winW: 36, item: 'outlet' };
 const isZone = w => w.t <= 0.6;
+let breakMode = false; // next tap on a wall breaks it in two
 let UL = null, ulMode = '', ulPts = []; // trace image underlay (kept in this session, not saved with the plan)
 const view = { ox: 0, oy: 0, s: 1, init: false };
 let cssW = 0, cssH = 0, dpr = 1, C = null;
@@ -2510,6 +2516,41 @@ function moveNodeTo(oldPt, newPt) {
     if (ptKey(w.b.x, w.b.y) === k) { w.b.x = newPt.x; w.b.y = newPt.y; }
   }
 }
+/* wall break: split one wall into two at a distance from its start. Openings go with the side they sit on. Returns [firstId, secondId] or null. */
+function splitWallAt(wallId, dist) {
+  const w = state.walls.find(x => x.id === wallId); if (!w) return null;
+  const g = wallGeom(w), L = g.L;
+  if (dist < 3 || dist > L - 3) return null;
+  for (const o of state.openings) if (o.wallId === w.id && o.offset - o.w / 2 < dist && o.offset + o.w / 2 > dist) return 'opening';
+  const r2 = v => Math.round(v * 100) / 100, pt = { x: r2(w.a.x + g.ux * dist), y: r2(w.a.y + g.uy * dist) };
+  const nw = Object.assign({}, JSON.parse(JSON.stringify(w)), { id: uid(state, 'w'), a: { x: pt.x, y: pt.y }, b: { x: w.b.x, y: w.b.y } });
+  w.b = { x: pt.x, y: pt.y };
+  state.walls.splice(state.walls.indexOf(w) + 1, 0, nw);
+  for (const o of state.openings) if (o.wallId === w.id && o.offset > dist) { o.wallId = nw.id; o.offset = r2(o.offset - dist); }
+  return [w.id, nw.id];
+}
+/* distances along a wall where other walls meet or cross it */
+function junctionDists(w) {
+  const g = wallGeom(w), out = [];
+  for (const v of state.walls) {
+    if (v === w) continue;
+    const cand = [];
+    for (const e of [v.a, v.b]) { const sd = segDist(e, w.a, w.b); if (sd.d < 0.75) cand.push(sd.t * g.L); }
+    const sx = v.b.x - v.a.x, sy = v.b.y - v.a.y, den = cross2(g.ux * g.L, g.uy * g.L, sx, sy);
+    if (Math.abs(den) > 1e-9) {
+      const qx = v.a.x - w.a.x, qy = v.a.y - w.a.y, t = cross2(qx, qy, sx, sy) / den, u = cross2(qx, qy, g.ux * g.L, g.uy * g.L) / den;
+      if (t > 0 && t < 1 && u > 0 && u < 1) cand.push(t * g.L);
+    }
+    cand.forEach(d => { if (d > 3 && d < g.L - 3 && !out.some(x => Math.abs(x - d) < 3)) out.push(d); });
+  }
+  return out.sort((a, b) => a - b);
+}
+function breakWall(wallId, dists) {
+  const ds = dists.slice().sort((a, b) => b - a); // far end first, so the first piece keeps its id
+  let blocked = false, n = 0;
+  mutate(() => { for (const d of ds) { const r = splitWallAt(wallId, d); if (r === 'opening') blocked = true; else if (r) n++; } }, { panel: true });
+  return { n, blocked };
+}
 /* move whole walls: walls attached at their ends stretch to follow, and walls that end partway along them are carried too */
 function shiftWalls(ids, dx, dy) {
   if (!dx && !dy) return;
@@ -2658,6 +2699,16 @@ function endPointer(e, cancel) {
     if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block' || gg.mode === 'wallmove' || gg.mode === 'roommove') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
     const hit = gg.hit || hitTest(p);
+    if (breakMode) {
+      breakMode = false; renderStrip();
+      if (hit && hit.type === 'wall') {
+        const w = state.walls.find(x => x.id === hit.id), gm = wallGeom(w), sd = segDist(S2W(p), w.a, w.b), st = state.settings.snap || 6;
+        const d = Math.round(sd.t * gm.L / st) * st, r = breakWall(w.id, [d]);
+        sel = hit; toast(r.n ? 'Wall broken in two. Select a piece to pull, move or delete it.' : (r.blocked ? 'A door or window sits on that spot. Move it first.' : 'Too close to the end of the wall to break there.'));
+        return;
+      }
+      toast('Tap on the wall you want to break.'); refresh(); return;
+    }
     sel = hit;
     if (hit && hit.type === 'room') { openRooms.add(hit.id); if (tab !== 'rooms') { tab = 'rooms'; } }
     if (hit && hit.type === 'block') tab = 'design';
@@ -2777,7 +2828,7 @@ const HINTS = {
 function renderStrip() {
   const el = $('#strip');
   if (mode === '3d') { el.innerHTML = '<span class="hint">Drag to orbit, pinch or scroll to zoom, two fingers to pan. Tap a floor or wall to jump to that room. Change finishes in the Rooms tab and the view updates.</span>'; return; }
-  let h = '<span class="hint">' + esc(pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
+  let h = '<span class="hint">' + esc(breakMode ? 'Break mode: tap the spot on the wall where you want it to split. It snaps to the grid.' : pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
   if (tool === 'room') {
     h += '<span class="lenbox"><input id="rmName" autocomplete="off" placeholder="Name (Kitchen, Primary bath)" value="' + esc(opts.rname || '') + '" aria-label="Room name for the next room"/><select id="rmType" aria-label="Room type for the next room">' +
       Object.keys(ROOM_TYPES).map(k => '<option value="' + k + '"' + ((opts.rtype || 'room') === k ? ' selected' : '') + '>' + ROOM_TYPES[k] + '</option>').join('') + '</select></span>';
@@ -2795,7 +2846,7 @@ function renderStrip() {
   el.innerHTML = h;
 }
 function setTool(t) {
-  tool = t; pending = null; curSnap = null;
+  tool = t; pending = null; curSnap = null; breakMode = false;
   if (t !== 'select') sel = t === 'select' ? sel : null;
   renderTools(); renderCtx(); renderStrip(); renderInspector(); draw();
   cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : 'crosshair';
@@ -2867,7 +2918,11 @@ function renderInspector() {
       '<label class="f">Length<input class="mono" id="i-len" value="' + esc(fmtFtIn(L)) + '"></label>' +
       '<label class="f">Thickness<select id="i-th">' + [0.5, 3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + (v === 0.5 ? 'Open edge (no wall)' : v + ' in') + '</option>').join('') + '</select></label>' +
       '<label class="f">Height (in)<input class="mono" id="i-h" inputmode="decimal" value="' + w.h + '"></label></div>' +
-      '<label class="check"><input type="checkbox" id="i-fixed"' + (w.fixed ? ' checked' : '') + '> Load bearing, do not move</label>';
+      '<label class="check"><input type="checkbox" id="i-fixed"' + (w.fixed ? ' checked' : '') + '> Load bearing, do not move</label>' +
+      '<div class="brk"><span class="lbl">Break wall</span><span class="btnrow">' +
+      '<button type="button" class="btn' + (breakMode ? ' primary' : '') + '" data-brk="tap" aria-pressed="' + breakMode + '">' + (breakMode ? 'Tap the wall...' : 'Break at a tap') + '</button>' +
+      '<button type="button" class="btn" data-brk="junc">Break at every junction</button>' +
+      '<span class="lenbox"><input class="mono" id="i-brk" autocomplete="off" placeholder="at 6-8 from start" aria-label="Break distance from the start of the wall"><button type="button" class="btn" data-brk="at">Break</button></span></span></div>';
   } else if (sel.type === 'opening') {
     const o = state.openings.find(x => x.id === sel.id); if (!o) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(OPENING_KINDS[o.kind].label) + '</strong><button type="button" class="btn danger" data-del="1">Delete</button></div>' +
@@ -2890,6 +2945,22 @@ function renderInspector() {
   el.hidden = false; el.innerHTML = h;
 }
 $('#insp').addEventListener('click', e => {
+  const bk = e.target.closest('[data-brk]');
+  if (bk && sel && sel.type === 'wall') {
+    const w = state.walls.find(x => x.id === sel.id); if (!w) return;
+    const a = bk.dataset.brk;
+    if (a === 'tap') { breakMode = !breakMode; renderInspector(); renderStrip(); return; }
+    if (a === 'junc') {
+      const ds = junctionDists(w);
+      if (!ds.length) { toast('No other walls meet this one, so there is nothing to break at. Use a tap or a distance.'); return; }
+      const r = breakWall(w.id, ds); toast(r.n ? 'Broke the wall into ' + (r.n + 1) + ' pieces. Select a piece to pull, move or delete it.' : 'A door or window sits on that spot. Move it first.'); return;
+    }
+    if (a === 'at') {
+      const d = parseLen(($('#i-brk') || {}).value || '');
+      if (!d) { toast('Type a distance from the start, like 6-8'); return; }
+      const r = breakWall(w.id, [d]); toast(r.n ? 'Wall broken in two.' : (r.blocked ? 'A door or window sits on that spot. Move it first.' : 'That point is at the end of the wall.')); return;
+    }
+  }
   if (e.target.closest('[data-del]')) { removeEntity(sel); return; }
   if (e.target.closest('[data-rot]')) { const f = state.fixtures.find(x => x.id === sel.id); mutate(() => { f.rot = (f.rot || 0) + Math.PI / 2; }, { panel: false }); return; }
   const fl = e.target.closest('[data-flip]');
