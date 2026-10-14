@@ -202,11 +202,20 @@ textarea.out { width: 100%; min-height: 160px; border: 1px solid var(--line); bo
 [hidden] { display: none !important; }
 
 /* layouts */
+.fedit { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; flex-basis: 100%; }
 .layouts { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
 .layouts .lbl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .ltabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .ltab { min-height: 36px; padding: 4px 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
 .ltab[aria-selected="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+canvas.elev { width: 100%; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); margin: 8px 0; }
+.seg2 { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.seg2 button { min-height: 34px; padding: 4px 11px; border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 13px; color: var(--ink); }
+.seg2 button:last-child { border-right: 0; }
+.seg2 button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.rdnote { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 8px 10px; margin: 8px 0; font-size: 13px; border-radius: 0 4px 4px 0; }
+.rdrow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0; }
+.rdrow .fl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-width: 64px; }
 .ltab i { font-style: normal; font-family: var(--font-mono); font-size: 11px; opacity: 0.8; margin-left: 4px; }
 
 /* design tab */
@@ -311,6 +320,7 @@ html.fs .layouts .lbl { display: none; }
     <section class="stage" aria-label="Plan sheet">
       <div class="hud" id="hud">
         <div class="layouts" id="layouts"></div>
+        <div class="layouts" id="floors"></div>
         <div class="tools" id="tools"></div>
         <div class="ctx" id="ctx"></div>
       </div>
@@ -637,13 +647,13 @@ const TYPE_EXPECT = {
   restroom: { toilet: 1, vanity: 1, light: 1, outlet: 1, switch: 1 }
 };
 
-const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Cabinets and tops', 'Built-ins', 'Appliances', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
+const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Stairs', 'Cabinets and tops', 'Built-ins', 'Appliances', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
 
 function defaultSettings() {
   return { wallH: 96, minOpenSF: 0, casingId: 'T-CASE', cleaning: true, dumpster: 1, snap: 6, ortho: true };
 }
 function newState() {
-  return { v: 1, example: false, walls: [], openings: [], fixtures: [], blocks: [], layouts: [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }], activeLayout: 'L1', rooms: [], nextId: 1, nextRoom: 1, prices: {}, waste: {}, manual: [], settings: defaultSettings() };
+  return { v: 1, example: false, walls: [], openings: [], fixtures: [], blocks: [], layouts: [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }], activeLayout: 'L1', rooms: [], floors: [{ id: 'F1', name: 'Main floor', rise: 106 }], activeFloor: 'F1', floorData: {}, nextId: 1, nextRoom: 1, prices: {}, waste: {}, manual: [], settings: defaultSettings() };
 }
 function uid(state, prefix) { return prefix + (state.nextId++); }
 
@@ -864,7 +874,26 @@ function analyze(state) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const w of state.walls) for (const p of [w.a, w.b]) { minx = Math.min(minx, p.x); miny = Math.min(miny, p.y); maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y); }
   const bbox = isFinite(minx) ? { minx, miny, maxx, maxy } : null;
-  return { rooms, dangling, segs, nodes, bbox };
+  return { rooms, dangling, segs, nodes, bbox, overall: overallDims(state.walls) };
+}
+
+/* Overall size of the drawn building: out to out of the wall faces (open edges and dividers are left out).
+   width runs left to right, length runs top to bottom of the sheet. */
+function overallDims(walls) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, c0x = Infinity, c0y = Infinity, c1x = -Infinity, c1y = -Infinity;
+  for (const w of walls) {
+    if (w.t <= 0.6) continue;
+    const dx = w.b.x - w.a.x, dy = w.b.y - w.a.y, L = Math.hypot(dx, dy);
+    if (L < 1) continue;
+    const nx = -dy / L * w.t / 2, ny = dx / L * w.t / 2;
+    for (const p of [w.a, w.b]) {
+      c0x = Math.min(c0x, p.x); c1x = Math.max(c1x, p.x); c0y = Math.min(c0y, p.y); c1y = Math.max(c1y, p.y);
+      for (const k of [-1, 1]) { x0 = Math.min(x0, p.x + k * nx); x1 = Math.max(x1, p.x + k * nx); y0 = Math.min(y0, p.y + k * ny); y1 = Math.max(y1, p.y + k * ny); }
+    }
+  }
+  if (!isFinite(x0)) return null;
+  const r2 = v => Math.round(v * 100) / 100;
+  return { minx: r2(x0), miny: r2(y0), maxx: r2(x1), maxy: r2(y1), width: r2(x1 - x0), length: r2(y1 - y0), cwidth: r2(c1x - c0x), clength: r2(c1y - c0y) };
 }
 
 function openingDeducted(o, settings) { return (o.w * o.h) / 144 >= (settings.minOpenSF || 0); }
@@ -905,7 +934,7 @@ function orderQty(net, wastePct, pack, basis) {
   return { qty: Math.ceil(gross - 1e-6), unit: basis, gross };
 }
 
-function buildTakeoff(state, an) {
+function buildTakeoff(state, an, more) {
   const S = state.settings;
   const L = new Map();
   const add = (key, init, room, qty) => {
@@ -915,7 +944,7 @@ function buildTakeoff(state, an) {
     l.net += qty;
     if (room) {
       const r = l.rooms.find(x => x.id === room.meta.id);
-      if (r) r.qty += qty; else l.rooms.push({ id: room.meta.id, name: room.meta.name, qty });
+      if (r) r.qty += qty; else l.rooms.push({ id: room.meta.id, name: room.meta.name + (room.tag ? ' (' + room.tag + ')' : ''), qty });
     }
     return l;
   };
@@ -932,6 +961,8 @@ function buildTakeoff(state, an) {
   };
 
   let totalArea = 0, heatedSF = 0;
+  /* one pass per floor: state and an are that floor's view, everything shared (prices, settings) comes from the outer scope */
+  const floorPass = (state, an) => {
   for (const room of an.rooms) {
     const m = room.meta, f = m.fin || {};
     totalArea += room.area; if (isHeated(m)) heatedSF += room.area;
@@ -1008,6 +1039,10 @@ function buildTakeoff(state, an) {
     }
   }
 
+  };
+  floorPass(state, an);
+  for (const P of more || []) floorPass(P.st, P.an);
+
   // allowances
   if (S.cleaning && totalArea > 0) add('allow:clean', { name: 'Final cleaning', cat: 'Allowances', unit: 'SF', source: 'Allowance', wastePct: 0, pack: null, scope: 'Final construction cleaning of all work areas.' }, null, totalArea);
   if (S.dumpster > 0) add('allow:dumpster', { name: 'Debris haul-off (dumpster)', cat: 'Allowances', unit: 'EA', source: 'Allowance', wastePct: 0, pack: null, scope: 'Dumpster rental and disposal of construction debris.' }, null, S.dumpster);
@@ -1035,40 +1070,50 @@ function buildTakeoff(state, an) {
 }
 
 /* ---------- checks ---------- */
-function runChecks(state, an, tk) {
+function runChecks(state, an, tk, more) {
   const out = [];
   const S = state.settings;
-  if (!an.rooms.length) out.push({ sev: 'warn', text: 'No rooms yet. Draw walls that close into a loop and rooms appear automatically.' });
-  if (an.dangling.length) out.push({ sev: 'warn', text: an.dangling.length + ' wall segment' + (an.dangling.length > 1 ? 's do' : ' does') + ' not close a room, so ' + (an.dangling.length > 1 ? 'they are' : 'it is') + ' left out of every quantity. Extend to meet another wall, or delete.' });
+  const passes = [{ st: state, an }].concat(more || []);
+  const multi = passes.length > 1;
   const slots = [['floor', 'floor finish'], ['wall', 'wall finish'], ['ceil', 'ceiling finish'], ['base', 'base']];
-  for (const r of an.rooms) {
-    const m = r.meta, name = m.name;
-    const missing = slots.filter(([k]) => !(m.fin && m.fin[k]) && !(m.type === 'garage' && k === 'base')).map(s => s[1]);
-    if (missing.length) out.push({ sev: 'info', roomId: m.id, text: name + ': no ' + missing.join(', ') + ' selected. Fine if that surface stays as it is.' });
-    const fixedHere = Object.keys(r.fix).filter(k => FIXTURES[k] && FIXTURES[k].fixed && r.fix[k] > 0).map(k => r.fix[k] + ' ' + FIXTURES[k].label.toLowerCase());
-    if (fixedHere.length) out.push({ sev: 'info', roomId: m.id, text: name + ': existing items to work around: ' + fixedHere.join(', ') + '.' });
-    if (m.type === 'kitchen' && !(m.fin && (m.fin.cabinet || m.fin.upper || m.fin.counter))) out.push({ sev: 'info', roomId: m.id, text: name + ': no new cabinets or countertop chosen yet.' });
-    if (m.type === 'room') out.push({ sev: 'info', roomId: m.id, text: name + ': set a room type so the checklist can compare it to a typical scope.' });
-    const exp = TYPE_EXPECT[m.type];
-    if (exp) {
-      const lack = [];
-      for (const k of Object.keys(exp)) {
-        const have = r.fix[k] || 0;
-        if (have < exp[k]) lack.push(have === 0 ? 'no ' + FIXTURES[k].label.toLowerCase() : 'only ' + have + ' ' + FIXTURES[k].label.toLowerCase() + (have > 1 ? 's' : '') + ' (typically ' + exp[k] + '+)');
+  const totalRooms = passes.reduce((n, P) => n + P.an.rooms.length, 0);
+  if (!totalRooms) out.push({ sev: 'warn', text: 'No rooms yet. Draw walls that close into a loop and rooms appear automatically.' });
+  for (const P of passes) {
+    const st = P.st, a = P.an, pre = multi ? (a.tag || 'Floor') + ', ' : '', fid = a.floorId;
+    const add = c => { if (multi) { c.text = pre + c.text; c.floorId = fid; } out.push(c); };
+    if (multi && !a.rooms.length && st.walls.length) add({ sev: 'warn', text: 'walls are drawn but they do not close into a room yet.' });
+    if (a.dangling.length) add({ sev: 'warn', text: a.dangling.length + ' wall segment' + (a.dangling.length > 1 ? 's do' : ' does') + ' not close a room, so ' + (a.dangling.length > 1 ? 'they are' : 'it is') + ' left out of every quantity. Extend to meet another wall, or delete.' });
+    for (const r of a.rooms) {
+      const m = r.meta, name = m.name;
+      const missing = slots.filter(([k]) => !(m.fin && m.fin[k]) && !(m.type === 'garage' && k === 'base')).map(s2 => s2[1]);
+      if (missing.length) add({ sev: 'info', roomId: m.id, text: name + ': no ' + missing.join(', ') + ' selected. Fine if that surface stays as it is.' });
+      const fixedHere = Object.keys(r.fix).filter(k => FIXTURES[k] && FIXTURES[k].fixed && r.fix[k] > 0).map(k => r.fix[k] + ' ' + FIXTURES[k].label.toLowerCase());
+      if (fixedHere.length) add({ sev: 'info', roomId: m.id, text: name + ': existing items to work around: ' + fixedHere.join(', ') + '.' });
+      if (m.type === 'kitchen' && !(m.fin && (m.fin.cabinet || m.fin.upper || m.fin.counter))) add({ sev: 'info', roomId: m.id, text: name + ': no new cabinets or countertop chosen yet.' });
+      if (m.type === 'room') add({ sev: 'info', roomId: m.id, text: name + ': set a room type so the checklist can compare it to a typical scope.' });
+      const exp = TYPE_EXPECT[m.type];
+      if (exp) {
+        const lack = [];
+        for (const k of Object.keys(exp)) {
+          const have = r.fix[k] || 0;
+          if (have < exp[k]) lack.push(have === 0 ? 'no ' + FIXTURES[k].label.toLowerCase() : 'only ' + have + ' ' + FIXTURES[k].label.toLowerCase() + (have > 1 ? 's' : '') + ' (typically ' + exp[k] + '+)');
+        }
+        if (lack.length) add({ sev: 'info', roomId: m.id, text: name + ': ' + lack.join(', ') + '.' });
       }
-      if (lack.length) out.push({ sev: 'info', roomId: m.id, text: name + ': ' + lack.join(', ') + '.' });
+      if (m.type === 'bedroom' && r.windowCount === 0) add({ sev: 'warn', roomId: m.id, text: name + ': bedroom has no window. Check egress requirements.' });
+      if (m.type !== 'closet' && m.type !== 'porch' && r.doorCount === 0 && !r.zoneEdges && !stairReaches(a, r)) add({ sev: 'warn', roomId: m.id, text: name + ': no door or opening, so the room is not reachable.' });
+      if (r.area < 20) add({ sev: 'info', roomId: m.id, text: name + ' is only ' + fmtNum(r.area, 1) + ' SF. Confirm the dimensions.' });
+      if (r.area > 1500) add({ sev: 'info', roomId: m.id, text: name + ' is ' + fmtNum(r.area, 0) + ' SF. Confirm the dimensions.' });
     }
-    if (m.type === 'bedroom' && r.windowCount === 0) out.push({ sev: 'warn', roomId: m.id, text: name + ': bedroom has no window. Check egress requirements.' });
-    if (m.type !== 'closet' && m.type !== 'porch' && r.doorCount === 0 && !r.zoneEdges) out.push({ sev: 'warn', roomId: m.id, text: name + ': no door or opening, so the room is not reachable.' });
-    if (r.area < 20) out.push({ sev: 'info', roomId: m.id, text: name + ' is only ' + fmtNum(r.area, 1) + ' SF. Confirm the dimensions.' });
-    if (r.area > 1500) out.push({ sev: 'info', roomId: m.id, text: name + ' is ' + fmtNum(r.area, 0) + ' SF. Confirm the dimensions.' });
+    if (typeof designChecks === 'function') for (const c of designChecks(st, a)) add(c);
+    if (typeof roomDesignChecks === 'function') for (const c of roomDesignChecks(st, a)) add(c);
   }
-  if (typeof designChecks === 'function') for (const c of designChecks(state, an)) out.push(c);
-  const fixedWalls = state.walls.filter(w => w.fixed).length;
+  if (typeof stairChecks === 'function') for (const c of stairChecks(state, passes)) out.push(c);
+  const fixedWalls = passes.reduce((n, P) => n + P.st.walls.filter(w => w.fixed).length, 0);
   if (fixedWalls) out.push({ sev: 'info', text: fixedWalls + ' wall' + (fixedWalls > 1 ? 's are' : ' is') + ' marked load bearing. Moving or opening ' + (fixedWalls > 1 ? 'them' : 'it') + ' needs an engineer and a temporary support plan.' });
   const demo = tk.lines.some(l => l.cat === 'Demo');
-  if (an.rooms.length && !demo && !S.dumpster) out.push({ sev: 'info', text: 'No demo or haul-off lines. Remodel work usually needs both. Turn on demo per room, or set haul-off loads under Takeoff settings.' });
-  else if (an.rooms.length && !demo) out.push({ sev: 'info', text: 'No demo lines yet. If this is a remodel, turn on "demo existing floor" for the rooms it applies to.' });
+  if (totalRooms && !demo && !S.dumpster) out.push({ sev: 'info', text: 'No demo or haul-off lines. Remodel work usually needs both. Turn on demo per room, or set haul-off loads under Takeoff settings.' });
+  else if (totalRooms && !demo) out.push({ sev: 'info', text: 'No demo lines yet. If this is a remodel, turn on "demo existing floor" for the rooms it applies to.' });
   const rule = tk.lines.filter(l => l.source === 'Rule').length;
   if (rule) out.push({ sev: 'ok', text: rule + ' companion item' + (rule > 1 ? 's were' : ' was') + ' added from your finish choices (underlayment, thinset, grout, supply kits and similar).' });
   if (tk.unpriced) out.push({ sev: tk.priced ? 'warn' : 'info', text: tk.unpriced + ' of ' + tk.lines.length + ' takeoff lines have no unit price yet.' });
@@ -1186,6 +1231,7 @@ function palName(pal, hex) { const hit = (PAL[pal] || []).find(p => p[1].toLower
 /* option helpers. role lets a design concept restyle every block that has a matching option */
 const CH = (k, label, v, def, role) => ({ k, label, t: 'choice', v, def, role });
 const CL = (k, label, pal, def, role) => ({ k, label, t: 'color', pal, def, role });
+const NUM = (k, label, def, min, max) => ({ k, label, t: 'num', def, min, max });
 const SUPPLY = (def) => CH('supply', 'Supplied by', [['gc', 'Contractor'], ['owner', 'Owner']], def);
 
 const GRADES = [['stock', 'Stock'], ['semi', 'Semi-custom'], ['custom', 'Custom']];
@@ -1576,8 +1622,105 @@ Object.assign(BLOCKS, {
   }
 });
 
+
+/* ----- stairs: a block that knows its floor to floor rise ----- */
+const STAIR_RISER = 7.75, STAIR_TREAD = 10; // residential code: riser 7-3/4 in at most, tread 10 in at least
+/* Surfaces of one stair in local block coordinates (x right, z toward the front). The bottom step is at the front.
+   shape: straight, lright (L, turns right), lleft, u (switchback). Step k tops out at k * riser height; the floor above is step R. */
+function stairGeom(b, o) {
+  const rise = +o.rise || 106, R = Math.max(3, Math.ceil(rise / STAIR_RISER - 1e-6)), rh = rise / R;
+  const W = b.w, D = b.d, shape = o.shape || 'straight', sw = Math.max(12, Math.min(+o.sw || 36, W, D));
+  const mx = shape === 'lleft' ? -1 : 1, steps = [], flights = [];
+  const put = (x, z, w, d, k) => steps.push({ x: mx * x, z, w, d, k, top: k * rh });
+  let path, landings = 0;
+  if (shape === 'straight') {
+    const n = R - 1, td = D / n;
+    for (let k = 1; k <= n; k++) put(0, D / 2 - (k - 0.5) * td, W, td, k);
+    flights.push({ n, td, width: W });
+    path = [[0, D / 2 - 3], [0, -D / 2 + 3]];
+  } else if (shape === 'u') {
+    const L = Math.max(1, D - sw), n = Math.max(2, R - 2), t1 = Math.max(1, Math.floor(n / 2)), t2 = Math.max(1, n - t1);
+    const td1 = L / t1, td2 = L / t2, lx = -W / 2 + sw / 2, rx = W / 2 - sw / 2, lz = -D / 2 + sw / 2;
+    for (let k = 1; k <= t1; k++) put(lx, D / 2 - (k - 0.5) * td1, sw, td1, k);
+    put(0, lz, W, sw, t1 + 1); landings = 1;
+    for (let j = 1; j <= t2; j++) put(rx, -D / 2 + sw + (j - 0.5) * td2, sw, td2, t1 + 1 + j);
+    flights.push({ n: t1, td: td1, width: sw }, { n: t2, td: td2, width: sw });
+    path = [[lx, D / 2 - 3], [lx, lz], [rx, lz], [rx, D / 2 - 3]];
+  } else {
+    const L1 = Math.max(1, D - sw), L2 = Math.max(1, W - sw), n = Math.max(2, R - 2);
+    const t1 = Math.max(1, Math.min(n - 1, Math.round(n * L1 / (L1 + L2)))), t2 = n - t1;
+    const td1 = L1 / t1, td2 = L2 / t2, lx = -W / 2 + sw / 2, lz = -D / 2 + sw / 2;
+    for (let k = 1; k <= t1; k++) put(lx, D / 2 - (k - 0.5) * td1, sw, td1, k);
+    put(lx, lz, sw, sw, t1 + 1); landings = 1;
+    for (let j = 1; j <= t2; j++) put(-W / 2 + sw + (j - 0.5) * td2, lz, td2, sw, t1 + 1 + j);
+    flights.push({ n: t1, td: td1, width: sw }, { n: t2, td: td2, width: sw });
+    path = [[lx, D / 2 - 3], [lx, lz], [W / 2 - 3, lz]];
+  }
+  return { R, rh, rise, shape, sw, steps, flights, landings, treads: steps.length - landings, path: path.map(p => [mx * p[0], p[1]]), minTread: Math.min.apply(null, flights.map(f => f.td)), minWidth: Math.min.apply(null, flights.map(f => f.width)) };
+}
+/* size that gives every flight the chosen tread depth */
+function stairFit(shape, rise, sw, tread) {
+  const R = Math.max(3, Math.ceil(rise / STAIR_RISER - 1e-6)), n = Math.max(2, R - 2), t1 = Math.ceil(n / 2), t2 = n - t1, r1 = v => Math.round(v * 2) / 2;
+  if (shape === 'u') return { w: 2 * sw + 4, d: r1(sw + t1 * tread) };
+  if (shape === 'lright' || shape === 'lleft') return { w: r1(sw + t2 * tread), d: r1(sw + t1 * tread) };
+  return { w: sw, d: r1((R - 1) * tread) };
+}
+function autoFitStair(b) {
+  const o = bopts(b), f = stairFit(o.shape, +o.rise || 106, +o.sw || 36, +o.tread || STAIR_TREAD);
+  b.w = f.w; b.d = f.d; b.h = +o.rise || 106;
+}
+function stairCorners(b, inset) { const k = inset || 0, hw = Math.max(1, b.w / 2 - k), hd = Math.max(1, b.d / 2 - k); return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(p => localToWorld(b, p[0], p[1])); }
+function stairLines(b, o) {
+  const g = stairGeom(b, o), out = [], flights = g.flights.length;
+  const shape = LABEL(BLOCKS.stair.opts, 'shape', o.shape), mat = LABEL(BLOCKS.stair.opts, 'treadMat', o.treadMat), tc = palName('wood', o.treadColor);
+  const stringers = g.flights.reduce((n, f) => n + (f.width <= 30 ? 2 : f.width <= 42 ? 3 : 4), 0);
+  out.push({ key: 'blk:stair:frame:' + o.shape + ':' + g.R + ':' + Math.round(g.minWidth) , name: 'Stair framing, ' + shape.toLowerCase() + ', ' + g.R + ' risers, ' + fmtNum(g.rh, 2) + ' in rise', cat: 'Stairs', unit: 'EA', qty: 1, scope: 'Frame stair with ' + stringers + ' 2x12 stringers' + (g.landings ? ' and a framed landing' : '') + ', ' + g.R + ' risers at ' + fmtNum(g.rh, 2) + ' in, treads at least ' + fmtNum(g.minTread, 1) + ' in deep, blocked and fire blocked, anchored top and bottom.' });
+  if (o.treadMat === 'carpet') out.push({ key: 'blk:stair:carpet', name: 'Stair carpet, treads and risers', cat: 'Stairs', unit: 'EA', qty: g.treads + g.landings, scope: 'Furnish and install carpet and pad on each tread and riser, wrapped and tacked, stair-rated adhesive at nosings.' });
+  else {
+    out.push({ key: 'blk:stair:tread:' + o.treadMat + ':' + o.treadColor + ':' + Math.round(g.minWidth), name: 'Stair treads, ' + mat.toLowerCase() + ', ' + tc + ', ' + Math.round(g.minWidth) + ' in wide', cat: 'Stairs', unit: 'EA', qty: g.treads, scope: 'Furnish and install ' + mat.toLowerCase() + ' stair treads with nosing, color ' + tc + ', glued and fastened.' });
+    out.push({ key: 'blk:stair:riser:' + o.riserColor, name: 'Stair risers, painted ' + palName('cab', o.riserColor).toLowerCase(), cat: 'Stairs', unit: 'EA', qty: g.R, scope: 'Furnish, install and paint stair risers, color ' + palName('cab', o.riserColor) + '.' });
+  }
+  if (g.landings) out.push({ key: 'blk:stair:landing:' + o.treadMat + ':' + o.treadColor, name: 'Stair landing, framed and finished', cat: 'Stairs', unit: 'EA', qty: g.landings, scope: 'Frame, deck and finish stair landing to match the treads.' });
+  const rails = +o.rails || 0;
+  if (rails) {
+    let lf = 0; for (const f of g.flights) lf += f.n * Math.hypot(f.td, g.rh) / 12;
+    lf += g.landings * g.sw / 12;
+    const style = LABEL(BLOCKS.stair.opts, 'railStyle', o.railStyle);
+    out.push({ key: 'blk:stair:rail:' + o.railStyle + ':' + rails, name: 'Stair handrail and guard, ' + style.toLowerCase() + ', ' + (rails === 2 ? 'both sides' : 'one side'), cat: 'Stairs', unit: 'LF', qty: lf * rails, scope: 'Furnish and install ' + style.toLowerCase() + ' with continuous graspable handrail at 34 to 38 in, balusters spaced under 4 in.' });
+    out.push({ key: 'blk:stair:newel:' + o.railStyle, name: 'Newel posts, ' + (o.railStyle === 'wood' ? 'wood' : 'metal'), cat: 'Stairs', unit: 'EA', qty: rails * (flights + 1), scope: 'Furnish and install newel posts, anchored through the framing.' });
+  }
+  out.push({ key: 'blk:stair:well', name: 'Stairwell opening in the floor above, framing', cat: 'Stairs', unit: 'EA', qty: 1, scope: 'Frame the stairwell opening with doubled headers and trimmers, temporary guard until the rail is set, patch the surrounding subfloor.' });
+  return out;
+}
+Object.assign(BLOCKS, {
+  stair: {
+    label: 'Stairs', cat: 'Stairs', w: 36, d: 130, h: 106, sizes: [32, 36, 42, 48], mount: 'free', supply: 'gc', stair: true,
+    opts: [
+      CH('shape', 'Shape', [['straight', 'Straight run'], ['lright', 'L shape, turns right'], ['lleft', 'L shape, turns left'], ['u', 'U shape, switchback']], 'straight'),
+      CH('sw', 'Stair width', [[32, '32 in'], [36, '36 in'], [42, '42 in'], [48, '48 in']], '36'),
+      NUM('rise', 'Floor to floor (in)', 106, 60, 180),
+      CH('tread', 'Tread depth', [[10, '10 in (code minimum)'], [10.5, '10.5 in'], [11, '11 in'], [12, '12 in']], '10'),
+      CH('treadMat', 'Treads', [['oak', 'Red oak'], ['maple', 'Maple'], ['pine', 'Painted pine'], ['carpet', 'Carpet']], 'oak'),
+      CL('treadColor', 'Tread color', 'wood', '#c49a6c', 'woodTone'),
+      CL('riserColor', 'Riser color', 'cab', '#f1efe9'),
+      CH('rails', 'Handrails', [['0', 'None'], ['1', 'One side'], ['2', 'Both sides']], '1'),
+      CH('railStyle', 'Rail style', [['wood', 'Wood rail and balusters'], ['iron', 'Iron balusters'], ['cable', 'Cable rail']], 'wood'),
+      SUPPLY('gc')
+    ],
+    parts(b, o) {
+      const g = stairGeom(b, o), P = [], carpet = o.treadMat === 'carpet', tc = carpet ? '#8f9296' : o.treadColor;
+      for (const st of g.steps) {
+        P.push(bx(st.x, st.z, st.w, st.d, 0, st.top - 1.5, o.riserColor));
+        P.push(bx(st.x, st.z, st.w, st.d, st.top - 1.5, st.top, tc, { rough: carpet ? 1 : 0.55 }));
+      }
+      return P;
+    },
+    lines(b, o) { return stairLines(b, o); }
+  }
+});
+
 /* group blocks for the placement palette */
-const BLOCK_GROUPS = [['Kitchen', ['base', 'upper', 'tall', 'island', 'ksink', 'hood', 'range', 'fridge', 'dishwasher']], ['Bath', ['vanity', 'toilet', 'tub', 'shower', 'vlight']], ['Built-ins', ['shelf', 'seat', 'closet']], ['Furniture', ['bed', 'nightstand', 'dresser', 'sofa', 'chair', 'coffee', 'dining', 'desk', 'bookcase', 'tv', 'rug']], ['Lighting', ['pendant', 'recessed', 'sconce', 'cove']], ['Laundry', ['washer', 'dryer']]];
+const BLOCK_GROUPS = [['Kitchen', ['base', 'upper', 'tall', 'island', 'ksink', 'hood', 'range', 'fridge', 'dishwasher']], ['Bath', ['vanity', 'toilet', 'tub', 'shower', 'vlight']], ['Built-ins', ['shelf', 'seat', 'closet']], ['Furniture', ['bed', 'nightstand', 'dresser', 'sofa', 'chair', 'coffee', 'dining', 'desk', 'bookcase', 'tv', 'rug']], ['Lighting', ['pendant', 'recessed', 'sconce', 'cove']], ['Laundry', ['washer', 'dryer']], ['Stairs', ['stair']]];
 
 /* ----- design logic: options, concepts, placement geometry, takeoff lines, checks, layouts ----- */
 const LABEL = (opts, k, v) => { const o = opts.find(x => x.k === k); if (!o || !o.v) return String(v); const hit = o.v.find(p => String(p[0]) === String(v)); return hit ? hit[1] : String(v); };
@@ -1626,6 +1769,7 @@ function newBlock(state, kind, x, y, style) {
   const def = BLOCKS[kind];
   const b = { id: uid(state, 'b'), kind, x, y, rot: 0, w: def.w, d: def.d, h: def.h, opts: {} };
   if (style) applyStyleToBlock(b, style);
+  if (def.stair) { const fl = floorOf(state, state.activeFloor); if (fl) b.opts.rise = fl.rise; autoFitStair(b); }
   return b;
 }
 
@@ -1836,34 +1980,742 @@ function designChecks(state, an) {
   return out;
 }
 
-/* ---------- layouts: Existing plus any number of concepts ---------- */
+/* ---------- stairs: how floors connect ---------- */
+function segCrossPoly(a, b, poly) {
+  if (pointInPoly(a, poly) || pointInPoly(b, poly)) return true;
+  for (let i = 0; i < poly.length; i++) {
+    const c = poly[i], d = poly[(i + 1) % poly.length];
+    const rx = b.x - a.x, ry = b.y - a.y, qx = d.x - c.x, qy = d.y - c.y, den = cross2(rx, ry, qx, qy);
+    if (Math.abs(den) < 1e-9) continue;
+    const t = cross2(c.x - a.x, c.y - a.y, qx, qy) / den, u = cross2(c.x - a.x, c.y - a.y, rx, ry) / den;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
+  }
+  return false;
+}
+/* a room with no door is still reachable when a stair lands in it, or arrives into it from below */
+function stairReaches(an, r) {
+  return (an.stairsHere || []).some(b => pointInPoly(b, r.poly)) || (an.belowStairs || []).some(b => pointInPoly(b, r.poly));
+}
+function stairChecks(state, passes) {
+  const out = [], by = {};
+  for (const P of passes) by[P.an.index != null ? P.an.index : 0] = P;
+  const n = state.floors.length;
+  for (const P of passes) {
+    const i = P.an.index || 0, fl = state.floors[i] || state.floors[0];
+    for (const b of P.st.blocks) {
+      if (b.kind !== 'stair') continue;
+      const o = bopts(b), g = stairGeom(b, o), pre = 'Stairs on ' + fl.name + ': ';
+      const mk = (sev, text, fid, bid) => out.push({ sev, text, floorId: fid || P.an.floorId, blockId: bid || b.id });
+      const up = by[i + 1];
+      if (i === n - 1) mk('info', pre + 'these stairs lead to a floor above, but there is no floor above yet. Add one with + Floor above, or delete the stairs.');
+      if (Math.abs((+o.rise || 0) - fl.rise) > 0.5) mk('warn', pre + 'stair rise is ' + fmtNum(+o.rise || 0, 1) + ' in but the floor is ' + fmtNum(fl.rise, 1) + ' in floor to floor. Set them equal.');
+      if (g.minTread < STAIR_TREAD - 0.05) mk('warn', pre + 'treads are only ' + fmtNum(g.minTread, 1) + ' in deep, and code wants ' + STAIR_TREAD + ' in. Lengthen the stairs or tap Auto fit.');
+      if (g.minWidth < 35.5) mk('warn', pre + 'the stair is ' + fmtNum(g.minWidth, 0) + ' in wide, and code wants at least 36 in.');
+      if (up) {
+        const poly = stairCorners(b, 3), upName = state.floors[i + 1].name;
+        const wall = up.st.walls.find(w => w.t > 0.6 && segCrossPoly(w.a, w.b, poly));
+        if (wall) mk('warn', 'A wall on ' + upName + ' crosses the stairwell from the ' + fl.name.toLowerCase() + ' stairs. Move the wall or the stairs.', up.an.floorId);
+        const over = up.st.blocks.find(c => { const d = BLOCKS[c.kind]; return d && !d.overlay && d.mount !== 'ceil' && !d.noClash && d.cat !== 'Stairs' && overlapDepth(blockCorners(c), poly) > 1; });
+        if (over) mk('warn', 'A ' + BLOCKS[over.kind].label.toLowerCase() + ' on ' + upName + ' sits over the stairwell. Move it clear of the opening.', up.an.floorId, over.id);
+      }
+    }
+  }
+  return out;
+}
+
+/* ===== Room design: clearances, layout generators and room checks (no DOM) =====
+   Works in each room's wall frame: every inner wall face is an edge with a start point a, a direction u along the wall
+   and a normal n pointing into the room. A block placed against that wall has its back on the edge and its front along n,
+   and its local x axis runs along u. */
+const R2 = v => Math.round(v * 100) / 100;
+function polyOverlap(A, B) {
+  let min = Infinity;
+  for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length], nx = -(b.y - a.y), ny = b.x - a.x, L = Math.hypot(nx, ny) || 1;
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const p of A) { const v = (p.x * nx + p.y * ny) / L; if (v < a0) a0 = v; if (v > a1) a1 = v; }
+    for (const p of B) { const v = (p.x * nx + p.y * ny) / L; if (v < b0) b0 = v; if (v > b1) b1 = v; }
+    const o = Math.min(a1, b1) - Math.max(a0, b0);
+    if (o <= 0) return 0;
+    if (o < min) min = o;
+  }
+  return min;
+}
+function roomFrame(state, r) {
+  const V = r.inner, n = V.length, ccw = polyArea(V) > 0, out = [];
+  for (let i = 0; i < n; i++) {
+    const a = V[i], b = V[(i + 1) % n], L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 6) continue;
+    const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+    let nx = -uy, ny = ux;
+    if (!pointInPoly({ x: (a.x + b.x) / 2 + nx * 3, y: (a.y + b.y) / 2 + ny * 3 }, r.inner)) { nx = -nx; ny = -ny; }
+    const he = r.edges[i], ops = [];
+    for (const o of (he && he.ops) || []) {
+      const wl = state.walls.find(w => w.id === o.wallId);
+      if (!wl) continue;
+      const g = wallGeom(wl), u = (wl.a.x + g.ux * o.offset - a.x) * ux + (wl.a.y + g.uy * o.offset - a.y) * uy;
+      ops.push({ o, u, lo: u - o.w / 2, hi: u + o.w / 2, wall: wl });
+    }
+    out.push({ k: out.length, i, a, b, L, ux, uy, nx, ny, zone: !!(he && he.seg.z), ops, ccw });
+  }
+  out.forEach((e, k) => { const nx = out[(k + 1) % out.length]; e.next = nx; e.adj = nx.i === (e.i + 1) % n; });
+  return out;
+}
+/* corner at the end of edge e (start of e.next): true when it turns inward at about 90 degrees */
+function cornerAfter(e) {
+  if (!e.adj) return false;
+  const c = cross2(e.ux, e.uy, e.next.ux, e.next.uy);
+  return (e.ccw ? c : -c) > 0.8 && !e.zone && !e.next.zone;
+}
+const rectEF = (e, u0, u1, v0, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(p => ({ x: e.a.x + e.ux * p[0] + e.nx * p[1], y: e.a.y + e.uy * p[0] + e.ny * p[1] }));
+function swingPolys(e, op) {
+  const o = op.o;
+  if (o.kind !== 'door' && o.kind !== 'entry' && o.kind !== 'french') return [];
+  const g = wallGeom(op.wall), side = o.side === -1 ? -1 : 1, nwx = -g.uy * side, nwy = g.ux * side;
+  if (nwx * e.nx + nwy * e.ny <= 0) return [];
+  const cx = op.wall.a.x + g.ux * o.offset, cy = op.wall.a.y + g.uy * o.offset;
+  const leaves = o.kind === 'french' ? [[-1, o.w / 2], [1, o.w / 2]] : [[o.flip ? 1 : -1, o.w]];
+  return leaves.map(([hs, R]) => {
+    const hx = cx + g.ux * hs * o.w / 2, hy = cy + g.uy * hs * o.w / 2, dx = -g.ux * hs, dy = -g.uy * hs, pts = [{ x: hx, y: hy }];
+    for (let k = 0; k <= 4; k++) { const f = k * Math.PI / 8; pts.push({ x: hx + R * (Math.cos(f) * dx + Math.sin(f) * nwx), y: hy + R * (Math.cos(f) * dy + Math.sin(f) * nwy) }); }
+    return pts;
+  });
+}
+function wallQuads(st) {
+  const out = [];
+  for (const w of st.walls) {
+    if (w.t <= 0.6) continue;
+    const g = wallGeom(w), cuts = [];
+    for (const o of st.openings) if (o.wallId === w.id && o.kind !== 'window') cuts.push([o.offset - o.w / 2, o.offset + o.w / 2]);
+    cuts.sort((p, q) => p[0] - q[0]);
+    const nx = -g.uy * w.t / 2, ny = g.ux * w.t / 2, pt = t => ({ x: w.a.x + g.ux * t, y: w.a.y + g.uy * t });
+    const seg = (a, b) => { if (b - a < 0.5) return; const A = pt(a), B = pt(b); out.push([{ x: A.x + nx, y: A.y + ny }, { x: B.x + nx, y: B.y + ny }, { x: B.x - nx, y: B.y - ny }, { x: A.x - nx, y: A.y - ny }]); };
+    let cur = 0;
+    for (const c of cuts) { seg(cur, Math.max(cur, c[0])); cur = Math.max(cur, c[1]); }
+    seg(cur, g.L);
+  }
+  return out;
+}
+const solidBlock = b => { const d = BLOCKS[b.kind]; return d && !d.overlay && !d.noClash && d.mount !== 'ceil' && vrange(b)[0] < 36; };
+/* everything that stops a person walking: walls, floor-standing blocks, immovable items. Each entry knows its owner. */
+function obstacleList(st, extra) {
+  const out = wallQuads(st).map(poly => ({ poly, id: 'wall' }));
+  for (const b of st.blocks) if (solidBlock(b)) out.push({ poly: blockCorners(b), id: b.id });
+  for (const f of st.fixtures) if (FIXTURES[f.kind] && FIXTURES[f.kind].fixed) out.push({ poly: fixtureCorners(f), id: f.id });
+  for (const b of extra || []) if (solidBlock(b)) out.push({ poly: blockCorners(b), id: b.id });
+  return out;
+}
+function rayDist(p, d, list, skipId, maxD) {
+  let best = maxD;
+  for (const ob of list) {
+    if (skipId && ob.id === skipId) continue;
+    const P = ob.poly;
+    for (let i = 0; i < P.length; i++) {
+      const c = P[i], e = P[(i + 1) % P.length], qx = e.x - c.x, qy = e.y - c.y, den = cross2(d.x, d.y, qx, qy);
+      if (Math.abs(den) < 1e-9) continue;
+      const t = cross2(c.x - p.x, c.y - p.y, qx, qy) / den, u = cross2(c.x - p.x, c.y - p.y, d.x, d.y) / den;
+      if (t >= -0.01 && t < best && u >= -1e-6 && u <= 1 + 1e-6) best = Math.max(0, t);
+    }
+  }
+  return best;
+}
+/* free distance in front of (or beside) a block, sampled across its face. side: 'front' 'back' 'left' 'right' */
+function sideClear(b, side, list, maxD) {
+  maxD = maxD || 120;
+  const hw = b.w / 2, hd = b.d / 2, t = rad(b.rot), c = Math.cos(t), s = Math.sin(t);
+  const loc = (lx, lz) => ({ x: b.x + lx * c - lz * s, y: b.y + lx * s + lz * c });
+  const dir = side === 'front' ? { x: -s, y: c } : side === 'back' ? { x: s, y: -c } : side === 'left' ? { x: -c, y: -s } : { x: c, y: s };
+  const along = side === 'front' || side === 'back', half = along ? hw : hd, off = side === 'front' ? hd : side === 'back' ? -hd : side === 'left' ? -hw : hw;
+  let best = maxD;
+  for (let k = 0; k < 5; k++) {
+    const q = -half + 2 + (2 * half - 4) * k / 4;
+    const p = along ? loc(q, off) : loc(off, q);
+    best = Math.min(best, rayDist({ x: p.x + dir.x * 0.05, y: p.y + dir.y * 0.05 }, dir, list, b.id, maxD));
+  }
+  return best;
+}
+const clearAround = (b, list) => { const o = { front: sideClear(b, 'front', list), back: sideClear(b, 'back', list), left: sideClear(b, 'left', list), right: sideClear(b, 'right', list) }; o.min = Math.min(o.front, o.back, o.left, o.right); return o; };
+
+/* free intervals along an edge for a run of cabinets of the given depth */
+function blockedOnEdge(e, obs, depth) {
+  const out = [];
+  for (const op of e.ops) if (op.o.kind !== 'window') out.push([op.lo - 1.5, op.hi + 1.5]);
+  for (const ob of obs) {
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const p of ob.poly) { const du = (p.x - e.a.x) * e.ux + (p.y - e.a.y) * e.uy, dv = (p.x - e.a.x) * e.nx + (p.y - e.a.y) * e.ny; u0 = Math.min(u0, du); u1 = Math.max(u1, du); v0 = Math.min(v0, dv); v1 = Math.max(v1, dv); }
+    if (v0 < depth - 0.5 && v1 > 0.5 && u1 > u0) out.push([u0 - 0.5, u1 + 0.5]);
+  }
+  return out;
+}
+function freeIntervals(lo, hi, blocked) {
+  const out = []; let cur = lo;
+  for (const b of blocked.slice().sort((p, q) => p[0] - q[0])) {
+    if (b[0] > cur) out.push([cur, Math.min(b[0], hi)]);
+    cur = Math.max(cur, b[1]);
+    if (cur >= hi) break;
+  }
+  if (cur < hi) out.push([cur, hi]);
+  return out.filter(s => s[1] - s[0] > 0.5);
+}
+
+/* ---------- 1D layout: fill a stretch of wall with fixed items and cabinets ---------- */
+const BASE_SIZES = [12, 15, 18, 21, 24, 30, 33, 36, 42], WALL_SIZES = [12, 15, 18, 21, 24, 30, 33, 36];
+function fillWidths(total, sizes) {
+  const n = Math.round(total / 3), dp = [{ c: 0, p: 0 }];
+  for (let k = 1; k <= n; k++) {
+    let best = null;
+    for (const s of sizes) { const j = k - s / 3; if (j < 0 || !dp[j]) continue; const c = dp[j].c + 1 + (s < 18 ? 0.7 : 0) + (s > 36 ? 0.3 : 0); if (!best || c < best.c) best = { c, p: s / 3 }; }
+    dp.push(best);
+  }
+  if (!dp[n]) return null;
+  const out = []; for (let k = n; k > 0; k -= dp[k].p) out.push(dp[k].p * 3);
+  return out.sort((a, b) => b - a);
+}
+/* seq: items { t:'item', kind, w } and gaps { t:'gap', min, grow }. Gaps get cabinets when fill is true, else stay empty.
+   Returns { els:[{kind,w,u0}], slack } or null when it cannot fit. sinkAt is a target u (from the start) for the sink center. */
+function planSegment(len, seq, o) {
+  o = o || {};
+  const gi = [], gw = [];
+  seq.forEach((x, i) => { if (x.t === 'gap') { gi.push(i); gw.push(x.min || 0); } });
+  const fixed = seq.reduce((s, x) => s + (x.t === 'item' ? x.w : 0), 0);
+  let rem = len - fixed - gw.reduce((s, v) => s + v, 0);
+  if (rem < -0.01) return null;
+  let k = 0, stuck = 0, guard = 0;
+  while (gi.length && rem >= 3 && stuck < gi.length && guard++ < 500) {
+    const j = k++ % gi.length;
+    if (!seq[gi[j]].grow) { stuck++; continue; }
+    const need = (o.fill && gw[j] === 0) ? 12 : 3;
+    if (rem >= need) { gw[j] += need; rem -= need; stuck = 0; } else stuck++;
+  }
+  const centerOf = (idx) => { let u = 0, g = 0; for (let i = 0; i < idx; i++) u += seq[i].t === 'item' ? seq[i].w : gw[g++]; return u + seq[idx].w / 2; };
+  if (o.sinkAt != null) {
+    const si = seq.findIndex(x => x.kind === 'sink');
+    if (si >= 0) {
+      const ga = seq.slice(0, si).map((x, i) => x.t === 'gap' ? i : -1).filter(i => i >= 0).pop();
+      const gb = seq.map((x, i) => (i > si && x.t === 'gap') ? i : -1).filter(i => i >= 0)[0];
+      if (ga != null && gb != null) {
+        const ja = gi.indexOf(ga), jb = gi.indexOf(gb);
+        let d = Math.round((o.sinkAt - centerOf(si)) / 3) * 3;
+        const ok = (v, mn) => v >= mn - 0.01 && (v === 0 || !o.fill || v >= 12);
+        while (d !== 0) {
+          if (ok(gw[ja] + d, seq[ga].min || 0) && ok(gw[jb] - d, seq[gb].min || 0)) { gw[ja] += d; gw[jb] -= d; break; }
+          d += d > 0 ? -3 : 3;
+        }
+      }
+    }
+  }
+  const els = []; let u = 0, g = 0;
+  const slackTo = gw.reduce((bi, v, j) => (v > gw[bi] ? j : bi), 0);
+  for (const x of seq) {
+    if (x.t === 'item') { els.push({ kind: x.kind, w: x.w, u0: u, item: x }); u += x.w; continue; }
+    let w = gw[g] + (g === slackTo ? rem : 0); g++;
+    if (o.fill && w >= 11.5) {
+      const w3 = Math.floor(w / 3) * 3, frac = w - w3, ws = fillWidths(w3, o.sizes || BASE_SIZES) || [w3];
+      ws[0] += frac;
+      for (const cw of ws) { els.push({ kind: 'cab', w: cw, u0: u }); u += cw; }
+    } else u += w;
+  }
+  return { els, slack: gi.length ? 0 : rem, end: u, centerOf, gw };
+}
+
+/* ---------- block creation against a wall edge ---------- */
+const edgeRot = e => Math.round(((Math.atan2(-e.nx, e.ny) * 180 / Math.PI) + 360) % 360 * 10) / 10 % 360;
+function edgeBlock(state, kind, e, uc, w, style, tag, o) {
+  o = o || {};
+  const b = newBlock(state, kind, 0, 0, style), d = o.d || b.d;
+  b.w = w; b.d = d; b.rot = edgeRot(e);
+  const off = (o.off || 0) + d / 2;
+  b.x = R2(e.a.x + e.ux * uc + e.nx * off); b.y = R2(e.a.y + e.uy * uc + e.ny * off);
+  if (o.opts) Object.assign(b.opts, o.opts);
+  b.gen = tag;
+  return b;
+}
+const rectBlock = (b) => blockCorners(b);
+
+/* ---------- kitchens ---------- */
+const KFEAT = { fridge: 36, range: 30, dw: 24, sink: 36, pantry: 24 };
+function kitchenRunConfigs(frame, layout) {
+  const cfgs = [], D = 24, usable = f => !f.zone && f.L >= 36;
+  const E = frame.filter(usable);
+  if (layout === 'one' || layout === 'auto') for (const e of E) cfgs.push({ layout: 'one', runs: [{ e, padS: 0, padE: 0 }] });
+  if (layout === 'galley' || layout === 'auto') for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
+    const a = E[i], b = E[j];
+    if (a.ux * b.ux + a.uy * b.uy > -0.95) continue;
+    const gap = (b.a.x - a.a.x) * a.nx + (b.a.y - a.a.y) * a.ny;
+    if (gap < 84 || gap > 156) continue;
+    cfgs.push({ layout: 'galley', runs: [{ e: a, padS: 0, padE: 0 }, { e: b, padS: 0, padE: 0 }] });
+  }
+  if (layout === 'l' || layout === 'auto') for (const e of E) if (cornerAfter(e) && usable(e.next)) {
+    cfgs.push({ layout: 'l', runs: [{ e, padS: 0, padE: 0 }, { e: e.next, padS: D, padE: 0 }] });
+    cfgs.push({ layout: 'l', runs: [{ e, padS: 0, padE: D }, { e: e.next, padS: 0, padE: 0 }] });
+  }
+  if (layout === 'u' || layout === 'auto') for (const e of E) if (cornerAfter(e) && cornerAfter(e.next) && usable(e.next) && usable(e.next.next)) {
+    cfgs.push({ layout: 'u', runs: [{ e, padS: 0, padE: D }, { e: e.next, padS: 0, padE: 0 }, { e: e.next.next, padS: D, padE: 0 }] });
+  }
+  return cfgs;
+}
+function kitchenSegPlan(seg, F, P) {
+  let best = null;
+  const mids = F.sink && F.range ? [['range', 'sink'], ['sink', 'range']] : F.sink ? [['sink']] : F.range ? [['range']] : [[]];
+  const ends = F.fridge ? ['start', 'end'] : [null];
+  const dws = F.sink && P.dw ? [1, -1] : [0];
+  for (const mid of mids) for (const fe of ends) for (const dws1 of dws) {
+    const seq = [], gap = (min, grow) => seq.push({ t: 'gap', min, grow: grow !== false });
+    const fr = () => { const items = [{ t: 'item', kind: 'fridge', w: P.fridgeW }]; if (P.pantry) items.push({ t: 'item', kind: 'pantry', w: KFEAT.pantry }); return fe === 'end' ? items.reverse() : items; };
+    if (fe === 'start') seq.push(...fr());
+    mid.forEach((f, mi) => {
+      if (f === 'range') { gap(15); seq.push({ t: 'item', kind: 'range', w: P.rangeW }); }
+      else {
+        gap(dws1 === 1 ? 18 : 12 + (dws1 === 0 ? 6 : 0));
+        if (dws1 === -1) seq.push({ t: 'item', kind: 'dw', w: KFEAT.dw });
+        seq.push({ t: 'item', kind: 'sink', w: KFEAT.sink });
+        if (dws1 === 1) seq.push({ t: 'item', kind: 'dw', w: KFEAT.dw });
+      }
+    });
+    const lastMid = mid[mid.length - 1];
+    gap(lastMid === 'range' ? 15 : lastMid === 'sink' ? (dws1 === 1 ? 12 : 18) : 0);
+    if (fe === 'end') seq.push(...fr());
+    const plan = planSegment(seg.e - seg.s, seq, { fill: true, sizes: BASE_SIZES, sinkAt: F.sink && seg.win != null ? seg.win : null });
+    if (!plan) continue;
+    let q = 0;
+    const sk = plan.els.find(x => x.kind === 'sink');
+    if (sk && seg.win != null) q -= Math.abs(sk.u0 + sk.w / 2 - seg.win) / 12;
+    q -= plan.els.filter(x => x.kind === 'cab' && x.w < 15).length * 0.4;
+    plan.q = q;
+    if (!best || q > best.q) best = plan;
+  }
+  return best;
+}
+function planKitchen(st, r, frame, obs, P) {
+  const cfgs = kitchenRunConfigs(frame, P.layout);
+  let best = null;
+  const want = ['sink', 'range', 'fridge'].filter(f => !(f === 'fridge' && P.fridge === false));
+  for (const cfg of cfgs) {
+    const segs = [];
+    cfg.gap = null;
+    for (let i = 0; i < cfg.runs.length; i++) for (let j = i + 1; j < cfg.runs.length; j++) {
+      const A = cfg.runs[i].e, B = cfg.runs[j].e;
+      if (A.nx * B.nx + A.ny * B.ny < -0.9) { const g = (B.a.x - A.a.x) * A.nx + (B.a.y - A.a.y) * A.ny - 48; cfg.gap = cfg.gap == null ? g : Math.min(cfg.gap, g); }
+    }
+    cfg.gapPen = cfg.gap != null && cfg.gap < 36 ? 60 + (36 - cfg.gap) : 0;
+    cfg.runs.forEach((run, ri) => {
+      for (const [s, e] of freeIntervals(run.padS, run.e.L - run.padE, blockedOnEdge(run.e, obs, 24))) if (e - s >= 24) {
+        const wn = run.e.ops.find(op => op.o.kind === 'window' && op.u > s + 18 && op.u < e - 18);
+        segs.push({ ri, run, s, e, win: wn ? wn.u - s : null });
+      }
+    });
+    if (!segs.length) continue;
+    const asg = [];
+    const rec = i => {
+      if (i === want.length) {
+        const plans = [];
+        for (let si = 0; si < segs.length; si++) {
+          const F = {}; want.forEach((f, k) => { if (asg[k] === si) F[f] = true; });
+          const pl = kitchenSegPlan(segs[si], F, P);
+          if (!pl) return;
+          plans.push(pl);
+        }
+        const pos = {};
+        plans.forEach((pl, si) => { for (const el of pl.els) if (['sink', 'range', 'fridge'].includes(el.kind)) { const sg = segs[si], uc = sg.s + el.u0 + el.w / 2; pos[el.kind] = { x: sg.run.e.a.x + sg.run.e.ux * uc + sg.run.e.nx * 12, y: sg.run.e.a.y + sg.run.e.uy * uc + sg.run.e.ny * 12 }; } });
+        let q = plans.reduce((s, p) => s + p.q, 0), lf = 0;
+        plans.forEach(pl => pl.els.forEach(el => { if (el.kind === 'cab') lf += el.w / 12; }));
+        if (pos.sink && pos.range && pos.fridge) {
+          const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) / 12, legs = [d(pos.sink, pos.range), d(pos.range, pos.fridge), d(pos.fridge, pos.sink)], tot = legs[0] + legs[1] + legs[2];
+          q -= legs.reduce((s, v) => s + Math.max(0, 4 - v) + Math.max(0, v - 9), 0) * 1.5 + Math.max(0, 13 - tot) + Math.max(0, tot - 26);
+        }
+        q += Math.min(lf, 24) * 0.25 - cfg.gapPen;
+        const pref = { l: 5, u: cfg.runs.length === 3 ? 4 : 0, galley: 4, one: 2 }[cfg.layout] || 0;
+        if (P.layout === 'auto') q += pref;
+        if (!best || q > best.q) best = { q, cfg, segs, plans, asg: asg.slice() };
+        return;
+      }
+      for (let si = 0; si < segs.length; si++) { asg[i] = si; rec(i + 1); }
+    };
+    rec(0);
+  }
+  return best;
+}
+function genKitchen(state, st, r, P, style) {
+  const frame = roomFrame(st, r), tag = 'rd:' + r.meta.id;
+  const obs = roomObstacles(st, frame, r, tag);
+  const plan = planKitchen(st, r, frame, obs, P);
+  if (!plan) return { blocks: [], notes: ['No wall in this room has enough clear length for a kitchen run. Check the doors and the room size.'] };
+  const blocks = [], notes = [], cabs = []; let rangeBlk = null;
+  const ec = (kind, e, uc, w, o) => { const b = edgeBlock(state, kind, e, uc, w, style, tag, o); blocks.push(b); return b; };
+  plan.plans.forEach((pl, si) => {
+    const sg = plan.segs[si], e = sg.run.e;
+    pl.els.forEach((el, i) => {
+      const uc = sg.s + el.u0 + el.w / 2;
+      if (el.kind === 'cab') cabs.push({ b: ec('base', e, uc, el.w), el, pl, i });
+      else if (el.kind === 'sink') { const bs = ec('base', e, uc, el.w, { opts: { config: 'sink' } }); const sk = newBlock(state, 'ksink', bs.x, bs.y, style); sk.rot = bs.rot; sk.host = bs.id; sk.gen = tag; blocks.push(sk); }
+      else if (el.kind === 'range') { rangeBlk = ec('range', e, uc, el.w); if (P.hood) ec('hood', e, uc, Math.max(el.w, 30), { d: 20 }); }
+      else if (el.kind === 'fridge') ec('fridge', e, uc, el.w);
+      else if (el.kind === 'pantry') ec('tall', e, uc, el.w);
+      else if (el.kind === 'dw') ec('dishwasher', e, uc, el.w);
+    });
+    // wall cabinets over the base run, leaving the range, fridge and windows clear
+    if (P.uppers) {
+      let lo = sg.s, hi = sg.e;
+      if (sg.s === sg.run.padS && sg.run.padS > 0) lo = 12;
+      if (sg.e === sg.run.e.L - sg.run.padE && sg.run.padE > 0) hi = sg.run.e.L - 12;
+      const cut = [];
+      pl.els.forEach(el => { if (el.kind === 'fridge' || el.kind === 'range' || el.kind === 'pantry') cut.push([sg.s + el.u0, sg.s + el.u0 + el.w]); });
+      for (const op of e.ops) if (op.o.kind === 'window') cut.push([op.lo - 1.5, op.hi + 1.5]);
+      for (const [a, b] of freeIntervals(lo, hi, cut)) {
+        if (b - a < 12) continue;
+        const w3 = Math.floor((b - a) / 3) * 3, frac = (b - a) - w3, ws = fillWidths(w3, WALL_SIZES) || [];
+        if (!ws.length) continue; ws[0] += frac;
+        let u = a;
+        for (const cw of ws) { ec('upper', e, u + cw / 2, cw); u += cw; }
+      }
+    }
+  });
+  // drawers beside the range
+  if (rangeBlk) for (const c of cabs) if (Math.hypot(c.b.x - rangeBlk.x, c.b.y - rangeBlk.y) < (rangeBlk.w + c.b.w) / 2 + 3 && c.b.w >= 15) c.b.opts.config = 'drawers';
+  // an island, only when there is room to walk around it
+  if (P.island) {
+    const main = plan.cfg.runs.reduce((a, b) => (b.e.L > a.e.L ? b : a), plan.cfg.runs[0]), e = main.e;
+    const sw = plan.segs.filter(s => s.run === main), seg = sw.sort((a, b) => (b.e - b.s) - (a.e - a.s))[0];
+    if (seg) {
+      const list = obstacleList(st, blocks);
+      let placed = null;
+      for (const aisle of [48, 44, 42, 39, 36]) for (const w of [96, 84, 72, 60, 48]) {
+        if (placed) break;
+        const span = Math.min(w, seg.e - seg.s - 12);
+        if (span < 48) continue;
+        const uc = (seg.s + seg.e) / 2, isl = edgeBlock(state, 'island', e, uc, Math.floor(span / 6) * 6 || span, style, tag, { d: 38, off: 24 + aisle });
+        isl.opts.seats = 'one';
+        const lst = list.concat([{ poly: blockCorners(isl), id: isl.id }]);
+        const c = clearAround(isl, lst);
+        const hits = obs.some(ob => polyOverlap(blockCorners(isl), ob.poly) > 0.5);
+        if (!hits && c.front >= 36 && c.left >= 36 && c.right >= 36 && c.back >= Math.min(aisle, 36)) placed = isl;
+      }
+      if (placed) { blocks.push(placed); if (P.pendants && placed.w >= 60) for (const f of [0.28, 0.72]) { const pd = newBlock(state, 'pendant', R2(placed.x + (f - 0.5) * placed.w * Math.cos(rad(placed.rot))), R2(placed.y + (f - 0.5) * placed.w * Math.sin(rad(placed.rot))), style); pd.gen = tag; blocks.push(pd); } }
+      else notes.push('There is not room for an island with 36 in to walk around it, so none was added.');
+    }
+  }
+  if (plan.cfg.gap != null && plan.cfg.gap < 36) notes.push('Only ' + fmtNum(Math.max(0, plan.cfg.gap), 0) + ' in between the facing counters, under the 36 in walkway minimum. Try One wall or L shape.');
+  notes.unshift(({ one: 'One wall', galley: 'Galley', l: 'L shape', u: 'U shape' })[plan.cfg.layout] + ' kitchen, ' + fmtNum(plan.plans.reduce((s, p) => s + p.els.filter(x => x.kind === 'cab' || x.kind === 'sink' || x.kind === 'range' || x.kind === 'dw').reduce((a, x) => a + x.w, 0), 0) / 12, 0) + ' LF of base run.');
+  return { blocks, notes, layout: plan.cfg.layout };
+}
+function roomObstacles(st, frame, r, tag) {
+  const out = [];
+  for (const e of frame) for (const op of e.ops) for (const poly of swingPolys(e, op)) out.push({ poly, why: 'door swing' });
+  for (const f of st.fixtures) if (FIXTURES[f.kind] && FIXTURES[f.kind].fixed && pointInPoly(f, r.poly)) out.push({ poly: fixtureCorners(f), why: FIXTURES[f.kind].label.toLowerCase() });
+  for (const b of st.blocks) { if (b.gen === tag || !solidBlock(b) || !pointInPoly(b, r.poly)) continue; out.push({ poly: blockCorners(b), why: BLOCKS[b.kind].label.toLowerCase() }); }
+  return out;
+}
+
+/* ---------- baths and laundry ---------- */
+const ROOMGEN_DEFAULTS = {
+  kitchen: { layout: 'auto', island: true, uppers: true, hood: true, dw: true, pantry: false, pendants: true, fridge: true, fridgeW: 36, rangeW: 30 },
+  bath: { layout: 'auto', vanW: 0, double: true, tubW: 60, showerW: 48 },
+  laundry: { uppers: true }
+};
+function bathSegPlan(seg, F, P) {
+  let best = null;
+  const mids = F.vanity && F.toilet ? [['vanity', 'toilet'], ['toilet', 'vanity']] : F.vanity ? [['vanity']] : F.toilet ? [['toilet']] : [[]];
+  for (const co of (F.corner ? ['start', 'end'] : [null])) for (const ord of mids) {
+    const seq = [], gap = (min, grow) => seq.push({ t: 'gap', min, grow: grow !== false });
+    const corner = F.corner ? { t: 'item', kind: F.corner.kind, w: F.corner.w, d: F.corner.d } : null;
+    if (corner && co === 'start') seq.push(corner);
+    const items = ord.map(k => ({ t: 'item', kind: k, w: k === 'toilet' ? 20 : P.vanW, d: k === 'toilet' ? 28 : 21 }));
+    if (F.free) items.push({ t: 'item', kind: 'tub', w: 60, d: 32, off: 6, free: true });
+    items.forEach((it, i) => { gap(it.kind === 'toilet' ? 6 : it.free ? 4 : 0, true); seq.push(it); });
+    gap(items.length && items[items.length - 1].kind === 'toilet' ? 6 : 0, true);
+    if (corner && co === 'end') seq.push(corner);
+    const plan = planSegment(seg.e - seg.s, seq, { fill: false });
+    if (!plan) continue;
+    plan.q = 0;
+    if (!best || plan.q > best.q) best = plan;
+  }
+  return best;
+}
+function bathAttempt(state, st, r, frame, obs, tag, kind, P, style) {
+  const cornerOf = kind === 'tub' ? { kind: 'tub', w: P.tubW, d: 30 } : (kind === 'shower' || kind === 'tubshower') ? { kind: 'shower', w: P.showerW, d: 36 } : null;
+  const need = ['vanity', 'toilet'].concat(cornerOf ? ['corner'] : []).concat(kind === 'tubshower' ? ['free'] : []);
+  const segs = [];
+  for (const e of frame) {
+    if (e.zone || e.L < 24) continue;
+    for (const [s, en] of freeIntervals(0, e.L, blockedOnEdge(e, obs, 30))) if (en - s >= 20) segs.push({ edge: e, s, e: en, corner: s <= 0.6 && prevConvex(frame, e) });
+  }
+  if (!segs.length || Math.pow(segs.length, need.length) > 5000) return null;
+  let best = null;
+  const asg = [];
+  const make = (el, sg) => {
+    const it = el.item || {}, o = { d: it.d };
+    if (it.free) { o.off = 6; o.opts = { type: 'oval', filler: 'floor', surround: 'none', door: 'none' }; }
+    const b = edgeBlock(state, el.kind, sg.edge, sg.s + el.u0 + el.w / 2, el.w, style, tag, o);
+    return b;
+  };
+  const rec = i => {
+    if (i === need.length) {
+      const plans = [];
+      for (let si = 0; si < segs.length; si++) {
+        const F = {};
+        need.forEach((f, k) => { if (asg[k] === si) { if (f === 'corner') F.corner = cornerOf; else F[f] = true; } });
+        if (F.corner && !segs[si].corner) return;
+        const pl = bathSegPlan(segs[si], F, P);
+        if (!pl) return;
+        plans.push(pl);
+      }
+      let q = 0;
+      const tries = [];
+      plans.forEach((pl, si) => { for (const el of pl.els) tries.push({ b: make(el, segs[si]), el, sg: segs[si] }); });
+      for (const t of tries) { if (t.b.kind === 'tub' && !t.el.item.free && Math.abs(t.sg.edge.L - t.el.w) < 8) q += 3; if (t.b.kind === 'vanity' && t.sg.edge.L > 60) q += 1; }
+      const list = obstacleList(st, tries.map(t => t.b));
+      let pen = 0;
+      for (const t of tries) {
+        const b = t.b, fc = sideClear(b, 'front', list, 60), min = b.kind === 'toilet' || b.kind === 'vanity' ? 21 : 24;
+        if (fc < min) pen += 25;
+        if (obs.some(ob => polyOverlap(blockCorners(b), ob.poly) > 0.5)) pen += 30;
+        if (b.kind === 'toilet') { const sl = sideClear(b, 'left', list, 30), sr = sideClear(b, 'right', list, 30); if (sl < 5 || sr < 5) pen += 25; else if (sl < 8 || sr < 8) pen += 3; }
+      }
+      q -= pen;
+      if (!best || q > best.q) best = { q, pen, blocks: tries.map(t => t.b) };
+      return;
+    }
+    for (let si = 0; si < segs.length; si++) { asg[i] = si; rec(i + 1); }
+  };
+  rec(0);
+  return best;
+}
+function genBath(state, st, r, P, style) {
+  const frame = roomFrame(st, r), tag = 'rd:' + r.meta.id, obs = roomObstacles(st, frame, r, tag);
+  const kind = P.layout === 'auto' ? (r.meta.type === 'powder' ? 'powder' : r.area >= 70 ? 'tubshower' : r.area >= 40 ? 'tub' : 'shower') : P.layout;
+  const widths = P.vanW ? [P.vanW] : (kind === 'powder' ? [30, 24] : kind === 'tubshower' ? [72, 60, 48, 36, 30] : [60, 48, 36, 30, 24]);
+  let best = null;
+  for (const vw of widths) {
+    const at = bathAttempt(state, st, r, frame, obs, tag, kind, Object.assign({}, P, { vanW: vw }), style);
+    if (at && (!best || at.q > best.q)) { best = at; if (at.pen < 25 && at.q >= 0) break; }
+  }
+  if (!best) return { blocks: [], notes: ['Could not fit the fixtures along the walls without blocking a door. Try a different bath layout or a larger room.'] };
+  for (const b of best.blocks) if (b.kind === 'vanity' && P.double && b.w >= 60) b.opts.sinks = '2';
+  const notes = [({ tub: 'Three piece bath with a tub', shower: 'Bath with a walk-in shower', tubshower: 'Bath with a shower and a freestanding tub', powder: 'Powder room' })[kind] + '.'];
+  if (best.pen >= 25) notes.push('This room is tight for the fixtures chosen. Check the clearances in the Checks tab.');
+  return { blocks: best.blocks, notes, layout: kind };
+}
+function prevConvex(frame, e) { const p = frame.find(f => f.next === e); return !!(p && cornerAfter(p)); }
+
+function genLaundry(state, st, r, P, style) {
+  const frame = roomFrame(st, r), tag = 'rd:' + r.meta.id, obs = roomObstacles(st, frame, r, tag);
+  let best = null;
+  for (const e of frame) {
+    if (e.zone) continue;
+    for (const [s, en] of freeIntervals(0, e.L, blockedOnEdge(e, obs, 30))) {
+      if (en - s < 56) continue;
+      for (const at of ['start', 'end']) {
+        const seq = [], gap = (min) => seq.push({ t: 'gap', min, grow: true });
+        if (at === 'end') gap(0);
+        seq.push({ t: 'item', kind: 'washer', w: 27, d: 30 }, { t: 'item', kind: 'dryer', w: 27, d: 30 });
+        if (at === 'start') gap(0);
+        const pl = planSegment(en - s, seq, { fill: true, sizes: BASE_SIZES });
+        if (!pl) continue;
+        const q = (en - s) + (pl.els.some(x => x.kind === 'cab') ? 10 : 0);
+        if (!best || q > best.q) best = { q, e, s, pl };
+      }
+    }
+  }
+  if (!best) return { blocks: [], notes: ['No wall has room for a washer and dryer pair with clearance. Check the doors and the room size.'] };
+  const blocks = [];
+  for (const el of best.pl.els) {
+    const uc = best.s + el.u0 + el.w / 2;
+    if (el.kind === 'cab') blocks.push(edgeBlock(state, 'base', best.e, uc, el.w, style, tag));
+    else blocks.push(edgeBlock(state, el.kind, best.e, uc, el.w, style, tag, { d: 30 }));
+  }
+  if (P.uppers) for (const el of best.pl.els) if (el.kind === 'cab') blocks.push(edgeBlock(state, 'upper', best.e, best.s + el.u0 + el.w / 2, el.w, style, tag));
+  return { blocks, notes: ['Washer and dryer pair' + (best.pl.els.some(x => x.kind === 'cab') ? ' with a folding counter and wall cabinets.' : '.')], layout: 'laundry' };
+}
+function genRoomDesign(state, st, r, P, style) {
+  const t = r.meta.type;
+  P = P || {};
+  const D = ROOMGEN_DEFAULTS;
+  if (t === 'kitchen') return genKitchen(state, st, r, Object.assign({}, D.kitchen, P.kitchen), style);
+  if (t === 'bathroom' || t === 'powder' || t === 'restroom') return genBath(state, st, r, Object.assign({}, D.bath, P.bath), style);
+  if (t === 'laundry') return genLaundry(state, st, r, Object.assign({}, D.laundry, P.laundry), style);
+  return { blocks: [], notes: ['Set the room type to Kitchen, Bathroom, Powder or Laundry first.'] };
+}
+
+/* ---------- checks for room design ---------- */
+function landing(b, dir, inside) {
+  const t = rad(b.rot), c = Math.cos(t), s = Math.sin(t), kinds = { base: 1, island: 1, dishwasher: 1, vanity: 1 };
+  const loc = o => { const dx = o.x - b.x, dy = o.y - b.y; return { x: dx * c + dy * s, z: -dx * s + dy * c }; };
+  let edge = dir * b.w / 2, total = 0;
+  for (let n = 0; n < 6; n++) {
+    const hit = inside.find(o => o !== b && Math.abs(((o.rot - b.rot + 540) % 360) - 180) < 1 && Math.abs(loc(o).z) < 12 && Math.abs((loc(o).x - dir * o.w / 2) - edge) < 2.5);
+    if (!hit || !kinds[hit.kind]) break;
+    total += hit.w; edge += dir * hit.w;
+  }
+  return total;
+}
+function roomDesignChecks(st, an) {
+  const out = [], list = obstacleList(st);
+  for (const r of an.rooms) {
+    const inside = st.blocks.filter(b => pointInPoly(b, r.poly) && BLOCKS[b.kind]);
+    if (!inside.length) continue;
+    const m = r.meta, nm = m.name, of = k => inside.filter(b => b.kind === k);
+    const add = (sev, text) => out.push({ sev, roomId: m.id, text: nm + ': ' + text });
+    const frame = roomFrame(st, r);
+    // doors that swing into furniture
+    for (const e of frame) for (const op of e.ops) for (const poly of swingPolys(e, op)) {
+      const hit = inside.find(b => solidBlock(b) && polyOverlap(blockCorners(b), poly) > 1);
+      if (hit) add('warn', 'the door swing hits the ' + BLOCKS[hit.kind].label.toLowerCase() + '. Move it or change the door.');
+    }
+    // walking room in front of a block. The other leg of an L or U, and a cabinet touching this one, are not walkways.
+    const frontFree = (b, maxD) => {
+      const big = blockCorners(Object.assign({}, b, { w: b.w + 2, d: b.d + 2 }));
+      const l2 = list.filter(o => {
+        if (o.id === 'wall' || o.id === b.id) return true;
+        const ob = inside.find(x => x.id === o.id);
+        if (ob && ob.kind !== 'island') { const dr = Math.abs(((ob.rot - b.rot) % 180 + 180) % 180 - 90); if (dr < 15) return false; }
+        return polyOverlap(o.poly, big) < 0.5;
+      });
+      return sideClear(Object.assign({}, b, { w: Math.max(6, b.w - 10) }), 'front', l2, maxD);
+    };
+    const range = of('range')[0], fridge = of('fridge')[0], dwv = of('dishwasher')[0];
+    const sinkBase = inside.find(b => b.kind === 'base' && bopts(b).config === 'sink') || of('ksink')[0];
+    const kitch = m.type === 'kitchen' || range || fridge || of('ksink').length;
+    if (kitch) {
+      if (range && fridge && sinkBase) {
+        const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) / 12, l1 = d(sinkBase, range), l2 = d(range, fridge), l3 = d(fridge, sinkBase), tot = l1 + l2 + l3;
+        const bad = [l1, l2, l3].some(v => v < 4 || v > 9) || tot < 13 || tot > 26;
+        out.push({ sev: bad ? 'info' : 'ok', roomId: m.id, text: nm + ': work triangle is ' + fmtNum(tot, 1) + ' ft around (sink to range ' + fmtNum(l1, 1) + ', range to fridge ' + fmtNum(l2, 1) + ', fridge to sink ' + fmtNum(l3, 1) + '). ' + (bad ? 'Each leg should be 4 to 9 ft and the total 13 to 26 ft.' : 'Within the usual 13 to 26 ft.') });
+      }
+      if (range) {
+        const L = landing(range, -1, inside), R = landing(range, 1, inside), lo = Math.min(L, R), hi = Math.max(L, R);
+        if (lo < 9 || hi < 12) add('warn', 'the range has ' + fmtNum(L, 0) + ' in of counter on one side and ' + fmtNum(R, 0) + ' in on the other. Plan 12 in on one side and 15 in on the other, as a landing for hot pans.');
+        if (!of('hood').length) add('info', 'no range hood over the range. Add one from the Kitchen blocks.');
+        else if (of('hood').some(h => h.w < range.w - 0.1)) add('warn', 'the hood is narrower than the range.');
+        const fc = frontFree(range, 60);
+        if (fc < 36) add('warn', 'only ' + fmtNum(fc, 0) + ' in in front of the range. Keep 36 in clear.');
+      }
+      if (sinkBase) {
+        const L = landing(sinkBase, -1, inside), R = landing(sinkBase, 1, inside), lo = Math.min(L, R), hi = Math.max(L, R);
+        if (lo < 18 || hi < 24) add('info', 'the sink has ' + fmtNum(L, 0) + ' in of counter on one side and ' + fmtNum(R, 0) + ' in on the other. Plan 24 in on one side and 18 in on the other.');
+        if (dwv && Math.hypot(dwv.x - sinkBase.x, dwv.y - sinkBase.y) > 44) add('info', 'the dishwasher is not next to the sink.');
+      }
+      if (fridge) { const fc = frontFree(fridge, 60); if (fc < 30) add('warn', 'only ' + fmtNum(fc, 0) + ' in in front of the refrigerator, so the doors may not open fully.'); }
+      let narrow = 999;
+      for (const b of inside) if (['base', 'range', 'dishwasher'].includes(b.kind) || (b.kind === 'island')) {
+        if (b.kind === 'island') narrow = Math.min(narrow, clearAround(b, list).min);
+        else narrow = Math.min(narrow, frontFree(b, 90));
+      }
+      if (narrow < 999) {
+        if (narrow < 36) add('warn', 'the narrowest walkway is ' + fmtNum(narrow, 0) + ' in. Keep at least 36 in, and 42 in where someone cooks.');
+        else if (narrow < 42) add('info', 'the narrowest walkway is ' + fmtNum(narrow, 0) + ' in. 42 in is better where someone cooks, and 48 in for two cooks.');
+        else out.push({ sev: 'ok', roomId: m.id, text: nm + ': the narrowest walkway is ' + fmtNum(narrow, 0) + ' in.' });
+      }
+    }
+    for (const t of of('toilet')) {
+      const fc = sideClear(t, 'front', list, 60), sl = sideClear(t, 'left', list, 40), sr = sideClear(t, 'right', list, 40);
+      if (fc < 21) add('warn', 'only ' + fmtNum(fc, 0) + ' in in front of the toilet. Code wants 21 in clear.');
+      if (sl + t.w / 2 < 15 || sr + t.w / 2 < 15) add('warn', 'the toilet center is ' + fmtNum(Math.min(sl, sr) + t.w / 2, 0) + ' in from the nearest side wall or fixture. Code wants 15 in.');
+    }
+    for (const v of of('vanity')) { const fc = sideClear(v, 'front', list, 60); if (fc < 21) add('warn', 'only ' + fmtNum(fc, 0) + ' in in front of the vanity. Code wants 21 in clear.'); }
+    for (const t of of('tub').concat(of('shower'))) { const fc = sideClear(t, 'front', list, 60); if (fc < 24) add('warn', 'only ' + fmtNum(fc, 0) + ' in in front of the ' + (t.kind === 'tub' ? 'tub' : 'shower') + '. Keep 24 in clear to step in, 30 in is better.'); }
+    for (const s of of('shower')) if (Math.min(s.w, s.d) < 30 || s.w * s.d < 900) add('warn', 'the shower is smaller than 30 by 30 in (900 square inches), the code minimum.');
+    for (const b of of('washer').concat(of('dryer'))) { const fc = sideClear(b, 'front', list, 60); if (fc < 30) add('info', 'only ' + fmtNum(fc, 0) + ' in in front of the ' + b.kind + '. Plan 30 in or more to load it.'); }
+  }
+  return out;
+}
+
+/* ---------- layouts: Existing plus any number of concepts, each holding every floor ---------- */
 const LAYOUT_KEYS = ['walls', 'openings', 'fixtures', 'rooms', 'blocks'];
-function pickLayout(state) { const o = {}; for (const k of LAYOUT_KEYS) o[k] = state[k]; return o; }
+const emptyContent = () => { const o = {}; for (const k of LAYOUT_KEYS) o[k] = []; return o; };
+function pickContent(h) { const o = {}; for (const k of LAYOUT_KEYS) o[k] = h[k]; return o; }
+/* A "holder" is the live state or a stored layout: the active floor sits flat in LAYOUT_KEYS, the other floors under floorData. */
+function pickLayout(state) { const o = pickContent(state); o.floorData = state.floorData; o.activeFloor = state.activeFloor; return o; }
+function fixHolder(h, floors) {
+  if (!h.floorData || typeof h.floorData !== 'object') h.floorData = {};
+  if (!floors.some(f => f.id === h.activeFloor)) h.activeFloor = floors[0].id;
+  for (const f of floors) {
+    if (f.id === h.activeFloor) continue;
+    const d = h.floorData[f.id] || (h.floorData[f.id] = emptyContent());
+    for (const k of LAYOUT_KEYS) if (!Array.isArray(d[k])) d[k] = [];
+  }
+  delete h.floorData[h.activeFloor];
+  for (const id of Object.keys(h.floorData)) if (!floors.some(f => f.id === id)) delete h.floorData[id];
+}
 function ensureLayouts(state) {
   if (!Array.isArray(state.blocks)) state.blocks = [];
   if (!Array.isArray(state.layouts) || !state.layouts.length) { state.layouts = [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }]; state.activeLayout = 'L1'; }
   if (!state.layouts.some(l => l.id === state.activeLayout)) state.activeLayout = state.layouts[0].id;
   for (const l of state.layouts) if (l.id !== state.activeLayout && l.data) { for (const k of LAYOUT_KEYS) if (!Array.isArray(l.data[k])) l.data[k] = []; }
+  const wallH = (state.settings && state.settings.wallH) || 96;
+  if (!Array.isArray(state.floors) || !state.floors.length) state.floors = [{ id: 'F1', name: 'Main floor', rise: wallH + 10 }];
+  for (const f of state.floors) { if (!f.name) f.name = 'Floor'; if (!(f.rise > 0)) f.rise = wallH + 10; }
+  fixHolder(state, state.floors);
+  for (const l of state.layouts) if (l.id !== state.activeLayout && l.data) fixHolder(l.data, state.floors);
   return state;
 }
 function activeLayout(state) { return state.layouts.find(l => l.id === state.activeLayout); }
+
+/* ----- floors ----- */
+const FLOOR_NAMES = ['Main floor', 'Second floor', 'Third floor', 'Fourth floor', 'Fifth floor'];
+const floorIndex = (state, id) => state.floors.findIndex(f => f.id === id);
+const floorOf = (state, id) => state.floors.find(f => f.id === id);
+/* height of a floor's finished surface above the lowest floor */
+function floorBase(state, idx) { let y = 0; for (let i = 0; i < idx; i++) y += state.floors[i].rise; return y; }
+function contentOf(h, fid) { if (!h) return null; if (fid === h.activeFloor) return h; return (h.floorData && h.floorData[fid]) || null; }
+function holderSwitch(h, id) {
+  if (id === h.activeFloor) return false;
+  h.floorData[h.activeFloor] = pickContent(h);
+  const d = h.floorData[id] || emptyContent();
+  for (const k of LAYOUT_KEYS) h[k] = d[k] || [];
+  delete h.floorData[id]; h.activeFloor = id;
+  return true;
+}
+function switchFloor(state, id) { return state.floors.some(f => f.id === id) ? holderSwitch(state, id) : false; }
+function newFloorId(state) { let n = state.floors.length + 1; while (state.floors.some(f => f.id === 'F' + n)) n++; return 'F' + n; }
+function allHolders(state) { const hs = [pickLayout(state)]; for (const l of state.layouts) if (l.id !== state.activeLayout && l.data) hs.push(l.data); return hs; }
+/* where: 'above' or 'below'. copyWalls copies the exterior walls of the neighbouring floor so the outline lines up. */
+function addFloor(state, where, copyWalls) {
+  const below = where === 'below', ref = below ? state.floors[0] : state.floors[state.floors.length - 1];
+  const f = { id: newFloorId(state), name: below ? (state.floors.some(x => /basement/i.test(x.name)) ? 'Lower level' : 'Basement') : (FLOOR_NAMES[state.floors.length] || 'Floor ' + (state.floors.length + 1)), rise: ref.rise };
+  for (const h of allHolders(state)) {
+    const src = contentOf(h, ref.id), c = emptyContent();
+    if (copyWalls && src) for (const w of src.walls) if (w.t >= 5.5) c.walls.push(Object.assign(JSON.parse(JSON.stringify(w)), { id: uid(state, 'w') }));
+    h.floorData[f.id] = c;
+  }
+  if (below) state.floors.unshift(f); else state.floors.push(f);
+  return f;
+}
+function removeFloor(state, id) {
+  if (state.floors.length < 2 || !state.floors.some(f => f.id === id)) return false;
+  const idx = floorIndex(state, id), other = state.floors[idx > 0 ? idx - 1 : 1].id;
+  if (state.activeFloor === id) holderSwitch(state, other);
+  for (const l of state.layouts) if (l.id !== state.activeLayout && l.data && l.data.activeFloor === id) holderSwitch(l.data, other);
+  state.floors = state.floors.filter(f => f.id !== id);
+  delete state.floorData[id];
+  for (const l of state.layouts) if (l.data && l.data.floorData) delete l.data.floorData[id];
+  return true;
+}
+/* every block on every floor of the live layout, or of a stored holder */
+function holderBlocks(h) { let out = (h.blocks || []).slice(); for (const k of Object.keys(h.floorData || {})) out = out.concat(h.floorData[k].blocks || []); return out; }
+function floorBlocks(state, fid) { const c = contentOf(state, fid); return c ? c.blocks : []; }
+function floorWalls(state, fid) { const c = contentOf(state, fid); return c ? c.walls : []; }
+
 function switchLayout(state, id) {
   const to = state.layouts.find(l => l.id === id);
   if (!to || id === state.activeLayout) return false;
-  const from = activeLayout(state);
+  const from = activeLayout(state), keep = state.activeFloor;
   from.data = pickLayout(state);
-  const d = to.data || { walls: [], openings: [], fixtures: [], rooms: [], blocks: [] };
+  const d = to.data || Object.assign(emptyContent(), { floorData: {}, activeFloor: keep });
   for (const k of LAYOUT_KEYS) state[k] = d[k] || [];
+  state.floorData = d.floorData || {}; state.activeFloor = d.activeFloor || keep;
   to.data = null; state.activeLayout = id;
+  fixHolder(state, state.floors);
+  if (state.activeFloor !== keep) holderSwitch(state, keep);
   return true;
 }
 function newLayoutId(state) { let n = state.layouts.length + 1; while (state.layouts.some(l => l.id === 'L' + n)) n++; return 'L' + n; }
 function addConcept(state, name, fromId, style) {
   const src = fromId === state.activeLayout ? pickLayout(state) : (state.layouts.find(l => l.id === fromId) || {}).data;
-  const data = JSON.parse(JSON.stringify(src || { walls: [], openings: [], fixtures: [], rooms: [], blocks: [] }));
+  const data = JSON.parse(JSON.stringify(src || Object.assign(emptyContent(), { floorData: {}, activeFloor: state.activeFloor })));
   for (const k of LAYOUT_KEYS) if (!Array.isArray(data[k])) data[k] = [];
+  fixHolder(data, state.floors);
   const L = { id: newLayoutId(state), name: name, kind: 'new', data, style: style || '' };
-  if (style) for (const b of data.blocks) applyStyleToBlock(b, style);
+  if (style) for (const b of holderBlocks(data)) applyStyleToBlock(b, style);
   state.layouts.push(L);
   return L;
 }
@@ -1881,24 +2733,51 @@ function estimateLayoutId(state) {
   const nw = state.layouts.find(l => l.kind === 'new');
   return nw ? nw.id : state.activeLayout;
 }
-/* run fn against any layout as if it were the active one */
-function withLayout(state, id, fn) {
-  if (id === state.activeLayout) return fn(state);
-  const L = state.layouts.find(l => l.id === id);
-  if (!L || !L.data) return null;
+/* Run fn against one floor of any layout as if it were the whole plan. The live state is passed straight through
+   when it already is that view; otherwise fn gets a throwaway copy and room records are written back afterwards. */
+function withView(state, lid, fid, fn) {
+  lid = lid || state.activeLayout; fid = fid || state.activeFloor;
+  if (lid === state.activeLayout && fid === state.activeFloor) return fn(state);
+  const h = lid === state.activeLayout ? pickLayout(state) : (state.layouts.find(l => l.id === lid) || {}).data;
+  if (!h) return null;
+  let c = contentOf(h, fid);
+  if (!c) { if (!h.floorData) h.floorData = {}; c = h.floorData[fid] = emptyContent(); }
   const tmp = Object.assign({}, state);
-  tmp._lid = id; tmp._activeContent = pickLayout(state);
-  for (const k of LAYOUT_KEYS) tmp[k] = L.data[k];
+  tmp._lid = lid; tmp._fid = fid; tmp._activeContent = lid === state.activeLayout ? h : pickLayout(state);
+  for (const k of LAYOUT_KEYS) tmp[k] = c[k];
   const res = fn(tmp);
-  L.data.rooms = tmp.rooms;
+  c.rooms = tmp.rooms;
   state.nextId = tmp.nextId; state.nextRoom = tmp.nextRoom;
   return res;
 }
-function layoutSummary(state, id) {
-  return withLayout(state, id, st => {
-    const an = analyze(st), tk = buildTakeoff(st, an);
-    return { rooms: an.rooms.length, blocks: st.blocks.length, area: an.rooms.reduce((s, r) => s + r.area, 0), lines: tk.lines.length, total: tk.total, priced: tk.priced, unpriced: tk.unpriced };
+/* one analysis per floor, bottom to top. Each part is { floor, index, st, an }. */
+function buildingParts(state, lid) {
+  const multi = state.floors.length > 1;
+  const parts = state.floors.map((f, i) => withView(state, lid, f.id, st => {
+    const an = analyze(st);
+    an.floorId = f.id; an.tag = multi ? f.name : ''; an.index = i;
+    for (const r of an.rooms) r.tag = an.tag;
+    return { floor: f, index: i, st, an };
+  }));
+  if (parts.some(p => !p)) return null;
+  parts.forEach((p, i) => {
+    p.an.stairsHere = p.st.blocks.filter(b => b.kind === 'stair');
+    p.an.belowStairs = i > 0 ? parts[i - 1].st.blocks.filter(b => b.kind === 'stair') : [];
+    p.an.belowWalls = i > 0 ? parts[i - 1].st.walls : [];
   });
+  return parts;
+}
+function buildingFor(state, lid) {
+  const parts = buildingParts(state, lid);
+  if (!parts) return null;
+  const tk = buildTakeoff(parts[0].st, parts[0].an, parts.slice(1));
+  return { parts, tk };
+}
+function layoutSummary(state, id) {
+  const B = buildingFor(state, id);
+  if (!B) return null;
+  const tk = B.tk;
+  return { rooms: B.parts.reduce((n, p) => n + p.an.rooms.length, 0), blocks: B.parts.reduce((n, p) => n + p.st.blocks.length, 0), area: tk.totalArea, lines: tk.lines.length, total: tk.total, priced: tk.priced, unpriced: tk.unpriced };
 }
 
 /* what the concept changes compared to Existing: demo quantities */
@@ -1908,7 +2787,8 @@ function demoDiff(state) {
   if (!cur || cur.kind === 'existing') return null;
   const ex = state.layouts.find(l => l.kind === 'existing');
   if (!ex || ex.id === lid) return null;
-  const exData = ex.data || state._activeContent;
+  const exHolder = ex.data || state._activeContent;
+  const exData = exHolder && contentOf(exHolder, state._fid || state.activeFloor);
   if (!exData) return null;
   const cw = state.walls, key = (a, b) => ptKey(a.x, a.y) + '|' + ptKey(b.x, b.y);
   const have = new Set(); cw.forEach(w => { have.add(key(w.a, w.b)); have.add(key(w.b, w.a)); });
@@ -1972,19 +2852,31 @@ function loadState() {
 }
 let state = ensureLayouts(loadState());
 let AN, TK, CK;
+let PARTS = [];
 function estimateTakeoff() {
   const eid = estimateLayoutId(state);
-  const tk = eid === state.activeLayout ? TK : withLayout(state, eid, st => buildTakeoff(st, analyze(st)));
+  const B = eid === state.activeLayout ? null : buildingFor(state, eid);
+  const tk = B ? B.tk : TK, parts = B ? B.parts : PARTS;
   const out = JSON.parse(exportTakeoffJSON(state, tk || TK));
   out.layout = (state.layouts.find(l => l.id === eid) || {}).name || '';
+  out.floors = parts.map(p => ({ name: p.floor.name, rooms: p.an.rooms.length, floorSF: Math.round(p.an.rooms.reduce((a, r) => a + r.area, 0)), overall: p.an.overall ? { widthIn: p.an.overall.width, lengthIn: p.an.overall.length } : null }));
+  const act = parts.find(p => p.an.floorId === (B ? B.parts[0].an.floorId : state.activeFloor)) || parts[0];
+  out.overall = act && act.an.overall ? { widthIn: act.an.overall.width, lengthIn: act.an.overall.length, width: fmtFtIn(act.an.overall.width), length: fmtFtIn(act.an.overall.length) } : null;
   return out;
 }
-function recompute() { AN = analyze(state); TK = buildTakeoff(state, AN); CK = runChecks(state, AN, TK); }
+function recompute() {
+  PARTS = buildingParts(state);
+  const cur = PARTS.find(p => p.floor.id === state.activeFloor) || PARTS[0];
+  AN = cur.an;
+  const others = PARTS.filter(p => p !== cur);
+  TK = buildTakeoff(state, AN, others);
+  CK = runChecks(state, AN, TK, others);
+}
 let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: AN.rooms.length, heatedSF: Math.round(AN.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0)), floorSF: Math.round(AN.rooms.reduce((a, r) => a + r.area, 0)), checks: CK.length } }, '*'); } catch (e) { /* ignore */ } return; }
+    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: PARTS.reduce((n, p) => n + p.an.rooms.length, 0), heatedSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0), 0)), floorSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + r.area, 0), 0)), checks: CK.length, floors: state.floors.length, overall: AN.overall ? { widthIn: AN.overall.width, lengthIn: AN.overall.length } : null } }, '*'); } catch (e) { /* ignore */ } return; }
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }, 300);
 }
@@ -2127,10 +3019,10 @@ function resize() {
   draw();
   if (mode === '3d') { size3D(); render3D(); }
 }
-function fitView() {
+function fitView(box) {
   if (!cssW) return;
-  const b = AN && AN.bbox ? AN.bbox : { minx: 0, miny: 0, maxx: 240, maxy: 180 };
-  const pad = 36, I = fitInsets ? fitInsets() : { t: 0, r: 0, b: 0, l: 0 };
+  const b = box || (AN && AN.bbox ? AN.bbox : { minx: 0, miny: 0, maxx: 240, maxy: 180 });
+  const pad = box ? 40 : (AN && AN.overall ? 56 : 36), I = fitInsets ? fitInsets() : { t: 0, r: 0, b: 0, l: 0 };
   const bw = Math.max(b.maxx - b.minx, 60), bh = Math.max(b.maxy - b.miny, 60);
   const aw = cssW - I.l - I.r - pad * 2, ah = cssH - I.t - I.b - pad * 2;
   const s = Math.max(0.15, Math.min(8, Math.min(aw / bw, ah / bh)));
@@ -2293,6 +3185,43 @@ function drawFixture(ctx, f, selected) {
   ctx.restore();
 }
 
+/* the floor underneath, faint, so walls and stairs line up from floor to floor */
+function drawBelowGhost(ctx) {
+  const idx = state.floors.findIndex(f => f.id === state.activeFloor);
+  if (idx < 1) return;
+  const c = contentOf(state, state.floors[idx - 1].id);
+  if (!c) return;
+  ctx.save(); ctx.globalAlpha = 0.28; ctx.strokeStyle = C.muted; ctx.lineCap = 'butt';
+  for (const w of c.walls) {
+    if (isZone(w)) continue;
+    const a = W2S(w.a), b = W2S(w.b);
+    ctx.lineWidth = Math.max(1.5, w.t * view.s); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.strokeStyle = C.accent;
+  for (const b of c.blocks) if (b.kind === 'stair') {
+    ctx.beginPath(); stairCorners(b).forEach((q, i) => { const t = W2S(q); if (i) ctx.lineTo(t.x, t.y); else ctx.moveTo(t.x, t.y); }); ctx.closePath(); ctx.stroke();
+  }
+  ctx.restore();
+}
+/* overall width and length, outside the wall dimensions */
+function drawOverall(ctx) {
+  const o = AN.overall;
+  if (!o || !(o.width > 0) || !(o.length > 0)) return;
+  const tl = W2S({ x: o.minx, y: o.miny }), br = W2S({ x: o.maxx, y: o.maxy }), off = 38;
+  ctx.save(); ctx.strokeStyle = C.accent; ctx.fillStyle = C.accent; ctx.lineWidth = 1.2; ctx.setLineDash([]);
+  const tick = (x, y, vert) => { ctx.beginPath(); if (vert) { ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); } else { ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6); } ctx.stroke(); };
+  const y = br.y + off, x = br.x + off;
+  ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(br.x, y); ctx.stroke(); tick(tl.x, y, false); tick(br.x, y, false);
+  ctx.beginPath(); ctx.moveTo(x, tl.y); ctx.lineTo(x, br.y); ctx.stroke(); tick(x, tl.y, true); tick(x, br.y, true);
+  ctx.beginPath(); ctx.moveTo(tl.x, br.y + 4); ctx.lineTo(tl.x, y + 6); ctx.moveTo(br.x + 4, tl.y); ctx.lineTo(x + 6, tl.y);
+  ctx.moveTo(br.x, br.y + 4); ctx.lineTo(br.x, y + 6); ctx.moveTo(br.x + 4, br.y); ctx.lineTo(x + 6, br.y);
+  ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  halo(ctx, 'Width ' + fmtFtIn(o.width), (tl.x + br.x) / 2, y + 13, C.accent, 12, true, true);
+  ctx.save(); ctx.translate(x + 13, (tl.y + br.y) / 2); ctx.rotate(Math.PI / 2);
+  halo(ctx, 'Length ' + fmtFtIn(o.length), 0, 0, C.accent, 12, true, true); ctx.restore();
+  ctx.restore();
+}
 function draw() {
   if (!cssW || !AN || mode === '3d') return;
   const ctx = cv.getContext('2d');
@@ -2326,6 +3255,7 @@ function draw() {
       ctx.restore();
     }
   }
+  drawBelowGhost(ctx);
   // walls
   ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
   for (const w of state.walls) {
@@ -2381,6 +3311,8 @@ function draw() {
     halo(ctx, fmtFtIn(g.L), 0, 0, C.muted, 11, true, false);
     ctx.restore();
   }
+  drawOverall(ctx);
+  drawFocus(ctx);
   // room labels
   for (const r of AN.rooms) {
     const xs = r.inner.map(p => p.x), ys = r.inner.map(p => p.y);
@@ -2789,6 +3721,7 @@ function renderCtx() {
   if (mode === '3d') {
     h += chipRow('Camera', [['iso', 'Overview'], ['top', 'Top down'], ['low', 'Low angle']], '', 'data-cam');
     h += '<span class="chips"><button type="button" class="chip-btn" data-ceil="1" aria-pressed="' + v3.ceil + '">Show ceilings</button></span>';
+    if (state.floors.length > 1) h += chipRow('Floors', [['all', 'All']].concat(state.floors.map((f, i) => [String(i), 'Up to ' + f.name])), v3.upTo == null ? 'all' : String(v3.upTo), 'data-f3');
   } else if (tool === 'wall') {
     h += chipRow('Wall', [[4.5, 'Interior 4.5"'], [6, 'Exterior 6"'], [8, 'Thick 8"'], [0.5, 'Open edge']], opts.thick, 'data-thick');
     h += '<span class="chips"><button type="button" class="chip-btn" data-ortho="1" aria-pressed="' + S.ortho + '">Straight lines</button></span>';
@@ -2856,6 +3789,8 @@ document.addEventListener('click', e => {
   if (md) { setMode(md.dataset.mode); return; }
   const cm = e.target.closest('[data-cam]');
   if (cm) { frame3D(cm.dataset.cam); render3D(); return; }
+  const f3 = e.target.closest('[data-f3]');
+  if (f3) { v3.upTo = f3.dataset.f3 === 'all' ? null : +f3.dataset.f3; renderCtx(); frame3D('iso'); rebuild3D(); return; }
   if (e.target.closest('[data-ceil]')) { v3.ceil = !v3.ceil; renderCtx(); rebuild3D(); return; }
   const t = e.target.closest('[data-tool]');
   if (t) { setTool(t.dataset.tool); return; }
@@ -2991,19 +3926,24 @@ $('#insp').addEventListener('change', e => {
 
 /* ---------- summary ---------- */
 function updateSummary() {
-  const floor = AN.rooms.reduce((s, r) => s + r.area, 0);
-  const lf = state.walls.filter(w => !isZone(w)).reduce((s, w) => s + wallGeom(w).L, 0) / 12;
+  const multi = state.floors.length > 1, parts = PARTS.length ? PARTS : [{ an: AN, st: state }];
+  const floor = parts.reduce((n, p) => n + p.an.rooms.reduce((s2, r) => s2 + r.area, 0), 0);
+  const heated = parts.reduce((n, p) => n + p.an.rooms.reduce((s2, r) => s2 + (isHeated(r.meta) ? r.area : 0), 0), 0);
+  const rooms = parts.reduce((n, p) => n + p.an.rooms.length, 0);
+  const lf = parts.reduce((n, p) => n + p.st.walls.filter(w => !isZone(w)).reduce((s2, w) => s2 + wallGeom(w).L, 0), 0) / 12;
+  const ov = AN.overall;
   $('#sum').innerHTML =
-    '<div><span class="k">Floor area</span><span class="v">' + fmtNum(floor, 0) + ' SF</span></div>' +
-    '<div><span class="k">Heated area</span><span class="v">' + fmtNum(AN.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0), 0) + ' SF</span></div>' +
-    '<div><span class="k">Rooms</span><span class="v">' + AN.rooms.length + '</span></div>' +
+    '<div title="Out to out of the wall faces on ' + esc((floorOf(state, state.activeFloor) || {}).name || 'this floor') + '"><span class="k">' + (multi ? 'Floor size' : 'Overall size') + '</span><span class="v">' + (ov ? esc(fmtFtIn(ov.width)) + ' x ' + esc(fmtFtIn(ov.length)) : 'none yet') + '</span></div>' +
+    '<div><span class="k">' + (multi ? 'Total area' : 'Floor area') + '</span><span class="v">' + fmtNum(floor, 0) + ' SF</span></div>' +
+    '<div><span class="k">Heated area</span><span class="v">' + fmtNum(heated, 0) + ' SF</span></div>' +
+    '<div><span class="k">Rooms</span><span class="v">' + rooms + '</span></div>' +
     '<div><span class="k">Wall run</span><span class="v">' + fmtNum(lf, 0) + ' LF</span></div>' +
     '<div><span class="k">Priced total</span><span class="v">' + (TK && TK.priced ? fmtMoney(TK.total) : 'not priced') + '</span></div>';
   $('#exBadge').hidden = !state.example;
 }
 
 /* ---------- panels ---------- */
-const TABS = [['rooms', 'Rooms'], ['design', 'Design'], ['takeoff', 'Takeoff'], ['checks', 'Checks'], ['export', 'Export']];
+const TABS = [['rooms', 'Rooms'], ['room', 'Room design'], ['design', 'Design'], ['takeoff', 'Takeoff'], ['checks', 'Checks'], ['export', 'Export']];
 function renderTabs() {
   const warns = CK ? CK.filter(c => c.sev === 'warn').length : 0;
   $('#tabs').innerHTML = TABS.map(t => '<button class="tab" role="tab" type="button" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + (t[0] === 'checks' && warns ? '<span class="n">' + warns + '</span>' : '') + '</button>').join('');
@@ -3012,6 +3952,7 @@ function renderPanel() {
   renderTabs();
   const el = $('#pane');
   if (tab === 'rooms') el.innerHTML = paneRooms();
+  else if (tab === 'room') { el.innerHTML = paneRoomDesign(); drawElev(); }
   else if (tab === 'design') el.innerHTML = paneDesign();
   else if (tab === 'takeoff') el.innerHTML = paneTakeoff();
   else if (tab === 'checks') el.innerHTML = paneChecks();
@@ -3019,7 +3960,7 @@ function renderPanel() {
 }
 function refresh(o) {
   o = o || {};
-  renderLayouts();
+  renderLayouts(); renderFloors();
   updateSummary(); draw(); renderInspector(); updateHistoryBtns();
   if (o.panel !== false) renderPanel(); else renderTabs();
   if (mode === '3d') rebuild3D();
@@ -3111,8 +4052,8 @@ function paneChecks() {
   const order = { warn: 0, info: 1, ok: 2 }, tagText = { warn: 'Fix', info: 'Check', ok: 'Done' };
   const items = CK.slice().sort((a, b) => order[a.sev] - order[b.sev]);
   return '<p class="note">Gaps found by comparing the plan to a typical scope for each room type. Tap an item tied to a room to jump to it.</p>' +
-    items.map(c => (c.roomId ? '<button type="button" class="ck ' + c.sev + '" data-goto="' + c.roomId + '">' : '<div class="ck ' + c.sev + '">') +
-      '<span class="tag">' + tagText[c.sev] + '</span><span class="t">' + esc(c.text) + '</span>' + (c.roomId ? '</button>' : '</div>')).join('');
+    items.map(c => (c.roomId || c.blockId ? '<button type="button" class="ck ' + c.sev + '"' + (c.floorId ? ' data-gofloor="' + c.floorId + '"' : '') + (c.blockId ? ' data-goblock="' + c.blockId + '"' : ' data-goto="' + c.roomId + '"') + '>' : '<div class="ck ' + c.sev + '">') +
+      '<span class="tag">' + tagText[c.sev] + '</span><span class="t">' + esc(c.text) + '</span>' + (c.roomId || c.blockId ? '</button>' : '</div>')).join('');
 }
 let exportText = '';
 let clearArmed = false;
@@ -3144,7 +4085,9 @@ pane.addEventListener('toggle', e => {
   if (d) { if (d.open) openRooms.add(d.dataset.room); else openRooms.delete(d.dataset.room); }
 }, true);
 pane.addEventListener('click', e => {
-  const gt = e.target.closest('[data-goto]');
+  const gt = e.target.closest('[data-goto],[data-goblock]');
+  if (gt && gt.dataset.gofloor && gt.dataset.gofloor !== state.activeFloor) { doFloor(gt.dataset.gofloor, true); }
+  if (gt && gt.dataset.goblock) { sel = { type: 'block', id: gt.dataset.goblock }; tab = 'checks'; refresh(); return; }
   if (gt) { sel = { type: 'room', id: gt.dataset.goto }; openRooms.add(gt.dataset.goto); tab = 'rooms'; refresh(); scrollToRoom(gt.dataset.goto); return; }
   const dm = e.target.closest('[data-delm]');
   if (dm) { mutate(() => { state.manual = state.manual.filter(m => m.id !== dm.dataset.delm); }); return; }
@@ -3273,6 +4216,228 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-ghost]')) { ghost = !ghost; renderLayouts(); draw(); }
 });
 
+/* ---------- floors ---------- */
+let floorEdit = false;
+function fmtRise(v) { return fmtFtIn(v); }
+function renderFloors() {
+  const el = $('#floors');
+  if (!el) return;
+  const act = floorOf(state, state.activeFloor), multi = state.floors.length > 1;
+  const list = state.floors.slice().reverse();
+  el.innerHTML = '<span class="lbl">Floor</span><span class="ltabs" role="tablist">' + list.map(f => '<button type="button" role="tab" class="ltab" data-floor="' + f.id + '" aria-selected="' + (f.id === state.activeFloor) + '">' + esc(f.name) + '</button>').join('') + '</span>' +
+    '<button type="button" class="chip-btn" data-fadd="above">+ Floor above</button><button type="button" class="chip-btn" data-fadd="below">+ Basement</button>' +
+    '<button type="button" class="chip-btn" data-fedit="1" aria-pressed="' + floorEdit + '">Floor settings</button>' +
+    (floorEdit && act ? '<span class="fedit"><label class="f">Name<input id="fl-name" value="' + esc(act.name) + '" aria-label="Floor name"></label><label class="f">Floor to floor<input class="mono" id="fl-rise" value="' + esc(fmtRise(act.rise)) + '" aria-label="Floor to floor height"></label>' +
+      (multi ? '<button type="button" class="btn danger" data-fdel="1">Remove floor</button>' : '') + '</span>' : '');
+}
+function afterFloorChange(msg) {
+  sel = null; pending = null; curSnap = null;
+  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+  if (msg) toast(msg);
+}
+function doFloor(id, quiet) {
+  if (!switchFloor(state, id)) return;
+  if (!quiet) afterFloorChange(); else { sel = null; recompute(); fitView(); renderTools(); renderCtx(); renderStrip(); }
+}
+function setFloorRise(fid, rise) {
+  const f = floorOf(state, fid); if (!f) return;
+  f.rise = rise;
+  for (const h of allHolders(state)) {
+    const c = contentOf(h, fid); if (!c) continue;
+    for (const b of c.blocks) if (b.kind === 'stair') { b.opts = b.opts || {}; b.opts.rise = rise; autoFitStair(b); }
+  }
+}
+document.addEventListener('click', e => {
+  const fl = e.target.closest('[data-floor]');
+  if (fl) { doFloor(fl.dataset.floor); return; }
+  const fa = e.target.closest('[data-fadd]');
+  if (fa) {
+    pushUndo();
+    const f = addFloor(state, fa.dataset.fadd, true);
+    switchFloor(state, f.id);
+    afterFloorChange('Added ' + f.name + '. Exterior walls were copied so the outline lines up.'); return;
+  }
+  if (e.target.closest('[data-fedit]')) { floorEdit = !floorEdit; renderFloors(); return; }
+  if (e.target.closest('[data-fdel]')) {
+    const f = floorOf(state, state.activeFloor);
+    if (window.confirm('Remove "' + f.name + '" and everything on it, in every layout? This cannot be undone.')) { pushUndo(); removeFloor(state, f.id); floorEdit = false; afterFloorChange(); }
+    return;
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'fl-name') { const f = floorOf(state, state.activeFloor); if (f) { pushUndo(); f.name = t.value.trim() || f.name; recompute(); scheduleSave(); refresh(); } return; }
+  if (t.id === 'fl-rise') {
+    const f = floorOf(state, state.activeFloor), v = parseLen(t.value, 'in');
+    if (!f) return;
+    if (!v || v < 60 || v > 180) { toast('Floor to floor must be 5 ft to 15 ft'); renderFloors(); return; }
+    pushUndo(); setFloorRise(f.id, v); recompute(); scheduleSave(); refresh(); toast('Stairs on this floor were resized to the new height');
+  }
+});
+
+
+/* ===== Room design: lay out one room (kitchen, bath, laundry), see it on the wall, check the clearances ===== */
+const rd = { room: '', P: { kitchen: {}, bath: {}, laundry: {} }, notes: {}, focus: true, wall: 0 };
+const RD_TYPES = { kitchen: 'kitchen', bathroom: 'bath', powder: 'bath', restroom: 'bath', laundry: 'laundry' };
+const rdVal = g => Object.assign({}, ROOMGEN_DEFAULTS[g], rd.P[g]);
+function rdRoom() {
+  if (sel && sel.type === 'room') rd.room = sel.id;
+  let r = AN.rooms.find(x => x.meta.id === rd.room);
+  if (!r) r = AN.rooms.find(x => RD_TYPES[x.meta.type]) || AN.rooms[0] || null;
+  if (r) rd.room = r.meta.id;
+  return r;
+}
+function rdSeg(label, group, key, items, cur) {
+  return '<div class="rdrow"><span class="fl">' + esc(label) + '</span><span class="seg2" role="group" aria-label="' + esc(label) + '">' +
+    items.map(it => '<button type="button" data-rdp="' + group + '.' + key + '" data-v="' + it[0] + '" aria-pressed="' + (String(cur) === String(it[0])) + '">' + esc(it[1]) + '</button>').join('') + '</span></div>';
+}
+const rdYN = (label, group, key, cur) => rdSeg(label, group, key, [[true, 'Yes'], [false, 'No']], !!cur);
+function rdControls(g) {
+  const v = rdVal(g);
+  if (g === 'kitchen') return rdSeg('Layout', g, 'layout', [['auto', 'Best fit'], ['one', 'One wall'], ['galley', 'Galley'], ['l', 'L shape'], ['u', 'U shape']], v.layout) +
+    rdYN('Island', g, 'island', v.island) + rdYN('Wall cabinets', g, 'uppers', v.uppers) + rdYN('Range hood', g, 'hood', v.hood) + rdYN('Dishwasher', g, 'dw', v.dw) +
+    rdYN('Pantry cabinet', g, 'pantry', v.pantry) + rdYN('Island pendants', g, 'pendants', v.pendants) +
+    rdSeg('Fridge', g, 'fridgeW', [[30, '30 in'], [33, '33 in'], [36, '36 in'], [42, '42 in']], v.fridgeW) + rdSeg('Range', g, 'rangeW', [[30, '30 in'], [36, '36 in']], v.rangeW);
+  if (g === 'bath') return rdSeg('Layout', g, 'layout', [['auto', 'Best fit'], ['tub', 'Tub'], ['shower', 'Shower'], ['tubshower', 'Tub and shower'], ['powder', 'Powder']], v.layout) +
+    rdSeg('Vanity', g, 'vanW', [[0, 'Best fit'], [24, '24'], [30, '30'], [36, '36'], [48, '48'], [60, '60'], [72, '72']], v.vanW) + rdYN('Double sinks when 60 in or more', g, 'double', v.double) +
+    rdSeg('Tub', g, 'tubW', [[60, '60 in'], [66, '66 in'], [72, '72 in']], v.tubW) + rdSeg('Shower', g, 'showerW', [[36, '36 in'], [42, '42 in'], [48, '48 in'], [60, '60 in']], v.showerW);
+  return rdYN('Wall cabinets', g, 'uppers', v.uppers);
+}
+function paneRoomDesign() {
+  const r = rdRoom();
+  if (!r) return '<p class="note">Draw walls that close into a room first, then come back here to lay it out.</p>';
+  const m = r.meta, g = RD_TYPES[m.type], tag = 'rd:' + m.id, gen = state.blocks.filter(b => b.gen === tag).length, all = state.blocks.filter(b => pointInPoly(b, r.poly)).length;
+  let h = '<p class="note">Pick a room and set what goes in it. Generate places cabinets, appliances and fixtures against the walls with the clearances checked. Everything it places is a normal block you can drag, resize or delete.</p>' +
+    '<label class="f">Room<select id="rd-room">' + AN.rooms.map(x => '<option value="' + x.meta.id + '"' + (x.meta.id === m.id ? ' selected' : '') + '>' + esc(x.meta.name) + ' (' + fmtNum(x.area, 0) + ' SF)</option>').join('') + '</select></label>';
+  if (!g) {
+    h += '<div class="rdnote">' + esc(m.name) + ' is set as ' + esc(ROOM_TYPES[m.type] || m.type) + '. Room design works on kitchens, bathrooms and laundry rooms. Set this room to:</div><div class="btnrow">' +
+      [['kitchen', 'Kitchen'], ['bathroom', 'Bathroom'], ['laundry', 'Laundry']].map(t => '<button type="button" class="btn" data-rdtype="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+    return h;
+  }
+  h += '<h3>' + ({ kitchen: 'Kitchen', bath: 'Bathroom', laundry: 'Laundry' })[g] + ' layout</h3>' + rdControls(g) +
+    '<div class="btnrow" style="margin-top:10px"><button type="button" class="btn primary" data-rdgen="1">' + (gen ? 'Generate again' : 'Generate layout') + '</button>' +
+    (gen ? '<button type="button" class="btn" data-rdclear="1">Clear generated (' + gen + ')</button>' : '') +
+    '<span class="seg2" role="group" aria-label="Focus on this room"><button type="button" data-rdfocus="1" aria-pressed="' + rd.focus + '">Focus room</button></span></div>' +
+    (all > gen ? '<p class="note">' + (all - gen) + ' other block' + (all - gen > 1 ? 's' : '') + ' in this room (placed by hand) stay put, and the layout works around them.</p>' : '');
+  for (const n of rd.notes[m.id] || []) h += '<div class="rdnote">' + esc(n) + '</div>';
+  const cks = CK.filter(c => c.roomId === m.id && (c.sev === 'warn' || /clear|aisle|triangle|landing|swing|door/i.test(c.text)));
+  if (cks.length) h += '<h3>Clearances</h3>' + cks.map(c => '<div class="ck ' + c.sev + '"><span class="tag">' + (c.sev === 'warn' ? 'Fix' : 'Check') + '</span><span class="t">' + esc(c.text) + '</span></div>').join('');
+  else if (gen) h += '<div class="ck ok"><span class="tag">Done</span><span class="t">No clearance problems found in this room.</span></div>';
+  const fr = roomFrame(state, r).filter(e => !e.zone);
+  if (fr.length) {
+    if (rd.wall >= fr.length) rd.wall = 0;
+    h += '<h3>Wall elevation</h3><span class="seg2" role="group" aria-label="Wall">' + fr.map((e, i) => '<button type="button" data-rdwall="' + i + '" aria-pressed="' + (i === rd.wall) + '">' + String.fromCharCode(65 + e.k) + ' ' + esc(fmtFtIn(e.L)) + '</button>').join('') + '</span>' +
+      '<canvas class="elev" id="rd-elev" aria-label="Elevation of the selected wall"></canvas><p class="note">Looking at the wall from inside the room. Letters match the plan.</p>';
+  }
+  return h;
+}
+function drawElev() {
+  const cvE = document.getElementById('rd-elev');
+  if (!cvE) return;
+  const r = rdRoom(); if (!r) return;
+  const fr = roomFrame(state, r).filter(e => !e.zone), e = fr[rd.wall];
+  if (!e) return;
+  const ratio = window.devicePixelRatio || 1, Wc = Math.max(240, cvE.clientWidth || 320), H = (state.settings.wallH || 96);
+  const pad = 22, sc = (Wc - pad * 2) / e.L, Hc = Math.round(H * sc + pad * 2 + 8);
+  cvE.style.height = Hc + 'px'; cvE.width = Math.round(Wc * ratio); cvE.height = Math.round(Hc * ratio);
+  const ctx = cvE.getContext('2d'); if (!ctx) return;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  const X = u => pad + u * sc, Y = y => Hc - pad - y * sc;
+  ctx.fillStyle = C.sheet; ctx.fillRect(0, 0, Wc, Hc);
+  ctx.fillStyle = C.tint[4]; ctx.globalAlpha = 0.5; ctx.fillRect(X(0), Y(H), e.L * sc, H * sc); ctx.globalAlpha = 1;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(e.L), Y(0)); ctx.stroke();
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.strokeRect(X(0), Y(H), e.L * sc, H * sc); ctx.setLineDash([]);
+  // openings
+  for (const op of e.ops) {
+    const o = op.o, sill = o.sill || 0, oh = o.h || (o.kind === 'window' ? 48 : 80);
+    ctx.fillStyle = o.kind === 'window' ? 'rgba(120,170,200,0.35)' : 'rgba(60,50,40,0.18)'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
+    ctx.fillRect(X(op.lo), Y(sill + oh), (op.hi - op.lo) * sc, oh * sc); ctx.strokeRect(X(op.lo), Y(sill + oh), (op.hi - op.lo) * sc, oh * sc);
+  }
+  // blocks near this wall, far ones first
+  const items = [];
+  for (const b of state.blocks) {
+    const def = BLOCKS[b.kind]; if (!def || !pointInPoly(b, r.poly)) continue;
+    const t = rad(b.rot), c = Math.cos(t), s2 = Math.sin(t);
+    const hu = (Math.abs(c * e.ux + s2 * e.uy)), hv = (Math.abs(-s2 * e.ux + c * e.uy));
+    for (const p of def.parts(b, bopts(b))) {
+      const q = localToWorld(b, p.x, p.z), u = (q.x - e.a.x) * e.ux + (q.y - e.a.y) * e.uy, v = (q.x - e.a.x) * e.nx + (q.y - e.a.y) * e.ny;
+      const a1 = Math.abs(c * e.ux + s2 * e.uy), a2 = Math.abs(-s2 * e.ux + c * e.uy);
+      const wu = (a1 * p.w + (1 - a1 * a1 > 0 ? Math.sqrt(1 - a1 * a1) : 0) * p.d), wv = (a2 * p.w + Math.sqrt(Math.max(0, 1 - a2 * a2)) * p.d);
+      void hu; void hv;
+      if (v - wv / 2 > 40 || p.y1 - p.y0 < 0.2) continue;
+      items.push({ u0: u - wu / 2, u1: u + wu / 2, y0: p.y0, y1: p.y1, v, c: p.c, op: p.o && p.o.opacity != null ? p.o.opacity : 1 });
+    }
+  }
+  items.sort((a, b) => b.v - a.v);
+  for (const it of items) {
+    ctx.globalAlpha = it.op; ctx.fillStyle = it.c; ctx.fillRect(X(it.u0), Y(it.y1), (it.u1 - it.u0) * sc, (it.y1 - it.y0) * sc);
+    ctx.globalAlpha = 0.45; ctx.strokeStyle = C.ink; ctx.lineWidth = 0.8; ctx.strokeRect(X(it.u0), Y(it.y1), (it.u1 - it.u0) * sc, (it.y1 - it.y0) * sc);
+  }
+  ctx.globalAlpha = 1; ctx.fillStyle = C.muted; ctx.font = '11px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'); ctx.textAlign = 'center';
+  ctx.fillText(fmtFtIn(e.L), X(e.L / 2), Hc - 6);
+}
+/* on the plan: dim everything outside the room, letter the walls, show door swings and the walking room in front of each block */
+function drawFocus(ctx) {
+  if (tab !== 'room' || !rd.focus || mode === '3d') return;
+  const r = AN.rooms.find(x => x.meta.id === rd.room); if (!r) return;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, cssW, cssH);
+  r.poly.forEach((p, i) => { const q = W2S(p); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath();
+  ctx.fillStyle = C.sheet; ctx.globalAlpha = 0.62; ctx.fill('evenodd'); ctx.globalAlpha = 1;
+  const list = obstacleList(state), fr = roomFrame(state, r);
+  for (const b of state.blocks) {
+    if (!BLOCKS[b.kind] || !solidBlock(b) || !pointInPoly(b, r.poly) || BLOCKS[b.kind].stair) continue;
+    const need = b.kind === 'island' ? 36 : 30, got = Math.min(sideClear(b, 'front', list.filter(o => o.id !== b.id), 60), 60);
+    if (b.kind === 'upper') continue;
+    const zone = [[-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [b.w / 2, b.d / 2 + need], [-b.w / 2, b.d / 2 + need]].map(p => W2S(localToWorld(b, p[0], p[1])));
+    ctx.fillStyle = got >= need ? 'rgba(46,125,90,0.16)' : 'rgba(200,90,40,0.28)';
+    ctx.beginPath(); zone.forEach((q, i) => { if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(120,110,100,0.18)'; ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+  for (const e of fr) for (const op of e.ops) for (const poly of swingPolys(e, op)) {
+    ctx.beginPath(); poly.forEach((p, i) => { const q = W2S(p); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const e of fr) {
+    if (e.zone) continue;
+    const mx = (e.a.x + e.b.x) / 2 + e.nx * 14, my = (e.a.y + e.b.y) / 2 + e.ny * 14, q = W2S({ x: mx, y: my }), on = e.k === rd.wall && tab === 'room';
+    ctx.fillStyle = on ? C.sel : C.sheet; ctx.strokeStyle = on ? C.sel : C.muted; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(q.x, q.y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = on ? '#fff' : C.ink; ctx.font = '700 11px sans-serif'; ctx.fillText(String.fromCharCode(65 + e.k), q.x, q.y + 0.5);
+  }
+  ctx.restore();
+}
+function rdGenerate() {
+  const r = rdRoom(); if (!r) return;
+  const id = r.meta.id, tag = 'rd:' + id, g = genRoomDesign(state, state, r, rd.P, activeStyle());
+  rd.notes[id] = g.notes || [];
+  if (!g.blocks.length) { renderPanel(); toast(g.notes && g.notes[0] ? g.notes[0] : 'Nothing could be placed'); return; }
+  mutate(() => { state.blocks = state.blocks.filter(b => b.gen !== tag).concat(g.blocks); }, { panel: false });
+  sel = { type: 'room', id }; refresh();
+  toast('Placed ' + g.blocks.length + ' blocks');
+}
+document.addEventListener('click', e => {
+  const pb = e.target.closest('[data-rdp]');
+  if (pb) {
+    const [g, k] = pb.dataset.rdp.split('.'), raw = pb.dataset.v;
+    rd.P[g][k] = raw === 'true' ? true : raw === 'false' ? false : /^-?\d+(\.\d+)?$/.test(raw) ? +raw : raw;
+    renderPanel(); return;
+  }
+  if (e.target.closest('[data-rdgen]')) { rdGenerate(); return; }
+  if (e.target.closest('[data-rdclear]')) {
+    const r = rdRoom(); if (!r) return; const tag = 'rd:' + r.meta.id;
+    mutate(() => { state.blocks = state.blocks.filter(b => b.gen !== tag); }, { panel: false }); rd.notes[r.meta.id] = []; renderPanel(); return;
+  }
+  if (e.target.closest('[data-rdfocus]')) { rd.focus = !rd.focus; renderPanel(); draw(); return; }
+  const rw = e.target.closest('[data-rdwall]'); if (rw) { rd.wall = +rw.dataset.rdwall; renderPanel(); draw(); return; }
+  const rt = e.target.closest('[data-rdtype]');
+  if (rt) { const r = rdRoom(); if (r) mutate(() => { r.meta.type = rt.dataset.rdtype; }); return; }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'rd-room') { rd.room = e.target.value; sel = { type: 'room', id: rd.room }; rd.wall = 0; refresh(); }
+});
+
 /* ===== Design UI: palette, 2D symbols, inspector, Design tab ===== */
 opts.bgroup = 'Kitchen'; opts.bkind = 'base';
 const activeStyle = () => (activeLayout(state) || {}).style || '';
@@ -3304,10 +4469,19 @@ function drawBlock(ctx, b, selected) {
     if (p.w * s >= 2 || p.d * s >= 2) { ctx.globalAlpha = 0.5; ctx.strokeStyle = C.ink; ctx.lineWidth = 1 / s; if (hi) ctx.setLineDash([4 / s, 3 / s]); ctx.stroke(); ctx.setLineDash([]); }
   }
   ctx.globalAlpha = 1;
+  if (def.stair) {
+    const g = stairGeom(b, o), pa = g.path;
+    ctx.strokeStyle = C.ink; ctx.fillStyle = C.ink; ctx.lineWidth = 1.6 / s; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); pa.forEach((q, i) => { if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.stroke();
+    const e = pa[pa.length - 1], f = pa[pa.length - 2], an = Math.atan2(e[1] - f[1], e[0] - f[0]), hs = 7 / s;
+    ctx.beginPath(); ctx.moveTo(e[0], e[1]); ctx.lineTo(e[0] - hs * Math.cos(an - 0.45), e[1] - hs * Math.sin(an - 0.45)); ctx.lineTo(e[0] - hs * Math.cos(an + 0.45), e[1] - hs * Math.sin(an + 0.45)); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(pa[0][0], pa[0][1], 2.6 / s, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   if (selected) { ctx.strokeStyle = C.sel; ctx.lineWidth = 2.2 / s; ctx.setLineDash([6 / s, 4 / s]); ctx.strokeRect(-b.w / 2 - 1.5, -b.d / 2 - 1.5, b.w + 3, b.d + 3); ctx.setLineDash([]); }
   ctx.restore();
   if (b.w * s > 40 && Math.min(b.w, b.d) * s > 16 && !isCeil(b)) {
-    const txt = b.name ? b.name : (def.cat === 'Furniture' ? def.label : def.label.split(' ')[0] + ' ' + Math.round(b.w) + '"');
+    const txt = b.name ? b.name : def.stair ? 'UP' : (def.cat === 'Furniture' ? def.label : def.label.split(' ')[0] + ' ' + Math.round(b.w) + '"');
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     halo(ctx, txt, c0.x, c0.y, C.muted, Math.max(8, Math.min(11, s * 5)), true, false);
   }
@@ -3354,6 +4528,10 @@ function dupBlock(b) {
   mutate(() => { state.blocks.push(c); });
   sel = { type: 'block', id: c.id }; refresh();
 }
+function stairInfo(b) {
+  const g = stairGeom(b, bopts(b)), fl = floorOf(state, state.activeFloor);
+  return g.R + ' risers at ' + fmtNum(g.rh, 2) + ' in, ' + g.treads + ' treads' + (g.landings ? ', ' + g.landings + ' landing' : '') + ', shallowest tread ' + fmtNum(g.minTread, 1) + ' in, ' + fmtNum(g.minWidth, 0) + ' in wide. Rise is the floor to floor height of ' + esc(fl ? fl.name : 'this floor') + '. Resizing the block by hand changes the tread depth.';
+}
 function blockInspector(b) {
   const def = BLOCKS[b.kind];
   return '<div class="insp-h"><strong>' + esc(def.label) + '</strong><span class="btnrow"><button type="button" class="btn" data-brot="-90" aria-label="Rotate left">&#8634; 90&deg;</button><button type="button" class="btn" data-brot="90" aria-label="Rotate right">&#8635; 90&deg;</button><button type="button" class="btn" data-bdup="1">Duplicate</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
@@ -3361,6 +4539,7 @@ function blockInspector(b) {
     '<label class="f">Width (in)<input class="mono" id="b-w" inputmode="decimal" list="bsz" value="' + b.w + '"></label>' +
     '<label class="f">Depth (in)<input class="mono" id="b-d" inputmode="decimal" value="' + b.d + '"></label>' +
     '<label class="f">Label<input id="b-name" placeholder="e.g. Pantry" value="' + esc(b.name || '') + '"></label></div>' +
+    (def.stair ? '<div class="btnrow"><button type="button" class="btn" data-stfit="1">Fit to floor height</button></div><p class="note">' + stairInfo(b) + '</p>' : '') +
     '<datalist id="bsz">' + (def.sizes || []).map(v => '<option value="' + v + '">').join('') + '</datalist>' +
     '<p class="note">Drag it on the plan to move it. ' + (def.mount === 'wall' ? 'It snaps flush to the nearest wall and lines up against the next block. ' : def.mount === 'host' ? 'Drop it on a cabinet and it sits on top. ' : '') + 'All choices (style, colors, finish) are in the Design tab.</p>';
 }
@@ -3377,6 +4556,7 @@ function optionsHTML(b) {
   let h = '<div class="grid2">';
   for (const d of def.opts) {
     if (d.t === 'color') h += '<div class="f wide"><span class="fl">' + esc(d.label) + ': <b>' + esc(palName(d.pal, o[d.k])) + '</b></span>' + swatches(d.k, d.pal, o[d.k]) + '</div>';
+    else if (d.t === 'num') h += '<label class="f">' + esc(d.label) + '<input class="mono" type="number" inputmode="decimal" min="' + d.min + '" max="' + d.max + '" step="0.25" data-bn="' + d.k + '" value="' + o[d.k] + '"></label>';
     else h += '<label class="f">' + esc(d.label) + '<select data-bo="' + d.k + '">' + d.v.map(v => '<option value="' + v[0] + '"' + (String(v[0]) === String(o[d.k]) ? ' selected' : '') + '>' + esc(v[1]) + '</option>').join('') + '</select></label>';
   }
   return h + '</div>';
@@ -3429,7 +4609,7 @@ function setBlockOpt(b, k, v) {
   mutate(() => {
     b.opts = b.opts || {}; b.opts[k] = v;
     if (k === 'top') { const pal = topPal(v), cur = b.opts.topColor; if (!cur || !(PAL[pal] || []).some(p => p[1].toLowerCase() === String(cur).toLowerCase())) b.opts.topColor = topDef(v); }
-    if (k === 'type' && b.kind === 'tub') { /* freestanding tubs ignore the surround */ }
+    if (BLOCKS[b.kind].stair && (k === 'shape' || k === 'sw' || k === 'tread' || k === 'rise')) { autoFitStair(b); snapBlock(b); }
   }, { panel: false });
   renderPanel();
 }
@@ -3440,8 +4620,9 @@ document.addEventListener('click', e => {
   if (rs) {
     const L = activeLayout(state); pushUndo();
     L.style = rs.dataset.restyle; let n = 0;
-    for (const b of state.blocks) n += applyStyleToBlock(b, L.style);
-    recompute(); scheduleSave(); refresh(); toast('Applied ' + STYLE_PRESETS[L.style].name + ' to ' + state.blocks.length + ' blocks'); return;
+    const all = holderBlocks(state);
+    for (const b of all) n += applyStyleToBlock(b, L.style);
+    recompute(); scheduleSave(); refresh(); toast('Applied ' + STYLE_PRESETS[L.style].name + ' to ' + all.length + ' blocks'); return;
   }
   if (e.target.closest('[data-lest]')) { mutate(() => { state.estimateLayout = activeLayout(state).id; }); return; }
   if (e.target.closest('[data-ldup]')) { makeConcept(state.activeLayout, activeLayout(state).style); return; }
@@ -3449,6 +4630,7 @@ document.addEventListener('click', e => {
   const bs = e.target.closest('[data-bsel]'); if (bs) { sel = { type: 'block', id: bs.dataset.bsel }; refresh(); return; }
   const sw = e.target.closest('[data-bc]');
   if (sw && sel && sel.type === 'block') { const b = blockById(sel.id); if (b) setBlockOpt(b, sw.dataset.bc, sw.dataset.v); return; }
+  if (e.target.closest('[data-stfit]') && sel && sel.type === 'block') { const b = blockById(sel.id); if (b) { mutate(() => { const fl = floorOf(state, state.activeFloor); b.opts = b.opts || {}; if (fl) b.opts.rise = fl.rise; autoFitStair(b); snapBlock(b); }, { panel: false }); renderPanel(); } return; }
   if (e.target.closest('[data-matchcab]') && sel && sel.type === 'block') {
     const src = blockById(sel.id), so = bopts(src), roles = { cabStyle: 1, cabColor: 1, pull: 1, metal: 1 };
     pushUndo(); let n = 0;
@@ -3477,6 +4659,11 @@ document.addEventListener('change', e => {
   if (!sel || sel.type !== 'block') return;
   const b = blockById(sel.id); if (!b) return;
   if (t.dataset.bo) { setBlockOpt(b, t.dataset.bo, t.value); return; }
+  if (t.dataset.bn) {
+    const d = BLOCKS[b.kind].opts.find(x => x.k === t.dataset.bn), v = parseFloat(t.value);
+    if (!d || !(v >= d.min && v <= d.max)) { toast(d ? d.label + ' must be ' + d.min + ' to ' + d.max : 'Out of range'); renderPanel(); return; }
+    setBlockOpt(b, t.dataset.bn, v); return;
+  }
   if (t.dataset.bcc) { setBlockOpt(b, t.dataset.bcc, t.value); return; }
   if (t.id === 'b-w') { const v = parseLen(t.value, 'in'); if (!v || v < 3 || v > 400) { toast('Width must be 3 to 400 in'); renderInspector(); return; } mutate(() => { b.w = v; snapBlock(b); }, { panel: false }); renderInspector(); }
   else if (t.id === 'b-d') { const v = parseLen(t.value, 'in'); if (!v || v < 1 || v > 400) { toast('Depth must be 1 to 400 in'); renderInspector(); return; } mutate(() => { b.d = v; snapBlock(b); }, { panel: false }); renderInspector(); }
@@ -3485,7 +4672,7 @@ document.addEventListener('change', e => {
 
 /* ===== 3D view: reads the same model as the 2D plan ===== */
 let mode = '2d';
-const v3 = { renderer: null, scene: null, camera: null, group: null, raf: 0, ceil: false, th: -0.75, ph: 0.95, r: 900, tx: 0, tz: 0, ptrs: new Map(), g: null, pinch: null };
+const v3 = { renderer: null, scene: null, camera: null, group: null, raf: 0, ceil: false, th: -0.75, ph: 0.95, r: 900, tx: 0, tz: 0, ty: 30, upTo: null, ptrs: new Map(), g: null, pinch: null };
 const cv3 = $('#cv3');
 
 /* ---------- looks: how each finish is drawn ---------- */
@@ -3672,7 +4859,24 @@ function buildDevice3D(G, f) {
   G.add(m);
 }
 
+/* whole building: one group per floor at its height. Each floor is built by pointing the plan globals at that floor's view. */
 function build3D() {
+  const G = new THREE.Group();
+  const parts = PARTS.length ? PARTS : null;
+  if (!parts || parts.length < 2) { G.add(buildFloor3D()); return G; }
+  const keepS = state, keepA = AN, lim = v3.upTo == null ? parts.length - 1 : Math.min(v3.upTo, parts.length - 1);
+  try {
+    for (const p of parts) {
+      if (p.index > lim) continue;
+      state = p.st; AN = p.an;
+      const g = buildFloor3D();
+      g.position.y = floorBase(keepS, p.index);
+      G.add(g);
+    }
+  } finally { state = keepS; AN = keepA; }
+  return G;
+}
+function buildFloor3D() {
   const G = new THREE.Group();
   const S = state.settings;
   const byId = {}; state.walls.forEach(w => { byId[w.id] = w; });
@@ -3698,7 +4902,12 @@ function build3D() {
     const m = r.meta, f = m.fin || {};
     // floor, out to the wall centerlines so doorways have no gap
     const fs = new THREE.Shape(r.poly.map(p => new THREE.Vector2(p.x, p.y)));
+    for (const sb of (AN.belowStairs || [])) {
+      const cs = stairCorners(sb, 0.5);
+      if (cs.every(q => pointInPoly(q, r.poly))) fs.holes.push(new THREE.Path(cs.slice().reverse().map(q => new THREE.Vector2(q.x, q.y))));
+    }
     const fg = new THREE.ShapeGeometry(fs); fg.rotateX(Math.PI / 2);
+    if ((AN.index || 0) > 0) { const sg = new THREE.ExtrudeGeometry(fs, { depth: 9, bevelEnabled: false }); sg.rotateX(Math.PI / 2); const sm = new THREE.Mesh(sg, solid('#d8d4cb')); sm.position.y = -0.2; G.add(sm); }
     const fm = new THREE.Mesh(fg, matFor('floor', f.floor)); fm.userData.roomId = m.id; G.add(fm);
     if (S && state.settings && v3.ceil) {
       const cg = new THREE.ShapeGeometry(new THREE.Shape(r.poly.map(p => new THREE.Vector2(p.x, p.y)))); cg.rotateX(Math.PI / 2);
@@ -3799,7 +5008,10 @@ function size3D() {
 function frame3D(preset) {
   const b = AN.bbox || { minx: 0, miny: 0, maxx: 240, maxy: 180 };
   v3.tx = (b.minx + b.maxx) / 2; v3.tz = (b.miny + b.maxy) / 2;
-  const span = Math.max(b.maxx - b.minx, b.maxy - b.miny, 120);
+  const nf = v3.upTo == null ? state.floors.length : Math.min(v3.upTo + 1, state.floors.length);
+  const H = floorBase(state, nf - 1) + 106;
+  v3.ty = nf > 1 ? H * 0.35 : 30;
+  const span = Math.max(b.maxx - b.minx, b.maxy - b.miny, H * 0.8, 120);
   if (preset === 'top') { v3.ph = 0.03; v3.th = Math.PI / 2; v3.r = span * 1.5; }
   else if (preset === 'low') { v3.ph = 1.28; v3.th = -0.9; v3.r = span * 1.05; }
   else { v3.ph = 0.95; v3.th = -0.75; v3.r = span * 1.45; }
@@ -3810,7 +5022,7 @@ function render3D() {
     v3.raf = 0;
     const s = Math.sin(v3.ph), c = v3.camera;
     c.position.set(v3.tx + v3.r * s * Math.cos(v3.th), v3.r * Math.cos(v3.ph), v3.tz + v3.r * s * Math.sin(v3.th));
-    c.lookAt(v3.tx, 30, v3.tz);
+    c.lookAt(v3.tx, v3.ty, v3.tz);
     v3.renderer.render(v3.scene, c);
   });
 }
