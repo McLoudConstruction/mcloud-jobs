@@ -2814,6 +2814,7 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const ICONS = {
+  brk: '<path d="M3 12h6M15 12h6"/><path d="M12 6v12"/><circle cx="12" cy="12" r="2"/>',
   trace: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 15l4-4 4 4 3-3 5 5"/><circle cx="15.5" cy="9" r="1.2"/>',
   select: '<path d="M6 3l12 8-5.5 1.5L9.5 19z"/>',
   wall: '<path d="M4 19L20 5" stroke-width="4.5"/>',
@@ -2891,7 +2892,40 @@ let tab = 'rooms';
 const openRooms = new Set();
 const opts = { thick: 4.5, doorKind: 'door', doorW: 32, winW: 36, item: 'outlet' };
 const isZone = w => w.t <= 0.6;
-let breakMode = false; // next tap on a wall breaks it in two
+let breakMode = false; // insert-break mode: hover a wall to see both sides, click to insert the point
+let breakHover = null;
+function breakHoverAt(p) {
+  const q = S2W(p); let best = null, bd = 18 / view.s;
+  for (const wl of state.walls) { const sd = segDist(q, wl.a, wl.b); if (sd.d < bd) { bd = sd.d; best = { wl, sd }; } }
+  if (!best) return null;
+  const L = wlen(best.wl); if (L < 8) return null;
+  const st = state.settings.snap || 6, ux = (best.wl.b.x - best.wl.a.x) / L, uy = (best.wl.b.y - best.wl.a.y) / L;
+  const d = Math.max(3, Math.min(L - 3, Math.round(best.sd.t * L / st) * st));
+  return { id: best.wl.id, d, L, ux, uy, x: best.wl.a.x + ux * d, y: best.wl.a.y + uy * d };
+}
+function drawBreakHover(ctx) {
+  const h = breakHover; if (!breakMode || !h) return;
+  const wl = state.walls.find(x => x.id === h.id); if (!wl) return;
+  const a = W2S(wl.a), b = W2S(wl.b), m = W2S(h);
+  let nx = -h.uy, ny = h.ux; if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
+  const off = 22;
+  ctx.save();
+  ctx.strokeStyle = C.sel; ctx.fillStyle = C.sel; ctx.globalAlpha = 0.45; ctx.lineWidth = 4; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.4;
+  for (const [f, t, v] of [[a, m, h.d], [m, b, h.L - h.d]]) {
+    const fx = f.x + nx * off, fy = f.y + ny * off, tx = t.x + nx * off, ty = t.y + ny * off;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty);
+    ctx.moveTo(f.x + nx * (off - 5), f.y + ny * (off - 5)); ctx.lineTo(f.x + nx * (off + 5), f.y + ny * (off + 5));
+    ctx.moveTo(t.x + nx * (off - 5), t.y + ny * (off - 5)); ctx.lineTo(t.x + nx * (off + 5), t.y + ny * (off + 5));
+    ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    halo(ctx, fmtFtIn(v), (fx + tx) / 2, (fy + ty) / 2, C.sel, 12, true, true);
+  }
+  ctx.beginPath(); ctx.arc(m.x, m.y, 6, 0, Math.PI * 2); ctx.fillStyle = C.sheet; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(m.x, m.y, 2.5, 0, Math.PI * 2); ctx.fillStyle = C.sel; ctx.fill();
+  ctx.restore();
+}
 let UL = null, ulMode = '', ulPts = []; // trace image underlay (kept in this session, not saved with the plan)
 const view = { ox: 0, oy: 0, s: 1, init: false };
 let cssW = 0, cssH = 0, dpr = 1, C = null;
@@ -3327,6 +3361,7 @@ function draw() {
     const w = state.walls.find(x => x.id === sel.id);
     if (w) for (const e of [w.a, w.b]) { const q = W2S(e); ctx.fillStyle = C.sheet; ctx.strokeStyle = C.sel; ctx.lineWidth = 2; ctx.beginPath(); ctx.rect(q.x - 6, q.y - 6, 12, 12); ctx.fill(); ctx.stroke(); }
   }
+  drawBreakHover(ctx);
   // drawing preview
   if (tool === 'room') {
     if (pending && curSnap) {
@@ -3516,6 +3551,113 @@ function breakWall(wallId, dists) {
   return { n, blocked };
 }
 /* move whole walls: walls attached at their ends stretch to follow, and walls that end partway along them are carried too */
+/* ---- moving walls and rooms ---- */
+const r2d = v => Math.round(v * 100) / 100;
+const wlen = w => Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+/* pulling a wall: ends meeting a continuing (collinear) wall get a jog wall so the step forms an L; corner walls stretch */
+function prepWallPull(mv) {
+  const W = state.walls.find(x => x.id === mv.ids[0]); mv.jogs = []; mv.moved = [mv.ids[0]];
+  const pts = new Set([W.a, W.b]);
+  if (!(state.settings.follow || wallInRoom(W.id))) { mv.pts = Array.from(pts); return; }
+  const g = wallGeom(W), skip = new Set();
+  const colin = v => { const gv = wallGeom(v); return Math.abs(gv.ux * g.uy - gv.uy * g.ux) < 0.02; };
+  for (const end of ['a', 'b']) {
+    const e = W[end], k = ptKey(e.x, e.y), att = [];
+    for (const v of state.walls) { if (v === W) continue; for (const ve of [v.a, v.b]) if (ptKey(ve.x, ve.y) === k) att.push({ v, ve }); }
+    const col = att.filter(o => colin(o.v));
+    if (col.length) {
+      const J = Object.assign({}, JSON.parse(JSON.stringify(W)), { id: uid(state, 'w'), a: { x: e.x, y: e.y }, b: { x: e.x, y: e.y } });
+      state.walls.push(J); pts.add(J.b); mv.jogs.push(J.id); mv.moved.push(J.id); col.forEach(o => skip.add(o.ve));
+    }
+    att.filter(o => !colin(o.v)).forEach(o => pts.add(o.ve));
+  }
+  for (const v of state.walls) { if (v === W || mv.jogs.indexOf(v.id) >= 0) continue; for (const ve of [v.a, v.b]) if (!skip.has(ve) && !pts.has(ve) && segDist(ve, W.a, W.b).d < 0.75) pts.add(ve); }
+  mv.pts = Array.from(pts);
+}
+/* moving a room: it leaves its neighbours behind. Walls it shared are copied so the neighbours stay closed. */
+function prepRoomDetach(mv) {
+  const rm = AN.rooms.find(x => x.meta.id === mv.meta); mv.pts = []; mv.moved = [];
+  if (!rm) return;
+  const otherSegs = new Set(), edgeWalls = new Set();
+  for (const o of AN.rooms) for (const e of o.edges) { edgeWalls.add(e.seg.wallId); if (o !== rm) otherSegs.add(e.seg.id); }
+  const origIds = new Set(state.walls.map(w => w.id)), byWall = new Map();
+  for (const e of rm.edges) { if (!byWall.has(e.seg.wallId)) byWall.set(e.seg.wallId, []); byWall.get(e.seg.wallId).push(e.seg); }
+  const descs = [];
+  for (const [wid, sgs] of byWall) {
+    const w = state.walls.find(x => x.id === wid); if (!w) continue;
+    const g = wallGeom(w), cuts = new Set();
+    for (const sg of sgs) {
+      descs.push({ mx: w.a.x + g.ux * (sg.start + sg.end) / 2, my: w.a.y + g.uy * (sg.start + sg.end) / 2, len: sg.end - sg.start, shared: otherSegs.has(sg.id) });
+      if (sg.start > 0.5) cuts.add(r2d(sg.start)); if (sg.end < g.L - 0.5) cuts.add(r2d(sg.end));
+    }
+    Array.from(cuts).sort((a, b) => b - a).forEach(d => splitWallAt(wid, d));
+  }
+  const ids = [];
+  for (const d of descs) {
+    const w = state.walls.find(x => ids.indexOf(x.id) < 0 && segDist({ x: d.mx, y: d.my }, x.a, x.b).d < 0.3 && Math.abs(wlen(x) - d.len) < 1.5);
+    if (!w) continue;
+    if (d.shared) { const c = JSON.parse(JSON.stringify(w)); c.id = uid(state, 'w'); state.walls.push(c); ids.push(c.id); }
+    else ids.push(w.id);
+  }
+  for (const w of state.walls) { // free-standing walls inside the room go with it
+    if (ids.indexOf(w.id) >= 0 || edgeWalls.has(w.id) || !origIds.has(w.id)) continue;
+    if (pointInPoly({ x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 }, rm.poly)) ids.push(w.id);
+  }
+  const set = new Set(ids), pts = [];
+  for (const w of state.walls) if (set.has(w.id)) { w.a = { x: w.a.x, y: w.a.y }; w.b = { x: w.b.x, y: w.b.y }; pts.push(w.a, w.b); }
+  mv.pts = pts; mv.moved = ids;
+  const sx = new Set(), sy = new Set();
+  for (const w of state.walls) if (!set.has(w.id)) for (const e of [w.a, w.b]) { sx.add(e.x); sy.add(e.y); }
+  mv.sx = Array.from(sx); mv.sy = Array.from(sy);
+}
+/* room names and settings follow their room, even while the shape is temporarily messy mid-drag */
+function restoreMetas(mv) {
+  if (!mv.metaSnap) return;
+  state.rooms = mv.metaSnap.map(o => { o.m.labelPt = o.lp ? (o.m.id === mv.meta ? { x: o.lp.x + mv.tx, y: o.lp.y + mv.ty } : { x: o.lp.x, y: o.lp.y }) : null; return o.m; });
+}
+function prepMove(mv) {
+  if (mv.meta) { mv.metaSnap = (state.rooms || []).map(m => ({ m, lp: m.labelPt ? { x: m.labelPt.x, y: m.labelPt.y } : null })); prepRoomDetach(mv); } else prepWallPull(mv);
+  mv.base = mv.pts.map(e => ({ o: e, x: e.x, y: e.y }));
+}
+function applyMove(mv, dx, dy) { for (const b of mv.base) { b.o.x = r2d(b.x + dx); b.o.y = r2d(b.y + dy); } }
+/* where a moved wall lies on top of another wall, keep just one */
+function mergeOverlaps(movedIds) {
+  for (const id of movedIds) {
+    const w = state.walls.find(x => x.id === id); if (!w) continue;
+    const L = wlen(w); if (L < 1) continue;
+    const ux = (w.b.x - w.a.x) / L, uy = (w.b.y - w.a.y) / L, cov = [];
+    for (const v of state.walls) {
+      if (v === w || movedIds.indexOf(v.id) >= 0) continue;
+      const off = e => Math.abs((e.x - w.a.x) * -uy + (e.y - w.a.y) * ux);
+      if (off(v.a) > 0.5 || off(v.b) > 0.5) continue;
+      const t1 = (v.a.x - w.a.x) * ux + (v.a.y - w.a.y) * uy, t2 = (v.b.x - w.a.x) * ux + (v.b.y - w.a.y) * uy;
+      const lo = Math.max(0, Math.min(t1, t2)), hi = Math.min(L, Math.max(t1, t2));
+      if (hi - lo > 1) cov.push([lo, hi]);
+    }
+    if (!cov.length) continue;
+    cov.sort((a, b) => a[0] - b[0]);
+    const un = [cov[0].slice()];
+    for (const c of cov.slice(1)) { const l = un[un.length - 1]; if (c[0] <= l[1] + 0.5) l[1] = Math.max(l[1], c[1]); else un.push(c.slice()); }
+    const ox = w.a.x, oy = w.a.y, mine = new Set([id]);
+    for (const [lo, hi] of un.slice().reverse()) {
+      if (hi < L - 0.5) { const r = splitWallAt(id, hi); if (Array.isArray(r)) mine.add(r[1]); }
+      if (lo > 0.5) { const r = splitWallAt(id, lo); if (Array.isArray(r)) mine.add(r[1]); }
+    }
+    const gone = new Set();
+    for (const [lo, hi] of un) {
+      const m = { x: ox + ux * (lo + hi) / 2, y: oy + uy * (lo + hi) / 2 };
+      const piece = state.walls.find(x => mine.has(x.id) && !gone.has(x.id) && segDist(m, x.a, x.b).d < 0.3 && Math.abs(wlen(x) - (hi - lo)) < 1.5);
+      if (piece) gone.add(piece.id);
+    }
+    if (gone.size) { state.walls = state.walls.filter(x => !gone.has(x.id)); state.openings = state.openings.filter(o => !gone.has(o.wallId)); }
+  }
+}
+function finishMove(mv) {
+  if (!mv || !mv.moved) return;
+  if (mv.jogs) { const dead = new Set(state.walls.filter(w => mv.jogs.indexOf(w.id) >= 0 && wlen(w) < 0.5).map(w => w.id)); if (dead.size) state.walls = state.walls.filter(w => !dead.has(w.id)); }
+  mergeOverlaps(mv.moved);
+  restoreMetas(mv);
+}
 /* rooms are protected: a wall or corner that belongs to a room keeps its neighbours attached when dragged */
 function wallInRoom(id) { return AN.rooms.some(r => r.edges.some(e => e.seg.wallId === id)); }
 function nodeInRoom(pt) {
@@ -3598,12 +3740,14 @@ cv.addEventListener('pointermove', e => {
     draw(); return;
   }
   if (!g) {
+    if (e.pointerType === 'mouse' && breakMode) { breakHover = breakHoverAt(p); draw(); return; }
     if (e.pointerType === 'mouse' && (tool === 'wall' || tool === 'room')) { curSnap = snapPt(S2W(p), { from: pending }); draw(); }
     return;
   }
   const dist = Math.hypot(p.x - g.start.x, p.y - g.start.y);
   if (dist > 6) g.moved = true;
   if (!g.moved) return;
+  if (breakMode) { breakHover = breakHoverAt(p); draw(); return; }
   if (g.mode === 'ul' && UL) { UL.x += (p.x - g.last.x) / view.s; UL.y += (p.y - g.last.y) / view.s; g.last = p; draw(); return; }
   if (tool === 'wall') { curSnap = snapPt(S2W(p), { from: pending || snapPt(S2W(g.start)) }); draw(); return; }
   if (tool === 'room') { if (!pending) { pending = snapPt(S2W(g.start)); g.dragRoom = true; } curSnap = snapPt(S2W(p)); draw(); return; }
@@ -3625,9 +3769,9 @@ cv.addEventListener('pointermove', e => {
       const rm = AN.rooms.find(x => x.meta.id === g.hit.id);
       if (rm) {
         g.mode = 'roommove'; pushUndo();
-        g.mv = { meta: rm.meta.id, ids: Array.from(new Set(rm.edges.map(e => e.seg.wallId))), tx: 0, ty: 0,
+        g.mv = { meta: rm.meta.id, tx: 0, ty: 0,
           fx: state.fixtures.filter(f => pointInPoly(f, rm.poly)).map(f => f.id), bl: state.blocks.filter(b => pointInPoly(b, rm.poly)).map(b => b.id) };
-        toast('Moving the room. Walls shared with other rooms stretch to follow.');
+        toast('Moving the room on its own. Its walls snap to neighbouring walls and merge into one.');
       } else g.mode = 'pan';
     }
     else g.mode = 'pan';
@@ -3638,14 +3782,21 @@ cv.addEventListener('pointermove', e => {
     let dx = q.x - s0.x, dy = q.y - s0.y;
     if (g.mode === 'wallmove') { const t = Math.round((dx * mv.nx + dy * mv.ny) / st) * st; dx = t * mv.nx; dy = t * mv.ny; }
     else { dx = Math.round(dx / st) * st; dy = Math.round(dy / st) * st; }
+    if (!mv.pts && (dx || dy)) prepMove(mv);
+    if (g.mode === 'roommove' && mv.pts && mv.base) { // snap the room's corners onto neighbouring walls
+      const thr = 10 / view.s; let bx = null, by = null;
+      for (const v of mv.base) {
+        for (const cx of mv.sx) { const d = cx - (v.x + dx); if (Math.abs(d) < thr && (bx === null || Math.abs(d) < Math.abs(bx))) bx = d; }
+        for (const cy of mv.sy) { const d = cy - (v.y + dy); if (Math.abs(d) < thr && (by === null || Math.abs(d) < Math.abs(by))) by = d; }
+      }
+      if (bx !== null) dx += bx; if (by !== null) dy += by;
+    }
     const ddx = dx - mv.tx, ddy = dy - mv.ty;
-    if (ddx || ddy) {
-      shiftWalls(mv.ids, ddx, ddy, g.mode === 'wallmove' && !state.settings.follow && !wallInRoom(mv.ids[0]));
-      const r2 = v => Math.round(v * 100) / 100;
-      for (const f of state.fixtures) if (mv.fx.indexOf(f.id) >= 0) { f.x = r2(f.x + ddx); f.y = r2(f.y + ddy); }
-      for (const b of state.blocks) if (mv.bl.indexOf(b.id) >= 0) { b.x = r2(b.x + ddx); b.y = r2(b.y + ddy); }
-      if (mv.meta) { const mm = state.rooms.find(x => x.id === mv.meta); if (mm && mm.labelPt) { mm.labelPt = { x: mm.labelPt.x + ddx, y: mm.labelPt.y + ddy }; } }
-      mv.tx = dx; mv.ty = dy; recompute(); draw();
+    if ((ddx || ddy) && mv.base) {
+      applyMove(mv, dx, dy);
+      for (const f of state.fixtures) if (mv.fx.indexOf(f.id) >= 0) { f.x = r2d(f.x + ddx); f.y = r2d(f.y + ddy); }
+      for (const b of state.blocks) if (mv.bl.indexOf(b.id) >= 0) { b.x = r2d(b.x + ddx); b.y = r2d(b.y + ddy); }
+      mv.tx = dx; mv.ty = dy; restoreMetas(mv); recompute(); draw();
     }
   } else if (g.mode === 'node') {
     const np = snapPt(S2W(p), { excl: g.cur });
@@ -3677,15 +3828,16 @@ function endPointer(e, cancel) {
   const gg = g; g = null;
   if (tool === 'trace') { if (ulMode === 'scale' && !gg.moved && UL) { ulPts.push(S2W(p)); if (ulPts.length > 2) ulPts = [ulPts[2]]; renderStrip(); draw(); } return; }
   if (tool === 'select') {
+    if (gg.mode === 'wallmove' || gg.mode === 'roommove') finishMove(gg.mv);
     if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block' || gg.mode === 'wallmove' || gg.mode === 'roommove') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
     const hit = gg.hit || hitTest(p);
     if (breakMode) {
-      breakMode = false; renderStrip();
-      if (hit && hit.type === 'wall') {
-        const w = state.walls.find(x => x.id === hit.id), gm = wallGeom(w), sd = segDist(S2W(p), w.a, w.b), st = state.settings.snap || 6;
-        const d = Math.round(sd.t * gm.L / st) * st, r = breakWall(w.id, [d]);
-        sel = hit; toast(r.n ? 'Wall broken in two. Select a piece to pull, move or delete it.' : (r.blocked ? 'A door or window sits on that spot. Move it first.' : 'Too close to the end of the wall to break there.'));
+      const bh = breakHoverAt(p); breakMode = false; breakHover = null; renderTools(); renderStrip();
+      if (bh) {
+        const r = breakWall(bh.id, [bh.d]);
+        sel = { type: 'wall', id: bh.id }; refresh();
+        toast(r.n ? 'Break inserted. Pull either side to shape an L.' : (r.blocked ? 'A door or window sits on that spot. Move it first.' : 'Too close to the end of the wall to break there.'));
         return;
       }
       toast('Tap on the wall you want to break.'); refresh(); return;
@@ -3753,6 +3905,7 @@ function renderTools() {
   if (mode === '3d') { $('#tools').innerHTML = viewGrp; return; }
   $('#tools').innerHTML = viewGrp +
     '<div class="tgroup" role="group" aria-label="Tools">' + TOOLS.map(t => '<button class="tbtn" data-tool="' + t[0] + '" aria-pressed="' + (tool === t[0]) + '" type="button">' + icon(t[0]) + '<span>' + t[1] + '</span></button>').join('') + '</div>' +
+    '<div class="tgroup" role="group" aria-label="Break"><button class="tbtn" id="breakBtn" type="button" aria-pressed="' + breakMode + '" title="Insert a break point in a wall">' + icon('brk') + '<span>Break</span></button></div>' +
     '<div class="tgroup" role="group" aria-label="History"><button class="tbtn" id="undoBtn" type="button">' + icon('undo') + '<span>Undo</span></button><button class="tbtn" id="redoBtn" type="button">' + icon('redo') + '<span>Redo</span></button></div>';
   updateHistoryBtns();
 }
@@ -3797,7 +3950,7 @@ function renderCtx() {
   $('#ctx').innerHTML = h;
 }
 const HINTS = {
-  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull it. A wall that is part of a room keeps its neighbours attached so the room stays closed; a free wall moves on its own. Drag a corner handle to move that end. With a room selected, drag it to move the whole room. Drag empty space to pan.',
+  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull it. A wall that is part of a room keeps its neighbours attached so the room stays closed; a free wall moves on its own. Drag a corner handle to move that end. With a room selected, drag it to move it on its own; its walls snap to neighbouring walls and merge into one. Drag empty space to pan.',
   room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
@@ -3810,7 +3963,7 @@ const HINTS = {
 function renderStrip() {
   const el = $('#strip');
   if (mode === '3d') { el.innerHTML = '<span class="hint">Drag to orbit, pinch or scroll to zoom, two fingers to pan. Tap a floor or wall to jump to that room. Change finishes in the Rooms tab and the view updates.</span>'; return; }
-  let h = '<span class="hint">' + esc(breakMode ? 'Break mode: tap the spot on the wall where you want it to split. It snaps to the grid.' : pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
+  let h = '<span class="hint">' + esc(breakMode ? 'Insert break: hover a wall to see the distance on each side of the point, then click to insert it. Pull either side to shape an L.' : pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
   if (tool === 'room') {
     h += '<span class="lenbox"><input id="rmName" autocomplete="off" placeholder="Name (Kitchen, Primary bath)" value="' + esc(opts.rname || '') + '" aria-label="Room name for the next room"/><select id="rmType" aria-label="Room type for the next room">' +
       Object.keys(ROOM_TYPES).map(k => '<option value="' + k + '"' + ((opts.rtype || 'room') === k ? ' selected' : '') + '>' + ROOM_TYPES[k] + '</option>').join('') + '</select></span>';
@@ -3828,7 +3981,7 @@ function renderStrip() {
   el.innerHTML = h;
 }
 function setTool(t) {
-  tool = t; pending = null; curSnap = null; breakMode = false;
+  tool = t; pending = null; curSnap = null; breakMode = false; breakHover = null;
   if (t !== 'select') sel = t === 'select' ? sel : null;
   renderTools(); renderCtx(); renderStrip(); renderInspector(); draw();
   cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : 'crosshair';
@@ -3843,6 +3996,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-ceil]')) { v3.ceil = !v3.ceil; renderCtx(); rebuild3D(); return; }
   const t = e.target.closest('[data-tool]');
   if (t) { setTool(t.dataset.tool); return; }
+  if (e.target.closest('#breakBtn')) { const on = !breakMode; if (tool !== 'select') setTool('select'); breakMode = on; breakHover = null; renderTools(); renderStrip(); renderInspector(); draw(); return; }
   if (e.target.closest('#undoBtn')) { undo(); return; }
   if (e.target.closest('#redoBtn')) { redo(); return; }
   const th = e.target.closest('[data-thick]'); if (th) { opts.thick = parseFloat(th.dataset.thick); renderCtx(); return; }
@@ -3942,7 +4096,7 @@ $('#insp').addEventListener('click', e => {
   if (bk && sel && sel.type === 'wall') {
     const w = state.walls.find(x => x.id === sel.id); if (!w) return;
     const a = bk.dataset.brk;
-    if (a === 'tap') { breakMode = !breakMode; renderInspector(); renderStrip(); return; }
+    if (a === 'tap') { breakMode = !breakMode; breakHover = null; renderInspector(); renderStrip(); renderTools(); draw(); return; }
     if (a === 'junc') {
       const ds = junctionDists(w);
       if (!ds.length) { toast('No other walls meet this one, so there is nothing to break at. Use a tap or a distance.'); return; }
