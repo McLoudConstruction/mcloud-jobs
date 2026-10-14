@@ -3654,10 +3654,18 @@ function mergeOverlaps(movedIds) {
     if (gone.size) { state.walls = state.walls.filter(x => !gone.has(x.id)); state.openings = state.openings.filter(o => !gone.has(o.wallId)); }
   }
 }
+/* walls squeezed down to nothing by a move are removed */
+function purgeTinyWalls() {
+  const dead = new Set(state.walls.filter(w => wlen(w) < 0.5).map(w => w.id));
+  if (!dead.size) return;
+  state.walls = state.walls.filter(w => !dead.has(w.id));
+  state.openings = state.openings.filter(o => !dead.has(o.wallId));
+}
 function finishMove(mv) {
-  if (!mv || !mv.moved) return;
+  if (!mv || !mv.moved) { purgeTinyWalls(); return; }
   if (mv.jogs) { const dead = new Set(state.walls.filter(w => mv.jogs.indexOf(w.id) >= 0 && wlen(w) < 0.5).map(w => w.id)); if (dead.size) state.walls = state.walls.filter(w => !dead.has(w.id)); }
   mergeOverlaps(mv.moved);
+  purgeTinyWalls();
   restoreMetas(mv);
 }
 /* rooms are protected: a wall or corner that belongs to a room keeps its neighbours attached when dragged */
@@ -3833,6 +3841,7 @@ function endPointer(e, cancel) {
   if (tool === 'trace') { if (ulMode === 'scale' && !gg.moved && UL) { ulPts.push(S2W(p)); if (ulPts.length > 2) ulPts = [ulPts[2]]; renderStrip(); draw(); } return; }
   if (tool === 'select') {
     if (gg.mode === 'wallmove' || gg.mode === 'roommove') finishMove(gg.mv);
+    if (gg.mode === 'node') purgeTinyWalls();
     if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block' || gg.mode === 'wallmove' || gg.mode === 'roommove') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
     const hit = gg.hit || hitTest(p);
