@@ -2709,8 +2709,8 @@ function switchLayout(state, id) {
   return true;
 }
 function newLayoutId(state) { let n = state.layouts.length + 1; while (state.layouts.some(l => l.id === 'L' + n)) n++; return 'L' + n; }
-function addConcept(state, name, fromId, style) {
-  const src = fromId === state.activeLayout ? pickLayout(state) : (state.layouts.find(l => l.id === fromId) || {}).data;
+function addConcept(state, name, fromId, style, blank) {
+  const src = blank ? null : fromId === state.activeLayout ? pickLayout(state) : (state.layouts.find(l => l.id === fromId) || {}).data;
   const data = JSON.parse(JSON.stringify(src || Object.assign(emptyContent(), { floorData: {}, activeFloor: state.activeFloor })));
   for (const k of LAYOUT_KEYS) if (!Array.isArray(data[k])) data[k] = [];
   fixHolder(data, state.floors);
@@ -3251,7 +3251,7 @@ function draw() {
     const act = activeLayout(state), ex = state.layouts.find(l => l.kind === 'existing');
     if (act && act.kind === 'new' && ex && ex.data) {
       ctx.save(); ctx.globalAlpha = 0.4; ctx.strokeStyle = C.muted; ctx.setLineDash([7, 5]); ctx.lineCap = 'butt';
-      for (const w of ex.data.walls) { const a = W2S(w.a), b = W2S(w.b); ctx.lineWidth = Math.max(1.5, w.t * view.s * 0.5); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      for (const w of (contentOf(ex.data, state.activeFloor) || { walls: [] }).walls) { const a = W2S(w.a), b = W2S(w.b); ctx.lineWidth = Math.max(1.5, w.t * view.s * 0.5); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
       ctx.restore();
     }
   }
@@ -4192,28 +4192,48 @@ function renderLayouts() {
   const act = activeLayout(state);
   el.innerHTML = '<span class="lbl">Layout</span><span class="ltabs" role="tablist">' + state.layouts.map(l => '<button type="button" role="tab" class="ltab" data-layout="' + l.id + '" aria-selected="' + (l.id === state.activeLayout) + '">' + esc(l.name) + (l.kind === 'new' && l.id === estimateLayoutId(state) && state.layouts.length > 1 ? ' <i title="Used for the estimate">$</i>' : '') + '</button>').join('') + '</span>' +
     '<button type="button" class="chip-btn" id="addConcept">+ New concept</button>' +
-    (act.kind === 'new' ? '<button type="button" class="chip-btn" data-ghost="1" aria-pressed="' + ghost + '">Show existing walls</button>' : '');
+    (act.kind === 'new' ? '<button type="button" class="chip-btn" data-ghost="1" aria-pressed="' + ghost + '">Show existing walls</button><button type="button" class="chip-btn" data-cpwalls="1">Copy existing walls</button>' : '');
 }
 function doSwitch(id) {
   if (!switchLayout(state, id)) return;
   sel = null; pending = null; curSnap = null;
   recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
 }
-function makeConcept(fromId, style) {
+/* A new concept starts as a blank slate on every floor. Pass copy = true to duplicate a layout instead. */
+function makeConcept(fromId, style, copy) {
   pushUndo();
   const n = state.layouts.filter(l => l.kind === 'new').length;
   const base = fromId || (state.layouts.find(l => l.kind === 'existing') || state.layouts[0]).id;
-  const L = addConcept(state, 'Concept ' + (CONCEPT_NAMES[n] || (n + 1)), base, style || '');
+  const L = addConcept(state, 'Concept ' + (CONCEPT_NAMES[n] || (n + 1)), base, style || '', !copy);
   switchLayout(state, L.id);
   sel = null; pending = null; tab = 'design';
-  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
-  toast('Started ' + L.name + ' from ' + (state.layouts.find(l => l.id === base) || {}).name);
+  if (!copy) ghost = true;
+  recompute(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+  const ex = state.layouts.find(l => l.kind === 'existing'), c = ex && ex.data ? contentOf(ex.data, state.activeFloor) : null;
+  const ov = c && c.walls.length ? overallDims(c.walls) : null;
+  if (!copy && ov) fitView({ minx: ov.minx, miny: ov.miny, maxx: ov.maxx, maxy: ov.maxy }); else fitView();
+  draw();
+  toast(copy ? 'Copied ' + (state.layouts.find(l => l.id === base) || {}).name + ' into ' + L.name : 'Started a blank ' + L.name + '. Existing walls show faintly. Use Copy existing walls to trace over them.');
+}
+/* copy the existing layout's walls and openings for the floor you are on into this concept */
+function copyExistingWalls() {
+  const ex = state.layouts.find(l => l.kind === 'existing');
+  const c = ex && ex.data ? contentOf(ex.data, state.activeFloor) : null;
+  if (!c || !c.walls.length) { toast('The existing layout has no walls on this floor'); return; }
+  mutate(() => {
+    const map = {};
+    for (const w of c.walls) { const n = JSON.parse(JSON.stringify(w)); n.id = uid(state, 'w'); map[w.id] = n.id; state.walls.push(n); }
+    for (const o of c.openings) if (map[o.wallId]) { const n = JSON.parse(JSON.stringify(o)); n.id = uid(state, 'o'); n.wallId = map[o.wallId]; state.openings.push(n); }
+  });
+  fitView(); draw();
+  toast('Copied ' + c.walls.length + ' walls and their doors and windows');
 }
 document.addEventListener('click', e => {
   const lt = e.target.closest('[data-layout]');
   if (lt) { doSwitch(lt.dataset.layout); return; }
   if (e.target.closest('#addConcept')) { makeConcept(); return; }
-  if (e.target.closest('[data-ghost]')) { ghost = !ghost; renderLayouts(); draw(); }
+  if (e.target.closest('[data-ghost]')) { ghost = !ghost; renderLayouts(); draw(); return; }
+  if (e.target.closest('[data-cpwalls]')) { copyExistingWalls(); return; }
 });
 
 /* ---------- floors ---------- */
@@ -4625,7 +4645,7 @@ document.addEventListener('click', e => {
     recompute(); scheduleSave(); refresh(); toast('Applied ' + STYLE_PRESETS[L.style].name + ' to ' + all.length + ' blocks'); return;
   }
   if (e.target.closest('[data-lest]')) { mutate(() => { state.estimateLayout = activeLayout(state).id; }); return; }
-  if (e.target.closest('[data-ldup]')) { makeConcept(state.activeLayout, activeLayout(state).style); return; }
+  if (e.target.closest('[data-ldup]')) { makeConcept(state.activeLayout, activeLayout(state).style, true); return; }
   if (e.target.closest('[data-ldel]')) { if (window.confirm('Delete "' + activeLayout(state).name + '"? This cannot be undone.')) { pushUndo(); removeLayout(state, state.activeLayout); sel = null; recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh(); } return; }
   const bs = e.target.closest('[data-bsel]'); if (bs) { sel = { type: 'block', id: bs.dataset.bsel }; refresh(); return; }
   const sw = e.target.closest('[data-bc]');
