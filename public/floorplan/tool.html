@@ -650,7 +650,7 @@ const TYPE_EXPECT = {
 const CAT_ORDER = ['Demo', 'Flooring', 'Walls', 'Ceilings', 'Trim', 'Stairs', 'Cabinets and tops', 'Built-ins', 'Appliances', 'Doors and windows', 'Plumbing', 'Electrical', 'Allowances', 'Manual'];
 
 function defaultSettings() {
-  return { wallH: 96, minOpenSF: 0, casingId: 'T-CASE', cleaning: true, dumpster: 1, snap: 6, ortho: true };
+  return { wallH: 96, minOpenSF: 0, casingId: 'T-CASE', cleaning: true, dumpster: 1, snap: 6, ortho: true, follow: false };
 }
 function newState() {
   return { v: 1, example: false, walls: [], openings: [], fixtures: [], blocks: [], layouts: [{ id: 'L1', name: 'Existing', kind: 'existing', data: null }], activeLayout: 'L1', rooms: [], floors: [{ id: 'F1', name: 'Main floor', rise: 106 }], activeFloor: 'F1', floorData: {}, nextId: 1, nextRoom: 1, prices: {}, waste: {}, manual: [], settings: defaultSettings() };
@@ -3484,8 +3484,13 @@ function breakWall(wallId, dists) {
   return { n, blocked };
 }
 /* move whole walls: walls attached at their ends stretch to follow, and walls that end partway along them are carried too */
-function shiftWalls(ids, dx, dy) {
+function shiftWalls(ids, dx, dy, alone) {
   if (!dx && !dy) return;
+  if (alone) { // move only these walls, leaving attached walls where they are
+    const r1 = v => Math.round(v * 100) / 100;
+    for (const w of state.walls) if (ids.indexOf(w.id) >= 0) for (const e of [w.a, w.b]) { e.x = r1(e.x + dx); e.y = r1(e.y + dy); }
+    return;
+  }
   const set = new Set(ids), moved = state.walls.filter(w => set.has(w.id)), keys = new Set();
   moved.forEach(w => { keys.add(ptKey(w.a.x, w.a.y)); keys.add(ptKey(w.b.x, w.b.y)); });
   const targets = new Set();
@@ -3565,7 +3570,11 @@ cv.addEventListener('pointermove', e => {
   if (tool === 'wall') { curSnap = snapPt(S2W(p), { from: pending || snapPt(S2W(g.start)) }); draw(); return; }
   if (tool === 'room') { if (!pending) { pending = snapPt(S2W(g.start)); g.dragRoom = true; } curSnap = snapPt(S2W(p)); draw(); return; }
   if (tool === 'select' && !g.mode) {
-    if (g.node && sel && sel.type === 'wall') { g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true; }
+    if (g.node && sel && sel.type === 'wall') {
+      g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true;
+      const sw = state.walls.find(x => x.id === sel.id), k = ptKey(g.node.x, g.node.y);
+      g.endWall = sw ? (ptKey(sw.a.x, sw.a.y) === k ? { id: sw.id, end: 'a' } : ptKey(sw.b.x, sw.b.y) === k ? { id: sw.id, end: 'b' } : null) : null;
+    }
     else if (g.hit && g.hit.type === 'fixture' && fixtureLocked(state.fixtures.find(x => x.id === g.hit.id))) { g.mode = 'pan'; toast('Immovable item. Select it and tick "Allow moving in this concept" to relocate it.'); }
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
     else if (g.hit && g.hit.type === 'block') { g.mode = 'block'; sel = g.hit; pushUndo(); const bb = blockById(g.hit.id); g.grab = bb ? { x: bb.x - S2W(p).x, y: bb.y - S2W(p).y } : { x: 0, y: 0 }; if (tab !== 'design') { tab = 'design'; renderPanel(); } }
@@ -3573,7 +3582,7 @@ cv.addEventListener('pointermove', e => {
     else if (g.hit && g.hit.type === 'wall' && sel && sel.type === 'wall' && sel.id === g.hit.id) {
       const wl = state.walls.find(x => x.id === g.hit.id), gm = wallGeom(wl);
       g.mode = 'wallmove'; pushUndo(); g.mv = { ids: [wl.id], nx: -gm.uy, ny: gm.ux, tx: 0, ty: 0, fx: [], bl: [] };
-      toast('Pulling the wall. Walls attached to it stretch to follow.');
+      toast(state.settings.follow ? 'Pulling the wall. Walls attached to it stretch to follow.' : 'Moving only this wall. Turn on Attached walls follow to stretch its neighbours.');
     } else if (g.hit && g.hit.type === 'room' && sel && sel.type === 'room' && sel.id === g.hit.id) {
       const rm = AN.rooms.find(x => x.meta.id === g.hit.id);
       if (rm) {
@@ -3593,7 +3602,7 @@ cv.addEventListener('pointermove', e => {
     else { dx = Math.round(dx / st) * st; dy = Math.round(dy / st) * st; }
     const ddx = dx - mv.tx, ddy = dy - mv.ty;
     if (ddx || ddy) {
-      shiftWalls(mv.ids, ddx, ddy);
+      shiftWalls(mv.ids, ddx, ddy, g.mode === 'wallmove' && !state.settings.follow);
       const r2 = v => Math.round(v * 100) / 100;
       for (const f of state.fixtures) if (mv.fx.indexOf(f.id) >= 0) { f.x = r2(f.x + ddx); f.y = r2(f.y + ddy); }
       for (const b of state.blocks) if (mv.bl.indexOf(b.id) >= 0) { b.x = r2(b.x + ddx); b.y = r2(b.y + ddy); }
@@ -3602,7 +3611,9 @@ cv.addEventListener('pointermove', e => {
     }
   } else if (g.mode === 'node') {
     const np = snapPt(S2W(p), { excl: g.cur });
-    moveNodeTo(g.cur, np); g.cur = { x: np.x, y: np.y };
+    if (state.settings.follow || !g.endWall) moveNodeTo(g.cur, np);
+    else { const ew = state.walls.find(x => x.id === g.endWall.id); if (ew) { ew[g.endWall.end].x = np.x; ew[g.endWall.end].y = np.y; } }
+    g.cur = { x: np.x, y: np.y };
     clampOpenings(); recompute(); updateSummary(); draw();
   } else if (g.mode === 'block') {
     const b = blockById(g.hit.id), w = S2W(p);
@@ -3748,7 +3759,7 @@ function renderCtx() {
   $('#ctx').innerHTML = h;
 }
 const HINTS = {
-  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull the whole wall (attached walls stretch), or drag a corner handle for one end. With a room selected, drag it to move the whole room. Drag empty space to pan.',
+  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull just that wall, or drag a corner handle to move only that end. Tick Attached walls follow in the wall panel to stretch its neighbours too. With a room selected, drag it to move the whole room. Drag empty space to pan.',
   room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
@@ -3854,6 +3865,7 @@ function renderInspector() {
       '<label class="f">Thickness<select id="i-th">' + [0.5, 3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + (v === 0.5 ? 'Open edge (no wall)' : v + ' in') + '</option>').join('') + '</select></label>' +
       '<label class="f">Height (in)<input class="mono" id="i-h" inputmode="decimal" value="' + w.h + '"></label></div>' +
       '<label class="check"><input type="checkbox" id="i-fixed"' + (w.fixed ? ' checked' : '') + '> Load bearing, do not move</label>' +
+      '<label class="check"><input type="checkbox" id="i-follow"' + (state.settings.follow ? ' checked' : '') + '> Attached walls follow when I drag a corner or pull this wall</label>' +
       '<div class="brk"><span class="lbl">Break wall</span><span class="btnrow">' +
       '<button type="button" class="btn' + (breakMode ? ' primary' : '') + '" data-brk="tap" aria-pressed="' + breakMode + '">' + (breakMode ? 'Tap the wall...' : 'Break at a tap') + '</button>' +
       '<button type="button" class="btn" data-brk="junc">Break at every junction</button>' +
@@ -3909,9 +3921,10 @@ $('#insp').addEventListener('change', e => {
       const L = parseLen(e.target.value);
       if (!L || L < 6) { toast('Could not read that length'); renderInspector(); return; }
       const g2 = wallGeom(w);
-      mutate(() => { moveNodeTo(w.b, { x: Math.round((w.a.x + g2.ux * L) * 100) / 100, y: Math.round((w.a.y + g2.uy * L) * 100) / 100 }); });
+      mutate(() => { const np = { x: Math.round((w.a.x + g2.ux * L) * 100) / 100, y: Math.round((w.a.y + g2.uy * L) * 100) / 100 }; if (state.settings.follow) moveNodeTo(w.b, np); else { w.b.x = np.x; w.b.y = np.y; } });
     } else if (id === 'i-th') mutate(() => { w.t = parseFloat(e.target.value); });
     else if (id === 'i-h') { const v = parseLen(e.target.value, 'in'); if (!v || v < 24) { toast('Height must be at least 24 in'); renderInspector(); return; } mutate(() => { w.h = v; }); }
+    else if (id === 'i-follow') { state.settings.follow = e.target.checked; scheduleSave(); toast(e.target.checked ? 'Attached walls will follow' : 'Walls now move on their own'); }
     else if (id === 'i-fixed') mutate(() => { w.fixed = e.target.checked; }, { panel: false });
   } else if (sel && sel.type === 'opening') {
     const o = state.openings.find(x => x.id === sel.id); if (!o) return;
