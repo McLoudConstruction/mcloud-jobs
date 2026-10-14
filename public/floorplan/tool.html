@@ -3904,7 +3904,8 @@ function renderInspector() {
   if (sel.type === 'wall') {
     const w = state.walls.find(x => x.id === sel.id); if (!w) { el.hidden = true; return; }
     const L = wallGeom(w).L;
-    h = '<div class="insp-h"><strong>Wall</strong><button type="button" class="btn danger" data-del="1">Delete</button></div>' +
+    h = '<div class="insp-h"><strong>' + (isZone(w) ? 'Missing wall' : 'Wall') + '</strong><span class="btnrow"><button type="button" class="btn" data-miss="1">' + (isZone(w) ? 'Restore wall' : 'Make missing') + '</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
+      (isZone(w) ? '<p class="note">No wall is built here, but the room stays one room. Restore wall puts it back.</p>' : '') +
       '<div class="fields">' +
       '<label class="f">Length<input class="mono" id="i-len" value="' + esc(fmtFtIn(L)) + '"></label>' +
       '<label class="f">Thickness<select id="i-th">' + [0.5, 3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + (v === 0.5 ? 'Open edge (no wall)' : v + ' in') + '</option>').join('') + '</select></label>' +
@@ -3952,6 +3953,17 @@ $('#insp').addEventListener('click', e => {
       if (!d) { toast('Type a distance from the start, like 6-8'); return; }
       const r = breakWall(w.id, [d]); toast(r.n ? 'Wall broken in two.' : (r.blocked ? 'A door or window sits on that spot. Move it first.' : 'That point is at the end of the wall.')); return;
     }
+  }
+  const ms = e.target.closest('[data-miss]');
+  if (ms && sel && sel.type === 'wall') {
+    const w = state.walls.find(x => x.id === sel.id); if (!w) return;
+    if (isZone(w)) { mutate(() => { w.t = w.prevT > 0.6 ? w.prevT : 4.5; delete w.prevT; }); toast('Wall restored'); }
+    else {
+      const n = state.openings.filter(o => o.wallId === w.id).length;
+      mutate(() => { w.prevT = w.t; w.t = 0.5; state.openings = state.openings.filter(o => o.wallId !== w.id); });
+      toast('Wall removed. The room stays whole' + (n ? ' (its ' + n + ' door/window ' + (n > 1 ? 'items were' : 'was') + ' removed too)' : '') + '. Use Restore wall to put it back.');
+    }
+    return;
   }
   if (e.target.closest('[data-del]')) { removeEntity(sel); return; }
   if (e.target.closest('[data-rot]')) { const f = state.fixtures.find(x => x.id === sel.id); mutate(() => { f.rot = (f.rot || 0) + Math.PI / 2; }, { panel: false }); return; }
