@@ -3516,6 +3516,12 @@ function breakWall(wallId, dists) {
   return { n, blocked };
 }
 /* move whole walls: walls attached at their ends stretch to follow, and walls that end partway along them are carried too */
+/* rooms are protected: a wall or corner that belongs to a room keeps its neighbours attached when dragged */
+function wallInRoom(id) { return AN.rooms.some(r => r.edges.some(e => e.seg.wallId === id)); }
+function nodeInRoom(pt) {
+  const k = ptKey(pt.x, pt.y);
+  return AN.rooms.some(r => r.edges.some(e => ptKey(e.seg.na.x, e.seg.na.y) === k || ptKey(e.seg.nb.x, e.seg.nb.y) === k));
+}
 function shiftWalls(ids, dx, dy, alone) {
   if (!dx && !dy) return;
   if (alone) { // move only these walls, leaving attached walls where they are
@@ -3605,7 +3611,7 @@ cv.addEventListener('pointermove', e => {
     if (g.node && sel && sel.type === 'wall') {
       g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true;
       const sw = state.walls.find(x => x.id === sel.id), k = ptKey(g.node.x, g.node.y);
-      g.endWall = sw ? (ptKey(sw.a.x, sw.a.y) === k ? { id: sw.id, end: 'a' } : ptKey(sw.b.x, sw.b.y) === k ? { id: sw.id, end: 'b' } : null) : null;
+      g.endWall = sw && !nodeInRoom(g.node) ? (ptKey(sw.a.x, sw.a.y) === k ? { id: sw.id, end: 'a' } : ptKey(sw.b.x, sw.b.y) === k ? { id: sw.id, end: 'b' } : null) : null;
     }
     else if (g.hit && g.hit.type === 'fixture' && fixtureLocked(state.fixtures.find(x => x.id === g.hit.id))) { g.mode = 'pan'; toast('Immovable item. Select it and tick "Allow moving in this concept" to relocate it.'); }
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
@@ -3614,7 +3620,7 @@ cv.addEventListener('pointermove', e => {
     else if (g.hit && g.hit.type === 'wall' && sel && sel.type === 'wall' && sel.id === g.hit.id) {
       const wl = state.walls.find(x => x.id === g.hit.id), gm = wallGeom(wl);
       g.mode = 'wallmove'; pushUndo(); g.mv = { ids: [wl.id], nx: -gm.uy, ny: gm.ux, tx: 0, ty: 0, fx: [], bl: [] };
-      toast(state.settings.follow ? 'Pulling the wall. Walls attached to it stretch to follow.' : 'Moving only this wall. Turn on Attached walls follow to stretch its neighbours.');
+      toast(state.settings.follow || wallInRoom(wl.id) ? 'Pulling the wall. It stays part of its room, so attached walls stretch to follow.' : 'Moving only this wall. Turn on Attached walls follow to stretch its neighbours.');
     } else if (g.hit && g.hit.type === 'room' && sel && sel.type === 'room' && sel.id === g.hit.id) {
       const rm = AN.rooms.find(x => x.meta.id === g.hit.id);
       if (rm) {
@@ -3634,7 +3640,7 @@ cv.addEventListener('pointermove', e => {
     else { dx = Math.round(dx / st) * st; dy = Math.round(dy / st) * st; }
     const ddx = dx - mv.tx, ddy = dy - mv.ty;
     if (ddx || ddy) {
-      shiftWalls(mv.ids, ddx, ddy, g.mode === 'wallmove' && !state.settings.follow);
+      shiftWalls(mv.ids, ddx, ddy, g.mode === 'wallmove' && !state.settings.follow && !wallInRoom(mv.ids[0]));
       const r2 = v => Math.round(v * 100) / 100;
       for (const f of state.fixtures) if (mv.fx.indexOf(f.id) >= 0) { f.x = r2(f.x + ddx); f.y = r2(f.y + ddy); }
       for (const b of state.blocks) if (mv.bl.indexOf(b.id) >= 0) { b.x = r2(b.x + ddx); b.y = r2(b.y + ddy); }
@@ -3791,7 +3797,7 @@ function renderCtx() {
   $('#ctx').innerHTML = h;
 }
 const HINTS = {
-  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull just that wall, or drag a corner handle to move only that end. Tick Attached walls follow in the wall panel to stretch its neighbours too. With a room selected, drag it to move the whole room. Drag empty space to pan.',
+  select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull it. A wall that is part of a room keeps its neighbours attached so the room stays closed; a free wall moves on its own. Drag a corner handle to move that end. With a room selected, drag it to move the whole room. Drag empty space to pan.',
   room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
