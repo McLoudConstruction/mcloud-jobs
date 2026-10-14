@@ -3433,6 +3433,38 @@ function addRoomTyped() {
 function fixtureLocked(f) { const a = activeLayout(state); return !!(f && FIXTURES[f.kind] && FIXTURES[f.kind].fixed && a && a.kind !== 'existing' && !f.moved); }
 function removeEntity(s) {
   if (!s) return;
+  if (s.type === 'room') {
+    const rm = AN.rooms.find(x => x.meta.id === s.id); if (!rm) return;
+    const otherSegs = new Set();
+    for (const o of AN.rooms) if (o !== rm) for (const e of o.edges) otherSegs.add(e.seg.id);
+    const own = rm.edges.map(e => e.seg).filter(sg => !otherSegs.has(sg.id));
+    const kept = rm.edges.length - own.length;
+    const fx = new Set(state.fixtures.filter(f => pointInPoly(f, rm.poly)).map(f => f.id)), bl = new Set(state.blocks.filter(b => pointInPoly(b, rm.poly)).map(b => b.id));
+    mutate(() => {
+      // cut walls at the room's seams, then drop the pieces only this room uses
+      const byWall = new Map();
+      for (const sg of rm.edges.map(e => e.seg)) { if (!byWall.has(sg.wallId)) byWall.set(sg.wallId, []); byWall.get(sg.wallId).push(sg); }
+      const mids = [];
+      for (const [wid, sgs] of byWall) {
+        const w = state.walls.find(x => x.id === wid); if (!w) continue;
+        const g = wallGeom(w), mine = sgs.filter(sg => !otherSegs.has(sg.id));
+        for (const sg of mine) mids.push({ x: w.a.x + g.ux * (sg.start + sg.end) / 2, y: w.a.y + g.uy * (sg.start + sg.end) / 2, len: sg.end - sg.start });
+        const cuts = [];
+        for (const sg of mine) { if (sg.start > 0.5) cuts.push(sg.start); if (sg.end < g.L - 0.5) cuts.push(sg.end); }
+        Array.from(new Set(cuts.map(v => Math.round(v * 100) / 100))).sort((p, q) => q - p).forEach(d => splitWallAt(wid, d));
+      }
+      const gone = new Set();
+      for (const m of mids) for (const w of state.walls) { const sd = segDist(m, w.a, w.b); if (sd.d < 0.3 && Math.abs(wallGeom(w).L - m.len) < 1.5) { gone.add(w.id); break; } }
+      state.walls = state.walls.filter(w => !gone.has(w.id));
+      state.openings = state.openings.filter(o => !gone.has(o.wallId));
+      state.fixtures = state.fixtures.filter(f => !fx.has(f.id));
+      state.blocks = state.blocks.filter(b => !bl.has(b.id));
+      state.rooms = state.rooms.filter(m => m.id !== s.id);
+    });
+    sel = null; refresh();
+    toast('Room deleted' + (kept ? ' (walls shared with neighbouring rooms were kept)' : '') + '. Use Undo to bring it back.');
+    return;
+  }
   mutate(() => {
     if (s.type === 'wall') { state.walls = state.walls.filter(w => w.id !== s.id); state.openings = state.openings.filter(o => o.wallId !== s.id); }
     else if (s.type === 'opening') state.openings = state.openings.filter(o => o.id !== s.id);
@@ -3854,8 +3886,15 @@ cv.addEventListener('pointermove', e => { cursor = S2W(local(e)); });
 /* ---------- inspector ---------- */
 function renderInspector() {
   const el = $('#insp');
-  if (mode === '3d' || !sel || sel.type === 'room') { el.hidden = true; el.innerHTML = ''; return; }
+  if (mode === '3d' || !sel) { el.hidden = true; el.innerHTML = ''; return; }
   let h = '';
+  if (sel.type === 'room') {
+    const m = state.rooms.find(x => x.id === sel.id); if (!m) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = '<div class="insp-h"><strong>' + esc(m.name || 'Room') + '</strong><button type="button" class="btn danger" data-del="1">Delete room</button></div>' +
+      '<p class="note">Removes the room, its own walls, doors, windows and the items inside it. Walls shared with a neighbouring room stay.</p>';
+    return;
+  }
   if (sel.type === 'wall') {
     const w = state.walls.find(x => x.id === sel.id); if (!w) { el.hidden = true; return; }
     const L = wallGeom(w).L;
