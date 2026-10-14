@@ -352,6 +352,7 @@ html.fs .layouts .lbl { display: none; }
 'use strict';
 
 /* ---------- small helpers ---------- */
+let metaStashOn = false, metaStash = new WeakMap(); // during a drag, rooms that briefly lose their shape keep their settings
 function ptKey(x, y) { return Math.round(x * 10) + ',' + Math.round(y * 10); }
 function cross2(ax, ay, bx, by) { return ax * by - ay * bx; }
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
@@ -816,15 +817,15 @@ function analyze(state) {
   // match / create room metadata
   const claimed = new Set();
   const oldMeta = state.rooms || [];
-  for (const r of rooms) {
-    let m = null;
-    for (const om of oldMeta) {
-      if (claimed.has(om)) continue;
-      if (om.labelPt && pointInPoly(om.labelPt, r.poly)) { m = om; break; }
-    }
-    if (m) claimed.add(m);
-    r.meta = m;
-  }
+  const held = metaStashOn ? (metaStash.get(state) || []) : [];
+  const pool = oldMeta.concat(held.filter(h => oldMeta.indexOf(h) < 0));
+  // each old room keeps the new shape that holds its label and is closest in size, so a room passing over another never steals its settings
+  const pairs = [];
+  rooms.forEach((r, ri) => pool.forEach(om => { if (om.labelPt && pointInPoly(om.labelPt, r.poly)) pairs.push({ ri, om, sc: om.lastArea ? Math.abs(r.area - om.lastArea) / Math.max(om.lastArea, 1) : 0.5 }); }));
+  pairs.sort((a, b) => a.sc - b.sc);
+  const taken = new Set();
+  for (const pr of pairs) { if (claimed.has(pr.om) || taken.has(pr.ri)) continue; rooms[pr.ri].meta = pr.om; claimed.add(pr.om); taken.add(pr.ri); }
+  if (metaStashOn) metaStash.set(state, pool.filter(om => !claimed.has(om)).slice(0, 40));
   rooms.sort((a, b) => {
     const pa = labelPoint(a.inner), pb = labelPoint(b.inner);
     return Math.abs(pa.y - pb.y) > 24 ? pa.y - pb.y : pa.x - pb.x;
@@ -836,6 +837,7 @@ function analyze(state) {
     }
     r.label = labelPoint(r.inner);
     r.meta.labelPt = { x: r.label.x, y: r.label.y };
+    r.meta.lastArea = r.area;
   }
   state.rooms = rooms.map(r => r.meta);
 
@@ -3724,6 +3726,7 @@ cv.addEventListener('pointerdown', e => {
     g = null; return;
   }
   if (ptrs.size > 2) return;
+  metaStashOn = true;
   g = { start: p, moved: false, node: null, hit: null, mode: null, ox: view.ox, oy: view.oy };
   if (tool === 'select') { g.node = nodeHit(p); g.hit = hitTest(p); }
   if (tool === 'pan') g.mode = 'pan';
@@ -3821,6 +3824,7 @@ cv.addEventListener('pointermove', e => {
   }
 });
 function endPointer(e, cancel) {
+  setTimeout(() => { metaStashOn = false; metaStash = new WeakMap(); }, 0);
   const p = local(e);
   ptrs.delete(e.pointerId);
   if (pinch) { if (ptrs.size < 2) pinch = null; g = null; return; }
