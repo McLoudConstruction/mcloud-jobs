@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
-import FloorplanPanel from '../../components/FloorplanPanel';
+import PlansPanel from '../../components/PlansPanel';
 import { jobHref } from '../../lib/links';
 
 // Standalone entry to the floorplan tool. The tool itself is FloorplanPanel
@@ -36,8 +36,8 @@ export default function FloorplanPage() {
     return (
       <AppShell>
         <div className="container">
-          <h2 style={{ color: 'var(--heading)' }}>Floorplan</h2>
-          <p style={{ color: 'var(--muted, #666)' }}>Pick a job to sketch its floorplan and build a material takeoff. You can also open it from any job under Sell &gt; Floorplan.</p>
+          <h2 style={{ color: 'var(--heading)' }}>Plans</h2>
+          <p style={{ color: 'var(--muted, #666)' }}>Pick a job to sketch a floorplan or upload plans for an AI takeoff. You can also open it from any job under Sell &gt; Plans.</p>
           <input className="input" placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 420, marginBottom: 12 }} />
           {list.map(j => (
             <div key={j.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border, #ddd)' }}>
@@ -53,7 +53,7 @@ export default function FloorplanPage() {
   return (
     <AppShell>
       <div className="container" style={{ maxWidth: 1400 }}>
-        <FloorplanPanel jobId={jobId} />
+        <PlansPanel jobId={jobId} />
       </div>
     </AppShell>
   );

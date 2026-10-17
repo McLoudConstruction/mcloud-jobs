@@ -131,7 +131,7 @@ export default function FloorplanPanel({ jobId, embedded = false }) {
     <div>
       <div className="top-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: embedded ? 0 : undefined }}>
         {!embedded && (
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Floorplan{job ? ` — ${job.customer_name || job.estimate_number || ''}` : ''}</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Plans{job ? ` — ${job.customer_name || job.estimate_number || ''}` : ''}</h2>
         )}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 12, opacity: 0.7 }}>{status}</span>

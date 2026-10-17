@@ -23,7 +23,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
     Sell: [
       { key: 'scope', label: 'Add or edit scope', run: () => go('scope') },
       { key: 'estimate-doc', label: 'Generate estimate document', run: () => push(`/jobs/${job.id}/proposal`) },
-      { key: 'floorplan', label: 'Sketch a floorplan', run: () => go('floorplan') },
+      { key: 'floorplan', label: 'Plans: build or upload', run: () => go('floorplan') },
       canRfp && { key: 'rfp', label: 'Send an RFP to subs', run: onRfp },
     ],
     Plan: [

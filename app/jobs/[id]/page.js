@@ -58,12 +58,12 @@ import LienWaiversCard from '../../../components/LienWaiversCard';
 import PunchItemsPanel from '../../../components/PunchItemsPanel';
 import WarrantyCard from '../../../components/WarrantyCard';
 import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
-import FloorplanPanel from '../../../components/FloorplanPanel';
+import PlansPanel from '../../../components/PlansPanel';
 import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
 
 // Job page structure (Oct 2026): tabs follow the life of a project instead
 // of the feature that produced the data.
-//   Sell      winning the work   - scope, cost, pricing, estimate, floorplan
+//   Sell      winning the work   - scope, cost, pricing, estimate, plans
 //   Plan      getting ready      - budget, material selections, work orders
 //   Build     doing the work     - updates, change orders, job costs, draws, pay apps, waivers
 //   Closeout  finishing up       - punch list, warranty, final invoice, review request
@@ -93,7 +93,7 @@ const TABS = [
       { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
       { key: 'proposal', label: 'Estimate & Contract' },
-      { key: 'floorplan', label: 'Floorplan' },
+      { key: 'floorplan', label: 'Plans' },
     ],
   },
   {
@@ -778,7 +778,7 @@ export default function JobDetailPage() {
         )}
 
         {tab === 'Sell' && section === 'floorplan' && (
-          <FloorplanPanel jobId={id} embedded />
+          <PlansPanel jobId={id} embedded onDone={loadJob} />
         )}
 
         {/* ------------------------------ PLAN ------------------------------ */}

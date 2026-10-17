@@ -34,7 +34,7 @@ const NAV_ITEMS = [
       { href: '/material-selections', label: 'Material Selections' },
       { href: '/reviews', label: 'Reviews' },
       { href: '/estimating/assemblies', label: 'Assemblies' },
-      { href: '/floorplan', label: 'Floorplan' },
+      { href: '/floorplan', label: 'Plans' },
     ],
   },
   { href: '/jobs/calendar', label: 'Schedule', icon: ScheduleIcon },

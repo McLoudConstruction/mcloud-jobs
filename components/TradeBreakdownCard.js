@@ -51,6 +51,11 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     e.preventDefault();
     if (!form.description.trim()) return;
     const payload = { ...form, quantity: Number(form.quantity) || 1, area: form.area.trim() || null };
+    // Saving an edit on a row the plan takeoff flagged counts as a person checking it.
+    if (editingId && actions.find(a => a.id === editingId)?.needs_verification) {
+      payload.needs_verification = false;
+      payload.verify_note = null;
+    }
     let error;
     if (editingId) {
       ({ error } = await supabase.from('job_scope_actions').update(payload).eq('id', editingId));
@@ -66,6 +71,12 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     // so the change shows up immediately.
     await load();
     await flagScheduleStale(jobId);
+  }
+
+  async function markVerified(id) {
+    const { error } = await supabase.from('job_scope_actions').update({ needs_verification: false, verify_note: null }).eq('id', id);
+    if (error) { setError(error.message); return; }
+    await load();
   }
 
   async function remove(id) {
@@ -163,7 +174,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
           </div>
           <div style={{ flex: 1, paddingLeft: 16 }}>
             {activeTrade && grouped[activeTrade].map(a => (
-              <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+              <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} onVerify={() => markVerified(a.id)} />
             ))}
           </div>
         </div>
@@ -177,7 +188,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
                 {area} <span style={{ color: 'var(--ink-soft)', fontWeight: 400, textTransform: 'none' }}>({rows.length})</span>
               </div>
               {rows.map(a => (
-                <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+                <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} onVerify={() => markVerified(a.id)} />
               ))}
             </div>
           ))}
@@ -187,7 +198,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
       {actions.length > 0 && view === 'flat' && (
         <div style={{ marginTop: 14 }}>
           {actions.map(a => (
-            <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} />
+            <ActionRow key={a.id} a={a} showTrade readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} onVerify={() => markVerified(a.id)} />
           ))}
         </div>
       )}
@@ -195,15 +206,21 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
   );
 }
 
-function ActionRow({ a, showTrade, readOnly, onEdit, onRemove }) {
+function ActionRow({ a, showTrade, readOnly, onEdit, onRemove, onVerify }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
       <div>
-        <b>{a.quantity}{a.unit_label ? ` ${a.unit_label}${a.quantity === 1 ? '' : 's'}` : ''}</b> — {a.description}
-        {showTrade && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{a.trade || 'Other'}{a.area ? ` · ${a.area}` : ''}</div>}
+        <b>{a.quantity}{a.unit_label ? ` ${a.unit_label}${a.quantity === 1 ? '' : 's'}` : ''}</b> {'\u2014'} {a.description}
+        {a.needs_verification && (
+          <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#8a5a00', background: '#f6e7c1', border: '1px solid #e0c57a', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>Needs verification</span>
+        )}
+        {showTrade && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{a.trade || 'Other'}{a.area ? ` \u00b7 ${a.area}` : ''}</div>}
+        {a.needs_verification && a.verify_note && <div style={{ fontSize: 11.5, color: '#8a5a00', marginTop: 2 }}>{a.verify_note}</div>}
+        {a.source === 'plan_ai' && a.sheet_ref && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>From plans: {a.sheet_ref}</div>}
       </div>
       {!readOnly && (
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {a.needs_verification && <button className="btn btn-sm" onClick={onVerify}>Mark verified</button>}
           <button className="btn btn-sm" onClick={onEdit}>Edit</button>
           <button className="btn btn-sm btn-danger" onClick={onRemove}>Delete</button>
         </div>
