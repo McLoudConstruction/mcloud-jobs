@@ -821,6 +821,18 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 
 .overview-split{ display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 1000px){ .overview-split{ grid-template-columns: 1fr; } }
+/* Scope card header: title on the left, the add buttons stacked top right. */
+.scope-card-head{ display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.scope-card-head h3{ margin: 0; }
+.scope-card-actions{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.scope-card-actions-row{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 700px){
+  .scope-card-actions{ align-items: flex-start; width: 100%; }
+  .scope-card-actions-row{ justify-content: flex-start; }
+}
+/* Job Status (left) and Danger Zone (right) on desktop; stacked on narrow screens. */
+.overview-pair{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; margin-top: 20px; }
+@media (max-width: 1000px){ .overview-pair{ grid-template-columns: 1fr; } }
 
 .row-settled{ opacity: 0.55; }
 .row-settled:hover{ opacity: 0.85; }
@@ -1819,6 +1831,15 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .estimate-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
 .estimate-grid-wide { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
 .estimate-sidebar { position: sticky; top: 20px; }
+/* On the Cost tab the action list stays beside the cost lines you are editing,
+   and scrolls inside itself when it is taller than the screen. */
+.estimate-grid-wide .estimate-sidebar { max-height: calc(100vh - 40px); overflow-y: auto; }
+/* Cost lines have an extra Type column. */
+.estimate-row.estimate-row-costs { grid-template-columns: 2fr 120px 130px 100px 90px 40px; }
+.estimate-add-grid.estimate-add-grid-costs { grid-template-columns: 2fr 120px 130px 110px auto; }
+.estimate-actions-toggle { background: none; border: none; padding: 0; margin-top: 4px; cursor: pointer; color: var(--ink-soft); font-size: 11px; font-family: inherit; text-decoration: underline; }
+.estimate-actions-list { margin-top: 6px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; max-height: 160px; overflow-y: auto; font-size: 11.5px; line-height: 1.45; }
+.estimate-tax-note { font-size: 11px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
 .estimate-margin-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
 .estimate-margin-table td { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .estimate-margin-table td:first-child { color: var(--ink-soft); }
@@ -1927,6 +1948,8 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   .estimate-grid-wide { grid-template-columns: 1fr; }
   .estimate-sidebar { position: static; }
   .estimate-row, .estimate-header-row, .estimate-add-grid { grid-template-columns: 1fr; }
+  .estimate-row.estimate-row-costs, .estimate-add-grid.estimate-add-grid-costs { grid-template-columns: 1fr; }
+  .estimate-grid-wide .estimate-sidebar { max-height: none; overflow: visible; }
 }
 @media (max-width: 640px){
   .data-table{ font-size: 11.5px; }

@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PopupModal from './PopupModal';
 import FollowingPhasesModal from './FollowingPhasesModal';
-import { followerCandidates, finishDelta, linkSequentialPhases } from '../lib/scheduleCascade';
-import { recomputeSequentialDates, countWorkableDays, splitAtWeekends, insertPhaseChronologically } from '../lib/scheduleDates';
+import { followerCandidates, finishDelta, linkSequentialPhases, addWorkdaysSigned } from '../lib/scheduleCascade';
+import { recomputeSequentialDates, countWorkableDays, splitAtWeekends, insertPhaseChronologically, nextWeekday } from '../lib/scheduleDates';
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
 import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES, PROJECT_COORDINATION_TYPE } from '../lib/constants';
@@ -133,6 +133,7 @@ export default function ScheduleCard({ jobId, job }) {
   const [scopeActions, setScopeActions] = useState([]);
   const [draft, setDraft] = useState(null); // generated but not yet confirmed
   const [startDate, setStartDate] = useState(job?.scheduled_start_date || '');
+  const [genAllowWeekend, setGenAllowWeekend] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -169,6 +170,10 @@ export default function ScheduleCard({ jobId, job }) {
     // did, to avoid clobbering a mid-keystroke duration edit) meant a
     // dragged bar only moved after a manual page refresh.
     setDraft(draftRows.length > 0 ? draftRows : null);
+    // A restored draft has no start date typed into this session. Without an
+    // anchor, every recompute (and Publish) hit new Date('T00:00:00'), which is
+    // the "Invalid time value" error.
+    setStartDate(cur => cur || draftRows[0]?.start_date || data.find(p => p.status !== 'draft')?.start_date || '');
   }, [jobId]);
 
   const loadScopeActions = useCallback(async () => {
@@ -219,7 +224,7 @@ export default function ScheduleCard({ jobId, job }) {
       const res = await fetch('/api/generate-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type }),
+        body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type, allowWeekendWork: genAllowWeekend }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate schedule.');
@@ -291,7 +296,7 @@ export default function ScheduleCard({ jobId, job }) {
   function updateDraftDuration(index, rawValue) {
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: rawValue } : p);
     const forDates = updated.map(p => ({ ...p, duration_days: Number(p.duration_days) > 0 ? Number(p.duration_days) : 1 }));
-    const recomputed = recomputeSequentialDates(forDates, startDate);
+    const recomputed = recomputeSequentialDates(forDates, startDate || draft[0]?.start_date);
     setDraft(updated.map((p, i) => ({ ...p, start_date: recomputed[i].start_date, end_date: recomputed[i].end_date })));
   }
 
@@ -320,21 +325,30 @@ export default function ScheduleCard({ jobId, job }) {
   function finalizeDraftDuration(index) {
     const clamped = Math.max(1, Math.round(Number(draft[index].duration_days)) || 1);
     const updated = draft.map((p, i) => i === index ? { ...p, duration_days: clamped } : p);
-    const recomputed = recomputeSequentialDates(updated, startDate);
+    const recomputed = recomputeSequentialDates(updated, startDate || draft?.[0]?.start_date);
     setDraft(recomputed);
     persistPhaseRows(recomputed);
   }
 
   function updateDraftPreferredStartDay(index, value) {
     const updated = draft.map((p, i) => i === index ? { ...p, preferred_start_day: value || null } : p);
-    const recomputed = recomputeSequentialDates(updated, startDate);
+    const recomputed = recomputeSequentialDates(updated, startDate || draft?.[0]?.start_date);
     setDraft(recomputed);
     persistPhaseRows(recomputed);
   }
 
   function updateDraftAllowWeekend(index, allow) {
     const updated = draft.map((p, i) => i === index ? { ...p, allow_weekend_work: allow } : p);
-    const recomputed = recomputeSequentialDates(updated, startDate);
+    const recomputed = recomputeSequentialDates(updated, startDate || draft?.[0]?.start_date);
+    setDraft(recomputed);
+    persistPhaseRows(recomputed);
+  }
+
+  // One switch for the whole draft. The per phase selects below still let
+  // individual phases differ.
+  function setAllDraftWeekend(allow) {
+    const updated = draft.map(p => ({ ...p, allow_weekend_work: allow }));
+    const recomputed = recomputeSequentialDates(updated, startDate || draft[0]?.start_date);
     setDraft(recomputed);
     persistPhaseRows(recomputed);
   }
@@ -372,7 +386,7 @@ export default function ScheduleCard({ jobId, job }) {
       // without a blur), so an empty/invalid value never reaches the DB.
       const cleanDraft = recomputeSequentialDates(
         draft.map(p => ({ ...p, duration_days: Math.max(1, Math.round(Number(p.duration_days)) || 1) })),
-        startDate
+        startDate || draft[0]?.start_date
       );
       await persistPhaseRows(cleanDraft);
 
@@ -678,6 +692,10 @@ export default function ScheduleCard({ jobId, job }) {
         <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
           <label>Start date</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginTop: 10 }}>
+            <input type="checkbox" checked={genAllowWeekend} onChange={e => setGenAllowWeekend(e.target.checked)} style={{ width: 'auto' }} />
+            Allow weekend work
+          </label>
           <div className="section-actions">
             <button className="btn btn-primary btn-sm" onClick={generate} disabled={loading}>
               {loading ? 'Generating…' : 'Generate schedule'}
@@ -697,6 +715,11 @@ export default function ScheduleCard({ jobId, job }) {
             </div>
             {addPhaseButton}
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginBottom: 10 }}>
+            <input type="checkbox" checked={draft.length > 0 && draft.every(p => p.allow_weekend_work)} onChange={e => setAllDraftWeekend(e.target.checked)} style={{ width: 'auto' }} />
+            Allow weekend work
+            <span style={{ color: 'var(--ink-soft)', fontSize: 11 }}>(off: the schedule skips Saturday and Sunday)</span>
+          </label>
 
           {view === 'timeline' && <TimelineView phases={draft} onPhaseUpdate={updatePhaseDates} />}
 
@@ -932,7 +955,7 @@ function weekendShading(minDate, dayWidth) {
   const bandStart = firstWeekendOffset * dayWidth;
   const bandEnd = bandStart + 2 * dayWidth;
   const period = 7 * dayWidth;
-  return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, color-mix(in srgb, var(--panel) 55%, var(--ink-soft) 20%) ${bandStart}px, color-mix(in srgb, var(--panel) 55%, var(--ink-soft) 20%) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
+  return `repeating-linear-gradient(to right, transparent 0px, transparent ${bandStart}px, color-mix(in srgb, var(--panel) 45%, var(--ink-soft) 32%) ${bandStart}px, color-mix(in srgb, var(--panel) 45%, var(--ink-soft) 32%) ${bandEnd}px, transparent ${bandEnd}px, transparent ${period}px)`;
 }
 
 // A thin vertical line at the start of every day column, so a bar's edges
@@ -947,6 +970,18 @@ function gridlines(dayWidth) {
 // transparent everywhere they don't apply, so they layer cleanly.
 function gridBackground(minDate, dayWidth) {
   return `${gridlines(dayWidth)}, ${weekendShading(minDate, dayWidth)}`;
+}
+
+// Compressed (weekdays only) view: a heavier line at the start of every Monday
+// column marks where one week ends and the next begins, over the usual day lines.
+function weekDividers(minDate, dayWidth) {
+  const firstMonday = (6 - minDate.getDay() + 5) % 5; // columns until the first Monday column
+  const period = 5 * dayWidth;
+  const at = firstMonday * dayWidth;
+  const weekLine = at === 0
+    ? `repeating-linear-gradient(to right, var(--ink-soft) 0, var(--ink-soft) 2px, transparent 2px, transparent ${period}px)`
+    : `repeating-linear-gradient(to right, transparent 0, transparent ${at}px, var(--ink-soft) ${at}px, var(--ink-soft) ${at + 2}px, transparent ${at + 2}px, transparent ${at + period}px)`;
+  return `${weekLine}, ${gridlines(dayWidth)}`;
 }
 
 function toISO(date) {
@@ -975,6 +1010,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
   const [containerWidth, setContainerWidth] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const dayWidthRef = useRef(DAY_WIDTH);
+  const compressRef = useRef(true);
 
   useEffect(() => {
     function checkMobile() { setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT); }
@@ -1000,22 +1036,25 @@ function TimelineView({ phases, onPhaseUpdate }) {
     function handleMove(e) {
       const deltaX = e.clientX - dragState.startX;
       const dayDelta = Math.round(deltaX / dayWidthRef.current);
-      const origStart = new Date(dragState.origStart + 'T00:00:00');
-      const origEnd = new Date(dragState.origEnd + 'T00:00:00');
-      let newStart = origStart, newEnd = origEnd;
+      // With weekend columns hidden, one column is one workday, so a drag
+      // of n columns moves n workdays. With weekends shown it is n calendar days.
+      const shift = (iso, n) => compressRef.current
+        ? addWorkdaysSigned(iso, n, false)
+        : toISO(addCalendarDays(new Date(iso + 'T00:00:00'), n));
+      let newStart = dragState.origStart, newEnd = dragState.origEnd;
 
       if (dragState.mode === 'move') {
-        newStart = addCalendarDays(origStart, dayDelta);
-        newEnd = addCalendarDays(origEnd, dayDelta);
+        newStart = shift(dragState.origStart, dayDelta);
+        newEnd = shift(dragState.origEnd, dayDelta);
       } else if (dragState.mode === 'resize-left') {
-        newStart = addCalendarDays(origStart, dayDelta);
-        if (newStart > origEnd) newStart = origEnd; // never invert below 1 day
+        newStart = shift(dragState.origStart, dayDelta);
+        if (newStart > dragState.origEnd) newStart = dragState.origEnd; // never invert below 1 day
       } else if (dragState.mode === 'resize-right') {
-        newEnd = addCalendarDays(origEnd, dayDelta);
-        if (newEnd < origStart) newEnd = origStart;
+        newEnd = shift(dragState.origEnd, dayDelta);
+        if (newEnd < dragState.origStart) newEnd = dragState.origStart;
       }
 
-      const next = { phaseId: dragState.phaseId, start_date: toISO(newStart), end_date: toISO(newEnd) };
+      const next = { phaseId: dragState.phaseId, start_date: newStart, end_date: newEnd };
       previewRef.current = next;
       setPreviewDates(next);
     }
@@ -1050,33 +1089,47 @@ function TimelineView({ phases, onPhaseUpdate }) {
     (previewDates && p.id === previewDates.phaseId) ? { ...p, start_date: previewDates.start_date, end_date: previewDates.end_date } : p
   );
 
-  const minDate = new Date(Math.min(...effectivePhases.map(p => new Date(p.start_date + 'T00:00:00'))));
+  // When no phase works weekends, Saturday and Sunday columns are left out
+  // entirely. A five day phase starting Wednesday then reads as Wed, Thu, Fri,
+  // Mon, Tue across a week divider instead of looking like it stops on Friday.
+  // As soon as any phase allows weekend work the full calendar returns, with
+  // weekends clearly shaded.
+  const compress = !phases.some(p => p.allow_weekend_work);
+  compressRef.current = compress;
+
+  const rawMin = new Date(Math.min(...effectivePhases.map(p => new Date(p.start_date + 'T00:00:00'))));
+  const minDate = compress ? new Date(nextWeekday(toISO(rawMin)) + 'T00:00:00') : rawMin;
   const maxDate = new Date(Math.max(...effectivePhases.map(p => new Date(p.end_date + 'T00:00:00'))));
-  // Grid extends a full extra week past the last scheduled day — this is
-  // a living schedule new items get added to over time, so there's
-  // always visible empty space at the end to drag a bar into or see
-  // where a newly added item landed, rather than the chart stopping
-  // exactly at the last bar.
+  // Grid extends a full extra week past the last scheduled day so there is
+  // always visible empty space at the end to drag a bar into.
   const displayMaxDate = addCalendarDays(maxDate, 7);
-  const totalSpan = Math.max(1, Math.round((displayMaxDate - minDate) / 86400000) + 1);
+  const days = [];
+  for (let d = new Date(minDate); d <= displayMaxDate; d = addCalendarDays(d, 1)) {
+    if (compress && (d.getDay() === 0 || d.getDay() === 6)) continue;
+    days.push(d);
+  }
+  const totalSpan = Math.max(1, days.length);
+  const colMap = new Map(days.map((d, i) => [toISO(d), i]));
+  const colOf = iso => {
+    if (!compress) return Math.round((new Date(iso + 'T00:00:00') - minDate) / 86400000);
+    return colMap.get(iso) ?? colMap.get(nextWeekday(iso)) ?? 0;
+  };
 
   let dayWidth = DAY_WIDTH;
   if (!isMobile && containerWidth > 0) {
     const availableWidth = containerWidth - LABEL_WIDTH;
-    const fitSpan = Math.min(totalSpan, MAX_FIT_DAYS);
+    const fitSpan = Math.min(totalSpan, compress ? 22 : MAX_FIT_DAYS);
     dayWidth = Math.max(20, availableWidth / fitSpan);
   }
   dayWidthRef.current = dayWidth;
 
   const gridWidth = totalSpan * dayWidth;
-  const weekendBg = gridBackground(minDate, dayWidth);
+  const weekendBg = compress ? weekDividers(minDate, dayWidth) : gridBackground(minDate, dayWidth);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayOffset = Math.round((today - minDate) / 86400000);
+  const todayISO = toISO(new Date(new Date().setHours(12, 0, 0, 0)));
+  const todayOffset = compress ? (colMap.has(todayISO) ? colMap.get(todayISO) : -1) : colOf(todayISO);
   const showToday = todayOffset >= 0 && todayOffset < totalSpan;
-
-  const days = Array.from({ length: totalSpan }, (_, i) => addCalendarDays(minDate, i));
+  const isMonday = d => d.getDay() === 1;
 
   return (
     <div style={{ marginBottom: 8 }}>
@@ -1087,7 +1140,7 @@ function TimelineView({ phases, onPhaseUpdate }) {
             <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 2, borderBottom: '1px solid var(--line)' }} />
             <div style={{ width: gridWidth, flexShrink: 0, display: 'flex', background: weekendBg, borderBottom: '1px solid var(--line)' }}>
               {days.map((d, i) => (
-                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0' }} className={showToday && i === todayOffset ? 'schedule-today-col' : ''}>
+                <div key={i} style={{ width: dayWidth, flexShrink: 0, textAlign: 'center', padding: '4px 0', ...(compress && i > 0 && isMonday(d) ? { boxShadow: 'inset 2px 0 0 var(--ink-soft)' } : {}) }} className={showToday && i === todayOffset ? 'schedule-today-col' : ''}>
                   <div style={{ fontSize: 8.5, color: 'var(--ink-soft)' }}>{dateLabel(d)}</div>
                   <div style={{ fontSize: 10, fontWeight: 600 }}>{DOW_LETTERS[d.getDay()]}</div>
                 </div>
@@ -1098,10 +1151,14 @@ function TimelineView({ phases, onPhaseUpdate }) {
           {effectivePhases.map(p => {
             const start = new Date(p.start_date + 'T00:00:00');
             const end = new Date(p.end_date + 'T00:00:00');
-            const offsetDays = Math.round((start - minDate) / 86400000);
-            const spanDays = Math.round((end - start) / 86400000) + 1;
+            const offsetDays = colOf(p.start_date);
+            const spanDays = colOf(p.end_date) - offsetDays + 1;
             const isDragging = dragState?.phaseId === p.id;
-            const segments = splitAtWeekends(p.start_date, p.end_date, p.allow_weekend_work);
+            // Weekend columns are hidden in compressed view, so the bar is one
+            // continuous block there. Otherwise a non-weekend phase breaks at weekends.
+            const segments = compress
+              ? [{ start: p.start_date, end: p.end_date }]
+              : splitAtWeekends(p.start_date, p.end_date, p.allow_weekend_work);
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
                 <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--card-bg)', zIndex: 1, padding: '6px 8px 6px 10px', fontSize: 10.5, lineHeight: 1.25 }}>
@@ -1130,8 +1187,8 @@ function TimelineView({ phases, onPhaseUpdate }) {
                     {segments.map((seg, si) => {
                       const segStart = new Date(seg.start + 'T00:00:00');
                       const segEnd = new Date(seg.end + 'T00:00:00');
-                      const segOffset = Math.round((segStart - start) / 86400000);
-                      const segSpan = Math.round((segEnd - segStart) / 86400000) + 1;
+                      const segOffset = colOf(seg.start) - offsetDays;
+                      const segSpan = colOf(seg.end) - colOf(seg.start) + 1;
                       return (
                         <div
                           key={si}

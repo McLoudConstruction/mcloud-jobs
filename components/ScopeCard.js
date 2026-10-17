@@ -1,15 +1,30 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import AIScopeGenerator from './AIScopeGenerator';
 import VoiceScopeRecorder from './VoiceScopeRecorder';
 import AssemblyPicker from './AssemblyPicker';
 import EstimateGuardrailBanner from './EstimateGuardrailBanner';
 import ScopeOptionsCard from './ScopeOptionsCard';
+import EstimateGroupsCard from './EstimateGroupsCard';
 import { flagScheduleStale } from '../lib/scheduleStale';
 
+// The Scope card. Everything that adds to the estimate's scope lives in its
+// header, top right:
+//   row 1  From assembly, Generate scope with AI   (build the scope text)
+//   row 2  Add Scope Variation, Add Alternates      (change what the customer chooses between)
+//
+// A scope variation is an entirely separate scope and price (Option A: patch
+// repair, Option B: full replacement). The first variation turns the estimate
+// into "multiple scope options" mode (job.estimate_mode = 'multi') and the
+// current scope becomes Option A, so nothing already written is left behind.
+// Alternates are optional add-ons layered on top of whichever scope is chosen.
 export default function ScopeCard({ job, jobId, onSave }) {
   const [items, setItems] = useState((job.scope_items || []).map(i => i.text || ''));
+  const [aiOpen, setAiOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const optionsRef = useRef(null);
+  const groupsRef = useRef(null);
   const mode = job.estimate_mode || 'single';
   const isLocked = !!job.estimate_groups_submitted_at;
 
@@ -24,34 +39,84 @@ export default function ScopeCard({ job, jobId, onSave }) {
     await flagScheduleStale(jobId);
   }
 
-  async function setMode(next) {
-    if (next === mode || isLocked) return;
-    if (next === 'multi' && !window.confirm('Switch to multiple scope options? The customer will pick one entirely separate scope of work (and price) to move forward with, instead of a single fixed scope.')) return;
-    if (next === 'single' && !window.confirm('Switch back to a single scope? Any scope options you built stay saved but will no longer be shown to the customer — the scope below becomes the estimate again.')) return;
-    await onSave({ estimate_mode: next });
+  async function backToSingle() {
+    if (isLocked) return;
+    if (!window.confirm('Go back to a single scope? Your variations stay saved but the customer will no longer see them. The scope above becomes the estimate again.')) return;
+    await onSave({ estimate_mode: 'single' });
+  }
+
+  async function addVariation() {
+    if (isLocked || busy) return;
+
+    // Already in variation mode: just add another one.
+    if (mode === 'multi') {
+      const label = window.prompt('Name this variation (e.g. "Option C: Partial Replacement"):');
+      if (!label || !label.trim()) return;
+      await optionsRef.current?.addOption(label.trim());
+      return;
+    }
+
+    // First variation. The current scope becomes Option A (unless variations
+    // from an earlier switch are still saved), then the new one is added.
+    const label = window.prompt('Name the new scope variation (e.g. "Option B: Full Replacement").\n\nYour current scope becomes "Option A" so the customer can choose between the two.');
+    if (!label || !label.trim()) return;
+    setBusy(true);
+    try {
+      const { data: existing, error: existingError } = await supabase.from('estimate_scope_options').select('id').eq('job_id', jobId);
+      if (existingError) throw existingError;
+      const rows = [];
+      if (!existing || existing.length === 0) {
+        rows.push({
+          job_id: jobId,
+          label: 'Option A',
+          sort_order: 0,
+          scope_items: items.filter(t => t.trim()).map(text => ({ text })),
+        });
+      }
+      rows.push({ job_id: jobId, label: label.trim(), sort_order: (existing?.length || 0) + rows.length });
+      const { error: insertError } = await supabase.from('estimate_scope_options').insert(rows);
+      if (insertError) throw insertError;
+      await onSave({ estimate_mode: 'multi' });
+    } catch (err) {
+      alert('Could not add the scope variation: ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addAlternate() {
+    groupsRef.current?.addGroup();
   }
 
   return (
     <>
       <div className="card">
-        <h3>Scope of work</h3>
+        <div className="scope-card-head">
+          <h3>Scope of work</h3>
+          <div className="scope-card-actions">
+            {mode === 'single' && (
+              <div className="scope-card-actions-row">
+                <AssemblyPicker align="right" onApply={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])} />
+                <button type="button" className="btn btn-sm" onClick={() => setAiOpen(o => !o)}>Generate scope with AI</button>
+              </div>
+            )}
+            <div className="scope-card-actions-row">
+              <button type="button" className="btn btn-sm btn-primary" onClick={addVariation} disabled={isLocked || busy}>+ Add Scope Variation</button>
+              <button type="button" className="btn btn-sm" onClick={addAlternate} disabled={isLocked}>+ Add Alternates</button>
+            </div>
+          </div>
+        </div>
 
         <EstimateGuardrailBanner job={job} />
 
-        <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, alignItems: 'center' }}>
-          <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>This estimate has:</span>
-          <button className={`btn btn-sm ${mode === 'single' ? 'btn-primary' : ''}`} onClick={() => setMode('single')} disabled={isLocked}>One scope</button>
-          <button className={`btn btn-sm ${mode === 'multi' ? 'btn-primary' : ''}`} onClick={() => setMode('multi')} disabled={isLocked}>Multiple scope options</button>
-        </div>
-
         {mode === 'single' ? (
           <>
-            <div style={{ marginBottom: 4 }}>
-              <AssemblyPicker onApply={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])} />
-            </div>
             <AIScopeGenerator
               projectType={job.project_type}
               jobId={jobId}
+              open={aiOpen}
+              onOpenChange={setAiOpen}
+              hideTrigger
               onGenerate={(newItems) => setItems(prev => [...prev.filter(t => t.trim()), ...newItems])}
               onTradeActions={saveTradeActions}
             />
@@ -76,11 +141,21 @@ export default function ScopeCard({ job, jobId, onSave }) {
         ) : (
           <>
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Two or more entirely separate scopes for this project — each with its own full scope of work and its own price. The customer picks one on the estimate document; only that one moves forward.
+              Two or more entirely separate scopes for this project, each with its own full scope of work and its own price. The customer picks one on the estimate document and only that one moves forward.
+              {!isLocked && (
+                <>
+                  {' '}
+                  <button type="button" onClick={backToSingle} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--ink-soft)', textDecoration: 'underline', fontSize: 11.5, fontFamily: 'inherit' }}>
+                    Use a single scope instead
+                  </button>
+                </>
+              )}
             </div>
-            <ScopeOptionsCard job={job} jobId={jobId} />
+            <ScopeOptionsCard ref={optionsRef} job={job} jobId={jobId} />
           </>
         )}
+
+        <EstimateGroupsCard ref={groupsRef} job={job} jobId={jobId} />
       </div>
     </>
   );

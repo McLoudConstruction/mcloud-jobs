@@ -42,7 +42,6 @@ import NotificationSettingsCard from '../../../components/NotificationSettingsCa
 import CustomerInfoCard from '../../../components/CustomerInfoCard';
 import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
-import EstimateGroupsCard from '../../../components/EstimateGroupsCard';
 import ScheduleCard from '../../../components/ScheduleCard';
 import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
 import ScheduleRiskBadge from '../../../components/ScheduleRiskBadge';
@@ -63,7 +62,7 @@ import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDest
 
 // Job page structure (Oct 2026): tabs follow the life of a project instead
 // of the feature that produced the data.
-//   Sell      winning the work   - scope, cost, pricing, estimate, plans
+//   Sell      winning the work   - scope, cost, pricing, plans
 //   Plan      getting ready      - budget, material selections, work orders
 //   Build     doing the work     - updates, change orders, job costs, draws, pay apps, waivers
 //   Closeout  finishing up       - punch list, warranty, final invoice, review request
@@ -88,11 +87,9 @@ const TABS = [
   {
     key: 'Sell', label: 'Sell', icon: CalculatorIcon, group: 'stage',
     sections: [
-      { key: 'portal', label: 'Portal & Notifications' },
       { key: 'scope', label: 'Scope' },
       { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
-      { key: 'proposal', label: 'Estimate & Contract' },
       { key: 'floorplan', label: 'Plans' },
     ],
   },
@@ -177,6 +174,10 @@ export default function JobDetailPage() {
   }, []);
   const [tab, setTab] = useState('Overview');
   const [section, setSection] = useState(null);
+  // Overview > Customer has two views: the customer's details, and their
+  // portal access and notification settings. Kept out of TABS because it is a
+  // switch inside one section, not a section of its own (see `view` in lib/links.js).
+  const [customerView, setCustomerView] = useState('details');
   // Landing: a job opens on the tab for its current stage unless the URL
   // names a destination. These refs carry what the URL said until the job
   // has loaded and we know its stage.
@@ -193,29 +194,38 @@ export default function JobDetailPage() {
   // local state, so refreshing (or bookmarking/sharing a link) while on
   // any tab besides Overview always landed back on Overview, since the
   // URL never actually reflected where you'd navigated to.
-  const goToTab = useCallback((tabKey, sectionKey) => {
+  const goToTab = useCallback((tabKey, sectionKey, view) => {
     const target = TABS.find(t => t.key === tabKey);
     if (!target) return;
     const resolvedSection = sectionKey || target.sections?.[0]?.key || null;
+    const resolvedView = tabKey === 'Overview' && resolvedSection === 'customer' && view === 'portal' ? 'portal' : null;
     setTab(tabKey);
     setSection(resolvedSection);
+    setCustomerView(resolvedView || 'details');
     setAutoOpen(null);
-    syncUrl(tabKey, resolvedSection);
+    syncUrl(tabKey, resolvedSection, resolvedView);
   }, []);
 
   // Same idea, for switching sections within a tab (e.g. Financials'
   // Invoicing/Receipts sub-nav) without changing the tab itself.
   const goToSection = useCallback((sectionKey) => {
     setSection(sectionKey);
+    setCustomerView('details');
     setAutoOpen(null);
-    syncUrl(tab, sectionKey);
+    syncUrl(tab, sectionKey, null);
   }, [tab]);
+
+  // Switches between the two views inside Overview > Customer.
+  const goToCustomerView = useCallback((view) => {
+    setCustomerView(view);
+    syncUrl('Overview', 'customer', view === 'portal' ? 'portal' : null);
+  }, []);
 
   // Navigate by destination name (see JOB_DESTINATIONS in lib/links.js), so
   // nothing in this file needs to know which tab a feature lives under.
   const goDest = useCallback((destination) => {
     const d = JOB_DESTINATIONS[destination];
-    if (d) goToTab(d.tab, d.section);
+    if (d) goToTab(d.tab, d.section, d.view);
   }, [goToTab]);
 
   // Same, but the destination opens with its "new ..." form ready to fill in.
@@ -224,12 +234,13 @@ export default function JobDetailPage() {
     setAutoOpen(destination);
   }, [goDest]);
 
-  function syncUrl(tabKey, sectionKey) {
+  function syncUrl(tabKey, sectionKey, view) {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     params.set('tab', tabKey);
     params.delete('new');
     if (sectionKey) params.set('section', sectionKey); else params.delete('section');
+    if (view) params.set('view', view); else params.delete('view');
     router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -239,15 +250,15 @@ export default function JobDetailPage() {
     // normalizeJobLink forgives case and retired section names, so old
     // bookmarks (?tab=schedule, section=proposals) land somewhere real
     // instead of being silently ignored.
-    const target = normalizeJobLink(TABS, params.get('tab'), params.get('section'));
+    const target = normalizeJobLink(TABS, params.get('tab'), params.get('section'), params.get('view'));
     if (target) {
       urlNamedTabRef.current = true;
       billingPendingRef.current = target.stageAware === 'billing';
-      goToTab(target.tab, target.section);
+      goToTab(target.tab, target.section, target.view);
       // ?new=1 (jobHref(id, dest, { new: 1 })) opens that destination's create form.
       if (params.get('new')) {
         const resolved = target.section || TABS.find(t => t.key === target.tab)?.sections?.[0]?.key || null;
-        const name = Object.keys(JOB_DESTINATIONS).find(k => JOB_DESTINATIONS[k].tab === target.tab && (JOB_DESTINATIONS[k].section || null) === resolved);
+        const name = Object.keys(JOB_DESTINATIONS).find(k => JOB_DESTINATIONS[k].tab === target.tab && (JOB_DESTINATIONS[k].section || null) === resolved && (JOB_DESTINATIONS[k].view || null) === (target.view || null));
         if (name) setAutoOpen(name);
       }
     }
@@ -279,6 +290,7 @@ export default function JobDetailPage() {
       goToTab('Overview');
     } else if (current.sections && !current.sections.some(s => s.key === section)) {
       setSection(current.sections[0].key);
+      setCustomerView('details');
     }
   }, [job, tab, section, goToTab]);
 
@@ -667,8 +679,7 @@ export default function JobDetailPage() {
             </div>
             {/* Generating the estimate is the primary action for the whole
                 estimating side of Sell, so it is reachable from Scope, Cost
-                and Pricing without hunting for it. (The Estimate & Contract
-                section carries the same buttons in its own card.) */}
+                and Pricing without hunting for it. */}
             {tab === 'Sell' && ['scope', 'cost', 'pricing'].includes(section) && (
               <div className="tab-sections-actions">
                 <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
@@ -686,8 +697,10 @@ export default function JobDetailPage() {
               <ProjectInfoCard job={job} onSave={saveJob} onNavigate={goDest} />
               <ProjectMilestonesCard job={job} jobId={id} onNavigate={goDest} />
             </div>
+            {/* Job Status on the left, Danger Zone on the right (stacked on narrow screens). */}
+            <div className="overview-pair">
             {(['new', 'inspected', 'proposal_delivered'].includes(job.stage) || job.stage === 'lost') && (
-              <div className="card" style={{ marginTop: 20 }}>
+              <div className="card">
                 <h3>Job Status</h3>
                 {closingLost ? (
                   <>
@@ -714,36 +727,46 @@ export default function JobDetailPage() {
                 )}
               </div>
             )}
-            <div className="card" style={{ marginTop: 20 }}>
+            <div className="card">
               <h3>Danger Zone</h3>
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
                 Permanently deletes this job and everything attached to it. This cannot be undone.
               </div>
               <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
             </div>
+            </div>
           </>
         )}
 
-        {/* ------------------------------ SELL ------------------------------ */}
+        {/* ------------------- OVERVIEW: CUSTOMER, FINANCIALS ---------------- */}
         {tab === 'Overview' && section === 'customer' && (
-          <CustomerInfoCard job={job} onSave={saveJob} />
+          <>
+            {/* Details and Portal & Notifications are two views of the same customer. */}
+            <div className="tab-sections" style={{ margin: '0 0 14px' }}>
+              <div className="tab-sections-pills">
+                <button className={`tab-section-btn ${customerView === 'details' ? 'active' : ''}`} onClick={() => goToCustomerView('details')}>Customer Details</button>
+                <button className={`tab-section-btn ${customerView === 'portal' ? 'active' : ''}`} onClick={() => goToCustomerView('portal')}>Portal &amp; Notifications</button>
+              </div>
+            </div>
+            {customerView === 'portal' ? (
+              <>
+                <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
+                <NotificationSettingsCard job={job} onSave={saveJob} />
+              </>
+            ) : (
+              <CustomerInfoCard job={job} onSave={saveJob} />
+            )}
+          </>
         )}
 
         {tab === 'Overview' && section === 'financials' && (
           <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
         )}
 
-        {tab === 'Sell' && section === 'portal' && (
-          <>
-            <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
-            <NotificationSettingsCard job={job} onSave={saveJob} />
-          </>
-        )}
-
+        {/* ------------------------------ SELL ------------------------------ */}
         {tab === 'Sell' && section === 'scope' && (
           <>
             <ScopeCard job={job} jobId={id} onSave={saveJob} />
-            <EstimateGroupsCard job={job} jobId={id} />
             <TermsCard job={job} onSave={saveJob} />
           </>
         )}
@@ -756,25 +779,6 @@ export default function JobDetailPage() {
           <EstimateTab job={job} jobId={id} section="pricing">
             <PriceCard job={job} onSave={saveJob} />
           </EstimateTab>
-        )}
-
-        {tab === 'Sell' && section === 'proposal' && (
-          <>
-            <div className="card">
-              <h3>Estimate &amp; Contract</h3>
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-                Build the estimate document from the scope and pricing, send it, and once it is accepted prepare the contract.
-                {job.proposal_sent_at && <> Estimate sent {new Date(job.proposal_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.</>}
-                {job.contract_finalized_at && <> Contract finalized {new Date(job.contract_finalized_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.</>}
-              </div>
-              <div className="section-actions" style={{ marginTop: 0 }}>
-                <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
-                {job.proposal_sent_at && (
-                  <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
-                )}
-              </div>
-            </div>
-          </>
         )}
 
         {tab === 'Sell' && section === 'floorplan' && (

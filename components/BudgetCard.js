@@ -56,7 +56,7 @@ export default function BudgetCard({ jobId, job }) {
   // individual line — job_costs entries (from receipts/work orders/
   // manual entry) aren't linked to a specific job_estimate_items row,
   // only tagged with a broad category. Materials comes from job_costs
-  // category 'materials'; Subcontractor Cost comes from category
+  // category 'materials'; Costs come from category
   // 'subcontractor' (what Work Orders log). Status follows the same
   // committed/actual meaning as the rest of this page: 'committed' is
   // an issued work order or other obligation not yet paid out;
@@ -156,7 +156,7 @@ export default function BudgetCard({ jobId, job }) {
 
             {pricedLabor.length > 0 && (
               <div style={{ marginBottom: 14 }}>
-                <div className="budget-line-group-label">Subcontractor Cost</div>
+                <div className="budget-line-group-label">Costs</div>
                 {pricedLabor.map(it => (
                   <div className="budget-line-row" key={it.id}>
                     <span>{it.unit_label || it.description}</span>
@@ -166,7 +166,7 @@ export default function BudgetCard({ jobId, job }) {
                   </div>
                 ))}
                 <div className="budget-line-row budget-line-subtotal">
-                  <span>Subcontractor Cost subtotal</span>
+                  <span>Costs subtotal</span>
                   <b>{fmtMoney(pricedLaborEstimated)}</b>
                   <b>{fmtMoney(subcontractorCommitted)}</b>
                   <b>{fmtMoney(subcontractorActual)}</b>

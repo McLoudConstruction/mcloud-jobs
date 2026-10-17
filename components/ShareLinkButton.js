@@ -90,11 +90,11 @@ export default function ShareLinkButton({ kind, jobId, proposalId, folder, custo
   const sheet = open && mounted ? createPortal(
     <div
       onClick={() => setOpen(false)}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: 'var(--panel, #fff)', color: 'var(--ink, #1C1B19)', width: '100%', maxWidth: 460, borderRadius: '14px 14px 0 0', padding: '18px 18px calc(18px + env(safe-area-inset-bottom))', boxShadow: '0 -6px 30px rgba(0,0,0,0.25)' }}
+        style={{ background: 'var(--panel, #fff)', color: 'var(--ink, #1C1B19)', width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', borderRadius: 14, padding: 18, boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <h3 style={{ margin: 0, color: 'var(--heading)' }}>{kind === 'proposal' ? 'Share estimate link' : `Share “${folder}”`}</h3>

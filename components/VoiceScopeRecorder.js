@@ -2,12 +2,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+// Remembered for a few minutes so opening several jobs in a row does not
+// repeat the connection test.
+let availabilityCache = null; // { at, available }
+const AVAILABILITY_TTL = 10 * 60 * 1000;
+
 // Records a site-walk on the estimator's phone/laptop, transcribes it
 // server-side (Whisper), then drafts scope-of-work items from the transcript
 // (/api/ai/transcribe, then /api/ai/draft-scope). Nothing is saved until the
 // estimator reviews the drafted items — same review-before-save contract as
 // AIScopeGenerator right above this in ScopeCard.
+//
+// The button only appears when the connection test passes: the voice and
+// drafting keys exist and the provider accepts them (/api/ai/walkthrough-status).
 export default function VoiceScopeRecorder({ projectType, jobId, existingItems, onGenerate }) {
+  const [available, setAvailable] = useState(
+    availabilityCache && Date.now() - availabilityCache.at < AVAILABILITY_TTL ? availabilityCache.available : null
+  );
   const [open, setOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -23,6 +34,23 @@ export default function VoiceScopeRecorder({ projectType, jobId, existingItems, 
   useEffect(() => {
     if (typeof window !== 'undefined' && (!navigator.mediaDevices || !window.MediaRecorder)) setUnsupported(true);
   }, []);
+
+  useEffect(() => {
+    if (available !== null) return;
+    let alive = true;
+    (async () => {
+      let ok = false;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/ai/walkthrough-status', { headers: { Authorization: `Bearer ${session?.access_token || ''}` } });
+        const data = await res.json().catch(() => ({}));
+        ok = Boolean(res.ok && data.available);
+      } catch { ok = false; }
+      availabilityCache = { at: Date.now(), available: ok };
+      if (alive) setAvailable(ok);
+    })();
+    return () => { alive = false; };
+  }, [available]);
 
   useEffect(() => () => {
     clearInterval(timerRef.current);
@@ -89,7 +117,7 @@ export default function VoiceScopeRecorder({ projectType, jobId, existingItems, 
     }
   }
 
-  if (unsupported) return null;
+  if (unsupported || !available) return null;
 
   return (
     <div style={{ marginBottom: 14 }}>

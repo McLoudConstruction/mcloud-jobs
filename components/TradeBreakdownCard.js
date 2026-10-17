@@ -6,10 +6,15 @@ import { flagScheduleStale } from '../lib/scheduleStale';
 
 const EMPTY_ROW = { description: '', trade: SERVICES_OFFERED[0], unit_label: '', quantity: 1, area: '' };
 
-export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
+const ALL_TRADES = 'All';
+
+// `trade` and `onTradeChange` are optional. When a parent passes them it
+// controls which trade is showing (the Cost tab switches this to the trade of
+// whichever cost line you are editing, so that trade's action list is in view).
+export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: tradeProp, onTradeChange }) {
   const [actions, setActions] = useState([]);
   const [view, setView] = useState('trade'); // 'trade' | 'area' | 'flat'
-  const [selectedTrade, setSelectedTrade] = useState(null);
+  const [selectedTrade, setSelectedTrade] = useState(ALL_TRADES);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_ROW);
   const [editingId, setEditingId] = useState(null);
@@ -94,7 +99,14 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
     return acc;
   }, {});
   const tradesWithActions = Object.keys(grouped);
-  const activeTrade = selectedTrade && grouped[selectedTrade] ? selectedTrade : tradesWithActions[0];
+  // Every trade the app knows about, plus anything odd already on an action,
+  // so the dropdown always lists the full set with a count beside each.
+  const tradeOptions = [...new Set([...SERVICES_OFFERED, ...tradesWithActions])];
+  const activeTrade = tradeProp || selectedTrade || ALL_TRADES;
+  function chooseTrade(value) {
+    setSelectedTrade(value);
+    if (onTradeChange) onTradeChange(value);
+  }
 
   const groupedByArea = actions.reduce((acc, a) => {
     const key = a.area || 'Whole job';
@@ -153,30 +165,32 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref }) {
       )}
 
       {actions.length > 0 && view === 'trade' && (
-        <div style={{ display: 'flex', gap: 0, marginTop: 14, minHeight: 200 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--line)', flexShrink: 0 }}>
-            {tradesWithActions.map(trade => (
-              <button
-                key={trade}
-                onClick={() => setSelectedTrade(trade)}
-                style={{
-                  writingMode: 'vertical-rl', transform: 'rotate(180deg)',
-                  background: trade === activeTrade ? 'var(--panel)' : 'transparent',
-                  border: 'none', borderRight: trade === activeTrade ? '2px solid var(--gold)' : 'none',
-                  padding: '14px 8px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em',
-                  textTransform: 'uppercase', color: trade === activeTrade ? 'var(--gold)' : 'var(--ink-soft)',
-                  cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {trade} ({grouped[trade].length})
-              </button>
-            ))}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <label htmlFor={`trade-filter-${jobId}`} style={{ margin: 0, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Trade</label>
+            <select id={`trade-filter-${jobId}`} value={activeTrade} onChange={e => chooseTrade(e.target.value)} style={{ maxWidth: 260 }}>
+              <option value={ALL_TRADES}>All trades ({actions.length})</option>
+              {tradeOptions.map(t => <option key={t} value={t}>{t} ({grouped[t]?.length || 0})</option>)}
+            </select>
           </div>
-          <div style={{ flex: 1, paddingLeft: 16 }}>
-            {activeTrade && grouped[activeTrade].map(a => (
+          {activeTrade === ALL_TRADES ? (
+            tradesWithActions.map(t => (
+              <div key={t} style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
+                  {t} <span style={{ color: 'var(--ink-soft)', fontWeight: 400, textTransform: 'none' }}>({grouped[t].length})</span>
+                </div>
+                {grouped[t].map(a => (
+                  <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} onVerify={() => markVerified(a.id)} />
+                ))}
+              </div>
+            ))
+          ) : (grouped[activeTrade] || []).length === 0 ? (
+            <div className="empty-state" style={{ padding: '10px 0' }}>No actions for {activeTrade} yet.</div>
+          ) : (
+            grouped[activeTrade].map(a => (
               <ActionRow key={a.id} a={a} readOnly={readOnly} onEdit={() => startEdit(a)} onRemove={() => remove(a.id)} onVerify={() => markVerified(a.id)} />
-            ))}
-          </div>
+            ))
+          )}
         </div>
       )}
 

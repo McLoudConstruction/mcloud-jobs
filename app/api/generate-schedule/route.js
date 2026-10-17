@@ -19,7 +19,7 @@ function extractJson(text) {
 
 export async function POST(request) {
   try {
-    const { tradeActions, startDate, projectType } = await request.json();
+    const { tradeActions, startDate, projectType, allowWeekendWork } = await request.json();
 
     if (!Array.isArray(tradeActions) || tradeActions.length === 0) {
       return Response.json({ error: 'Add at least one trade-tagged action to the trade breakdown first.' }, { status: 400 });
@@ -116,7 +116,7 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
         duration_days: duration,
         sort_order: i,
         source: 'ai',
-        allow_weekend_work: false, // always off by default — a person opts individual phases in afterward
+        allow_weekend_work: allowWeekendWork === true, // off unless the person ticked Allow weekend work
         preferred_start_day: stage.preferredStartDay || null,
       };
     });

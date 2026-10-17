@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { appHref } from '../lib/links';
@@ -25,7 +25,12 @@ function fmtDate(v) {
 // revised estimate, and triaging whatever the customer didn't end up
 // with — declined alternates AND the scope option(s) they didn't pick —
 // into the deferred-scope follow-up bucket.
-export default function EstimateGroupsCard({ job, jobId }) {
+//
+// This no longer has a card of its own. It renders inside the Scope card,
+// below the scope, and only shows up once there is something to show (an
+// alternate exists, or the customer has submitted). The Scope card's
+// "Add Alternates" button calls addGroup() through the ref.
+const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }, ref) {
   const [groups, setGroups] = useState([]);
   const [scopeOptions, setScopeOptions] = useState([]);
   const [deferred, setDeferred] = useState([]);
@@ -57,6 +62,7 @@ export default function EstimateGroupsCard({ job, jobId }) {
   const isLocked = !!job.estimate_groups_submitted_at;
 
   async function addGroup() {
+    if (isLocked) return;
     const label = window.prompt('Name this Alternate (e.g. "Defer siding to next year"):');
     if (!label || !label.trim()) return;
     setBusy(true);
@@ -71,6 +77,8 @@ export default function EstimateGroupsCard({ job, jobId }) {
     if (insertError) { setError(insertError.message); return; }
     await load();
   }
+
+  useImperativeHandle(ref, () => ({ addGroup }));
 
   async function updateGroup(id, patch) {
     setBusy(true);
@@ -154,11 +162,14 @@ export default function EstimateGroupsCard({ job, jobId }) {
     ? scopeOptions.filter(o => o.id !== job.selected_scope_option_id && !reviewedOptionIds.has(o.id))
     : [];
 
+  // Nothing to show yet: the section appears when the first alternate is added.
+  if (groups.length === 0 && !isLocked && declinedAlternates.length === 0 && declinedScopeOptions.length === 0) return null;
+
   return (
-    <div className="card">
-      <h3>Flexible Estimate — Alternates</h3>
+    <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+      <h4 style={{ margin: '0 0 4px' }}>Alternates</h4>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-        On top of the scope above, add independently includable/deferrable add-ons the customer picks interactively on the estimate document. The price auto-calculates from their picks once submitted.
+        Optional add-ons the customer can include or leave out on the estimate document. The price updates from their picks once they submit.
       </div>
 
       {isLocked && (
@@ -171,8 +182,6 @@ export default function EstimateGroupsCard({ job, jobId }) {
       )}
 
       {error && <div style={{ fontSize: 12, color: '#a13f3f', marginBottom: 10 }}>{error}</div>}
-
-      {groups.length === 0 && <div className="empty-state">No alternates yet — add one below.</div>}
 
       {groups.map((g, idx) => (
         <div key={g.id} style={{ border: '1px solid var(--panel-line)', borderRadius: 6, padding: 14, marginBottom: 12 }}>
@@ -240,10 +249,6 @@ export default function EstimateGroupsCard({ job, jobId }) {
         </div>
       ))}
 
-      <div className="section-actions">
-        <button className="btn btn-sm" onClick={addGroup} disabled={busy || isLocked}>+ Alternate</button>
-      </div>
-
       {isLocked && (declinedAlternates.length > 0 || declinedScopeOptions.length > 0) && (
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
           <h4 style={{ margin: '0 0 4px' }}>What the customer didn't pick</h4>
@@ -272,4 +277,6 @@ export default function EstimateGroupsCard({ job, jobId }) {
       )}
     </div>
   );
-}
+});
+
+export default EstimateGroupsCard;

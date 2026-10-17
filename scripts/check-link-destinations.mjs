@@ -34,7 +34,13 @@ function check(label, tabKey, sectionKey) {
   }
 }
 
-for (const [name, d] of Object.entries(links.JOB_DESTINATIONS)) check(`destination "${name}"`, d.tab, d.section);
+for (const [name, d] of Object.entries(links.JOB_DESTINATIONS)) {
+  check(`destination "${name}"`, d.tab, d.section);
+  // `view` is only meaningful inside Overview > Customer (Details / Portal & Notifications).
+  if (d.view && !(d.tab === 'Overview' && d.section === 'customer' && d.view === 'portal')) {
+    problems.push(`destination "${name}" -> view "${d.view}" is only supported on Overview > Customer (portal)`);
+  }
+}
 for (const [stage, d] of Object.entries(links.STAGE_LANDING)) check(`stage "${stage}" landing`, d.tab, d.section);
 for (const stage of Object.keys(links.STAGE_LANDING)) {
   const dest = links.billingDestination(stage);

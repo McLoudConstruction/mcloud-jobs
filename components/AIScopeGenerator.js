@@ -1,11 +1,18 @@
 'use client';
 import { useState } from 'react';
 
-export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTradeActions }) {
+// By default this renders its own "Generate scope with AI" button. A parent
+// that wants the button somewhere else (the Scope card puts it in its header)
+// passes `open` and `onOpenChange` to control the panel and `hideTrigger` to
+// drop the built-in button.
+export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTradeActions, open: openProp, onOpenChange, hideTrigger }) {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const setOpen = value => { if (controlled) { if (onOpenChange) onOpenChange(value); } else setOpenState(value); };
 
   async function generate() {
     if (!description.trim()) return;
@@ -35,6 +42,8 @@ export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTra
       setLoading(false);
     }
   }
+
+  if (!open && hideTrigger) return null;
 
   return (
     <div style={{ marginBottom: 14 }}>

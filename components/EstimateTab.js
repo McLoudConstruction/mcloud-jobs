@@ -4,7 +4,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
 import MaterialImageChooser from './MaterialImageChooser';
-import { SERVICES_OFFERED } from '../lib/constants';
+import { SERVICES_OFFERED, COST_TYPES, costTypeLabel } from '../lib/constants';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '$0.00';
@@ -36,7 +36,12 @@ export default function EstimateTab({ job, jobId, section, children }) {
   const [priceBook, setPriceBook] = useState([]);
   const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' });
   const [priceMatches, setPriceMatches] = useState([]);
-  const [newLabor, setNewLabor] = useState({ trade: SERVICES_OFFERED[0], description: '', unit_price: '' });
+  const [newLabor, setNewLabor] = useState({ cost_type: 'subcontractor', trade: SERVICES_OFFERED[0], description: '', unit_price: '' });
+  // Which trade's action list is showing in the sidebar. It follows the cost
+  // line you are working on, so the list is in view while you price it.
+  const [focusTrade, setFocusTrade] = useState(null);
+  const [openActionRows, setOpenActionRows] = useState({}); // { [itemId]: true } rows with their trade's actions expanded
+  const taxAutoTried = useRef('');
   const marginSaveTimer = useRef(null);
   const taxSaveTimer = useRef(null);
   const materialDescRef = useRef(null);
@@ -178,17 +183,20 @@ export default function EstimateTab({ job, jobId, section, children }) {
       // before inserting, rather than trusting React state — closes the
       // race where a second click (or a slow realtime update) sees a
       // stale list and re-adds a trade that was just added a moment ago.
-      let existingQuery = supabase.from('job_estimate_items').select('unit_label').eq('job_id', jobId).eq('category', 'labor');
+      let existingQuery = supabase.from('job_estimate_items').select('unit_label, cost_type').eq('job_id', jobId).eq('category', 'labor');
       existingQuery = isMulti ? existingQuery.eq('option_id', selectedOptionId) : existingQuery.is('option_id', null);
       const { data: currentLabor } = await existingQuery;
-      const existingTrades = new Set((currentLabor || []).map(it => it.unit_label));
+      // Only subcontractor lines count: a Labor or Supervision line for
+      // Framing does not mean Framing already has its subcontractor row.
+      const existingTrades = new Set((currentLabor || []).filter(it => (it.cost_type || 'subcontractor') === 'subcontractor').map(it => it.unit_label));
       const toAdd = trades.filter(t => !existingTrades.has(t));
       if (toAdd.length === 0) return;
       const { error: insertError } = await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
         job_id: jobId,
         option_id: isMulti ? selectedOptionId : null,
         category: 'labor',
-        description: `${trade} — labor/subcontractor cost`,
+        cost_type: 'subcontractor',
+        description: `${trade} subcontractor cost`,
         quantity: 1,
         unit_label: trade,
         unit_price: 0,
@@ -321,18 +329,29 @@ export default function EstimateTab({ job, jobId, section, children }) {
   async function addLaborItem(e) {
     e.preventDefault();
     if (isMulti && !selectedOptionId) return;
+    const isSupervision = newLabor.cost_type === 'supervision';
+    const trade = isSupervision ? (newLabor.trade || '') : (newLabor.trade || SERVICES_OFFERED[0]);
+    const fallbackDescription = isSupervision
+      ? (trade ? `Supervision, ${trade}` : 'Supervision')
+      : `${trade} ${costTypeLabel(newLabor.cost_type).toLowerCase()} cost`;
     const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
       option_id: isMulti ? selectedOptionId : null,
       category: 'labor',
-      description: newLabor.description.trim() || `${newLabor.trade} — labor/subcontractor cost`,
+      cost_type: newLabor.cost_type,
+      description: newLabor.description.trim() || fallbackDescription,
       quantity: 1,
-      unit_label: newLabor.trade,
+      unit_label: trade,
       unit_price: parseFloat(newLabor.unit_price) || 0,
       source: 'manual',
     }).select().single();
-    if (!error && data) setItems(prev => [...prev, data]);
-    setNewLabor({ trade: SERVICES_OFFERED[0], description: '', unit_price: '' });
+    if (error) {
+      setTradesError(error.message.includes('cost_type') ? 'Cost types need migration 159 run in Supabase first.' : error.message);
+    } else if (data) {
+      setTradesError('');
+      setItems(prev => [...prev, data]);
+    }
+    setNewLabor(prev => ({ cost_type: prev.cost_type, trade: prev.trade, description: '', unit_price: '' }));
     laborDescRef.current?.focus();
   }
 
@@ -347,6 +366,24 @@ export default function EstimateTab({ job, jobId, section, children }) {
         supabase.from('jobs').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', jobId);
       }
     }, 500);
+  }
+
+  const [taxLookup, setTaxLookup] = useState({ busy: false, note: '' });
+  async function lookupSalesTax() {
+    const zip = String(job.project_zip || '').trim().slice(0, 5);
+    if (!/^\d{5}$/.test(zip)) { setTaxLookup({ busy: false, note: 'Add a ZIP code to the project address first.' }); return; }
+    setTaxLookup({ busy: true, note: '' });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/sales-tax?zip=${zip}`, { headers: { Authorization: `Bearer ${session?.access_token || ''}` } });
+      const body = await res.json();
+      if (body.error === 'not_configured') { setTaxLookup({ busy: false, note: 'Automatic lookup is not set up. Enter the rate by hand.' }); return; }
+      if (!res.ok || body.error) { setTaxLookup({ busy: false, note: body.error || 'Lookup failed.' }); return; }
+      saveSalesTax(String(body.percent));
+      setTaxLookup({ busy: false, note: `${body.percent}% for ZIP ${zip}. Confirm before sending.` });
+    } catch {
+      setTaxLookup({ busy: false, note: 'Lookup failed.' });
+    }
   }
 
   function saveSalesTax(value) {
@@ -366,6 +403,8 @@ export default function EstimateTab({ job, jobId, section, children }) {
   const laborItems = items.filter(it => it.category === 'labor');
   const materialSubtotal = materialItems.reduce((s, it) => s + lineTotal(it), 0);
   const laborSubtotal = laborItems.reduce((s, it) => s + lineTotal(it), 0);
+  const costByType = Object.fromEntries(COST_TYPES.map(t => [t.value, laborItems.filter(it => (it.cost_type || 'subcontractor') === t.value).reduce((sum, it) => sum + lineTotal(it), 0)]));
+  const typesWithCost = COST_TYPES.filter(t => costByType[t.value] > 0);
   const taxNum = parseFloat(salesTax) || 0;
   const salesTaxDollars = materialSubtotal * (taxNum / 100);
   const subtotal = materialSubtotal + salesTaxDollars + laborSubtotal;
@@ -521,9 +560,12 @@ export default function EstimateTab({ job, jobId, section, children }) {
           </div>
 
           <div className="card">
-            <h3>Subcontractor Cost{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
+            <h3>Costs{isMulti && selectedOption ? ` - ${selectedOption.label}` : ''}</h3>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
+              Subcontractors, your own labor, and supervision. Each line has a type. The action list for the trade you are working on stays in view on the right.
+            </div>
 
-            <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
+            <div className="section-actions" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestTradesFromActions} disabled={suggestingTrades || actions.length === 0}>
                 {suggestingTrades ? 'Adding…' : 'Add a row per trade from action list'}
               </button>
@@ -531,54 +573,96 @@ export default function EstimateTab({ job, jobId, section, children }) {
             {tradesError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{tradesError}</div>}
 
             <div className="estimate-table" style={{ marginTop: 16 }}>
-              <div className="estimate-row estimate-header-row">
+              <div className="estimate-row estimate-header-row estimate-row-costs">
                 <div>Description</div>
+                <div>Type</div>
                 <div>Trade</div>
                 <div>Cost</div>
                 <div>Total</div>
                 <div></div>
               </div>
-              {laborItems.map(it => (
-                <div key={it.id} className={`estimate-row ${rowStatus[it.id] === 'saved' ? 'row-flash-saved' : rowStatus[it.id] === 'error' ? 'row-flash-error' : ''}`}>
-                  <div>
-                    <input
-                      value={it.description}
-                      onChange={e => updateLocalItem(it.id, 'description', e.target.value)}
-                      onBlur={e => persistItem(it.id, 'description', e.target.value)}
-                    />
-                    {it.source === 'suggested' && <span className="estimate-tag">Suggested</span>}
-                    {rowStatus[it.id] === 'error' && <div style={{ fontSize: 11, color: '#a13f3f', marginTop: 3 }}>Couldn't save — try again</div>}
+              {laborItems.map(it => {
+                const type = it.cost_type || 'subcontractor';
+                const tradeActions = it.unit_label ? actions.filter(a => (a.trade || 'Other') === it.unit_label) : [];
+                return (
+                  <div
+                    key={it.id}
+                    className={`estimate-row estimate-row-costs ${rowStatus[it.id] === 'saved' ? 'row-flash-saved' : rowStatus[it.id] === 'error' ? 'row-flash-error' : ''}`}
+                    onFocus={() => setFocusTrade(it.unit_label || 'All')}
+                  >
+                    <div>
+                      <input
+                        value={it.description}
+                        onChange={e => updateLocalItem(it.id, 'description', e.target.value)}
+                        onBlur={e => persistItem(it.id, 'description', e.target.value)}
+                      />
+                      {it.source === 'suggested' && <span className="estimate-tag">Suggested</span>}
+                      {rowStatus[it.id] === 'error' && <div style={{ fontSize: 11, color: '#a13f3f', marginTop: 3 }}>Couldn't save, try again</div>}
+                      {it.unit_label && (
+                        <>
+                          <button type="button" className="estimate-actions-toggle" onClick={() => setOpenActionRows(prev => ({ ...prev, [it.id]: !prev[it.id] }))}>
+                            {openActionRows[it.id] ? 'Hide' : 'Show'} {tradeActions.length} {tradeActions.length === 1 ? 'action' : 'actions'} for {it.unit_label}
+                          </button>
+                          {openActionRows[it.id] && (
+                            <div className="estimate-actions-list">
+                              {tradeActions.length === 0 && <div style={{ color: 'var(--ink-soft)' }}>No actions listed for {it.unit_label} yet.</div>}
+                              {tradeActions.map(a => (
+                                <div key={a.id} style={{ marginBottom: 3 }}>
+                                  <b>{a.quantity}{a.unit_label ? ` ${a.unit_label}` : ''}</b> {a.description}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div>
+                      <select
+                        value={type}
+                        onChange={e => { updateLocalItem(it.id, 'cost_type', e.target.value); persistItem(it.id, 'cost_type', e.target.value); }}
+                      >
+                        {COST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <select
+                        value={it.unit_label || ''}
+                        onChange={e => { updateLocalItem(it.id, 'unit_label', e.target.value); persistItem(it.id, 'unit_label', e.target.value); setFocusTrade(e.target.value || 'All'); }}
+                      >
+                        {type === 'supervision' && <option value="">All trades</option>}
+                        {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <input
+                        type="number" step="0.01"
+                        value={it.unit_price}
+                        onChange={e => updateLocalItem(it.id, 'unit_price', e.target.value)}
+                        onBlur={e => persistItem(it.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="estimate-line-total">{fmtMoney(lineTotal(it))}</div>
+                    <div>
+                      <button className="btn btn-sm btn-danger" onClick={() => deleteItem(it.id)}>×</button>
+                    </div>
                   </div>
-                  <div>
-                    <select
-                      value={it.unit_label || ''}
-                      onChange={e => { updateLocalItem(it.id, 'unit_label', e.target.value); persistItem(it.id, 'unit_label', e.target.value); }}
-                    >
-                      {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <input
-                      type="number" step="0.01"
-                      value={it.unit_price}
-                      onChange={e => updateLocalItem(it.id, 'unit_price', e.target.value)}
-                      onBlur={e => persistItem(it.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="estimate-line-total">{fmtMoney(lineTotal(it))}</div>
-                  <div>
-                    <button className="btn btn-sm btn-danger" onClick={() => deleteItem(it.id)}>×</button>
-                  </div>
-                </div>
-              ))}
-              {laborItems.length === 0 && <div className="empty-state" style={{ padding: '14px 0' }}>No subcontractor costs yet.</div>}
+                );
+              })}
+              {laborItems.length === 0 && <div className="empty-state" style={{ padding: '14px 0' }}>No costs yet.</div>}
             </div>
 
             <form onSubmit={addLaborItem} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14, marginTop: 16 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 8 }}>+ Add subcontractor cost</div>
-              <div className="estimate-add-grid">
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 8 }}>+ Add cost</div>
+              <div className="estimate-add-grid estimate-add-grid-costs">
                 <input ref={laborDescRef} placeholder="Description (optional)" value={newLabor.description} onChange={e => setNewLabor(prev => ({ ...prev, description: e.target.value }))} />
-                <select value={newLabor.trade} onChange={e => setNewLabor(prev => ({ ...prev, trade: e.target.value }))}>
+                <select value={newLabor.cost_type} onChange={e => setNewLabor(prev => ({ ...prev, cost_type: e.target.value, trade: e.target.value === 'supervision' ? '' : (prev.trade || SERVICES_OFFERED[0]) }))}>
+                  {COST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <select
+                  value={newLabor.trade}
+                  onChange={e => { setNewLabor(prev => ({ ...prev, trade: e.target.value })); setFocusTrade(e.target.value || 'All'); }}
+                >
+                  {newLabor.cost_type === 'supervision' && <option value="">All trades</option>}
                   {SERVICES_OFFERED.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
                 <input type="number" step="0.01" placeholder="Cost" value={newLabor.unit_price} onChange={e => setNewLabor(prev => ({ ...prev, unit_price: e.target.value }))} />
@@ -589,7 +673,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
         </div>
 
         <div className="estimate-sidebar">
-          <TradeBreakdownCard jobId={jobId} />
+          <TradeBreakdownCard jobId={jobId} trade={focusTrade || 'All'} onTradeChange={setFocusTrade} />
         </div>
       </div>
     );
@@ -631,9 +715,21 @@ export default function EstimateTab({ job, jobId, section, children }) {
                     </span>
                     <span>{fmtMoney(salesTaxDollars)}</span>
                   </div>
+                  <div className="estimate-tax-note">
+                    <button type="button" className="estimate-actions-toggle" onClick={lookupSalesTax} disabled={taxLookup.busy}>
+                      {taxLookup.busy ? 'Looking up…' : 'Look up by project ZIP'}
+                    </button>
+                    {taxLookup.note && <span> {taxLookup.note}</span>}
+                  </div>
                 </td>
               </tr>
-              <tr><td>Subcontractor Cost</td><td>{fmtMoney(laborSubtotal)}</td></tr>
+              <tr><td>Costs</td><td>{fmtMoney(laborSubtotal)}</td></tr>
+              {typesWithCost.length > 1 && typesWithCost.map(t => (
+                <tr key={t.value}>
+                  <td style={{ paddingLeft: 14, fontSize: 12, color: 'var(--ink-soft)' }}>{t.label}</td>
+                  <td style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{fmtMoney(costByType[t.value])}</td>
+                </tr>
+              ))}
               <tr className="estimate-margin-total-row"><td>Total Cost</td><td>{fmtMoney(subtotal)}</td></tr>
               <tr>
                 <td>Margin</td>

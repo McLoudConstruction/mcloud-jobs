@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { jobHref } from '../lib/links';
@@ -20,7 +20,10 @@ function fmtMoney(v) {
 // each option is priced from a full materials/subcontractor cost
 // build-up on the Cost tab (option switcher there). This card just shows
 // the option's current computed price and links over to price it.
-export default function ScopeOptionsCard({ job, jobId }) {
+//
+// The Scope card's "Add Scope Variation" button adds options through the ref
+// (addOption), so there is no add button down here any more.
+const ScopeOptionsCard = forwardRef(function ScopeOptionsCard({ job, jobId }, ref) {
   const [options, setOptions] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -42,8 +45,11 @@ export default function ScopeOptionsCard({ job, jobId }) {
 
   const isLocked = !!job.estimate_groups_submitted_at;
 
-  async function addOption() {
-    const label = window.prompt('Name this option (e.g. "Option A: Patch Repair"):');
+  // `name` is passed when the caller already asked for one (the Scope card
+  // does); otherwise this asks.
+  async function addOption(name) {
+    if (isLocked) return;
+    const label = name || window.prompt('Name this option (e.g. "Option A: Patch Repair"):');
     if (!label || !label.trim()) return;
     setBusy(true);
     setError('');
@@ -56,6 +62,8 @@ export default function ScopeOptionsCard({ job, jobId }) {
     if (insertError) { setError(insertError.message); return; }
     await load();
   }
+
+  useImperativeHandle(ref, () => ({ addOption }));
 
   async function updateOption(id, patch) {
     setBusy(true);
@@ -96,10 +104,10 @@ export default function ScopeOptionsCard({ job, jobId }) {
     <div>
       {error && <div style={{ fontSize: 12, color: '#a13f3f', marginBottom: 10 }}>{error}</div>}
 
-      {options.length === 0 && <div className="empty-state">No scope options yet — add at least two below.</div>}
+      {options.length === 0 && <div className="empty-state">No scope variations yet. Use Add Scope Variation above to add at least two.</div>}
       {options.length === 1 && (
         <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-          Add at least one more option — the customer needs two or more to choose between.
+          Add one more variation. The customer needs two or more to choose between.
         </div>
       )}
 
@@ -119,12 +127,11 @@ export default function ScopeOptionsCard({ job, jobId }) {
         />
       ))}
 
-      <div className="section-actions">
-        <button className="btn btn-sm" onClick={addOption} disabled={busy || isLocked}>+ Add option</button>
-      </div>
     </div>
   );
-}
+});
+
+export default ScopeOptionsCard;
 
 // Its own local item list (seeded once from the option, not resynced on
 // every prop refresh) — same pattern as ScopeCard's single-scope editor —

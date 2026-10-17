@@ -76,7 +76,7 @@ export default function WorkOrderDocumentPage() {
     setSendResult(null);
     try {
       const attachmentBase64 = await generatePdfBase64('doc-preview', docFilename('Work-Order', company?.company_name || job.customer_name));
-      const subject = `Work Order — McLoud Construction, Project #${job.project_number}`;
+      const subject = `Work Order from McLoud Construction`; // the [Project #] tag is appended on send
       const html = `<div style="font-family: -apple-system, sans-serif; font-size: 14px; color: #1C1B19; line-height: 1.6;">
         <p>Hi${company?.contact_name ? ' ' + company.contact_name.split(' ')[0] : ''},</p>
         <p>Attached is a work order from McLoud Construction for project #${job.project_number} (${job.project_address || ''}).</p>

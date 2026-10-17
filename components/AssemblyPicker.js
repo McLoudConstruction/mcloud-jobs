@@ -9,7 +9,7 @@ import { appHref } from '../lib/links';
 // scope they're building. Purely additive — it hands items back to the
 // parent's onApply, the same shape AIScopeGenerator/VoiceScopeRecorder use,
 // so nothing is saved until the normal "Save scope" button is pressed.
-export default function AssemblyPicker({ onApply }) {
+export default function AssemblyPicker({ onApply, align = 'left' }) {
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [items, setItems] = useState({});
@@ -32,11 +32,11 @@ export default function AssemblyPicker({ onApply }) {
   }
 
   return (
-    <div style={{ display: 'inline-block', marginRight: 8 }}>
+    <div style={{ display: 'inline-block', position: 'relative', marginRight: align === 'right' ? 0 : 8 }}>
       <button type="button" className="btn btn-sm" onClick={() => setOpen(o => !o)}>+ From assembly</button>
       {open && (
-        <div style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', zIndex: 5, top: 4, background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 10, minWidth: 260, boxShadow: '0 2px 10px rgba(0,0,0,0.12)' }}>
+        <div>
+          <div style={{ position: 'absolute', zIndex: 5, top: 'calc(100% + 4px)', [align === 'right' ? 'right' : 'left']: 0, textAlign: 'left', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 10, minWidth: 260, boxShadow: '0 2px 10px rgba(0,0,0,0.12)' }}>
             {ASSEMBLY_CATEGORIES.map(cat => (
               <div key={cat.key} style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9b773d' }}>{cat.label}</div>
