@@ -212,6 +212,8 @@ canvas.elev { width: 100%; display: block; border: 1px solid var(--line); border
 .seg2 { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
 .seg2 button { min-height: 34px; padding: 4px 11px; border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 13px; color: var(--ink); }
 .seg2 button:last-child { border-right: 0; }
+.seg2 button[aria-selected="true"] { background: var(--accent-soft); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.seg2 button:disabled { opacity: .45; cursor: not-allowed; }
 .seg2 button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .dimed { position: absolute; z-index: 8; width: 288px; max-width: calc(100% - 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.28); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .dimed .dimed-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -1118,6 +1120,10 @@ function runChecks(state, an, tk, more) {
     if (typeof roomDesignChecks === 'function') for (const c of roomDesignChecks(st, a)) add(c);
   }
   if (typeof stairChecks === 'function') for (const c of stairChecks(state, passes)) out.push(c);
+  const lbOut = passes.reduce((n, P) => n + P.st.walls.filter(w => w.fixed && isZone(w)).length, 0);
+  if (lbOut) out.push({ sev: 'warn', text: lbOut + ' load bearing wall' + (lbOut > 1 ? 's are' : ' is') + ' made missing or open. This needs a beam or header and an engineer before it can be built.' });
+  { const Lx = activeLayout(state), ex = state.layouts.find(l => l.kind === 'existing');
+    if (Lx && Lx.locked && Lx.baseSig && ex && ex.data && sketchSig(state) !== Lx.baseSig) out.push({ sev: 'warn', text: 'Sketch changed after this concept was made. Re-sync walls to bring the concept up to date.', action: 'resync' }); }
   const fixedWalls = passes.reduce((n, P) => n + P.st.walls.filter(w => w.fixed).length, 0);
   if (fixedWalls) out.push({ sev: 'info', text: fixedWalls + ' wall' + (fixedWalls > 1 ? 's are' : ' is') + ' marked load bearing. Moving or opening ' + (fixedWalls > 1 ? 'them' : 'it') + ' needs an engineer and a temporary support plan.' });
   const demo = tk.lines.some(l => l.cat === 'Demo');
@@ -2704,6 +2710,42 @@ function ensureLayouts(state) {
   return state;
 }
 function activeLayout(state) { return state.layouts.find(l => l.id === state.activeLayout); }
+/* ----- phases: Sketch is the Existing layout, Design is a concept. A concept made by Finalize sketch is locked: room size stays. ----- */
+const layoutLocked = () => { const L = activeLayout(state); return !!(L && L.locked); };
+const wallLocked = w => !!(w && w.lock && layoutLocked());
+const isExteriorWall = w => w.t >= 5.5;
+const sketchFinal = st => !!(st.sketchFinal || st.layouts.some(l => l.kind === 'new'));
+const LOCK_MSG = 'Room size is locked in Design. Switch to Sketch to change it.';
+function existingHolder(st) { const ex = st.layouts.find(l => l.kind === 'existing'); return ex ? (ex.id === st.activeLayout ? pickLayout(st) : ex.data) : null; }
+function sketchSig(st) {
+  const h = existingHolder(st); if (!h) return '';
+  const parts = [];
+  for (const f of st.floors) {
+    const c = contentOf(h, f.id); if (!c) continue;
+    parts.push(f.id + ':' + c.walls.map(w => [w.a.x, w.a.y, w.b.x, w.b.y, w.t].map(v => Math.round(v * 10)).join(',')).sort().join(';') + '|' + c.openings.map(o => o.kind + Math.round(o.w) + Math.round(o.offset)).sort().join(','));
+  }
+  const str = parts.join('/'); let n = 0; for (let i = 0; i < str.length; i++) n = (n * 31 + str.charCodeAt(i)) | 0;
+  return String(n);
+}
+function lockConcept(st, L) {
+  for (const f of st.floors) { const c = contentOf(L.data, f.id); if (c) for (const w of c.walls) w.lock = true; }
+  L.locked = true; L.baseSig = sketchSig(st);
+}
+/* replace the sketch walls in the live (locked) concept with the current sketch. Walls added in Design stay. */
+function resyncConcept(st) {
+  const L = activeLayout(st), ex = st.layouts.find(l => l.kind === 'existing');
+  if (!L || !L.locked || !ex || !ex.data) return false;
+  for (const f of st.floors) {
+    const dst = contentOf(st, f.id), src = contentOf(ex.data, f.id); if (!dst || !src) continue;
+    const gone = new Set(dst.walls.filter(w => w.lock).map(w => w.id));
+    dst.walls = dst.walls.filter(w => !gone.has(w.id)); dst.openings = dst.openings.filter(o => !gone.has(o.wallId));
+    const map = {};
+    for (const w of src.walls) { const n = JSON.parse(JSON.stringify(w)); n.id = uid(st, 'w'); n.lock = true; map[w.id] = n.id; dst.walls.push(n); }
+    for (const o of src.openings) if (map[o.wallId]) { const n = JSON.parse(JSON.stringify(o)); n.id = uid(st, 'o'); n.wallId = map[o.wallId]; dst.openings.push(n); }
+  }
+  L.baseSig = sketchSig(st);
+  return true;
+}
 
 /* ----- floors ----- */
 const FLOOR_NAMES = ['Main floor', 'Second floor', 'Third floor', 'Fourth floor', 'Fifth floor'];
@@ -3000,8 +3042,12 @@ function fixSel() {
     (sel.type === 'fixture' && state.fixtures.some(f => f.id === sel.id)) || (sel.type === 'block' && state.blocks.some(b => b.id === sel.id)) || (sel.type === 'room' && state.rooms.some(r => r.id === sel.id));
   if (!ok) sel = null;
 }
+function lockGeom() { return state.walls.filter(w => w.lock).map(w => w.id + ':' + [w.a.x, w.a.y, w.b.x, w.b.y].map(v => Math.round(v * 100)).join(',')).sort().join(';'); }
 function mutate(fn, o) {
-  pushUndo(); fn(); state.example = false; clampOpenings();
+  const lg = layoutLocked() ? lockGeom() : null;
+  pushUndo(); fn();
+  if (lg !== null && lockGeom() !== lg) { restore(undoStack.pop()); toast(LOCK_MSG); recompute(); fixSel(); refresh(o); return; }
+  state.example = false; clampOpenings();
   recompute(); fixSel(); scheduleSave(); refresh(o);
 }
 function clampOpenings() {
@@ -3393,6 +3439,7 @@ function dimHitAt(p) {
 function closeDimEditor() { const el = $('#dimEd'); if (el) el.remove(); dimEd = null; }
 function eighthsParts(v) { const e = Math.max(0, Math.round(v * 8)), ft = Math.floor(e / 96), rem = e - ft * 96; return { ft, inch: Math.floor(rem / 8), fr: rem % 8 }; }
 function openDimEditor(h) {
+  if (layoutLocked()) { toast(LOCK_MSG); return; }
   closeDimEditor();
   let title, cur, dirs, note;
   if (h.kind === 'edge') {
@@ -3751,6 +3798,8 @@ function addRoomTyped() {
 function fixtureLocked(f) { const a = activeLayout(state); return !!(f && FIXTURES[f.kind] && FIXTURES[f.kind].fixed && a && a.kind !== 'existing' && !f.moved); }
 function removeEntity(s) {
   if (!s) return;
+  if (layoutLocked() && s.type === 'room') { toast(LOCK_MSG); return; }
+  if (s.type === 'wall' && wallLocked(state.walls.find(x => x.id === s.id))) { toast('This wall is part of the sketch. Use Make missing to take it out of the design.'); return; }
   if (s.type === 'room') {
     const rm = AN.rooms.find(x => x.meta.id === s.id); if (!rm) return;
     const otherSegs = new Set();
@@ -4017,7 +4066,7 @@ cv.addEventListener('pointerdown', e => {
   }
   if (ptrs.size > 2) return;
   metaStashOn = true;
-  g = { start: p, moved: false, node: null, hit: null, mode: null, ox: view.ox, oy: view.oy };
+  g = { start: p, moved: false, node: null, hit: null, mode: null, ox: view.ox, oy: view.oy, lg: layoutLocked() ? lockGeom() : null };
   if (tool === 'select') { g.node = nodeHit(p); g.hit = hitTest(p); }
   if (tool === 'pan') g.mode = 'pan';
   if (tool === 'trace' && UL && ulMode !== 'scale') { g.mode = 'ul'; g.last = p; }
@@ -4045,15 +4094,18 @@ cv.addEventListener('pointermove', e => {
   if (tool === 'wall') { curSnap = snapPt(S2W(p), { from: pending || snapPt(S2W(g.start)) }); draw(); return; }
   if (tool === 'room') { if (!pending) { pending = snapPt(S2W(g.start)); g.dragRoom = true; } curSnap = snapPt(S2W(p)); draw(); return; }
   if (tool === 'select' && !g.mode) {
-    if (g.node && sel && sel.type === 'wall') {
+    if (g.node && sel && sel.type === 'wall' && layoutLocked() && state.walls.some(x => x.lock && (ptKey(x.a.x, x.a.y) === ptKey(g.node.x, g.node.y) || ptKey(x.b.x, x.b.y) === ptKey(g.node.x, g.node.y)))) { g.mode = 'pan'; toast(LOCK_MSG); }
+    else if (g.node && sel && sel.type === 'wall') {
       g.mode = 'node'; g.cur = { x: g.node.x, y: g.node.y }; pushUndo(); g.undone = true;
       const sw = state.walls.find(x => x.id === sel.id), k = ptKey(g.node.x, g.node.y);
       g.endWall = sw && !nodeInRoom(g.node) ? (ptKey(sw.a.x, sw.a.y) === k ? { id: sw.id, end: 'a' } : ptKey(sw.b.x, sw.b.y) === k ? { id: sw.id, end: 'b' } : null) : null;
     }
     else if (g.hit && g.hit.type === 'fixture' && fixtureLocked(state.fixtures.find(x => x.id === g.hit.id))) { g.mode = 'pan'; toast('Immovable item. Select it and tick "Allow moving in this concept" to relocate it.'); }
     else if (g.hit && g.hit.type === 'fixture') { g.mode = 'fixture'; sel = g.hit; pushUndo(); }
-    else if (g.hit && g.hit.type === 'block') { g.mode = 'block'; sel = g.hit; pushUndo(); const bb = blockById(g.hit.id); g.grab = bb ? { x: bb.x - S2W(p).x, y: bb.y - S2W(p).y } : { x: 0, y: 0 }; if (tab !== 'design') { tab = 'design'; renderPanel(); } }
+    else if (g.hit && g.hit.type === 'block') { g.mode = 'block'; sel = g.hit; pushUndo(); const bb = blockById(g.hit.id); g.grab = bb ? { x: bb.x - S2W(p).x, y: bb.y - S2W(p).y } : { x: 0, y: 0 }; if (tab !== 'design' && !sketchMode()) { tab = 'design'; renderPanel(); } }
     else if (g.hit && g.hit.type === 'opening') { g.mode = 'opening'; sel = g.hit; pushUndo(); }
+    else if (g.hit && g.hit.type === 'wall' && sel && sel.type === 'wall' && sel.id === g.hit.id && wallLocked(state.walls.find(x => x.id === g.hit.id))) { g.mode = 'pan'; toast(LOCK_MSG); }
+    else if (g.hit && g.hit.type === 'room' && sel && sel.type === 'room' && sel.id === g.hit.id && layoutLocked()) { g.mode = 'pan'; toast(LOCK_MSG); }
     else if (g.hit && g.hit.type === 'wall' && sel && sel.type === 'wall' && sel.id === g.hit.id) {
       const wl = state.walls.find(x => x.id === g.hit.id), gm = wallGeom(wl);
       g.mode = 'wallmove'; pushUndo(); g.mv = { ids: [wl.id], nx: -gm.uy, ny: gm.ux, tx: 0, ty: 0, fx: [], bl: [] };
@@ -4120,6 +4172,7 @@ function endPointer(e, cancel) {
   if (pinch) { if (ptrs.size < 2) pinch = null; g = null; return; }
   if (!g || cancel) { g = null; return; }
   const gg = g; g = null;
+  if (gg.moved && gg.lg != null && lockGeom() !== gg.lg) { restore(undoStack.pop()); toast(LOCK_MSG); recompute(); fixSel(); refresh(); return; }
   if (tool === 'trace') { if (ulMode === 'scale' && !gg.moved && UL) { ulPts.push(S2W(p)); if (ulPts.length > 2) ulPts = [ulPts[2]]; renderStrip(); draw(); } return; }
   if (tool === 'select') {
     if (gg.mode === 'wallmove' || gg.mode === 'roommove') finishMove(gg.mv);
@@ -4140,7 +4193,7 @@ function endPointer(e, cancel) {
     }
     sel = hit;
     if (hit && hit.type === 'room') { openRooms.add(hit.id); if (tab !== 'rooms') { tab = 'rooms'; } }
-    if (hit && hit.type === 'block') tab = 'design';
+    if (hit && hit.type === 'block' && !sketchMode()) tab = 'design';
     refresh();
     if (hit && hit.type === 'room') scrollToRoom(hit.id);
     return;
@@ -4196,11 +4249,12 @@ document.addEventListener('keydown', e => {
 const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['objects', 'Objects'], ['trace', 'Trace'], ['pan', 'Pan']];
 function renderTools() {
   const viewGrp = '<div class="tgroup" role="group" aria-label="View">' +
-    [['2d', 'plan', 'Plan'], ['3d', 'cube', '3D']].map(v => '<button class="tbtn" data-mode="' + v[0] + '" aria-pressed="' + (mode === v[0]) + '" type="button">' + icon(v[1]) + '<span>' + v[2] + '</span></button>').join('') + '</div>';
+    [['2d', 'plan', 'Plan'], ['3d', 'cube', '3D']].filter(v => v[0] === '2d' || !sketchMode()).map(v => '<button class="tbtn" data-mode="' + v[0] + '" aria-pressed="' + (mode === v[0]) + '" type="button">' + icon(v[1]) + '<span>' + v[2] + '</span></button>').join('') + '</div>';
   if (mode === '3d') { $('#tools').innerHTML = viewGrp; return; }
+  const lk = layoutLocked(), toolList = TOOLS.filter(t => !(lk && (t[0] === 'room' || t[0] === 'trace')));
   $('#tools').innerHTML = viewGrp +
-    '<div class="tgroup" role="group" aria-label="Tools">' + TOOLS.map(t => '<button class="tbtn" data-tool="' + t[0] + '" aria-pressed="' + (tool === t[0]) + '" type="button">' + icon(t[0]) + '<span>' + t[1] + '</span></button>').join('') + '</div>' +
-    '<div class="tgroup" role="group" aria-label="Break"><button class="tbtn" id="breakBtn" type="button" aria-pressed="' + breakMode + '" title="Insert a break point in a wall">' + icon('brk') + '<span>Break</span></button></div>' +
+    '<div class="tgroup" role="group" aria-label="Tools">' + toolList.map(t => '<button class="tbtn" data-tool="' + t[0] + '" aria-pressed="' + (tool === t[0]) + '" type="button">' + icon(t[0]) + '<span>' + t[1] + '</span></button>').join('') + '</div>' +
+    (lk ? '' : '<div class="tgroup" role="group" aria-label="Break"><button class="tbtn" id="breakBtn" type="button" aria-pressed="' + breakMode + '" title="Insert a break point in a wall">' + icon('brk') + '<span>Break</span></button></div>') +
     '<div class="tgroup" role="group" aria-label="History"><button class="tbtn" id="undoBtn" type="button">' + icon('undo') + '<span>Undo</span></button><button class="tbtn" id="redoBtn" type="button">' + icon('redo') + '<span>Redo</span></button></div>';
   updateHistoryBtns();
 }
@@ -4243,7 +4297,7 @@ function renderCtx() {
 }
 const HINTS = {
   select: 'Tap a wall, door, item or room to edit it. With a wall selected, drag it to push or pull it. A wall that is part of a room keeps its neighbours attached so the room stays closed; a free wall moves on its own. Drag a corner handle to move that end. With a room selected, drag it to move it on its own; its walls snap to neighbouring walls and merge into one. Drag empty space to pan.',
-  room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Item tool.',
+  room: 'Sketch each room at its real size. Tap one corner, then the opposite corner, or type the width and depth. Then mark what cannot move with the Objects tool.',
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
   window: 'Tap on a wall to place a window.',
@@ -4356,9 +4410,11 @@ function renderInspector() {
   }
   if (sel.type === 'wall') {
     const w = state.walls.find(x => x.id === sel.id); if (!w) { el.hidden = true; return; }
-    const L = wallGeom(w).L;
-    h = '<div class="insp-h"><strong>' + (isZone(w) ? 'Missing wall' : 'Wall') + '</strong><span class="btnrow"><button type="button" class="btn" data-miss="1">' + (isZone(w) ? 'Restore wall' : 'Make missing') + '</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
-      (isZone(w) ? '<p class="note">No wall is built here, but the room stays one room. Restore wall puts it back.</p>' : '') +
+    const L = wallGeom(w).L, lk = wallLocked(w), ext = lk && isExteriorWall(w) && !isZone(w);
+    if (lk) h = '<div class="insp-h"><strong>' + (isZone(w) ? 'Missing wall' : 'Wall') + ' (from the sketch)</strong><span class="btnrow">' + (ext ? '' : '<button type="button" class="btn" data-miss="1">' + (isZone(w) ? 'Restore wall' : 'Make missing') + '</button>') + '</span></div>' +
+      '<p class="note">' + (ext ? 'Outer wall. It cannot be moved or removed in Design, but you can add, move or change its doors and windows.' : w.fixed ? 'Load bearing. Making it missing needs a beam or header and an engineer.' : 'Its size is locked. Make it missing to open the room up.') + '</p>';
+    else h = '<div class="insp-h"><strong>' + (isZone(w) ? 'Missing wall' : 'Wall') + '</strong><span class="btnrow"><button type="button" class="btn" data-miss="1">' + (isZone(w) ? 'Restore wall' : 'Make missing') + '</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
+      (lk ? '' : (isZone(w) ? '<p class="note">No wall is built here, but the room stays one room. Restore wall puts it back.</p>' : '') +
       '<div class="fields">' +
       wallLenField(w, L) +
       '<label class="f">Thickness<select id="i-th">' + [0.5, 3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + (v === 0.5 ? 'Open edge (no wall)' : v + ' in') + '</option>').join('') + '</select></label>' +
@@ -4368,7 +4424,7 @@ function renderInspector() {
       '<div class="brk"><span class="lbl">Break wall</span><span class="btnrow">' +
       '<button type="button" class="btn' + (breakMode ? ' primary' : '') + '" data-brk="tap" aria-pressed="' + breakMode + '">' + (breakMode ? 'Tap the wall...' : 'Break at a tap') + '</button>' +
       '<button type="button" class="btn" data-brk="junc">Break at every junction</button>' +
-      '<span class="lenbox"><input class="mono" id="i-brk" autocomplete="off" placeholder="at 6-8 from start" aria-label="Break distance from the start of the wall"><button type="button" class="btn" data-brk="at">Break</button></span></span></div>';
+      '<span class="lenbox"><input class="mono" id="i-brk" autocomplete="off" placeholder="at 6-8 from start" aria-label="Break distance from the start of the wall"><button type="button" class="btn" data-brk="at">Break</button></span></span></div>');
   } else if (sel.type === 'opening') {
     const o = state.openings.find(x => x.id === sel.id); if (!o) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(OPENING_KINDS[o.kind].label) + '</strong><button type="button" class="btn danger" data-del="1">Delete</button></div>' +
@@ -4413,6 +4469,8 @@ $('#insp').addEventListener('click', e => {
     const w = state.walls.find(x => x.id === sel.id); if (!w) return;
     if (isZone(w)) { mutate(() => { w.t = w.prevT > 0.6 ? w.prevT : 4.5; delete w.prevT; }); toast('Wall restored'); }
     else {
+      if (wallLocked(w) && isExteriorWall(w)) { toast(LOCK_MSG); return; }
+      if (w.fixed && !window.confirm('This wall is marked load bearing.\n\nTaking it out needs a beam or header and an engineer. Make it missing anyway?')) return;
       const n = state.openings.filter(o => o.wallId === w.id).length;
       mutate(() => { w.prevT = w.t; w.t = 0.5; state.openings = state.openings.filter(o => o.wallId !== w.id); });
       toast('Wall removed. The room stays whole' + (n ? ' (its ' + n + ' door/window ' + (n > 1 ? 'items were' : 'was') + ' removed too)' : '') + '. Use Restore wall to put it back.');
@@ -4428,6 +4486,7 @@ $('#insp').addEventListener('change', e => {
   const id = e.target.id;
   if (sel && sel.type === 'wall') {
     const w = state.walls.find(x => x.id === sel.id); if (!w) return;
+    if (wallLocked(w) && id !== 'i-follow') { toast(LOCK_MSG); renderInspector(); return; }
     if (id === 'i-len') {
       const L = parseLen(e.target.value);
       if (!L || L < 6) { toast('Could not read that length'); renderInspector(); return; }
@@ -4468,9 +4527,11 @@ function updateSummary() {
 
 /* ---------- panels ---------- */
 const TABS = [['rooms', 'Rooms'], ['room', 'Room design'], ['design', 'Design'], ['takeoff', 'Takeoff'], ['checks', 'Checks'], ['export', 'Export']];
+function tabsNow() { return sketchMode() ? TABS.filter(t => t[0] !== 'room' && t[0] !== 'design') : TABS; }
 function renderTabs() {
   const warns = CK ? CK.filter(c => c.sev === 'warn').length : 0;
-  $('#tabs').innerHTML = TABS.map(t => '<button class="tab" role="tab" type="button" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + (t[0] === 'checks' && warns ? '<span class="n">' + warns + '</span>' : '') + '</button>').join('');
+  if (!tabsNow().some(t => t[0] === tab)) tab = 'rooms';
+  $('#tabs').innerHTML = tabsNow().map(t => '<button class="tab" role="tab" type="button" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + (t[0] === 'checks' && warns ? '<span class="n">' + warns + '</span>' : '') + '</button>').join('');
 }
 function renderPanel() {
   renderTabs();
@@ -4577,7 +4638,7 @@ function paneChecks() {
   const items = CK.slice().sort((a, b) => order[a.sev] - order[b.sev]);
   return '<p class="note">Gaps found by comparing the plan to a typical scope for each room type. Tap an item tied to a room to jump to it.</p>' +
     items.map(c => (c.roomId || c.blockId ? '<button type="button" class="ck ' + c.sev + '"' + (c.floorId ? ' data-gofloor="' + c.floorId + '"' : '') + (c.blockId ? ' data-goblock="' + c.blockId + '"' : ' data-goto="' + c.roomId + '"') + '>' : '<div class="ck ' + c.sev + '">') +
-      '<span class="tag">' + tagText[c.sev] + '</span><span class="t">' + esc(c.text) + '</span>' + (c.roomId || c.blockId ? '</button>' : '</div>')).join('');
+      '<span class="tag">' + tagText[c.sev] + '</span><span class="t">' + esc(c.text) + '</span>' + (c.action === 'resync' ? '<button type="button" class="btn" data-resync="1">Re-sync walls</button>' : '') + (c.roomId || c.blockId ? '</button>' : '</div>')).join('');
 }
 let exportText = '';
 let clearArmed = false;
@@ -4713,15 +4774,46 @@ const CONCEPT_NAMES = 'ABCDEFGH';
 function renderLayouts() {
   const el = $('#layouts');
   if (!el) return;
-  const act = activeLayout(state);
-  el.innerHTML = '<span class="lbl">Layout</span><span class="ltabs" role="tablist">' + state.layouts.map(l => '<button type="button" role="tab" class="ltab" data-layout="' + l.id + '" aria-selected="' + (l.id === state.activeLayout) + '">' + esc(l.name) + (l.kind === 'new' && l.id === estimateLayoutId(state) && state.layouts.length > 1 ? ' <i title="Used for the estimate">$</i>' : '') + '</button>').join('') + '</span>' +
+  const act = activeLayout(state), sk = sketchMode(), fin = sketchFinal(state);
+  const seg = '<span class="seg2" role="tablist" aria-label="Phase"><button type="button" role="tab" data-phase="sketch" aria-selected="' + sk + '">Sketch</button>' +
+    '<button type="button" role="tab" data-phase="design" aria-selected="' + !sk + '"' + (fin ? '' : ' disabled title="Finalize the sketch to open Design"') + '>Design</button></span>';
+  if (sk) {
+    el.innerHTML = '<span class="lbl">Phase</span>' + seg +
+      (fin ? '<span class="lbl">Sketch is finalized. Changes here do not move your concepts.</span>' : '<button type="button" class="chip-btn primary" id="finalizeBtn">Finalize sketch</button>');
+    return;
+  }
+  el.innerHTML = '<span class="lbl">Phase</span>' + seg + '<span class="ltabs" role="tablist">' + state.layouts.filter(l => l.kind === 'new').map(l => '<button type="button" role="tab" class="ltab" data-layout="' + l.id + '" aria-selected="' + (l.id === state.activeLayout) + '">' + esc(l.name) + (l.id === estimateLayoutId(state) && state.layouts.length > 1 ? ' <i title="Used for the estimate">$</i>' : '') + '</button>').join('') + '</span>' +
     '<button type="button" class="chip-btn" id="addConcept">+ New concept</button>' +
-    (act.kind === 'new' ? '<button type="button" class="chip-btn" data-ghost="1" aria-pressed="' + ghost + '">Show existing walls</button><button type="button" class="chip-btn" data-cpwalls="1">Copy existing walls</button>' : '');
+    '<button type="button" class="chip-btn" data-ghost="1" aria-pressed="' + ghost + '">Show sketch walls</button>' +
+    (act.locked ? '' : '<button type="button" class="chip-btn" data-cpwalls="1">Copy existing walls</button>');
+}
+function afterPhase() {
+  sel = null; pending = null; curSnap = null; breakMode = false;
+  if (mode === '3d' && sketchMode()) mode = '2d';
+  if (!tabsNow().some(t => t[0] === tab)) tab = 'rooms';
+  if (layoutLocked() && (tool === 'room' || tool === 'trace')) tool = 'select';
+  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+}
+function gotoPhase(ph) {
+  if (ph === 'sketch') { const ex = state.layouts.find(l => l.kind === 'existing'); if (ex && switchLayout(state, ex.id)) afterPhase(); return; }
+  if (!sketchFinal(state)) { toast('Finalize the sketch first'); return; }
+  const cs = state.layouts.filter(l => l.kind === 'new'); if (!cs.length) return;
+  const to = cs.find(l => l.id === state.lastConcept) || cs[0];
+  if (switchLayout(state, to.id)) afterPhase();
+}
+function finalizeSketch() {
+  if (!AN.rooms.length && !state.walls.length) { toast('Draw the rooms first'); return; }
+  if (!window.confirm('Finalize the sketch?\n\nDesign opens on a copy. In Design, room sizes and the outer walls are locked. You can reopen the sketch any time.')) return;
+  pushUndo();
+  state.sketchFinal = Date.now();
+  if (!state.layouts.some(l => l.kind === 'new')) makeConcept(null, '', true);
+  else gotoPhase('design');
+  toast('Sketch finalized. You are in Design.');
 }
 function doSwitch(id) {
   if (!switchLayout(state, id)) return;
-  sel = null; pending = null; curSnap = null;
-  recompute(); fitView(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
+  const L = activeLayout(state); if (L && L.kind === 'new') state.lastConcept = L.id;
+  afterPhase();
 }
 /* A new concept starts as a blank slate on every floor. Pass copy = true to duplicate a layout instead. */
 function makeConcept(fromId, style, copy) {
@@ -4729,7 +4821,9 @@ function makeConcept(fromId, style, copy) {
   const n = state.layouts.filter(l => l.kind === 'new').length;
   const base = fromId || (state.layouts.find(l => l.kind === 'existing') || state.layouts[0]).id;
   const L = addConcept(state, 'Concept ' + (CONCEPT_NAMES[n] || (n + 1)), base, style || '', !copy);
-  switchLayout(state, L.id);
+  const baseL = state.layouts.find(l => l.id === base);
+  if (copy && baseL && baseL.kind === 'existing') lockConcept(state, L);
+  switchLayout(state, L.id); state.lastConcept = L.id;
   sel = null; pending = null; tab = 'design';
   if (!copy) ghost = true;
   recompute(); scheduleSave(); renderTools(); renderCtx(); renderStrip(); refresh();
@@ -4755,7 +4849,10 @@ function copyExistingWalls() {
 document.addEventListener('click', e => {
   const lt = e.target.closest('[data-layout]');
   if (lt) { doSwitch(lt.dataset.layout); return; }
-  if (e.target.closest('#addConcept')) { makeConcept(); return; }
+  const ph = e.target.closest('[data-phase]'); if (ph) { gotoPhase(ph.dataset.phase); return; }
+  if (e.target.closest('#finalizeBtn')) { finalizeSketch(); return; }
+  if (e.target.closest('[data-resync]')) { if (window.confirm('Replace the sketch walls in this concept with the current sketch?\n\nDoors and windows on those walls go back to the sketch. Objects and walls you added in Design stay.')) { pushUndo(); resyncConcept(state); recompute(); scheduleSave(); refresh(); toast('Concept walls re-synced with the sketch'); } return; }
+  if (e.target.closest('#addConcept')) { if (sketchFinal(state)) { const ex = state.layouts.find(l => l.kind === 'existing'); makeConcept(ex.id, '', true); } else makeConcept(); return; }
   if (e.target.closest('[data-ghost]')) { ghost = !ghost; renderLayouts(); draw(); return; }
   if (e.target.closest('[data-cpwalls]')) { copyExistingWalls(); return; }
 });
@@ -5093,7 +5190,7 @@ function placeBlockAt(p) {
   if (isFreeTub(b)) { const g0 = wallGapOf(b, state); if (g0 != null && g0 <= TUB_GAP_FLUSH) snapBlock(b, TUB_GAP_DEFAULT); }
   if (def.mount === 'host' && !hostAt(state, b.x, b.y, b.id)) toast('Drop this on a base cabinet or island');
   mutate(() => { state.blocks.push(b); });
-  sel = { type: 'block', id: b.id }; tab = 'design'; refresh();
+  sel = { type: 'block', id: b.id }; if (!sketchMode()) tab = 'design'; refresh();
 }
 const blockById = id => state.blocks.find(b => b.id === id);
 function dupBlock(b) {
@@ -5162,7 +5259,7 @@ function paneDesign() {
       (def.cat === 'Cabinetry' || def.cat === 'Built-ins' ? '<div class="btnrow" style="margin-top:8px"><button type="button" class="btn" data-matchcab="1">Match these cabinet choices to all cabinets</button></div>' : '') +
       (def.furn ? '<p class="note">Furniture is part of the design only. It is not in the takeoff.</p>' : '');
   } else if (state.blocks.length === 0) {
-    h += '<p class="note">No blocks yet. Pick the <b>Design</b> tool, choose Kitchen, Bath, Built-ins, Furniture or Lighting, then tap the plan. Every block has its own styles and colors.</p>';
+    h += '<p class="note">No objects yet. Pick the <b>Objects</b> tool, choose a group such as Kitchen, Bath, Built-ins, Furniture or Lighting, then tap the plan. Every object has its own styles and colors.</p>';
   } else h += '<p class="note">Tap a block on the plan to change its style, colors and finishes.</p>';
   // schedule
   if (state.blocks.length) {
