@@ -213,6 +213,13 @@ canvas.elev { width: 100%; display: block; border: 1px solid var(--line); border
 .seg2 button { min-height: 34px; padding: 4px 11px; border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 13px; color: var(--ink); }
 .seg2 button:last-child { border-right: 0; }
 .seg2 button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.dimed { position: absolute; z-index: 8; width: 288px; max-width: calc(100% - 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.28); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dimed .dimed-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.dimed .dimed-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.dimed .dimed-row label.f { flex: 1 1 90px; }
+.dimed .chip-btn, .dimed .seg2 button, .dimed .btn { min-height: 44px; }
+.dimed .chip-btn { min-width: 44px; padding: 4px 8px; }
+.dimed .note { margin: 0; font-size: 12px; color: var(--muted); }
 .rdnote { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 8px 10px; margin: 8px 0; font-size: 13px; border-radius: 0 4px 4px 0; }
 .rdrow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0; }
 .rdrow .fl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-width: 64px; }
@@ -3273,6 +3280,244 @@ function drawBelowGhost(ctx) {
   }
   ctx.restore();
 }
+/* ===== Inside dimensions: every number on the plan is an inside measurement, and you can tap it to type it ===== */
+const COARSE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+const INSIDE_NOTE = 'Inside measurement. Wall depth is added.';
+let dimHits = [];   // tappable label boxes, rebuilt on every draw
+let dimEd = null;   // the open editor
+
+/* One entry per straight stretch of room wall (pieces of one wall that line up are joined). len is the clear inside length. */
+function roomEdgeGroups(room) {
+  const E = room.edges, n = E.length;
+  if (n < 3) return [];
+  const cont = (a, b) => {
+    if (a.seg.wallId !== b.seg.wallId) return false;
+    const ax = a.he.to.x - a.he.from.x, ay = a.he.to.y - a.he.from.y, bx = b.he.to.x - b.he.from.x, by = b.he.to.y - b.he.from.y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    return la > 0 && lb > 0 && (ax * bx + ay * by) / (la * lb) > 0.999;
+  };
+  let s0 = -1;
+  for (let i = 0; i < n; i++) if (!cont(E[(i - 1 + n) % n], E[i])) { s0 = i; break; }
+  if (s0 < 0) return [];
+  const out = [];
+  let i = s0, cnt = 0;
+  while (cnt < n) {
+    let j = i, len = E[i % n].len, c = 1;
+    while (cnt + c < n && cont(E[j % n], E[(j + 1) % n])) { j++; len += E[j % n].len; c++; }
+    const first = E[i % n], last = E[j % n];
+    out.push({ room, len, from: first.he.from, to: last.he.to, wallId: first.seg.wallId, prev: E[(i - 1 + n) % n], next: E[(j + 1) % n], a: room.inner[i % n], b: room.inner[(j + 1) % n] });
+    cnt += c; i = j + 1;
+  }
+  return out;
+}
+const roomTitle = r => (r.meta && r.meta.name) || 'Room';
+const dirName = (dx, dy) => Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+function drawDimLabels(ctx) {
+  dimHits = [];
+  const fs = COARSE ? 14 : 12, placed = [];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const chip = (cx, cy, ang, text, hit) => {
+    ctx.font = '600 ' + fs + 'px ' + C.fMono;
+    const bw = ctx.measureText(text).width + 12, bh = fs + 8;
+    const ca = Math.abs(Math.cos(ang)), sa = Math.abs(Math.sin(ang));
+    const hw = ca * bw / 2 + sa * bh / 2, hh = sa * bw / 2 + ca * bh / 2;
+    if (placed.some(q => Math.abs(q.x - cx) < q.hw + hw + 2 && Math.abs(q.y - cy) < q.hh + hh + 2)) return;
+    placed.push({ x: cx, y: cy, hw, hh });
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+    ctx.globalAlpha = 0.92; ctx.fillStyle = C.sheet; ctx.strokeStyle = C.muted; ctx.lineWidth = 1;
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 4); else ctx.rect(-bw / 2, -bh / 2, bw, bh);
+    ctx.fill(); ctx.globalAlpha = 0.55; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = C.ink; ctx.fillText(text, 0, 1);
+    ctx.restore();
+    dimHits.push(Object.assign({ cx, cy, ang, hw: Math.max(bw / 2, 22), hh: Math.max(bh / 2, 22) }, hit));
+  };
+  const textAng = (ux, uy) => { let a = Math.atan2(uy, ux); if (a > Math.PI / 2 || a < -Math.PI / 2) a += Math.PI; return a; };
+  // keep clear of each room's name and area label
+  for (const r of AN.rooms) {
+    const xs = r.inner.map(q => q.x), ys = r.inner.map(q => q.y);
+    if ((Math.max(...xs) - Math.min(...xs)) * view.s < 64 || (Math.max(...ys) - Math.min(...ys)) * view.s < 30) continue;
+    const q = W2S(r.label); ctx.font = '400 13px ' + C.fBody;
+    placed.push({ x: q.x, y: q.y, hw: Math.max(ctx.measureText(r.meta.name || '').width / 2 + 4, 36), hh: 20 });
+  }
+  const used = new Set();
+  const groups = [];
+  for (const r of AN.rooms) { for (const e of r.edges) used.add(e.seg.wallId); for (const gp of roomEdgeGroups(r)) groups.push(gp); }
+  groups.sort((p, q) => q.len - p.len);
+  for (const gp of groups) {
+    if (gp.len * view.s < 46) continue;
+    const dx = gp.b.x - gp.a.x, dy = gp.b.y - gp.a.y, L = Math.hypot(dx, dy);
+    if (L < 1) continue;
+    const ux = dx / L, uy = dy / L, mx = (gp.a.x + gp.b.x) / 2, my = (gp.a.y + gp.b.y) / 2;
+    let nx = -uy, ny = ux;
+    if (!pointInPoly({ x: mx + nx * 1.5, y: my + ny * 1.5 }, gp.room.inner)) { nx = -nx; ny = -ny; }
+    const m = W2S({ x: mx, y: my }), off = 6 + fs;
+    chip(m.x + nx * off, m.y + ny * off, textAng(ux, uy), fmtFtIn(gp.len), { kind: 'edge', gp });
+  }
+  // walls that belong to no room keep their end to end length, shown on the side away from the plan
+  const bb = AN.bbox, cx = bb ? (bb.minx + bb.maxx) / 2 : 0, cy = bb ? (bb.miny + bb.maxy) / 2 : 0;
+  for (const w of state.walls) {
+    if (used.has(w.id)) continue;
+    const g = wallGeom(w);
+    if (g.L * view.s < 48) continue;
+    const mid = { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 };
+    let nx = -g.uy, ny = g.ux;
+    if ((mid.x - cx) * nx + (mid.y - cy) * ny < 0) { nx = -nx; ny = -ny; }
+    const off = Math.max(2.5, w.t * view.s) / 2 + 8 + fs, m = W2S(mid);
+    chip(m.x + nx * off, m.y + ny * off, textAng(g.ux, g.uy), fmtFtIn(g.L), { kind: 'wall', w });
+  }
+}
+function dimHitAt(p) {
+  let best = null, bd = Infinity;
+  for (const h of dimHits) {
+    const dx = p.x - h.cx, dy = p.y - h.cy, c = Math.cos(h.ang), s2 = Math.sin(h.ang);
+    const lx = dx * c + dy * s2, ly = -dx * s2 + dy * c;
+    if (Math.abs(lx) <= h.hw && Math.abs(ly) <= h.hh) { const d = Math.hypot(lx / h.hw, ly / h.hh); if (d < bd) { bd = d; best = h; } }
+  }
+  return best;
+}
+
+/* the editor: feet, inches and a fraction, so the iPad number pad is enough */
+function closeDimEditor() { const el = $('#dimEd'); if (el) el.remove(); dimEd = null; }
+function eighthsParts(v) { const e = Math.max(0, Math.round(v * 8)), ft = Math.floor(e / 96), rem = e - ft * 96; return { ft, inch: Math.floor(rem / 8), fr: rem % 8 }; }
+function openDimEditor(h) {
+  closeDimEditor();
+  let title, cur, dirs, note;
+  if (h.kind === 'edge') {
+    const gp = h.gp, ux = gp.to.x - gp.from.x, uy = gp.to.y - gp.from.y;
+    title = roomTitle(gp.room) + ', inside length'; cur = gp.len; note = INSIDE_NOTE;
+    dirs = [['from', dirName(-ux, -uy)], ['both', 'both'], ['to', dirName(ux, uy)]];
+  } else if (h.kind === 'wall') {
+    const w = h.w, ux = w.b.x - w.a.x, uy = w.b.y - w.a.y;
+    title = 'Wall length'; cur = wallGeom(w).L; note = 'This wall is not part of a room, so it is measured end to end.';
+    dirs = [['from', dirName(-ux, -uy)], ['both', 'both'], ['to', dirName(ux, uy)]];
+  } else {
+    const ov = AN.overall; if (!ov) return;
+    const wd = h.axis === 'w';
+    title = wd ? 'Overall width' : 'Overall length'; cur = wd ? ov.width : ov.length; note = 'Overall size is outside to outside: inside plus the wall depth at each end.';
+    dirs = wd ? [['from', 'left'], ['both', 'both'], ['to', 'right']] : [['from', 'up'], ['both', 'both'], ['to', 'down']];
+  }
+  const pt = eighthsParts(cur), wrap = $('#canvasWrap');
+  dimEd = { h, AN0: AN, grow: opts.grow || 'both', fr: pt.fr };
+  const el = document.createElement('div');
+  el.id = 'dimEd'; el.className = 'dimed'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', title);
+  const frs = [[0, '0'], [1, '1/8'], [2, '1/4'], [3, '3/8'], [4, '1/2'], [5, '5/8'], [6, '3/4'], [7, '7/8']];
+  el.innerHTML = '<div class="dimed-h"><strong>' + esc(title) + '</strong><button type="button" class="btn" data-dim="cancel" aria-label="Close">&times;</button></div>' +
+    '<div class="dimed-row"><label class="f">Feet<input class="mono" id="de-ft" inputmode="numeric" autocomplete="off" value="' + pt.ft + '"></label>' +
+    '<label class="f">Inches<input class="mono" id="de-in" inputmode="decimal" autocomplete="off" value="' + pt.inch + '"></label></div>' +
+    '<div class="chips" id="de-fr" role="group" aria-label="Fraction of an inch">' + frs.map(f => '<button type="button" class="chip-btn" data-defr="' + f[0] + '" aria-pressed="' + (f[0] === pt.fr) + '">' + f[1] + '</button>').join('') + '</div>' +
+    '<div class="dimed-row"><span class="lbl">Grow</span><span class="seg2" id="de-grow" role="group" aria-label="Which end moves">' + dirs.map(d => '<button type="button" data-degrow="' + d[0] + '" aria-pressed="' + (dimEd.grow === d[0]) + '">' + esc(d[1].charAt(0).toUpperCase() + d[1].slice(1)) + '</button>').join('') + '</span></div>' +
+    '<p class="note">' + esc(note) + '</p>' +
+    '<div class="btnrow"><button type="button" class="btn primary" data-dim="apply">Apply</button><button type="button" class="btn" data-dim="cancel">Cancel</button></div>';
+  wrap.appendChild(el);
+  const r = wrap.getBoundingClientRect(), ew = el.offsetWidth, eh = el.offsetHeight;
+  const left = Math.max(8, Math.min(r.width - ew - 8, h.cx - ew / 2));
+  let top = h.cy > r.height * 0.5 ? h.cy - eh - 26 : h.cy + 26;
+  top = Math.max(8, Math.min(r.height - eh - 8, top));
+  el.style.left = left + 'px'; el.style.top = top + 'px';
+  const ft = $('#de-ft'); if (ft) { ft.focus(); ft.select(); }
+}
+function readDimEditor() {
+  const ft = parseFloat(($('#de-ft') || {}).value || '0'), inch = parseFloat(($('#de-in') || {}).value || '0');
+  if (!isFinite(ft) || !isFinite(inch) || ft < 0 || inch < 0) return null;
+  return ft * 12 + inch + (dimEd ? dimEd.fr : 0) / 8;
+}
+/* pull one wall along a direction by an amount, so the walls that meet it stretch to follow (same as pulling it by hand) */
+function endPull(wallId, ux, uy, amount) {
+  const W = state.walls.find(x => x.id === wallId);
+  if (!W || Math.abs(amount) < 0.005) return;
+  const g = wallGeom(W);
+  let nx = -g.uy, ny = g.ux, c = nx * ux + ny * uy;
+  if (Math.abs(c) < 0.25) return;
+  if (c < 0) { nx = -nx; ny = -ny; c = -c; }
+  const d = amount / c, mv = { ids: [wallId], nx, ny, tx: 0, ty: 0, fx: [], bl: [] };
+  prepMove(mv); applyMove(mv, nx * d, ny * d); finishMove(mv);
+}
+/* when a room shrinks a lot its name point can fall outside it. Hand the old settings back to the room that took its place. */
+function repairMetas(before) {
+  recompute();
+  const lost = before.filter(m => state.rooms.indexOf(m) < 0), fresh = state.rooms.filter(m => before.indexOf(m) < 0), used = new Set();
+  for (const lm of lost) {
+    let best = null, bd = Infinity;
+    for (const fm of fresh) { if (used.has(fm) || !lm.labelPt || !fm.labelPt) continue; const d = Math.hypot(lm.labelPt.x - fm.labelPt.x, lm.labelPt.y - fm.labelPt.y); if (d < bd) { bd = d; best = fm; } }
+    if (best) { used.add(best); lm.labelPt = best.labelPt; lm.lastArea = best.lastArea; state.rooms[state.rooms.indexOf(best)] = lm; }
+  }
+}
+function setEdgeLen(gp, T, grow) {
+  const delta = T - gp.len;
+  if (Math.abs(delta) < 0.01) return;
+  const ux = gp.to.x - gp.from.x, uy = gp.to.y - gp.from.y, L = Math.hypot(ux, uy) || 1;
+  const dTo = grow === 'from' ? 0 : grow === 'to' ? delta : delta / 2, dFrom = grow === 'to' ? 0 : grow === 'from' ? delta : delta / 2;
+  const wTo = gp.next.seg.wallId, wFrom = gp.prev.seg.wallId, before = (state.rooms || []).slice();
+  mutate(() => {
+    endPull(wTo, ux / L, uy / L, dTo); recompute();
+    endPull(wFrom, ux / L, uy / L, -dFrom);
+    repairMetas(before);
+  });
+}
+function setFreeWallLen(w, T, grow) {
+  const g = wallGeom(w), delta = T - g.L;
+  if (Math.abs(delta) < 0.01) return;
+  const dTo = grow === 'from' ? 0 : grow === 'to' ? delta : delta / 2, dFrom = grow === 'to' ? 0 : grow === 'from' ? delta : delta / 2;
+  const r1 = v => Math.round(v * 100) / 100;
+  mutate(() => {
+    const nb = { x: r1(w.b.x + g.ux * dTo), y: r1(w.b.y + g.uy * dTo) }, na = { x: r1(w.a.x - g.ux * dFrom), y: r1(w.a.y - g.uy * dFrom) };
+    if (state.settings.follow) { moveNodeTo(w.b, nb); moveNodeTo(w.a, na); } else { w.b.x = nb.x; w.b.y = nb.y; w.a.x = na.x; w.a.y = na.y; }
+  });
+}
+/* overall width or length: the walls on the outside of that side move, and everything attached stretches */
+function setOverall(axis, T, grow) {
+  const ov = AN.overall; if (!ov) return false;
+  const horiz = axis === 'w', cur = horiz ? ov.width : ov.length, delta = T - cur;
+  if (Math.abs(delta) < 0.01) return true;
+  const lo = [], hi = [];
+  for (const w of state.walls) {
+    if (w.t <= 0.6) continue;
+    const along = horiz ? Math.abs(w.a.x - w.b.x) : Math.abs(w.a.y - w.b.y);
+    if (along > 0.75) continue;
+    const c = horiz ? (w.a.x + w.b.x) / 2 : (w.a.y + w.b.y) / 2;
+    if (Math.abs(c - ((horiz ? ov.minx : ov.miny) + w.t / 2)) < 0.75) lo.push(w.id);
+    else if (Math.abs(c - ((horiz ? ov.maxx : ov.maxy) - w.t / 2)) < 0.75) hi.push(w.id);
+  }
+  const dHi = grow === 'from' ? 0 : grow === 'to' ? delta : delta / 2, dLo = grow === 'to' ? 0 : grow === 'from' ? delta : delta / 2;
+  if ((dHi && !hi.length) || (dLo && !lo.length)) return false;
+  const before = (state.rooms || []).slice();
+  mutate(() => {
+    if (dHi) shiftWalls(hi, horiz ? dHi : 0, horiz ? 0 : dHi);
+    if (dLo) shiftWalls(lo, horiz ? -dLo : 0, horiz ? 0 : -dLo);
+    purgeTinyWalls();
+    repairMetas(before);
+  });
+  return true;
+}
+function applyDimEditor() {
+  const d = dimEd; if (!d) return;
+  const T = readDimEditor();
+  if (T == null || T < 6) { toast('Type a length of 6 in or more'); return; }
+  if (AN !== d.AN0) { closeDimEditor(); toast('The plan changed. Tap the number again.'); return; }
+  opts.grow = d.grow;
+  const h = d.h;
+  closeDimEditor();
+  if (h.kind === 'edge') setEdgeLen(h.gp, T, d.grow);
+  else if (h.kind === 'wall') setFreeWallLen(h.w, T, d.grow);
+  else if (!setOverall(h.axis, T, d.grow)) toast('No outside wall found on that side to move.');
+}
+document.addEventListener('click', e => {
+  const act = e.target.closest('[data-dim]');
+  if (act) { if (act.dataset.dim === 'apply') applyDimEditor(); else closeDimEditor(); return; }
+  const fr = e.target.closest('[data-defr]');
+  if (fr && dimEd) { dimEd.fr = parseInt(fr.dataset.defr, 10); document.querySelectorAll('#de-fr [data-defr]').forEach(b => b.setAttribute('aria-pressed', String(b === fr))); return; }
+  const gr = e.target.closest('[data-degrow]');
+  if (gr && dimEd) { dimEd.grow = gr.dataset.degrow; document.querySelectorAll('#de-grow [data-degrow]').forEach(b => b.setAttribute('aria-pressed', String(b === gr))); return; }
+  const eg = e.target.closest('[data-dimedge]');
+  if (eg) { const gp = dimList[parseInt(eg.dataset.dimedge, 10)]; if (gp) { const m = W2S({ x: (gp.a.x + gp.b.x) / 2, y: (gp.a.y + gp.b.y) / 2 }); openDimEditor({ kind: 'edge', gp, cx: m.x, cy: m.y }); } }
+});
+document.addEventListener('keydown', e => {
+  if (!dimEd) return;
+  if (e.key === 'Escape') { e.preventDefault(); closeDimEditor(); return; }
+  if (e.key === 'Enter' && e.target && (e.target.id === 'de-ft' || e.target.id === 'de-in')) { e.preventDefault(); applyDimEditor(); }
+});
+let dimList = []; // inside lengths listed in the wall inspector, so a tap can open the editor
+
 /* overall width and length, outside the wall dimensions */
 function drawOverall(ctx) {
   const o = AN.overall;
@@ -3287,9 +3532,13 @@ function drawOverall(ctx) {
   ctx.moveTo(br.x, br.y + 4); ctx.lineTo(br.x, y + 6); ctx.moveTo(br.x + 4, br.y); ctx.lineTo(x + 6, br.y);
   ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  halo(ctx, 'Width ' + fmtFtIn(o.width), (tl.x + br.x) / 2, y + 13, C.accent, 12, true, true);
+  const wtxt = 'Width ' + fmtFtIn(o.width), ltxt = 'Length ' + fmtFtIn(o.length);
+  halo(ctx, wtxt, (tl.x + br.x) / 2, y + 13, C.accent, 12, true, true);
+  const wTw = ctx.measureText(wtxt).width;
   ctx.save(); ctx.translate(x + 13, (tl.y + br.y) / 2); ctx.rotate(Math.PI / 2);
-  halo(ctx, 'Length ' + fmtFtIn(o.length), 0, 0, C.accent, 12, true, true); ctx.restore();
+  halo(ctx, ltxt, 0, 0, C.accent, 12, true, true); const lTw = ctx.measureText(ltxt).width; ctx.restore();
+  dimHits.push({ kind: 'overall', axis: 'w', cx: (tl.x + br.x) / 2, cy: y + 13, ang: 0, hw: Math.max(wTw / 2 + 8, 22), hh: 22 });
+  dimHits.push({ kind: 'overall', axis: 'l', cx: x + 13, cy: (tl.y + br.y) / 2, ang: Math.PI / 2, hw: Math.max(lTw / 2 + 8, 22), hh: 22 });
   ctx.restore();
 }
 function draw() {
@@ -3363,24 +3612,8 @@ function draw() {
   // fixtures
   for (const f of state.fixtures) drawFixture(ctx, f, sel && sel.type === 'fixture' && sel.id === f.id);
 
-  // dimension labels
-  const bb = AN.bbox;
-  const cx = bb ? (bb.minx + bb.maxx) / 2 : 0, cy = bb ? (bb.miny + bb.maxy) / 2 : 0;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (const w of state.walls) {
-    const g = wallGeom(w);
-    if (g.L * view.s < 48) continue;
-    const mid = { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 };
-    let nx = -g.uy, ny = g.ux;
-    if ((mid.x - cx) * nx + (mid.y - cy) * ny < 0) { nx = -nx; ny = -ny; }
-    const off = Math.max(2.5, w.t * view.s) / 2 + 10;
-    const m = W2S(mid);
-    let ang = Math.atan2(g.uy, g.ux);
-    if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
-    ctx.save(); ctx.translate(m.x + nx * off, m.y + ny * off); ctx.rotate(ang);
-    halo(ctx, fmtFtIn(g.L), 0, 0, C.muted, 11, true, false);
-    ctx.restore();
-  }
+  // dimension labels: inside lengths, drawn inside each room, tappable
+  drawDimLabels(ctx);
   drawOverall(ctx);
   drawFocus(ctx);
   // room labels
@@ -3405,7 +3638,7 @@ function draw() {
       ctx.strokeStyle = C.sel; ctx.lineWidth = Math.max(2.5, opts.thick * view.s); ctx.globalAlpha = 0.55;
       ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)); ctx.globalAlpha = 1;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      halo(ctx, fmtFtIn(Math.abs(curSnap.x - pending.x)) + ' x ' + fmtFtIn(Math.abs(curSnap.y - pending.y)), (a.x + b.x) / 2, (a.y + b.y) / 2, C.sel, 13, true, true);
+      halo(ctx, fmtFtIn(Math.max(0, Math.abs(curSnap.x - pending.x) - opts.thick)) + ' x ' + fmtFtIn(Math.max(0, Math.abs(curSnap.y - pending.y) - opts.thick)), (a.x + b.x) / 2, (a.y + b.y) / 2, C.sel, 13, true, true);
     }
     if (pending) { const a = W2S(pending); ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(a.x, a.y, 5, 0, Math.PI * 2); ctx.fill(); }
     if (curSnap) { const q = W2S(curSnap); ctx.strokeStyle = C.sel; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(q.x, q.y, curSnap.node ? 8 : 5, 0, Math.PI * 2); ctx.stroke(); }
@@ -3419,7 +3652,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1;
         const L = Math.hypot(curSnap.x - pending.x, curSnap.y - pending.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        halo(ctx, fmtFtIn(L), (a.x + b.x) / 2, (a.y + b.y) / 2 - 16, C.sel, 13, true, true);
+        halo(ctx, fmtFtIn(Math.max(0, L - opts.thick)), (a.x + b.x) / 2, (a.y + b.y) / 2 - 16, C.sel, 13, true, true);
       }
       ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(a.x, a.y, 5, 0, Math.PI * 2); ctx.fill();
     }
@@ -3498,7 +3731,8 @@ function addRoomTyped() {
   const w = parseLen(wI.value), d = parseLen(dI.value);
   if (!w || !d) { toast('Type a width and depth like 12\'6"'); (w ? dI : wI).focus(); return; }
   const sx = 1, sy = 1; // typed rooms grow right and down from the corner you tapped
-  const b = { x: Math.round((pending.x + sx * w) * 100) / 100, y: Math.round((pending.y + sy * d) * 100) / 100 };
+  // typed sizes are inside sizes: the wall depth is added on top
+  const b = { x: Math.round((pending.x + sx * (w + opts.thick)) * 100) / 100, y: Math.round((pending.y + sy * (d + opts.thick)) * 100) / 100 };
   if (addRoomRect(pending, b)) { pending = null; curSnap = null; renderStrip(); draw(); toast('Room added'); }
 }
 function fixtureLocked(f) { const a = activeLayout(state); return !!(f && FIXTURES[f.kind] && FIXTURES[f.kind].fixed && a && a.kind !== 'existing' && !f.moved); }
@@ -3758,6 +3992,7 @@ let pinch = null;
 function local(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 cv.addEventListener('pointerdown', e => {
+  if (dimEd && !dimHitAt(local(e))) closeDimEditor();
   try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
   const p = local(e);
   ptrs.set(e.pointerId, p);
@@ -3878,6 +4113,7 @@ function endPointer(e, cancel) {
     if (gg.mode === 'node') purgeTinyWalls();
     if (gg.mode === 'node' || gg.mode === 'fixture' || gg.mode === 'opening' || gg.mode === 'block' || gg.mode === 'wallmove' || gg.mode === 'roommove') { state.example = false; recompute(); scheduleSave(); refresh(); return; }
     if (gg.mode === 'pan') { draw(); return; }
+    if (!breakMode && !gg.moved) { const dh = dimHitAt(p); if (dh) { sel = null; refresh({ panel: false }); openDimEditor(dh); return; } }
     const hit = gg.hit || hitTest(p);
     if (breakMode) {
       const bh = breakHoverAt(p); breakMode = false; breakHover = null; renderTools(); renderStrip();
@@ -4010,17 +4246,17 @@ const HINTS = {
 function renderStrip() {
   const el = $('#strip');
   if (mode === '3d') { el.innerHTML = '<span class="hint">Drag to orbit, pinch or scroll to zoom, two fingers to pan. Tap a floor or wall to jump to that room. Change finishes in the Rooms tab and the view updates.</span>'; return; }
-  let h = '<span class="hint">' + esc(breakMode ? 'Insert break: hover a wall to see the distance on each side of the point, then click to insert it. Pull either side to shape an L.' : pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the width and depth (the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
+  let h = '<span class="hint">' + esc(breakMode ? 'Insert break: hover a wall to see the distance on each side of the point, then click to insert it. Pull either side to shape an L.' : pending ? (tool === 'room' ? 'Corner set. Tap the opposite corner, or type the inside width and depth (wall depth is added, and the room grows right and down from this corner).' : 'Start point set. Tap the end point, or type a length and choose a direction.') : HINTS[tool]) + '</span>';
   if (tool === 'room') {
     h += '<span class="lenbox"><input id="rmName" autocomplete="off" placeholder="Name (Kitchen, Primary bath)" value="' + esc(opts.rname || '') + '" aria-label="Room name for the next room"/><select id="rmType" aria-label="Room type for the next room">' +
       Object.keys(ROOM_TYPES).map(k => '<option value="' + k + '"' + ((opts.rtype || 'room') === k ? ' selected' : '') + '>' + ROOM_TYPES[k] + '</option>').join('') + '</select></span>';
   }
   if (tool === 'room' && pending) {
-    h += '<span class="lenbox"><input id="rmW" class="mono" inputmode="text" autocomplete="off" placeholder="Width 12\'" aria-label="Room width"/><input id="rmD" class="mono" inputmode="text" autocomplete="off" placeholder="Depth 10\'" aria-label="Room depth"/>' +
+    h += '<span class="lenbox"><input id="rmW" class="mono" inputmode="text" autocomplete="off" placeholder="Inside width 12\'" aria-label="Room inside width"/><input id="rmD" class="mono" inputmode="text" autocomplete="off" placeholder="Inside depth 10\'" aria-label="Room inside depth"/>' +
       '<button type="button" class="btn primary" id="rmAdd">Add room</button><button type="button" class="btn" id="doneBtn">Cancel</button></span>';
   }
   if (tool === 'wall' && pending) {
-    h += '<span class="lenbox"><input id="lenIn" class="mono" inputmode="text" autocomplete="off" placeholder="12\'6&quot;" aria-label="Wall length"/>' +
+    h += '<span class="lenbox"><input id="lenIn" class="mono" inputmode="text" autocomplete="off" placeholder="Inside 12\'6&quot;" aria-label="Wall inside length"/>' +
       ['left', 'up', 'down', 'right'].map(d => '<button type="button" class="dir" data-dir="' + d + '" aria-label="Draw ' + d + '">' + icon(d) + '</button>').join('') +
       '<button type="button" class="btn primary" id="doneBtn">Done</button></span>';
   }
@@ -4076,7 +4312,8 @@ function drawTyped(dir) {
   const L = parseLen(inp.value);
   if (!L || L < 6) { toast('Type a length like 12\'6" first'); inp.focus(); return; }
   const v = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-  const pt = { x: Math.round((pending.x + v[0] * L) * 100) / 100, y: Math.round((pending.y + v[1] * L) * 100) / 100 };
+  const Lc = L + opts.thick; // typed length is the inside length, so the wall depth is added on top
+  const pt = { x: Math.round((pending.x + v[0] * Lc) * 100) / 100, y: Math.round((pending.y + v[1] * Lc) * 100) / 100 };
   if (addWall(pending, pt)) { pending = pt; renderStrip(); const i2 = $('#lenIn'); if (i2) i2.focus(); draw(); }
 }
 document.addEventListener('keydown', e => {
@@ -4091,6 +4328,14 @@ document.addEventListener('keydown', e => {
 cv.addEventListener('pointermove', e => { cursor = S2W(local(e)); });
 
 /* ---------- inspector ---------- */
+/* a wall that is part of a room is measured inside, so its length is edited by tapping the inside number */
+function wallLenField(w, L) {
+  dimList = [];
+  for (const r of AN.rooms) for (const gp of roomEdgeGroups(r)) if (gp.wallId === w.id) dimList.push(gp);
+  if (!dimList.length) return '<label class="f">Length<input class="mono" id="i-len" value="' + esc(fmtFtIn(L)) + '"></label>';
+  return '<div class="f"><span class="fl">Inside length (tap to type)</span><span class="btnrow">' +
+    dimList.map((gp, i) => '<button type="button" class="btn" data-dimedge="' + i + '">' + esc(roomTitle(gp.room)) + ' ' + esc(fmtFtIn(gp.len)) + '</button>').join('') + '</span></div>';
+}
 function renderInspector() {
   const el = $('#insp');
   if (mode === '3d' || !sel) { el.hidden = true; el.innerHTML = ''; return; }
@@ -4108,7 +4353,7 @@ function renderInspector() {
     h = '<div class="insp-h"><strong>' + (isZone(w) ? 'Missing wall' : 'Wall') + '</strong><span class="btnrow"><button type="button" class="btn" data-miss="1">' + (isZone(w) ? 'Restore wall' : 'Make missing') + '</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
       (isZone(w) ? '<p class="note">No wall is built here, but the room stays one room. Restore wall puts it back.</p>' : '') +
       '<div class="fields">' +
-      '<label class="f">Length<input class="mono" id="i-len" value="' + esc(fmtFtIn(L)) + '"></label>' +
+      wallLenField(w, L) +
       '<label class="f">Thickness<select id="i-th">' + [0.5, 3.5, 4.5, 5.5, 6, 8, 12].map(v => '<option value="' + v + '"' + (Math.abs(w.t - v) < 0.01 ? ' selected' : '') + '>' + (v === 0.5 ? 'Open edge (no wall)' : v + ' in') + '</option>').join('') + '</select></label>' +
       '<label class="f">Height (in)<input class="mono" id="i-h" inputmode="decimal" value="' + w.h + '"></label></div>' +
       '<label class="check"><input type="checkbox" id="i-fixed"' + (w.fixed ? ' checked' : '') + '> Load bearing, do not move</label>' +
