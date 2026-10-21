@@ -1794,10 +1794,40 @@ function overlapDepth(A, B) {
   return min;
 }
 /* wall-mounted blocks sit flush against the nearest wall face, back to the wall */
-function snapToWall(b, state) {
+/* Freestanding tubs (clawfoot, oval, slipper) stand off the wall, often about a foot. Every other wall mounted block, and alcove or drop-in tubs, stay flush. */
+const FREE_TUBS = ['clawfoot', 'oval', 'slipper'];
+const TUB_GAP_DEFAULT = 12, TUB_GAP_FLUSH = 3, TUB_GAP_REACH = 36;
+function isFreeTub(b) { return !!b && b.kind === 'tub' && FREE_TUBS.includes(bopts(b).type); }
+/* half the block's size measured along a direction, so a turned block is measured correctly */
+function extentAlong(b, nx, ny) {
+  const t = rad(b.rot), c = Math.cos(t), s = Math.sin(t);
+  return (b.w / 2) * Math.abs(nx * c + ny * s) + (b.d / 2) * Math.abs(-nx * s + ny * c);
+}
+function nearestWallFor(b, state) {
+  let best = null, bd = Infinity;
+  for (const w of state.walls) {
+    const sd = segDist({ x: b.x, y: b.y }, w.a, w.b);
+    const f = sd.d - w.t / 2;
+    if (f < bd) { bd = f; best = { w, sd, face: f }; }
+  }
+  return best;
+}
+/* inches of clear space between the block's edge and the nearest wall face, or null when there is no wall */
+function wallGapOf(b, state) {
+  const nb = nearestWallFor(b, state);
+  if (!nb) return null;
+  const w = nb.w, dx = w.b.x - w.a.x, dy = w.b.y - w.a.y, L = Math.hypot(dx, dy) || 1;
+  let nx = -dy / L, ny = dx / L;
+  if ((b.x - nb.sd.x) * nx + (b.y - nb.sd.y) * ny < 0) { nx = -nx; ny = -ny; }
+  return Math.max(0, nb.face - extentAlong(b, nx, ny));
+}
+/* forceGap: place the block exactly this many inches from the nearest wall, however far away it is now */
+function snapToWall(b, state, forceGap) {
   const def = BLOCKS[b.kind];
   if (!def || def.mount !== 'wall') return false;
-  let best = null, bd = 30;
+  const free = isFreeTub(b), forced = forceGap != null && free;
+  let best = null, bd = free ? b.d / 2 + TUB_GAP_REACH : 30;
+  if (forced) bd = Infinity;
   for (const w of state.walls) {
     const sd = segDist({ x: b.x, y: b.y }, w.a, w.b);
     if (sd.d - w.t / 2 < bd) { bd = sd.d - w.t / 2; best = { w, sd }; }
@@ -1809,7 +1839,11 @@ function snapToWall(b, state) {
   // the front faces along the normal, away from the wall. rot 0 has the front toward +y.
   b.rot = Math.round(((Math.atan2(-nx, ny) * 180 / Math.PI) + 360) % 360 * 10) / 10 % 360;
   const along = (b.x - w.a.x) * ux + (b.y - w.a.y) * uy;
-  const off = w.t / 2 + b.d / 2;
+  // a freestanding tub keeps the distance it was dragged to. Within a few inches of the wall it settles flush.
+  let gap = 0;
+  if (forced) gap = Math.max(0, forceGap);
+  else if (free) { const edge = bd - b.d / 2; gap = edge <= TUB_GAP_FLUSH ? 0 : Math.min(TUB_GAP_REACH, Math.round(edge)); }
+  const off = w.t / 2 + b.d / 2 + gap;
   let a2 = Math.max(b.w / 2, Math.min(L - b.w / 2, Math.round(along / 3) * 3));
   if (L < b.w) a2 = along;
   b.x = Math.round((w.a.x + ux * a2 + nx * off) * 100) / 100;
@@ -4764,9 +4798,9 @@ function hitBlock(w) {
 }
 
 /* ---------- placing and editing ---------- */
-function snapBlock(b) {
+function snapBlock(b, gap) {
   const def = BLOCKS[b.kind];
-  if (def.mount === 'wall') snapToWall(b, state);
+  if (def.mount === 'wall') snapToWall(b, state, gap);
   else if (def.mount === 'host') snapToHost(b, state);
 }
 function placeBlockAt(p) {
@@ -4774,6 +4808,7 @@ function placeBlockAt(p) {
   if (!def) return;
   const b = newBlock(state, opts.bkind, Math.round(w.x / 3) * 3, Math.round(w.y / 3) * 3, activeStyle());
   snapBlock(b);
+  if (isFreeTub(b)) { const g0 = wallGapOf(b, state); if (g0 != null && g0 <= TUB_GAP_FLUSH) snapBlock(b, TUB_GAP_DEFAULT); }
   if (def.mount === 'host' && !hostAt(state, b.x, b.y, b.id)) toast('Drop this on a base cabinet or island');
   mutate(() => { state.blocks.push(b); });
   sel = { type: 'block', id: b.id }; tab = 'design'; refresh();
@@ -4789,6 +4824,13 @@ function stairInfo(b) {
   const g = stairGeom(b, bopts(b)), fl = floorOf(state, state.activeFloor);
   return g.R + ' risers at ' + fmtNum(g.rh, 2) + ' in, ' + g.treads + ' treads' + (g.landings ? ', ' + g.landings + ' landing' : '') + ', shallowest tread ' + fmtNum(g.minTread, 1) + ' in, ' + fmtNum(g.minWidth, 0) + ' in wide. Rise is the floor to floor height of ' + esc(fl ? fl.name : 'this floor') + '. Resizing the block by hand changes the tread depth.';
 }
+function tubGapControl(b) {
+  const g = wallGapOf(b, state), cur = g == null ? null : Math.round(g * 8) / 8;
+  return '<div class="brk"><span class="lbl">Distance from wall</span><span class="chips">' +
+    [[0, 'Flush'], [6, '6 in'], [12, '12 in'], [18, '18 in']].map(c => '<button type="button" class="chip-btn" data-bgap="' + c[0] + '" aria-pressed="' + (cur != null && Math.abs(cur - c[0]) < 0.5) + '">' + c[1] + '</button>').join('') + '</span>' +
+    '<span class="lenbox"><input class="mono" id="b-gap" inputmode="text" autocomplete="off" aria-label="Distance from the nearest wall" placeholder="' + (cur == null ? 'no wall' : 'in') + '" value="' + (cur == null ? '' : esc(fmtFtIn(cur))) + '"></span></div>' +
+    '<p class="note">A freestanding tub can stand off the wall. Drag it away, or pick a distance here. It settles flush when it is within 3 in of a wall.</p>';
+}
 function blockInspector(b) {
   const def = BLOCKS[b.kind];
   return '<div class="insp-h"><strong>' + esc(def.label) + '</strong><span class="btnrow"><button type="button" class="btn" data-brot="-90" aria-label="Rotate left">&#8634; 90&deg;</button><button type="button" class="btn" data-brot="90" aria-label="Rotate right">&#8635; 90&deg;</button><button type="button" class="btn" data-bdup="1">Duplicate</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
@@ -4796,6 +4838,7 @@ function blockInspector(b) {
     '<label class="f">Width (in)<input class="mono" id="b-w" inputmode="decimal" list="bsz" value="' + b.w + '"></label>' +
     '<label class="f">Depth (in)<input class="mono" id="b-d" inputmode="decimal" value="' + b.d + '"></label>' +
     '<label class="f">Label<input id="b-name" placeholder="e.g. Pantry" value="' + esc(b.name || '') + '"></label></div>' +
+    (isFreeTub(b) ? tubGapControl(b) : '') +
     (def.stair ? '<div class="btnrow"><button type="button" class="btn" data-stfit="1">Fit to floor height</button></div><p class="note">' + stairInfo(b) + '</p>' : '') +
     '<datalist id="bsz">' + (def.sizes || []).map(v => '<option value="' + v + '">').join('') + '</datalist>' +
     '<p class="note">Drag it on the plan to move it. ' + (def.mount === 'wall' ? 'It snaps flush to the nearest wall and lines up against the next block. ' : def.mount === 'host' ? 'Drop it on a cabinet and it sits on top. ' : '') + 'All choices (style, colors, finish) are in the Design tab.</p>';
@@ -4865,6 +4908,7 @@ function paneDesign() {
 function setBlockOpt(b, k, v) {
   mutate(() => {
     b.opts = b.opts || {}; b.opts[k] = v;
+    if (k === 'type' && b.kind === 'tub') { if (isFreeTub(b)) { const g0 = wallGapOf(b, state); if (g0 != null && g0 <= TUB_GAP_FLUSH) snapBlock(b, TUB_GAP_DEFAULT); } else snapBlock(b); }
     if (k === 'top') { const pal = topPal(v), cur = b.opts.topColor; if (!cur || !(PAL[pal] || []).some(p => p[1].toLowerCase() === String(cur).toLowerCase())) b.opts.topColor = topDef(v); }
     if (BLOCKS[b.kind].stair && (k === 'shape' || k === 'sw' || k === 'tread' || k === 'rise')) { autoFitStair(b); snapBlock(b); }
   }, { panel: false });
@@ -4904,6 +4948,8 @@ document.addEventListener('click', e => {
     }
     recompute(); scheduleSave(); refresh(); toast('Matched ' + n + ' choices'); return;
   }
+  const bgp = e.target.closest('[data-bgap]');
+  if (bgp && sel && sel.type === 'block') { const b = blockById(sel.id); if (b && isFreeTub(b)) { mutate(() => { snapBlock(b, parseFloat(bgp.dataset.bgap)); }, { panel: false }); renderInspector(); } return; }
   const br = e.target.closest('[data-brot]');
   if (br && sel && sel.type === 'block') { const b = blockById(sel.id); mutate(() => { b.rot = ((b.rot || 0) + parseInt(br.dataset.brot, 10) + 360) % 360; }, { panel: false }); return; }
   if (e.target.closest('[data-bdup]') && sel && sel.type === 'block') { dupBlock(blockById(sel.id)); return; }
@@ -4922,7 +4968,8 @@ document.addEventListener('change', e => {
     setBlockOpt(b, t.dataset.bn, v); return;
   }
   if (t.dataset.bcc) { setBlockOpt(b, t.dataset.bcc, t.value); return; }
-  if (t.id === 'b-w') { const v = parseLen(t.value, 'in'); if (!v || v < 3 || v > 400) { toast('Width must be 3 to 400 in'); renderInspector(); return; } mutate(() => { b.w = v; snapBlock(b); }, { panel: false }); renderInspector(); }
+  if (t.id === 'b-gap') { const v = parseLen(t.value, 'in'); if (v == null || v < 0 || v > 120) { toast('Type a distance from 0 to 10 ft'); renderInspector(); return; } mutate(() => { snapBlock(b, v); }, { panel: false }); renderInspector(); }
+  else if (t.id === 'b-w') { const v = parseLen(t.value, 'in'); if (!v || v < 3 || v > 400) { toast('Width must be 3 to 400 in'); renderInspector(); return; } mutate(() => { b.w = v; snapBlock(b); }, { panel: false }); renderInspector(); }
   else if (t.id === 'b-d') { const v = parseLen(t.value, 'in'); if (!v || v < 1 || v > 400) { toast('Depth must be 1 to 400 in'); renderInspector(); return; } mutate(() => { b.d = v; snapBlock(b); }, { panel: false }); renderInspector(); }
   else if (t.id === 'b-name') mutate(() => { b.name = t.value.trim(); }, { panel: false });
 });
