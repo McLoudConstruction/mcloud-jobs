@@ -51,7 +51,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
   const anytime = [
     // A visit, walk, inspection or any other event on this job. Available at
     // every stage because you walk a site before, during and after the work.
-    onAddScheduleItem && { key: 'schedule-item', label: 'Add schedule item (visit, walk, event)', run: onAddScheduleItem },
+    onAddScheduleItem && { key: 'schedule-item', label: 'Add visit (site visit, walk, event)', run: onAddScheduleItem },
     { key: 'message', label: 'Message the customer', run: () => go('messages') },
     { key: 'email', label: 'Email the customer', run: () => go('email') },
     { key: 'invite', label: inviting ? 'Sending invite…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to customer portal', run: onInvite, disabled: inviting },

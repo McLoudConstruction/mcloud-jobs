@@ -43,7 +43,6 @@ import CustomerInfoCard from '../../../components/CustomerInfoCard';
 import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
 import ScheduleCard from '../../../components/ScheduleCard';
-import JobScheduleEventsCard from '../../../components/JobScheduleEventsCard';
 import NewEventModal from '../../../components/NewEventModal';
 import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
 import ScheduleRiskBadge from '../../../components/ScheduleRiskBadge';
@@ -644,7 +643,7 @@ export default function JobDetailPage() {
         <NewEventModal
           open={scheduleItemOpen}
           onClose={() => setScheduleItemOpen(false)}
-          title="Add Schedule Item"
+          title="Add Visit"
           defaultEventType="site_visit"
           lockedJobId={id}
           lockedJobLabel={job.project_address || job.customer_name || formattedProjectNumber(job)}
@@ -933,8 +932,7 @@ export default function JobDetailPage() {
         {/* ----------------------- AVAILABLE AT EVERY STAGE ----------------- */}
         {tab === 'Schedule' && (
           <>
-            <JobScheduleEventsCard jobId={id} onAdd={() => setScheduleItemOpen(true)} />
-            <ScheduleCard job={job} jobId={id} />
+            <ScheduleCard job={job} jobId={id} onAddVisit={() => setScheduleItemOpen(true)} />
             <ScheduleRiskBadge jobId={id} />
             <ScheduleDelayCard jobId={id} job={job} />
             <BlackoutDatesCard jobId={id} />

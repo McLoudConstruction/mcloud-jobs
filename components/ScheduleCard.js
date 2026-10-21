@@ -128,7 +128,7 @@ function WeatherStatusLine({ phase, flag, noRule, checkedThrough }) {
   return null;
 }
 
-export default function ScheduleCard({ jobId, job }) {
+export default function ScheduleCard({ jobId, job, onAddVisit }) {
   const [phases, setPhases] = useState([]);
   const [scopeActions, setScopeActions] = useState([]);
   const [draft, setDraft] = useState(null); // generated but not yet confirmed
@@ -602,8 +602,14 @@ export default function ScheduleCard({ jobId, job }) {
   // a trade, or a non-billable type like Punch List / Inspection — via
   // the same Trade dropdown Generate Schedule itself uses) is available
   // whether or not there's a draft pending, and in both List and Timeline.
+  //
+  // "Add Visit" sits to its left: it logs a site visit, walk or other event
+  // (the page owns that form, passed in as onAddVisit) rather than a phase.
   const addPhaseButton = (
-    <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add Schedule Item</button>
+    <>
+      {onAddVisit && <button className="btn btn-sm" onClick={onAddVisit}>+ Add Visit</button>}
+      <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add Schedule Item</button>
+    </>
   );
 
   function closeAddPhase() {
