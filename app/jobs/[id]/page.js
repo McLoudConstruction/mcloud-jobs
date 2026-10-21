@@ -43,6 +43,8 @@ import CustomerInfoCard from '../../../components/CustomerInfoCard';
 import ProjectInfoCard from '../../../components/ProjectInfoCard';
 import ScopeCard from '../../../components/ScopeCard';
 import ScheduleCard from '../../../components/ScheduleCard';
+import JobScheduleEventsCard from '../../../components/JobScheduleEventsCard';
+import NewEventModal from '../../../components/NewEventModal';
 import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
 import ScheduleRiskBadge from '../../../components/ScheduleRiskBadge';
 import PriceCard from '../../../components/PriceCard';
@@ -154,6 +156,7 @@ export default function JobDetailPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [rfpPanelOpen, setRfpPanelOpen] = useState(false);
+  const [scheduleItemOpen, setScheduleItemOpen] = useState(false);
 
   useEffect(() => {
     function goOnline() { setIsOnline(true); }
@@ -538,6 +541,7 @@ export default function JobDetailPage() {
     job, role, stageTab: currentStageTab, afterOpportunity, inFieldPhase, isDone,
     inviting, go: goDest, create: goCreate, push: (href) => router.push(href),
     onRfp: () => setRfpPanelOpen(true), onInvite: invitePortal,
+    onAddScheduleItem: () => setScheduleItemOpen(true),
   });
   return (
     <AppShell>
@@ -636,6 +640,15 @@ export default function JobDetailPage() {
         {(role === 'owner' || role === 'estimator') && (
           <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} projectAddress={job.project_address} />
         )}
+
+        <NewEventModal
+          open={scheduleItemOpen}
+          onClose={() => setScheduleItemOpen(false)}
+          title="Add Schedule Item"
+          defaultEventType="site_visit"
+          lockedJobId={id}
+          lockedJobLabel={job.project_address || job.customer_name || formattedProjectNumber(job)}
+        />
 
         {inviteResult && (
           <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
@@ -920,6 +933,7 @@ export default function JobDetailPage() {
         {/* ----------------------- AVAILABLE AT EVERY STAGE ----------------- */}
         {tab === 'Schedule' && (
           <>
+            <JobScheduleEventsCard jobId={id} onAdd={() => setScheduleItemOpen(true)} />
             <ScheduleCard job={job} jobId={id} />
             <ScheduleRiskBadge jobId={id} />
             <ScheduleDelayCard jobId={id} job={job} />

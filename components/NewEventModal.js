@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PopupModal from './PopupModal';
 import SearchableSelect from './SearchableSelect';
-import { EVENT_TYPE_LABELS } from '../lib/constants';
+import { EVENT_TYPE_LABELS, JOB_EVENT_TYPE_ORDER, CUSTOMER_VISIBLE_EVENT_TYPES } from '../lib/constants';
 
 function todayISO() {
   const t = new Date();
@@ -15,7 +15,12 @@ function todayISO() {
 // description, who on staff needs it on their calendar, and a date/time.
 // Saving inserts into schedule_events and hands the new row back via
 // onCreated so the calendar page can refresh without a full reload.
-export default function NewEventModal({ open, onClose, onCreated, defaultDate, defaultEventType = 'meeting', title = 'New Event' }) {
+//
+// Pass lockedJobId to use it as a job's "Add schedule item" form: the project
+// picker goes away (it's always that job), the type list leads with Site Visit
+// and the walk types, you're pre-selected under People, and a "Show on the
+// customer portal" switch appears (on by default for visits and walks).
+export default function NewEventModal({ open, onClose, onCreated, defaultDate, defaultEventType = 'meeting', title = 'New Event', lockedJobId = null, lockedJobLabel = '' }) {
   const [projects, setProjects] = useState([]);
   const [staff, setStaff] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -27,16 +32,25 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
   const [invitedCompanyIds, setInvitedCompanyIds] = useState([]);
   const [eventDate, setEventDate] = useState(defaultDate || todayISO());
   const [eventTime, setEventTime] = useState('');
+  const [shareWithCustomer, setShareWithCustomer] = useState(CUSTOMER_VISIBLE_EVENT_TYPES.includes(defaultEventType));
+  const [shareTouched, setShareTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Locked to one job (the job page's "Add schedule item") or picked below.
+  const effectiveProjectId = lockedJobId ? `job:${lockedJobId}` : projectId;
+  const jobLinked = effectiveProjectId.startsWith('job:');
 
   useEffect(() => {
     if (!open) return;
     setEventDate(defaultDate || todayISO());
     setEventType(defaultEventType);
+    setShareWithCustomer(CUSTOMER_VISIBLE_EVENT_TYPES.includes(defaultEventType));
+    setShareTouched(false);
     Promise.all([
-      supabase.from('opportunities').select('id, project, contact_name, company').order('created_at', { ascending: false }).limit(200),
-      supabase.from('jobs').select('id, project_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
+      // Locked to a job: the 400-row project search isn't needed.
+      lockedJobId ? Promise.resolve({ data: [] }) : supabase.from('opportunities').select('id, project, contact_name, company').order('created_at', { ascending: false }).limit(200),
+      lockedJobId ? Promise.resolve({ data: [] }) : supabase.from('jobs').select('id, project_number, customer_name, project_address').order('created_at', { ascending: false }).limit(200),
       supabase.from('staff_users').select('id, full_name, role').eq('status', 'active').order('full_name'),
       // Subcontractors only: the companies table also holds customers,
       // suppliers, etc., none of whom have a Sub Portal calendar to invite to.
@@ -56,8 +70,21 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
       setProjects([...jobOptions, ...oppOptions]);
       setStaff(staffRes.data || []);
       setCompanies(companyRes.data || []);
+      // Logging a visit usually means "I'm going" — start with yourself on it.
+      if (lockedJobId) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          const me = session?.user?.id;
+          if (me && (staffRes.data || []).some(s => s.id === me)) setAssignedStaffIds(prev => (prev.length ? prev : [me]));
+        });
+      }
     });
-  }, [open, defaultDate, defaultEventType]);
+  }, [open, defaultDate, defaultEventType, lockedJobId]);
+
+  function changeType(next) {
+    setEventType(next);
+    // Follow the type's default until the person flips the switch themselves.
+    if (!shareTouched) setShareWithCustomer(CUSTOMER_VISIBLE_EVENT_TYPES.includes(next));
+  }
 
   function toggleStaff(id) {
     setAssignedStaffIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -74,6 +101,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
   function reset() {
     setProjectId(''); setEventType(defaultEventType); setDescription('');
     setAssignedStaffIds([]); setInvitedCompanyIds([]); setSubPick(''); setEventTime(''); setError('');
+    setShareWithCustomer(CUSTOMER_VISIBLE_EVENT_TYPES.includes(defaultEventType)); setShareTouched(false);
   }
 
   async function submit(e) {
@@ -81,7 +109,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
     if (!eventDate) { setError('Pick a date.'); return; }
     setSaving(true);
     setError('');
-    const [projKind, projId] = projectId ? projectId.split(':') : [null, null];
+    const [projKind, projId] = effectiveProjectId ? effectiveProjectId.split(':') : [null, null];
     const payload = {
       event_type: eventType,
       description: description.trim() || null,
@@ -91,6 +119,9 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
       job_id: projKind === 'job' ? projId : null,
       assigned_staff_ids: assignedStaffIds,
       invited_company_ids: invitedCompanyIds,
+      // Only sent when on, so the Calendar page's plain "New Event" keeps
+      // working even before migration 160 adds the column.
+      ...(jobLinked && shareWithCustomer ? { show_to_customer: true } : {}),
     };
     const { data, error: insertError } = await supabase.from('schedule_events').insert(payload).select().single();
     setSaving(false);
@@ -104,17 +135,25 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
     <PopupModal open={open} onClose={() => { reset(); onClose(); }} maxWidth={480}>
       <h3>{title}</h3>
       <form onSubmit={submit}>
-        <label>Project (optional)</label>
-        <SearchableSelect
-          options={projects}
-          value={projectId}
-          onChange={setProjectId}
-          placeholder="Search leads, opportunities, jobs…"
-        />
+        {lockedJobId ? (
+          lockedJobLabel && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 4 }}>For {lockedJobLabel}</div>
+        ) : (
+          <>
+            <label>Project (optional)</label>
+            <SearchableSelect
+              options={projects}
+              value={projectId}
+              onChange={setProjectId}
+              placeholder="Search leads, opportunities, jobs…"
+            />
+          </>
+        )}
 
-        <label style={{ marginTop: 12 }}>Event Type</label>
-        <select value={eventType} onChange={e => setEventType(e.target.value)}>
-          {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        <label style={{ marginTop: lockedJobId ? 0 : 12 }}>{lockedJobId ? 'What' : 'Event Type'}</label>
+        <select value={eventType} onChange={e => changeType(e.target.value)}>
+          {(lockedJobId ? JOB_EVENT_TYPE_ORDER.filter(k => EVENT_TYPE_LABELS[k]) : Object.keys(EVENT_TYPE_LABELS)).map(k => (
+            <option key={k} value={k}>{EVENT_TYPE_LABELS[k]}</option>
+          ))}
         </select>
 
         <label style={{ marginTop: 12 }}>Description</label>
@@ -143,7 +182,7 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
           })}
         </div>
 
-        {projectId.startsWith('job:') && companies.length > 0 && (
+        {jobLinked && companies.length > 0 && (
           <>
             <label style={{ marginTop: 12 }}>Invite Subcontractors (optional)</label>
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>
@@ -190,6 +229,23 @@ export default function NewEventModal({ open, onClose, onCreated, defaultDate, d
             <input type="time" step={900} value={eventTime} onChange={e => setEventTime(e.target.value)} />
           </div>
         </div>
+
+        {jobLinked && (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, fontWeight: 400, fontSize: 13, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              style={{ width: 'auto', marginTop: 3 }}
+              checked={shareWithCustomer}
+              onChange={e => { setShareWithCustomer(e.target.checked); setShareTouched(true); }}
+            />
+            <span>
+              Show on the customer portal
+              <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                The customer sees the date, the type, and the phase name. Your description stays internal.
+              </span>
+            </span>
+          </label>
+        )}
 
         {error && <div style={{ color: '#a13f3f', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
 

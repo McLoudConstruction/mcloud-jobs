@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const STAGE_GROUPS = ['Sell', 'Plan', 'Build', 'Closeout'];
 
-export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFieldPhase, isDone, inviting, go, create, push, onRfp, onInvite }) {
+export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFieldPhase, isDone, inviting, go, create, push, onRfp, onInvite, onAddScheduleItem }) {
   const canRfp = role === 'owner' || role === 'estimator';
 
   const groups = {
@@ -49,6 +49,9 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
   };
 
   const anytime = [
+    // A visit, walk, inspection or any other event on this job. Available at
+    // every stage because you walk a site before, during and after the work.
+    onAddScheduleItem && { key: 'schedule-item', label: 'Add schedule item (visit, walk, event)', run: onAddScheduleItem },
     { key: 'message', label: 'Message the customer', run: () => go('messages') },
     { key: 'email', label: 'Email the customer', run: () => go('email') },
     { key: 'invite', label: inviting ? 'Sending invite…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to customer portal', run: onInvite, disabled: inviting },
@@ -60,7 +63,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
   if (current && clean(groups[current]).length) {
     out.push({ key: current, label: `${current} - where this job is`, current: true, items: clean(groups[current]) });
   }
-  out.push({ key: 'anytime', label: 'Any time', items: anytime });
+  out.push({ key: 'anytime', label: 'Any time', items: clean(anytime) });
   for (const g of STAGE_GROUPS) {
     if (g === current || !clean(groups[g]).length) continue;
     out.push({ key: g, label: g, items: clean(groups[g]) });
