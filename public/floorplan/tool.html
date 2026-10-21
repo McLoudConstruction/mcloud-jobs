@@ -1104,7 +1104,7 @@ function runChecks(state, an, tk, more) {
       if (exp) {
         const lack = [];
         for (const k of Object.keys(exp)) {
-          const have = r.fix[k] || 0;
+          const have = (r.fix[k] || 0) + blockCountFor(st, r, k);
           if (have < exp[k]) lack.push(have === 0 ? 'no ' + FIXTURES[k].label.toLowerCase() : 'only ' + have + ' ' + FIXTURES[k].label.toLowerCase() + (have > 1 ? 's' : '') + ' (typically ' + exp[k] + '+)');
         }
         if (lack.length) add({ sev: 'info', roomId: m.id, text: name + ': ' + lack.join(', ') + '.' });
@@ -1533,6 +1533,12 @@ Object.assign(BLOCKS, {
     parts(b, o) { const w = b.w, d = b.d; return [bx(0, 0, w, d, 0, 16, o.color), ...cabFronts(b, Object.assign({ style: 'shaker' }, o), d / 2 - 0.5, 1, 15.5, o.storage === 'drawers' ? 'drawers' : 'doors'), bx(0, 0, w - 1, d - 1, 16, 19, o.cushion, { rough: 0.95 })]; },
     lines(b, o) { return [{ key: 'blk:seat:' + o.storage + ':' + o.color, name: 'Built-in window seat, ' + o.storage + ' storage, ' + palName('cab', o.color), cat: 'Built-ins', unit: 'LF', qty: b.w / 12, scope: 'Furnish and install built-in window seat with ' + o.storage + ' storage, painted or stained, with cushion support.' }]; }
   },
+  alcove: {
+    label: 'Alcove / niche', cat: 'Built-ins', w: 36, d: 12, h: 84, sizes: [24, 30, 36, 48, 60, 72], mount: 'wall', supply: 'gc',
+    opts: [CL('color', 'Paint or stain', 'cab', '#f1efe9', 'cabColor'), CH('kind', 'Type', [['niche', 'Recessed niche'], ['shelves', 'Built-in shelves'], ['nook', 'Nook']], 'niche')],
+    parts(b, o) { const w = b.w, d = b.d; return [bx(0, 0, w, d, 0, 2, o.color, { opacity: 0.6 }), bx(0, -d / 2 + 0.5, w, 1, 0, b.h || 84, o.color, { opacity: 0.8 })]; },
+    lines(b, o) { const t = { niche: 'Recessed niche', shelves: 'Built-in shelves', nook: 'Nook' }[o.kind]; return [{ key: 'blk:alcove:' + o.kind, name: t + ', framed and finished', cat: 'Built-ins', unit: 'EA', qty: 1, scope: 'Frame, finish and paint ' + t.toLowerCase() + ' about ' + Math.round(b.w) + ' in wide.' }]; }
+  },
   closet: {
     label: 'Closet system', cat: 'Built-ins', w: 72, d: 24, h: 84, sizes: [48, 60, 72, 96, 120], mount: 'wall', supply: 'gc',
     opts: [CH('type', 'System', [['reach', 'Rod and shelf'], ['double', 'Double hang'], ['custom', 'Custom with drawers and shoe shelves']], 'double'), CL('color', 'Finish', 'cab', '#f1efe9', 'cabColor'), CH('led', 'Integrated lighting', [['none', 'None'], ['3000', 'LED bar, 3000K'], ['4000', 'LED bar, 4000K']], 'none', 'ledTemp')],
@@ -1728,8 +1734,14 @@ Object.assign(BLOCKS, {
   }
 });
 
+/* blocks that stand in for a fixture of the same job, so room checks count them */
+const BLOCK_AS_FIX = { toilet: ['toilet'], vanity: ['vanity'], tub: ['tub', 'shower'], sink: ['ksink'], light: ['recessed'] };
+function blockCountFor(st, r, k) {
+  const kinds = BLOCK_AS_FIX[k]; if (!kinds) return 0;
+  return (st.blocks || []).filter(b => kinds.indexOf(b.kind) >= 0 && pointInPoly(b, r.poly)).length;
+}
 /* group blocks for the placement palette */
-const BLOCK_GROUPS = [['Kitchen', ['base', 'upper', 'tall', 'island', 'ksink', 'hood', 'range', 'fridge', 'dishwasher']], ['Bath', ['vanity', 'toilet', 'tub', 'shower', 'vlight']], ['Built-ins', ['shelf', 'seat', 'closet']], ['Furniture', ['bed', 'nightstand', 'dresser', 'sofa', 'chair', 'coffee', 'dining', 'desk', 'bookcase', 'tv', 'rug']], ['Lighting', ['pendant', 'recessed', 'sconce', 'cove']], ['Laundry', ['washer', 'dryer']], ['Stairs', ['stair']]];
+const BLOCK_GROUPS = [['Kitchen', ['base', 'upper', 'tall', 'island', 'ksink', 'hood', 'range', 'fridge', 'dishwasher']], ['Bath', ['vanity', 'toilet', 'tub', 'shower', 'vlight']], ['Built-ins', ['alcove', 'shelf', 'seat', 'closet']], ['Furniture', ['bed', 'nightstand', 'dresser', 'sofa', 'chair', 'coffee', 'dining', 'desk', 'bookcase', 'tv', 'rug']], ['Lighting', ['pendant', 'recessed', 'sconce', 'cove']], ['Laundry', ['washer', 'dryer']], ['Stairs', ['stair']]];
 
 /* ----- design logic: options, concepts, placement geometry, takeoff lines, checks, layouts ----- */
 const LABEL = (opts, k, v) => { const o = opts.find(x => x.k === k); if (!o || !o.v) return String(v); const hit = o.v.find(p => String(p[0]) === String(v)); return hit ? hit[1] : String(v); };
@@ -2864,6 +2876,7 @@ const ICONS = {
   room: '<path d="M5 5h14v14H5z" stroke-width="3"/>',
   door: '<path d="M3 20h18M6 20V6M6 6a14 14 0 0 1 14 14"/>',
   window: '<path d="M3 9h18v6H3zM12 9v6"/>',
+  objects: '<path d="M4 9h16v10H4zM4 9l3-4h10l3 4M9 13h6"/>',
   item: '<circle cx="12" cy="12" r="7"/><path d="M12 8.5v7M8.5 12h7"/>',
   pan: '<path d="M12 3v18M3 12h18M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5"/>',
   undo: '<path d="M9 14L4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3"/>',
@@ -4158,8 +4171,7 @@ function endPointer(e, cancel) {
   if (gg.moved) return;
   if (tool === 'door') placeOpening(p, opts.doorKind);
   else if (tool === 'window') placeOpening(p, 'window');
-  else if (tool === 'item') placeFixture(p);
-  else if (tool === 'block') placeBlockAt(p);
+  else if (tool === 'objects') { if (/^fx:/.test(opts.bkind || '')) placeFixture(p); else placeBlockAt(p); }
 }
 cv.addEventListener('pointerup', e => endPointer(e, false));
 cv.addEventListener('pointercancel', e => endPointer(e, true));
@@ -4181,7 +4193,7 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- toolbar, context, strip ---------- */
-const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['item', 'Item'], ['block', 'Design'], ['trace', 'Trace'], ['pan', 'Pan']];
+const TOOLS = [['select', 'Select'], ['room', 'Room'], ['wall', 'Wall'], ['door', 'Door'], ['window', 'Window'], ['objects', 'Objects'], ['trace', 'Trace'], ['pan', 'Pan']];
 function renderTools() {
   const viewGrp = '<div class="tgroup" role="group" aria-label="View">' +
     [['2d', 'plan', 'Plan'], ['3d', 'cube', '3D']].map(v => '<button class="tbtn" data-mode="' + v[0] + '" aria-pressed="' + (mode === v[0]) + '" type="button">' + icon(v[1]) + '<span>' + v[2] + '</span></button>').join('') + '</div>';
@@ -4220,13 +4232,10 @@ function renderCtx() {
     h += chipRow('Width', DW[opts.doorKind] || [[28, '28"'], [30, '30"'], [32, '32"'], [36, '36"'], [48, '48"']], opts.doorW, 'data-dw');
   } else if (tool === 'window') {
     h += chipRow('Width', [[24, '24"'], [36, '36"'], [48, '48"'], [60, '60"'], [72, '72"']], opts.winW, 'data-ww');
-  } else if (tool === 'block') {
+  } else if (tool === 'objects') {
     h += ctxBlock();
   } else if (tool === 'trace') {
     h += ctxTrace();
-  } else if (tool === 'item') {
-    h += chipRow('New', Object.keys(FIXTURES).filter(k => !FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
-    h += chipRow('Existing', Object.keys(FIXTURES).filter(k => FIXTURES[k].fixed).map(k => [k, FIXTURES[k].label]), opts.item, 'data-item');
   } else {
     h += '<span class="lbl">' + (tool === 'pan' ? 'Drag to move the sheet' : 'Tap to select') + '</span>';
   }
@@ -4238,8 +4247,7 @@ const HINTS = {
   wall: 'Tap to start a wall, tap again for the end point. Walls chain until you tap the same point twice or press Done. You can also type a length.',
   door: 'Tap on a wall to place a door. Pick the type and width above.',
   window: 'Tap on a wall to place a window.',
-  block: 'Pick a block above, then tap the plan to place it. Cabinets and furniture snap flush to the nearest wall. Sinks drop onto a cabinet. Select a block to change its style, colors and size.',
-  item: 'Tap inside a room to place an item. Items under Existing are things that cannot move, like posts, stacks and the panel.',
+  objects: 'Pick a group and an object above, then tap the plan to place it. Cabinets, vanities and alcoves snap flush to the nearest wall. Sinks drop onto a cabinet. Existing holds things that cannot move, like posts, stacks and the panel. Select an object to change its size, style and colors.',
   trace: 'Load a picture of a floorplan to trace over.',
   pan: 'Drag to move the sheet. Pinch or use + and - to zoom.'
 };
@@ -4287,7 +4295,6 @@ document.addEventListener('click', e => {
   const dk = e.target.closest('[data-dkind]'); if (dk) { opts.doorKind = dk.dataset.dkind; const kk = OPENING_KINDS[opts.doorKind]; if (kk && opts.doorKind !== 'door' && opts.doorKind !== 'entry') opts.doorW = kk.w; else if (opts.doorW > 48) opts.doorW = 32; renderCtx(); return; }
   const dw = e.target.closest('[data-dw]'); if (dw) { opts.doorW = parseFloat(dw.dataset.dw); renderCtx(); return; }
   const ww = e.target.closest('[data-ww]'); if (ww) { opts.winW = parseFloat(ww.dataset.ww); renderCtx(); return; }
-  const it = e.target.closest('[data-item]'); if (it) { opts.item = it.dataset.item; renderCtx(); return; }
   if (e.target.closest('#rmAdd')) { addRoomTyped(); return; }
   if (e.target.closest('#doneBtn')) { pending = null; curSnap = null; renderStrip(); draw(); return; }
   const dir = e.target.closest('[data-dir]');
@@ -4379,6 +4386,7 @@ function renderInspector() {
     const f = state.fixtures.find(x => x.id === sel.id); if (!f) { el.hidden = true; return; }
     h = '<div class="insp-h"><strong>' + esc(FIXTURES[f.kind].label) + '</strong><span class="btnrow"><button type="button" class="btn" data-rot="1">Rotate 90&deg;</button><button type="button" class="btn danger" data-del="1">Delete</button></span></div>' +
       '<p class="note">' + (FIXTURES[f.kind].fixed ? 'Existing item that cannot move. It is shown on the plan and in Checks, and it is left out of the takeoff.' : 'Drag it on the plan to move it. Counts go to the room it sits in.') + '</p>' +
+      (CONVERT_TO[f.kind] ? '<div class="btnrow"><button type="button" class="btn" data-fxconv="1">Convert to object</button></div><p class="note">Turns this into an object you can size, style and move. It is then counted from the object, not the old item.</p>' : '') +
       (FIXTURES[f.kind].fixed && activeLayout(state).kind !== 'existing' ? '<label class="check"><input type="checkbox" id="f-moved"' + (f.moved ? ' checked' : '') + '> Allow moving in this concept (adds a relocation check)</label>' : '');
   }
   el.hidden = false; el.innerHTML = h;
@@ -4979,18 +4987,47 @@ opts.bgroup = 'Kitchen'; opts.bkind = 'base';
 const activeStyle = () => (activeLayout(state) || {}).style || '';
 const isCeil = b => BLOCKS[b.kind] && BLOCKS[b.kind].mount === 'ceil';
 
+const OBJ_GROUPS = () => BLOCK_GROUPS.filter(g => !(sketchMode() && (g[0] === 'Furniture' || g[0] === 'Lighting'))).map(g => [g[0], g[1].map(k => [k, BLOCKS[k].label])])
+  .concat([['Existing', Object.keys(FIXTURES).filter(k => FIXTURES[k].fixed).map(k => ['fx:' + k, FIXTURES[k].label])]])
+  .concat([['Electrical', Object.keys(FIXTURES).filter(k => FIXTURES[k].cat === 'Electrical').map(k => ['fx:' + k, FIXTURES[k].label])]]);
+function sketchMode() { const L = activeLayout(state); return !L || L.kind === 'existing'; }
 function ctxBlock() {
-  const grp = BLOCK_GROUPS.find(g => g[0] === opts.bgroup) || BLOCK_GROUPS[0];
-  if (grp[1].indexOf(opts.bkind) < 0) opts.bkind = grp[1][0];
-  return chipRow('Add', BLOCK_GROUPS.map(g => [g[0], g[0]]), grp[0], 'data-bgroup') +
-    chipRow('', grp[1].map(k => [k, BLOCKS[k].label]), opts.bkind, 'data-bkind') +
-    '<span class="lbl">Style for new</span><select id="newStyle" aria-label="Design style for new blocks"><option value="">Default</option>' + STYLE_LIST.map(s => '<option value="' + s[0] + '"' + (activeStyle() === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('') + '</select>';
+  const groups = OBJ_GROUPS();
+  const grp = groups.find(g => g[0] === opts.bgroup) || groups[0];
+  if (!grp[1].some(k => k[0] === opts.bkind)) opts.bkind = grp[1][0][0];
+  if (/^fx:/.test(opts.bkind)) opts.item = opts.bkind.slice(3);
+  return chipRow('Group', groups.map(g => [g[0], g[0]]), grp[0], 'data-bgroup') +
+    chipRow('', grp[1], opts.bkind, 'data-bkind') +
+    (sketchMode() ? '' : '<span class="lbl">Style for new</span><select id="newStyle" aria-label="Design style for new objects"><option value="">Default</option>' + STYLE_LIST.map(s => '<option value="' + s[0] + '"' + (activeStyle() === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('') + '</select>');
 }
 
 /* ---------- drawing ---------- */
+/* Sketch phase: a plain labelled outline, no finishes. Upper cabinets and ceiling items are dashed. */
+function drawBlockPlain(ctx, b, def, selected) {
+  const s = view.s, c0 = W2S(b), hi = (def.elev || 0) >= 50 || isCeil(b);
+  ctx.save(); ctx.translate(c0.x, c0.y); ctx.rotate(rad(b.rot)); ctx.scale(s, s); ctx.lineJoin = 'round';
+  ctx.globalAlpha = hi ? 0.5 : 0.9; ctx.fillStyle = hi ? 'rgba(0,0,0,0)' : 'rgba(120,130,140,0.14)'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4 / s;
+  if (hi) ctx.setLineDash([4 / s, 3 / s]);
+  ctx.beginPath(); ctx.rect(-b.w / 2, -b.d / 2, b.w, b.d); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+  if (def.cat === 'Bath' && b.kind !== 'vlight') {
+    ctx.globalAlpha = 0.8; ctx.beginPath();
+    if (b.kind === 'toilet') ctx.ellipse(0, b.d * 0.12, b.w * 0.36, b.d * 0.3, 0, 0, Math.PI * 2);
+    else if (b.kind === 'vanity') ctx.ellipse(0, 0, Math.min(b.w * 0.3, 9), b.d * 0.28, 0, 0, Math.PI * 2);
+    else { ctx.rect(-b.w / 2 + 3, -b.d / 2 + 3, b.w - 6, b.d - 6); if (b.kind === 'shower') { ctx.moveTo(-b.w / 2 + 3, -b.d / 2 + 3); ctx.lineTo(b.w / 2 - 3, b.d / 2 - 3); } }
+    ctx.stroke();
+  }
+  if (selected) { ctx.globalAlpha = 1; ctx.strokeStyle = C.sel; ctx.lineWidth = 2.2 / s; ctx.setLineDash([6 / s, 4 / s]); ctx.strokeRect(-b.w / 2 - 1.5, -b.d / 2 - 1.5, b.w + 3, b.d + 3); ctx.setLineDash([]); }
+  ctx.restore();
+  if (b.w * s > 34 && Math.min(b.w, b.d) * s > 14) {
+    const txt = (b.name ? b.name : def.label.split(' ')[0]) + ' ' + Math.round(b.w) + '"';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    halo(ctx, txt, c0.x, c0.y, C.muted, Math.max(8, Math.min(11, s * 5)), true, false);
+  }
+}
 function drawBlock(ctx, b, selected) {
   const def = BLOCKS[b.kind];
   if (!def) return;
+  if (sketchMode() && !def.stair) { drawBlockPlain(ctx, b, def, selected); return; }
   const o = bopts(b), s = view.s, c0 = W2S(b), hi = (def.elev || 0) >= 50 && b.kind !== 'pendant';
   const parts = def.parts(b, o).slice().sort((p, q) => p.y1 - q.y1);
   ctx.save(); ctx.translate(c0.x, c0.y); ctx.rotate(rad(b.rot)); ctx.scale(s, s); ctx.lineJoin = 'round';
@@ -5198,6 +5235,15 @@ document.addEventListener('click', e => {
   const br = e.target.closest('[data-brot]');
   if (br && sel && sel.type === 'block') { const b = blockById(sel.id); mutate(() => { b.rot = ((b.rot || 0) + parseInt(br.dataset.brot, 10) + 360) % 360; }, { panel: false }); return; }
   if (e.target.closest('[data-bdup]') && sel && sel.type === 'block') { dupBlock(blockById(sel.id)); return; }
+});
+const CONVERT_TO = { toilet: 'toilet', vanity: 'vanity', tub: 'tub', sink: 'ksink' };
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-fxconv]') || !sel || sel.type !== 'fixture') return;
+  const f = state.fixtures.find(x => x.id === sel.id); if (!f || !CONVERT_TO[f.kind]) return;
+  const b = newBlock(state, CONVERT_TO[f.kind], f.x, f.y, activeStyle()); b.rot = f.rot || 0;
+  snapBlock(b);
+  mutate(() => { state.fixtures = state.fixtures.filter(x => x.id !== f.id); state.blocks.push(b); });
+  sel = { type: 'block', id: b.id }; refresh();
 });
 document.addEventListener('change', e => {
   const t = e.target;
