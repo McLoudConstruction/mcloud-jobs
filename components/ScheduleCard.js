@@ -606,10 +606,10 @@ export default function ScheduleCard({ jobId, job, onAddVisit }) {
   // "Add Visit" sits to its left: it logs a site visit, walk or other event
   // (the page owns that form, passed in as onAddVisit) rather than a phase.
   const addPhaseButton = (
-    <>
+    <div style={{ display: 'flex', gap: 8 }}>
       {onAddVisit && <button className="btn btn-sm" onClick={onAddVisit}>+ Add Visit</button>}
       <button className="btn btn-sm" onClick={() => setAddingPhase(true)}>+ Add Schedule Item</button>
-    </>
+    </div>
   );
 
   function closeAddPhase() {
