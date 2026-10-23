@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import StaffUsersPanel from '../../components/StaffUsersPanel';
+import BotKeysPanel from '../../components/BotKeysPanel';
 import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
@@ -17,7 +18,7 @@ import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 import { settingsHref } from '../../lib/links';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users', 'Bots'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -493,7 +494,7 @@ function SettingsPageInner() {
 
         {tab === 'Email Templates' && <EmailTemplatesCard />}
 
-        {tab !== 'Email Templates' && (
+        {tab !== 'Email Templates' && tab !== 'Bots' && (
         <div className="section-actions" style={{ marginBottom: 20 }}>
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
           {tab === 'Cosmetic' && <button className="btn" onClick={resetToDefault}>Reset colors to default</button>}
@@ -597,6 +598,8 @@ function SettingsPageInner() {
         )}
 
         {tab === 'Users' && <StaffUsersPanel session={session} />}
+
+        {tab === 'Bots' && <BotKeysPanel />}
       </div>
     </AppShell>
   );
