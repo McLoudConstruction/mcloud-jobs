@@ -14,6 +14,7 @@ import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import ComplianceVaultPanel from '../../components/ComplianceVaultPanel';
+import AdminDeleteButton from '../../components/AdminDeleteButton';
 import { COMPLIANCE_OVERALL } from '../../lib/compliance';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
@@ -536,13 +537,6 @@ export default function SubcontractorsPage() {
     setInviteResult('');
   }
 
-  async function removeSub(id) {
-    if (!confirm('Delete this subcontractor?')) return;
-    const { error } = await supabase.from('companies').delete().eq('id', id);
-    if (error) { setSaveError(error.message); return; }
-    await loadSubs();
-  }
-
   async function saveCustomField(sub, key, value) {
     try {
       const nextFields = await updateCustomFieldValue('companies', sub.id, sub.custom_fields, key, value);
@@ -732,6 +726,14 @@ export default function SubcontractorsPage() {
             {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save subcontractor')}</button>
+              {editingId && (
+                <AdminDeleteButton
+                  kind="company"
+                  recordId={editingId}
+                  name={form.company_name}
+                  onDeleted={() => { cancelForm(); loadSubs(); }}
+                />
+              )}
             </div>
             {inviteResult && <div style={{ fontSize: 12, color: inviteResult.startsWith('Failed') ? '#a13f3f' : '#3a6b45', marginTop: 8 }}>{inviteResult}</div>}
             </form>
@@ -956,7 +958,7 @@ export default function SubcontractorsPage() {
               })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true,
-                render: c => <button className="btn btn-sm btn-danger" onClick={() => removeSub(c.id)}>Delete</button>,
+                render: c => <AdminDeleteButton kind="company" recordId={c.id} name={c.company_name} onDeleted={loadSubs} />,
               },
             ]}
           />

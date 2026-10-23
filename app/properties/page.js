@@ -9,7 +9,8 @@ import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
 import LogVisitPopover from '../../components/LogVisitPopover';
 import PopupModal from '../../components/PopupModal';
-import EmailLogPanel from '../../components/EmailLogPanel';
+import TouchTimeline from '../../components/TouchTimeline';
+import AdminDeleteButton from '../../components/AdminDeleteButton';
 import SendEmailButton from '../../components/SendEmailButton';
 import AddColumnButton from '../../components/AddColumnButton';
 import CustomFieldCell from '../../components/CustomFieldCell';
@@ -173,13 +174,6 @@ export default function PropertiesPage() {
     setShowForm(false);
     setShowContactForm(false);
     setPropertyContacts([]);
-  }
-
-  async function removeProperty(id) {
-    if (!confirm('Delete this property?')) return;
-    const { error } = await supabase.from('properties').delete().eq('id', id);
-    if (error) { setSaveError(error.message); return; }
-    await loadProperties();
   }
 
   async function saveCustomField(property, key, value) {
@@ -496,6 +490,14 @@ export default function PropertiesPage() {
             {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save property')}</button>
+              {editingId && (
+                <AdminDeleteButton
+                  kind="property"
+                  recordId={editingId}
+                  name={form.property_name}
+                  onDeleted={() => { cancelForm(); loadProperties(); }}
+                />
+              )}
             </div>
               </form>
             {editingId && form.contact_email && (
@@ -509,7 +511,7 @@ export default function PropertiesPage() {
                 />
               </div>
             )}
-            {editingId && <EmailLogPanel kind="property" recordId={editingId} />}
+            {editingId && <TouchTimeline kind="property" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">
@@ -586,7 +588,7 @@ export default function PropertiesPage() {
                 render: p => (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <LogVisitPopover onLog={iso => markVisited(p.id, iso)} />
-                    <button className="btn btn-sm btn-danger" onClick={() => removeProperty(p.id)}>Delete</button>
+                    <AdminDeleteButton kind="property" recordId={p.id} name={p.property_name} onDeleted={loadProperties} />
                   </div>
                 ),
               },

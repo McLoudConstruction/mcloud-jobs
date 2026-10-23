@@ -2,18 +2,19 @@
 
 This is the instruction sheet for any bot that works the sales side of McLoud Jobs. Give it to the bot along with its key.
 
-A bot can do four things, and nothing else:
+A bot can do five things, and nothing else:
 
 1. Read leads
 2. Read prospects
 3. Add prospects
 4. Log outreach
+5. Read outreach history
 
 It cannot reach jobs, financials, subcontractors, staff, or settings. The database enforces this, not just the website.
 
 ## Setup (owner, once)
 
-1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160).
+1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160), then `supabase-migration-162-owner-delete-and-touch-timeline.sql` (adds outreach history).
 2. In the app go to Settings, then the Bots tab, then New bot key. Give it a name (shown on everything it creates), a requests per minute limit, and optionally an expiry date.
 3. Copy the key. It is shown once. It looks like `mcb_` followed by 64 characters.
 4. To cut a bot off, press Revoke on its card. It stops working at once.
@@ -141,11 +142,41 @@ Answer: `{ "status": "logged", "touch_id": "...", "prospect_id": "...", "effects
 - `bounced`: suppresses the address. Does not count as contact.
 - `no_answer`, `wrong_contact`: logged only.
 
+## 5. Read outreach history
+
+What has already happened with a prospect or an address, so you do not contact someone twice. `GET /api/bot/sales/outreach`
+
+```
+curl -s "https://YOUR-SITE/api/bot/sales/outreach?prospect_id=PROSPECT_ID" -H "Authorization: Bearer $KEY"
+curl -s "https://YOUR-SITE/api/bot/sales/outreach?email=ann@zion.org" -H "Authorization: Bearer $KEY"
+```
+
+Filters (all optional): `prospect_id`, `email`, `channel`, `outcome`, `source`, `since` (ISO date), `limit` (1 to 200, default 50), `cursor`. Use `prospect_id` or `email`, not both. With neither, you get the latest history across all prospects.
+
+- `prospect_id` returns everything for that prospect and the people linked to it.
+- `email` returns exactly that address: touches sent to it, and touches logged for the person who holds it.
+- `source` is `touch` (logged by a bot, including you) or `sequence` (sent by the platform's email sequences, with replies and bounces).
+- `outcome` takes any outcome from section 4, plus `opened` and `clicked` for sequence emails.
+
+Newest first. Each item:
+
+```
+{ "id": "...", "at": "2026-10-21T14:05:00Z", "source": "touch", "channel": "email",
+  "direction": "outbound", "outcome": "sent", "summary": null, "note": "Intro email",
+  "by": "church-bot", "email": "ann@zion.org",
+  "prospect": { "id": "...", "name": "Zion Lutheran Church" },
+  "person": { "id": "...", "name": "Ann Fox" } }
+```
+
+`by` is the bot name for a touch and the sequence name for a sequence event. `summary` is the subject line for a sequence email. `prospect` and `person` are null when the touch is not tied to one. Paging works the same as for prospects (`next_cursor`).
+
+Staff email is never part of this. It covers bot touches and platform sequence activity only.
+
 ## Rules for bots
 
 1. Check `can_email` before sending any email. If it is false, do not email that person. `do_not_contact` means no contact of any kind.
 2. Always send an `Idempotency-Key` (8 to 128 characters: letters, numbers, `_ . : -`) on every POST. If a request times out, resend it with the same key and body. It will not be applied twice. Reusing a key with a different body returns 422 `idempotency_conflict`.
-3. Log every touch, including bounces, unsubscribes, and replies, as soon as they happen.
+3. Log every touch, including bounces, unsubscribes, and replies, as soon as they happen. Before you contact someone, check their history (section 5) and skip anyone already reached recently.
 4. Page with `next_cursor`. Do not fetch faster than your rate limit.
 5. On 429, wait the number of seconds in the `Retry-After` header.
 6. Your own outgoing email is sent from your own mailbox, not the platform. It must include an unsubscribe option and our postal address (CAN-SPAM). When someone unsubscribes, log `unsubscribed` right away.
@@ -160,16 +191,18 @@ Errors look like `{ "code": "...", "error": "human readable message" }`, sometim
 | 400 | `invalid_json` | Body is not valid JSON |
 | 401 | `unauthorized`, `key_expired` | Missing, wrong, or revoked key, or an expired key |
 | 403 | `forbidden` | Key does not have the sales scope |
-| 404 | `unknown_prospect` | No prospect with that `prospect_id` or email. Add it first |
+| 404 | `unknown_prospect` | No prospect with that `prospect_id` (history or logging), or no prospect with that email (logging). Add it first |
 | 409 | `ambiguous_prospect` | The email matches several prospects. Use `prospect_id` |
 | 413 | `too_large` | Body over 50,000 characters |
 | 422 | `unknown_field`, `unknown_filter`, `invalid_field`, `invalid_filter`, `invalid_filters`, `invalid_body`, `invalid_idempotency_key`, `idempotency_conflict` | A field or value is wrong, or an Idempotency-Key was reused with a different body. Read `error` and `allowed` |
 | 429 | `rate_limited` | Too many requests. See `Retry-After` |
 | 500 | `server_error` | Our side. Retry later |
-| 503 | `not_configured` | Migration 161 has not been run |
+| 503 | `not_configured` | Migration 161 (or 162, for history) has not been run |
 
 Rejected requests (422) count toward your rate limit, so fix the request instead of retrying it unchanged.
 
 ## Staff view
 
 Settings, then Bots, shows each key with its last use, 24 hour call count, prospects added, touches logged, and a recent activity list. Prospects added by a bot are marked in the database with `created_by_bot_id`, so they can be reviewed or removed.
+
+Every touch a bot logs, every sequence email, and mail from a connected mailbox shows in the Touches section of the Person, Property and Company popups. A touch on a person also shows on their property and company, labeled with the person's name.

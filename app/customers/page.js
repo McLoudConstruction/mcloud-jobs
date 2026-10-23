@@ -6,7 +6,8 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
-import EmailLogPanel from '../../components/EmailLogPanel';
+import TouchTimeline from '../../components/TouchTimeline';
+import AdminDeleteButton from '../../components/AdminDeleteButton';
 import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
@@ -235,13 +236,6 @@ export default function CustomersPage() {
     setShowForm(false);
   }
 
-  async function removeContact(id) {
-    if (!confirm('Delete this contact?')) return;
-    const { error } = await supabase.from('contacts').delete().eq('id', id);
-    if (error) { setSaveError(error.message); return; }
-    await loadContacts();
-  }
-
   async function saveCustomField(contact, key, value) {
     try {
       const nextFields = await updateCustomFieldValue('contacts', contact.id, contact.custom_fields, key, value);
@@ -457,6 +451,14 @@ export default function CustomersPage() {
                   {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
                   <div className="section-actions">
                     <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
+                    {editingId && (
+                      <AdminDeleteButton
+                        kind="contact"
+                        recordId={editingId}
+                        name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
+                        onDeleted={() => { cancelForm(); loadContacts(); }}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -498,7 +500,7 @@ export default function CustomersPage() {
                 />
               </div>
             )}
-            {editingId && <EmailLogPanel kind="contact" recordId={editingId} />}
+            {editingId && <TouchTimeline kind="contact" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">
@@ -564,7 +566,7 @@ export default function CustomersPage() {
               })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true, sticky: true,
-                render: c => <button className="btn btn-sm btn-danger" onClick={() => removeContact(c.id)}>Delete</button>,
+                render: c => <AdminDeleteButton kind="contact" recordId={c.id} name={c.name} onDeleted={loadContacts} />,
               },
             ]}
           />

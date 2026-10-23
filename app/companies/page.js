@@ -6,7 +6,8 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import AddressFields, { formatAddress } from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
-import EmailLogPanel from '../../components/EmailLogPanel';
+import TouchTimeline from '../../components/TouchTimeline';
+import AdminDeleteButton from '../../components/AdminDeleteButton';
 import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
@@ -163,13 +164,6 @@ export default function CompaniesPage() {
     setShowForm(false);
   }
 
-  async function removeCompany(id) {
-    if (!confirm('Delete this company?')) return;
-    const { error } = await supabase.from('companies').delete().eq('id', id);
-    if (error) { setSaveError(error.message); return; }
-    await loadCompanies();
-  }
-
   async function saveCustomField(company, key, value) {
     try {
       const nextFields = await updateCustomFieldValue('companies', company.id, company.custom_fields, key, value);
@@ -280,6 +274,14 @@ export default function CompaniesPage() {
             {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save company')}</button>
+              {editingId && (
+                <AdminDeleteButton
+                  kind="company"
+                  recordId={editingId}
+                  name={form.company_name}
+                  onDeleted={() => { cancelForm(); loadCompanies(); }}
+                />
+              )}
             </div>
             </form>
             {editingId && form.contact_email && (
@@ -292,7 +294,7 @@ export default function CompaniesPage() {
                 />
               </div>
             )}
-            {editingId && <EmailLogPanel kind="company" recordId={editingId} />}
+            {editingId && <TouchTimeline kind="company" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">
@@ -348,7 +350,7 @@ export default function CompaniesPage() {
               })),
               {
                 key: 'actions', label: '', defaultWidth: 90, filterable: false, stopClickPropagation: true, sticky: true,
-                render: c => <button className="btn btn-sm btn-danger" onClick={() => removeCompany(c.id)}>Delete</button>,
+                render: c => <AdminDeleteButton kind="company" recordId={c.id} name={c.company_name} onDeleted={loadCompanies} />,
               },
             ]}
           />

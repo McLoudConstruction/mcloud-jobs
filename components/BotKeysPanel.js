@@ -16,6 +16,7 @@ const ACTION_LABELS = {
   'prospects.list': 'Read prospects',
   'prospects.create': 'Added a prospect',
   'outreach.log': 'Logged outreach',
+  'outreach.history': 'Read outreach history',
 };
 
 function when(value) {
