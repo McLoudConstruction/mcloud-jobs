@@ -3,6 +3,7 @@ import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatPhone } from '../lib/constants';
 import AddressFields, { formatAddress } from './AddressFields';
+import JobContactLink from './JobContactLink';
 
 // Billing is assumed to be the same as the project/jobsite address unless
 // the saved record actually shows otherwise — a job only counts as
@@ -191,6 +192,7 @@ export default function CustomerInfoCard({ job, onSave }) {
           <button className="btn btn-sm" onClick={() => setEditing(true)} type="button">Edit</button>
         )}
       </div>
+      <JobContactLink jobId={job.id} />
       <div className="two-col">
         {isCommercial ? (
           <div style={{ position: 'relative' }}>

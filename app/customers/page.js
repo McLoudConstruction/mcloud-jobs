@@ -26,6 +26,7 @@ import { resolveMainPropertyId } from '../../lib/contactProperties';
 import ContactPropertiesCard from '../../components/ContactPropertiesCard';
 import ContactHistoryCard from '../../components/ContactHistoryCard';
 import ContactHeader from '../../components/ContactHeader';
+import ContactJobsCard from '../../components/ContactJobsCard';
 import ContactDetailsView from '../../components/ContactDetailsView';
 import Collapsible from '../../components/Collapsible';
 import RecencyDot from '../../components/RecencyDot';
@@ -202,6 +203,17 @@ export default function CustomersPage() {
     if (!session) return;
     refreshRecency();
   }, [session, refreshRecency]);
+
+  // A link like /customers?contact=ID opens that person, for example from a job's Customer card.
+  const openedFromLink = useRef(false);
+  useEffect(() => {
+    if (openedFromLink.current || contacts.length === 0) return;
+    const wanted = new URLSearchParams(window.location.search).get('contact');
+    if (!wanted) { openedFromLink.current = true; return; }
+    const found = contacts.find(c => c.id === wanted);
+    openedFromLink.current = true;
+    if (found) startEdit(found);
+  }, [contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!session) return;
@@ -834,6 +846,7 @@ export default function CustomersPage() {
               <div className="contact-popup-grid even">
                 <div>
                   <ContactPropertiesCard contactId={editingId} canEdit onChanged={handlePropertiesChanged} />
+                  <ContactJobsCard contactId={editingId} />
                   <ContactHistoryCard
                     contactId={editingId}
                     canEdit

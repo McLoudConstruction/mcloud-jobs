@@ -145,7 +145,7 @@ curl -s "https://YOUR-SITE/api/bot/sales/people?company_id=COMPANY_ID&can_email=
 
 Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`. Also `email_confidence` (`verified` or `pattern_guess`), to pick people whose address is safe to use.
 
-Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `inactive`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
+Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`, the main property), `properties` (every property they are linked to, main first, each with `id`, `name` and `main`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `inactive`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
 
 `POST /api/bot/sales/people` adds a person:
 
@@ -162,6 +162,14 @@ Give a name (or `first_name` and `last_name`), or at least an email. Allowed fie
 Answer: `{ "status": "created", "id": "...", "matched_on": null, "can_email": true, "blocked_reason": null, "similar": [] }`. Like prospects, `status` is `created` (HTTP 201) or `duplicate` (HTTP 200, nothing overwritten). A duplicate is the same email, or with no email the same name at the same company or property. `similar` lists people with the same name or phone, for you to look at.
 
 `PATCH /api/bot/sales/people/{id}` changes any field on an existing person. Same fields as adding, plus `add_note`, `blocked_reason` and `shared_email` (true or false). Send `null` to clear an optional field; `name`, `blocked_reason` and `email_confidence` cannot be cleared. `email_confidence` can move from `pattern_guess` to `verified`, but a bot cannot downgrade a `verified` address. `blocked_reason` (`bounced`, `left_company` or `opted_out`) records why a person cannot be emailed, and it blocks automated email at once. A bot can set it but cannot clear it; staff clear it. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
+
+One person can be linked to several properties (run `supabase-migration-172-bot-multiple-property-links.sql` after 171). Their main property is the one in `property`; the full list is in `properties`.
+- `property_id` ADDS that property and keeps the person's other links. A person with no property yet gets it as their main one. Sending a property they already have changes nothing.
+- `main_property_id` makes that property the main one. The old main property stays linked as an extra.
+- `unlink_property_id` removes one link. If it was the main property, the oldest remaining link becomes the main one.
+- `property_id` as a filter on the people list finds everyone linked to that property, main or not. On the prospects list, a prospect's `contact` and `people` include everyone linked to it.
+- On `POST /outreach`, `person_id` together with `prospect_id` is accepted when the person is linked to that prospect in any way. A bare email that belongs to someone at more than one property is answered with 409 `ambiguous_prospect` and the list of `prospect_ids`; send `prospect_id` to say which.
+- `POST /people` with `property_id` still sets the new person's main property.
 
 ## 6. Read and add companies
 

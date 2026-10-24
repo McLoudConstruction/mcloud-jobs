@@ -6,6 +6,8 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { formatPhone, nextProjectNumber } from '../../../lib/constants';
 
+const HOMEOWNER_TYPE = 'Residential - Homeowner';
+
 const EMPTY_FORM = {
   project_number: '',
   expected_close_date: '',
@@ -113,9 +115,12 @@ function NewOpportunityPageInner() {
       customer_email: contact.contact_email || prev.customer_email,
       customer_phone: contact.contact_phone || prev.customer_phone,
     }));
+    // A commercial contact hiring us for their own house: their saved address is the business
+    // address, not the house, so it is not carried over. The job is still linked to them.
+    const businessContactOnHome = form.project_type === 'residential' && contact.contact_type !== HOMEOWNER_TYPE;
     // Not shown on this form, but carried into the job record so it's
     // already there once you're on the job's own Project/Customer tab.
-    setCarriedAddress({
+    setCarriedAddress(businessContactOnHome ? {} : {
       billing_email: contact.billing_email || null,
       billing_street: contact.billing_street || contact.address_street || null,
       billing_unit: contact.billing_unit || contact.address_unit || null,
@@ -133,8 +138,10 @@ function NewOpportunityPageInner() {
     const filled = [];
     if (contact.contact_email) filled.push('email');
     if (contact.contact_phone) filled.push('phone');
-    if (contact.billing_street || contact.address_street) filled.push('address (carried to the job record)');
-    setAutofillNote(`Filled from ${contact.name}: ${filled.join(', ') || 'name only'}.`);
+    if (!businessContactOnHome && (contact.billing_street || contact.address_street)) filled.push('address (carried to the job record)');
+    setAutofillNote(businessContactOnHome
+      ? `Linked to ${contact.name} (${contact.contact_type || 'commercial contact'}). Filled: ${filled.join(', ') || 'name only'}. Their business address was not copied, so add the house address on the job.`
+      : `Filled from ${contact.name}: ${filled.join(', ') || 'name only'}.`);
     setTimeout(() => setAutofillNote(''), 6000);
   }
 
@@ -173,6 +180,8 @@ function NewOpportunityPageInner() {
       customer_contact: fullName,
       ...carriedAddress,
     };
+    // Link the job to the person picked from the suggestions (needs migration 173; dropped if it has not been run).
+    if (selectedContactId) payload.contact_id = selectedContactId;
 
     // Two people opening this form at nearly the same moment can both be
     // handed the same suggested project number. Rather than making
@@ -184,12 +193,16 @@ function NewOpportunityPageInner() {
       if (!insertError || insertError.code !== '23505') break;
       payload.project_number = await computeNextProjectNumber(form.project_type);
     }
+    if (insertError && 'contact_id' in payload && /contact_id/.test(insertError.message || '')) {
+      delete payload.contact_id;
+      ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
+    }
 
     if (!insertError && !selectedContactId) {
       // No existing contact was picked from suggestions, so this is a brand
       // new customer — log them as a contact now rather than letting their
       // info live only on this one job with no record in the CRM.
-      await supabase.from('contacts').insert({
+      const { data: newContact } = await supabase.from('contacts').insert({
         name: payload.customer_name || fullName,
         first_name: form.first_name.trim() || null,
         last_name: form.last_name.trim() || null,
@@ -197,7 +210,9 @@ function NewOpportunityPageInner() {
         contact_email: form.customer_email || null,
         contact_phone: form.customer_phone || null,
         contact_type: isCommercial ? 'Commercial' : 'Residential - Homeowner',
-      });
+      }).select('id').maybeSingle();
+      // Link the job to the person just added (best effort, needs migration 173).
+      if (newContact?.id && data?.id) await supabase.from('jobs').update({ contact_id: newContact.id }).eq('id', data.id);
     }
 
     setSaving(false);
