@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PopupModal from './PopupModal';
+import { contactsAtProperty, propertiesOfContact } from '../lib/contactProperties';
 
 // "Log a touch" for a Person, Property or Company (migration 163).
 //
@@ -72,8 +73,8 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
   async function loadProperty(id) {
     setPeople([]); setNextStep(null);
     if (!id) return;
-    const [{ data: contacts }, { data: prop }] = await Promise.all([
-      supabase.from('contacts').select('id, name').eq('property_id', id).order('name'),
+    const [contacts, { data: prop }] = await Promise.all([
+      contactsAtProperty(id, { columns: 'id, name' }),
       supabase.from('properties').select('next_action_at, next_action_note').eq('id', id).maybeSingle(),
     ]);
     setPeople(contacts || []);
@@ -97,9 +98,14 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
         if (!c) { setError('Could not find this person.'); return; }
         setFixedPerson({ id: c.id, name: c.name || 'this person' });
         setPersonId(c.id);
-        if (c.property_id) {
-          setPropertyId(c.property_id);
-          const { data: prop } = await supabase.from('properties').select('next_action_at, next_action_note').eq('id', c.property_id).maybeSingle();
+        // A person can be linked to several properties. Offer the choice when there is one to make,
+        // starting on their main property.
+        const linked = await propertiesOfContact(c.id);
+        if (linked.length > 1) setProperties(linked.map(l => ({ id: l.id, property_name: l.name })));
+        const startId = c.property_id || linked[0]?.id || null;
+        if (startId) {
+          setPropertyId(startId);
+          const { data: prop } = await supabase.from('properties').select('next_action_at, next_action_note').eq('id', startId).maybeSingle();
           if (prop?.next_action_at) setNextStep({ at: prop.next_action_at, note: prop.next_action_note || '' });
         }
         // No linked property: nothing to pick. The touch is recorded on the person only.

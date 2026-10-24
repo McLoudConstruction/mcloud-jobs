@@ -21,7 +21,9 @@ import { useStaffAuth } from '../../lib/staffAuthContext';
 import { parseVCard } from '../../lib/vcard';
 import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
-import { linkOrCreateCompanyByName, findPropertyIdByName } from '../../lib/contactSync';
+import { linkOrCreateCompanyByName } from '../../lib/contactSync';
+import { resolveMainPropertyId } from '../../lib/contactProperties';
+import ContactPropertiesCard from '../../components/ContactPropertiesCard';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
@@ -221,6 +223,17 @@ export default function CustomersPage() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
+  // After a property is linked or removed in the Properties card, the main property can change
+  // (the first link becomes the main one, and removing the main one promotes the next). Pull the
+  // saved value back into the form so Save does not undo it.
+  async function handlePropertiesChanged() {
+    if (editingId) {
+      const { data } = await supabase.from('contacts').select('property').eq('id', editingId).maybeSingle();
+      if (data) setForm(prev => ({ ...prev, property: data.property || '' }));
+    }
+    loadContacts();
+  }
+
   async function submit(e, { allowDuplicate = false } = {}) {
     e?.preventDefault?.();
     if (!form.first_name.trim() && !form.last_name.trim()) return;
@@ -275,7 +288,9 @@ export default function CustomersPage() {
     // address to be worth creating, and a contact's free-text property
     // name alone isn't enough to do that well. If nothing matches, the
     // text is still saved; it just isn't linked to a Properties record.
-    payload.property_id = await findPropertyIdByName(form.property);
+    // This sets the person's MAIN property. Other linked properties are
+    // added and removed in the Properties card below the form.
+    payload.property_id = await resolveMainPropertyId(form.property, editingId);
 
     let mutationError;
     if (editingId) {
@@ -564,7 +579,7 @@ export default function CustomersPage() {
                         {EMAIL_BLOCKED_REASONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                     </div>
-                    <div><label>Property</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
+                    <div><label>{editingId ? 'Main property' : 'Property'}</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
                   </div>
 
                   {editingId && emailStatus && emailStatus !== form.email_blocked_reason && emailStatus !== 'no_email' && (
@@ -689,6 +704,9 @@ export default function CustomersPage() {
               </>
             )}
             </form>
+            {editingId && (
+              <ContactPropertiesCard contactId={editingId} canEdit={editMode} onChanged={handlePropertiesChanged} />
+            )}
             {editingId && (
               <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {form.contact_email && (

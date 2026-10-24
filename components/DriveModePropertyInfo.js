@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { contactsAtProperty } from '../lib/contactProperties';
 import { formatPhone } from '../lib/constants';
 import SiteRequestForm from './SiteRequestForm';
 
@@ -23,9 +24,9 @@ export default function DriveModePropertyInfo({ stop }) {
 
   async function load() {
     if (!propertyId) return;
-    const [{ data: prop }, { data: list }] = await Promise.all([
+    const [{ data: prop }, list] = await Promise.all([
       supabase.from('properties').select('notes').eq('id', propertyId).maybeSingle(),
-      supabase.from('contacts').select('id, name, position, contact_phone, contact_email').eq('property_id', propertyId).order('created_at', { ascending: false }),
+      contactsAtProperty(propertyId, { columns: 'id, name, position, contact_phone, contact_email, created_at', sortBy: 'newest' }),
     ]);
     setExistingNotes(prop?.notes || '');
     setContacts(list || []);

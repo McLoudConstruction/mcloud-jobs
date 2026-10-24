@@ -673,8 +673,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   }
 }
 
-.contact-popup-grid{ display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start; }
-@media (max-width: 800px){ .contact-popup-grid{ grid-template-columns: 1fr; } }
+/* minmax(0, ...) and min-width: 0 let each column shrink below its content's width. Without them the
+   Touches rows (single-line, nowrap text) set the column width, which stretched the whole popup. */
+.contact-popup-grid{ display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+.contact-popup-grid > div{ min-width: 0; }
+@media (max-width: 800px){ .contact-popup-grid{ grid-template-columns: minmax(0, 1fr); } }
 
 /* Contact popup: read-only "More information" view. Fields stay in place but
    read as greyed-out boxes until Edit contact is pressed. */
@@ -688,7 +691,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .contact-fieldset:disabled input[type="checkbox"]{ opacity: .7; }
 .contact-popup-head{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; padding-right: 36px; }
 .contact-popup-head h3{ margin: 0; }
-.contact-touches-panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; }
+.contact-touches-panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; min-width: 0; overflow: hidden; }
 
 /* Small info tooltip (hover, keyboard focus, or tap). */
 .info-tip{ position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ink-soft); color: var(--ink-soft); font-size: 11px; font-weight: 700; line-height: 1; cursor: help; flex: none; }

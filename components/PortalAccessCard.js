@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { contactsAtProperty } from '../lib/contactProperties';
 
 function normalizeEmail(email) {
   return (email || '').trim().toLowerCase();
@@ -46,7 +47,7 @@ export default function PortalAccessCard({ job, jobId, onLinkProperty }) {
   useEffect(() => {
     if (!job.property_id) { setProperty(null); setPropertyContacts([]); return; }
     supabase.from('properties').select('*').eq('id', job.property_id).maybeSingle().then(({ data }) => setProperty(data));
-    supabase.from('contacts').select('*').eq('property_id', job.property_id).then(({ data }) => { if (data) setPropertyContacts(data); });
+    contactsAtProperty(job.property_id).then(list => setPropertyContacts(list));
   }, [job.property_id]);
 
   async function searchProperties(term) {

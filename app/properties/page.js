@@ -20,6 +20,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
+import { contactsAtProperty, searchPeople, linkContactToProperty, unlinkContactFromProperty } from '../../lib/contactProperties';
 import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { mapRow, splitDuplicates } from '../../lib/propertyImport';
 
@@ -94,6 +95,9 @@ export default function PropertiesPage() {
   const [savingContact, setSavingContact] = useState(false);
   const [contactNote, setContactNote] = useState('');
   const [propertyContacts, setPropertyContacts] = useState([]);
+  const [linkingPerson, setLinkingPerson] = useState(false); // the "link someone already in People" picker
+  const [personTerm, setPersonTerm] = useState('');
+  const [personResults, setPersonResults] = useState([]);
   const { customColumns, addColumn } = useCustomColumns('properties');
   const [isMobile, setIsMobile] = useState(false);
 
@@ -118,8 +122,8 @@ export default function PropertiesPage() {
 
   const loadPropertyContacts = useCallback(async (propertyId) => {
     if (!propertyId) { setPropertyContacts([]); return; }
-    const { data } = await supabase.from('contacts').select('*').eq('property_id', propertyId).order('name', { ascending: true });
-    if (data) setPropertyContacts(data);
+    // Everyone linked to this property, including people whose main property is a different one.
+    setPropertyContacts(await contactsAtProperty(propertyId));
   }, []);
 
   // Jobs at the property being edited, so a win can point at the job it became.
@@ -241,6 +245,7 @@ export default function PropertiesPage() {
     setEditingId(null);
     setShowForm(false);
     setShowContactForm(false);
+    setLinkingPerson(false); setPersonTerm(''); setPersonResults([]);
     setPropertyContacts([]);
   }
 
@@ -318,8 +323,39 @@ export default function PropertiesPage() {
   }
 
   async function removePropertyContact(contactId, name) {
-    if (!confirm(`Remove ${name} from this property? They'll stay in Contacts, just unlinked from here.`)) return;
-    await supabase.from('contacts').update({ property_id: null }).eq('id', contactId);
+    if (!confirm(`Remove ${name} from this property? They'll stay in Contacts, just unlinked from here. Any other properties they are linked to are not changed.`)) return;
+    const res = await unlinkContactFromProperty(contactId, editingId);
+    if (!res.ok) {
+      setContactNote(res.error);
+      setTimeout(() => setContactNote(''), 6000);
+      return;
+    }
+    loadPropertyContacts(editingId);
+  }
+
+  // Look up people as the user types in the "Link existing person" picker.
+  useEffect(() => {
+    if (!linkingPerson) return undefined;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const found = await searchPeople(personTerm, propertyContacts.map(c => c.id));
+      if (!cancelled) setPersonResults(found);
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [personTerm, linkingPerson, propertyContacts]);
+
+  // Link someone who is already in People, so one person can sit under several properties.
+  async function linkExistingPerson(person) {
+    if (!editingId) return;
+    const res = await linkContactToProperty(person.id, editingId);
+    if (!res.ok) {
+      setContactNote(res.error);
+      setTimeout(() => setContactNote(''), 6000);
+      return;
+    }
+    setLinkingPerson(false); setPersonTerm(''); setPersonResults([]);
+    setContactNote(res.already ? `${person.name} is already linked here.` : `${person.name} linked to this property.`);
+    setTimeout(() => setContactNote(''), 3000);
     loadPropertyContacts(editingId);
   }
 
@@ -587,10 +623,36 @@ export default function PropertiesPage() {
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
                 <div className="top-actions" style={{ marginBottom: 10 }}>
                   <h4 style={{ margin: 0, fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)' }}>Property Contacts &amp; Influencers</h4>
-                  <button type="button" className="btn btn-sm" onClick={() => setShowContactForm(s => !s)}>
-                    {showContactForm ? 'Cancel' : '+ Add Contact / Influencer'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-sm" onClick={() => { setLinkingPerson(l => !l); setPersonTerm(''); setPersonResults([]); }}>
+                      {linkingPerson ? 'Cancel' : '+ Link existing person'}
+                    </button>
+                    <button type="button" className="btn btn-sm" onClick={() => setShowContactForm(s => !s)}>
+                      {showContactForm ? 'Cancel' : '+ Add Contact / Influencer'}
+                    </button>
+                  </div>
                 </div>
+
+                {linkingPerson && (
+                  <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 10, marginBottom: 14 }}>
+                    <label style={{ marginTop: 0 }}>Find someone already in People</label>
+                    <input autoFocus value={personTerm} onChange={e => setPersonTerm(e.target.value)} placeholder="Name or email" />
+                    {personTerm.trim().length >= 2 && personResults.length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 6 }}>No one else matches.</div>
+                    )}
+                    {personResults.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => linkExistingPerson(c)}
+                        style={{ all: 'unset', cursor: 'pointer', display: 'block', width: '100%', boxSizing: 'border-box', padding: '7px 4px', borderBottom: '1px solid var(--line)' }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{[c.position, c.management_company, c.contact_email].filter(Boolean).join(' · ')}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {contactNote && <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 10 }}>{contactNote}</div>}
 
