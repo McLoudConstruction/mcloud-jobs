@@ -2,19 +2,22 @@
 
 This is the instruction sheet for any bot that works the sales side of McLoud Jobs. Give it to the bot along with its key.
 
-A bot can do five things, and nothing else:
+A bot works the whole sales side, and nothing else:
 
-1. Read leads
-2. Read prospects
-3. Add prospects
-4. Log outreach
-5. Read outreach history
+| Area | Read | Add | Change |
+|------|------|-----|--------|
+| Leads (people who asked for work) | yes | no | no |
+| Prospects (properties we want to win) | yes | yes | stage, next step, blanks |
+| People (contacts) | yes | yes | blanks only |
+| Companies | yes | yes | blanks only |
+| Outreach (touches) | yes | yes | no |
+| Follow up lists (the Sales page) | yes | no | no |
 
-It cannot reach jobs, financials, subcontractors, staff, or settings. The database enforces this, not just the website.
+A bot can never delete anything. Deleting is owner only, in the app. It never overwrites something staff entered: updates only fill in blanks, with a few working fields on a prospect as the exception (section 4). It cannot reach jobs, financials, subcontractors, staff, or settings. The database enforces all of this, not just the website.
 
 ## Setup (owner, once)
 
-1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160), then `supabase-migration-162-owner-delete-and-touch-timeline.sql` (adds outreach history), then `supabase-migration-163-staff-touch-log.sql` (easier logging, plus staff can log touches by hand).
+1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160), then `supabase-migration-162-owner-delete-and-touch-timeline.sql` (adds outreach history), then `supabase-migration-163-staff-touch-log.sql` (easier logging, plus staff can log touches by hand), then 164 and 165 (follow up lists, touches without a property), then `supabase-migration-166-bot-sales-people-companies.sql` (people, companies, prospect updates, follow up lists for bots).
 2. In the app go to Settings, then the Bots tab, then New bot key. Give it a name (shown on everything it creates), a requests per minute limit, and optionally an expiry date.
 3. Copy the key. It is shown once. It looks like `mcb_` followed by 64 characters.
 4. To cut a bot off, press Revoke on its card. It stops working at once.
@@ -29,7 +32,7 @@ Every request sends the key as a bearer token. Never put the key in the URL.
 Authorization: Bearer mcb_...
 ```
 
-All answers are JSON. Reads are GET. Writes are POST with a JSON object body and `Content-Type: application/json`.
+All answers are JSON. Reads are GET. Adding is POST with a JSON object body and `Content-Type: application/json`. Filling in an existing record is PATCH to the record's address (`/people/{id}`, `/companies/{id}`, `/prospects/{id}`) with a JSON object body. Every list can also be fetched one record at a time with GET on that address, which answers 404 when there is no such record.
 
 Check that a key works and see the allowed values:
 
@@ -37,7 +40,7 @@ Check that a key works and see the allowed values:
 curl -s https://YOUR-SITE/api/bot/sales -H "Authorization: Bearer $KEY"
 ```
 
-This returns the bot name, its limits, and `allowed_values` (channels, directions, outcomes, stages, tiers, verticals). Read `allowed_values` instead of guessing.
+This returns the bot name, its limits, and `allowed_values` (channels, directions, outcomes, stages, the stages a bot may set, tiers, verticals, `contact_types` for people, `company_types` for companies). Read `allowed_values` instead of guessing.
 
 ## 1. Read leads
 
@@ -61,9 +64,9 @@ Prospects are organizations we want to win (churches, apartments, hotels, office
 curl -s "https://YOUR-SITE/api/bot/sales/prospects?vertical=church&city=Kansas%20City&can_email=true&contacted=false" -H "Authorization: Bearer $KEY"
 ```
 
-Filters (all optional): `stage`, `vertical`, `tier` (A, B, C), `city`, `state`, `type`, `q`, `email` (finds an org by any contact address), `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`.
+Filters (all optional): `id`, `company_id`, `stage`, `vertical`, `tier` (A, B, C), `city`, `state`, `type`, `q`, `email` (finds an org by any contact address), `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`.
 
-Each prospect has: `id`, `name`, `type`, `vertical`, `tier`, `stage`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built`, `sq_ft`, `notes`, `contact` (main contact with `name`, `email`, `phone`, `can_email`), `people` (other contacts, each with `can_email`), `can_email`, `do_not_contact`, `last_contacted_at`, `next_action_at`, `next_action_note`, and `touches` (`count`, `last_at`, `last_outcome`).
+Each prospect has: `id`, `name`, `type`, `vertical`, `tier`, `stage`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built`, `sq_ft`, `notes`, `contact` (main contact with `name`, `email`, `phone`, `can_email`), `people` (other contacts, each with `can_email`), `can_email`, `do_not_contact`, `last_contacted_at`, `next_action_at`, `next_action_note`, `stage_changed_at`, `lost_reason`, `reengage_at`, `company_id`, and `touches` (`count`, `last_at`, `last_outcome`).
 
 ### Paging
 
@@ -105,7 +108,91 @@ Answer:
 
 A duplicate is the same name at the same street, or the same name in the same city when a street is missing. Two campuses of one church at different streets are separate prospects. `similar` lists soft matches (for example a shared email or phone) for you to look at. They do not block creation.
 
-## 4. Log outreach
+## 4. Update a prospect
+
+`PATCH /api/bot/sales/prospects/{id}`
+
+```
+curl -s -X PATCH https://YOUR-SITE/api/bot/sales/prospects/PROSPECT_ID \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: zion-next-step-2026-10-24" \
+  -d '{"stage": "proposal", "next_action_at": "2026-10-30T15:00:00Z", "next_action_note": "Send the roof estimate", "add_note": "Walked the roof with the pastor"}'
+```
+
+Two kinds of fields:
+
+- **Working fields** can be replaced, because moving a prospect along is the job: `stage` (`prospecting`, `contacted`, `proposal`, `lost`), `next_action_at` (ISO time), `next_action_note`, `lost_reason` and `reengage_at` (a date, only while the stage is `lost`), and `do_not_contact`. Send `null` to clear `next_action_at`, `next_action_note`, `lost_reason` or `reengage_at`. A bot cannot set `won` (staff decide that), and can set `do_not_contact` to `true` but never clear it.
+- **Descriptive fields** only fill blanks: `type`, `vertical`, `tier`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built` (four digits), `sq_ft`, `contact_name`, `contact_email`, `contact_phone`, `company_id`, `notes`. If staff already entered a different value it is left alone and listed under `skipped`.
+
+`add_note` appends a dated note signed with your bot name. It never replaces the notes.
+
+Answer: `{ "status": "updated", "id": "...", "updated": { "stage": { "before": "contacted", "after": "proposal" } }, "skipped": [] }`. `status` is `updated` or `unchanged`. The `updated` list is also saved in the audit log, so staff can see exactly what a bot changed.
+
+## 5. Read and add people
+
+People are the contacts in the database: property managers, pastors, owners, agents. Residential homeowners are in this list too, so use `type` to filter. People who belong to a subcontractor company are never returned.
+
+`GET /api/bot/sales/people`, `GET /api/bot/sales/people/{id}`
+
+```
+curl -s "https://YOUR-SITE/api/bot/sales/people?company_id=COMPANY_ID&can_email=true" -H "Authorization: Bearer $KEY"
+```
+
+Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`.
+
+Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `phone`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
+
+`POST /api/bot/sales/people` adds a person:
+
+```
+curl -s https://YOUR-SITE/api/bot/sales/people \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: person-dana-reyes-2026-10-24" \
+  -d '{"name": "Dana Reyes", "email": "dana@hopepg.com", "position": "Regional Manager", "type": "Multi-Family", "company_id": "COMPANY_ID"}'
+```
+
+Give a name (or `first_name` and `last_name`), or at least an email. Allowed fields: `name`, `first_name`, `last_name`, `email`, `phone`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `company_id`, `property_id`, `notes`. Link the person with `company_id` and `property_id` (ids from the lists). A person linked to a property gets the role `Property Contact` unless you give one.
+
+Answer: `{ "status": "created", "id": "...", "matched_on": null, "can_email": true, "blocked_reason": null, "similar": [] }`. Like prospects, `status` is `created` (HTTP 201) or `duplicate` (HTTP 200, nothing overwritten). A duplicate is the same email, or with no email the same name at the same company or property. `similar` lists people with the same name or phone, for you to look at.
+
+`PATCH /api/bot/sales/people/{id}` fills in blanks on an existing person. Same fields as adding, plus `add_note`. Anything staff already entered is left alone and listed under `skipped`. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
+
+## 6. Read and add companies
+
+Companies are management companies, ownership groups, REITs and developers. Subcontractors are in the same table but are never returned and cannot be created here.
+
+`GET /api/bot/sales/companies`, `GET /api/bot/sales/companies/{id}`
+
+Filters (all optional): `id`, `q`, `type` (see `allowed_values.company_types`), `city`, `state`, `email` (the company's contact email or any of its people's), `created_since`, `limit`, `cursor`.
+
+Each company has: `id`, `name`, `type`, `street`, `unit`, `city`, `state`, `zip`, `contact_name`, `contact_email`, `contact_phone`, `notes`, `people_count` and `people` (up to 25), `properties_count` and `properties` (up to 25, with `stage`), `touches` (with its people and properties: `count`, `last_at`, `last_outcome`), `created_at`.
+
+`POST /api/bot/sales/companies` adds one (only `name` is required). Allowed fields: `name`, `type`, `street`, `unit`, `city`, `state`, `zip`, `contact_name`, `contact_email`, `contact_phone`, `notes`. Same name at the same street is a `duplicate`; with a street missing on one side, the same city; with neither to compare, the name alone.
+
+`PATCH /api/bot/sales/companies/{id}` fills in blanks, and `add_note` appends a note. Same answer shape as above.
+
+## 7. Follow up lists (the Sales page)
+
+The lists and scorecard staff see on the Sales page. `GET /api/bot/sales/follow-up`
+
+```
+curl -s "https://YOUR-SITE/api/bot/sales/follow-up?limit=25&stalled_days=14" -H "Authorization: Bearer $KEY"
+```
+
+Filters (optional): `limit` (1 to 100, default 25, per list), `stalled_days` (1 to 365, default 14).
+
+The answer has four lists, each `{ "count": N, "items": [...] }`, where every item has the prospect `id` and `name` (fetch the full record with `GET /prospects/{id}`):
+
+- `overdue`: a next step with a date that has passed.
+- `no_next_step`: contacted or at proposal, with nothing planned.
+- `stalled`: contacted or at proposal and quiet for `stalled_days` or more (`quiet_days`).
+- `try_again`: lost prospects whose try again date has arrived (`reengage_at`, `lost_reason`).
+
+It also has `scorecard`: `overall`, `by_vertical` and `by_source`, each with `prospects`, `reached`, `replied`, `estimates` and `won`. Work these lists top down, and use `PATCH /prospects/{id}` to set the next step once you have acted.
+
+## 8. Log outreach
 
 Record every touch you make, so staff and other bots can see it. `POST /api/bot/sales/outreach`
 
@@ -137,14 +224,14 @@ curl -s https://YOUR-SITE/api/bot/sales/outreach \
 
 Fields:
 
-- `prospect_id` or `email`: one is required. An email must match exactly one prospect or one of its contacts. If it matches none (404) or several (409), you get an error, so use `prospect_id` when you have it.
+- `prospect_id`, `person_id` or `email`: at least one is required. `person_id` logs the touch on that person, and on their prospect when they belong to one. A person does not need a prospect. An email must match exactly one prospect or person. If it matches none (404) or several (409, with `prospect_ids` and `person_ids`), you get an error, so use an id when you have it. Sending `prospect_id` with a `person_id` from a different prospect is refused (422 `person_not_at_prospect`).
 - `channel`: `email` (default), `call`, `text`, `mail`, `visit`, `other`.
 - `outcome`: `sent`, `connected`, `replied`, `bounced`, `interested`, `not_interested`, `unsubscribed`, `no_answer`, `voicemail`, `meeting_set`, `wrong_contact`, `note`. Defaults to `sent` for `email`, `text` and `mail`. For `call`, `visit` and `other` you must say what happened.
 - `direction`: `outbound` (default) or `inbound`. A `replied` outcome defaults to `inbound`.
 - `note`: short free text.
 - `sent_at`: ISO time, defaults to now.
 
-Answer: `{ "status": "logged", "touch_id": "...", "prospect_id": "...", "effects": [...] }`. `effects` lists what the platform did because of the outcome.
+Answer: `{ "status": "logged", "touch_id": "...", "prospect_id": "...", "person_id": "...", "effects": [...] }`. `prospect_id` or `person_id` is null when the touch is not tied to one. `effects` lists what the platform did because of the outcome. A touch with no prospect never changes prospect fields, and a touch at a company is logged on the person you reached there.
 
 ### Logging many at once
 
@@ -169,28 +256,32 @@ The answer is HTTP 200 with one result per touch, in order, each with its `index
 
 ### What each outcome does
 
-- `sent`, `connected`, `voicemail`, `replied`, `interested`, `not_interested`, `unsubscribed`, `meeting_set`: counts as contact. Updates last contacted, and moves a prospect still at `prospecting` to `contacted`.
+- `sent`, `connected`, `voicemail`, `replied`, `interested`, `not_interested`, `unsubscribed`, `meeting_set`: counts as contact. Updates last contacted, and moves a prospect still at `prospecting` to `contacted` (when the touch has a prospect).
 - `replied`, `interested`, `meeting_set`: also stops any platform email sequence for that address and sets the prospect's next action note so staff follow up.
 - `not_interested`: stops platform sequences for that address. The address is not suppressed.
 - `unsubscribed`: suppresses the address, stops sequences, and opts the contact out of automated email. Never email them again.
 - `bounced`: suppresses the address. Does not count as contact.
 - `no_answer`, `wrong_contact`, `note`: logged only. Use `note` to leave an observation (for example "looks vacant") that is not a contact.
 
-## 5. Read outreach history
+## 9. Read outreach history
 
-What has already happened with a prospect or an address, so you do not contact someone twice. `GET /api/bot/sales/outreach`
+What has already happened with a prospect, person, company or address, so you do not contact someone twice. `GET /api/bot/sales/outreach`
 
 ```
 curl -s "https://YOUR-SITE/api/bot/sales/outreach?prospect_id=PROSPECT_ID" -H "Authorization: Bearer $KEY"
 curl -s "https://YOUR-SITE/api/bot/sales/outreach?email=ann@zion.org" -H "Authorization: Bearer $KEY"
+curl -s "https://YOUR-SITE/api/bot/sales/outreach?person_id=PERSON_ID" -H "Authorization: Bearer $KEY"
+curl -s "https://YOUR-SITE/api/bot/sales/outreach?company_id=COMPANY_ID" -H "Authorization: Bearer $KEY"
 ```
 
-Filters (all optional): `prospect_id`, `email`, `channel`, `outcome`, `source`, `since` (ISO date), `limit` (1 to 200, default 50), `cursor`. Use `prospect_id` or `email`, not both. With neither, you get the latest history across all prospects.
+Filters (all optional): `prospect_id`, `person_id`, `company_id`, `email`, `channel`, `outcome`, `source`, `since` (ISO date), `limit` (1 to 200, default 50), `cursor`. Use only one of `prospect_id`, `person_id`, `company_id` or `email`. With none of them, you get the latest history across everything.
 
 - `prospect_id` returns everything for that prospect and the people linked to it.
+- `person_id` returns everything for that person.
+- `company_id` returns everything for the company, its properties, and everyone linked to the company or those properties.
 - `email` returns exactly that address: touches sent to it, and touches logged for the person who holds it.
-- `source` is `touch` (logged by a bot, including you) or `sequence` (sent earlier by the platform's email sequences, with replies and bounces). Touches logged by staff by hand also appear, with `by` set to `Staff` and no note. They are there so you do not contact someone staff already reached.
-- `outcome` takes any outcome from section 4, plus `opened` and `clicked` for sequence emails.
+- `source` is `touch` (logged by a bot, including you), `staff` (logged by staff by hand, shown with `by` set to `Staff` and no note, so you do not contact someone staff already reached), or `sequence` (sent earlier by the platform's email sequences, with replies and bounces).
+- `outcome` takes any outcome from section 8, plus `opened` and `clicked` for sequence emails.
 
 Newest first. Each item:
 
@@ -210,11 +301,14 @@ Staff email is never part of this. It covers bot touches, staff touches (without
 
 1. Check `can_email` before sending any email. If it is false, do not email that person. `do_not_contact` means no contact of any kind.
 2. Always send an `Idempotency-Key` (8 to 128 characters: letters, numbers, `_ . : -`) on every POST. If a request times out, resend it with the same key and body. It will not be applied twice. Reusing a key with a different body returns 422 `idempotency_conflict`.
-3. Log every touch, including bounces, unsubscribes, and replies, as soon as they happen. Before you contact someone, check their history (section 5) and skip anyone already reached recently.
+3. Log every touch, including bounces, unsubscribes, and replies, as soon as they happen. Before you contact someone, check their history (section 9) and skip anyone already reached recently.
 4. Page with `next_cursor`. Do not fetch faster than your rate limit.
 5. On 429, wait the number of seconds in the `Retry-After` header.
 6. Your own outgoing email is sent from your own mailbox, not the platform. It must include an unsubscribe option and our postal address (CAN-SPAM). When someone unsubscribes, log `unsubscribed` right away.
-7. Do not scrape or guess. Only add organizations you have a real reason to contact.
+7. Do not scrape or guess. Only add organizations and people you have a real reason to contact.
+8. Look before you add. Search `people`, `companies` and `prospects` first. The duplicate checks catch the obvious cases, but a record you found yourself is always better than a new one.
+9. Fill in, do not fight. If a PATCH comes back with `skipped` fields, staff already have a different value. Leave it. If you think it is wrong, say so in `add_note`.
+10. Never email anyone whose `can_email` is false, whichever list you found them in. `blocked_reason` says why.
 
 ## Errors
 
@@ -225,18 +319,19 @@ Errors look like `{ "code": "...", "error": "human readable message" }`, sometim
 | 400 | `invalid_json` | Body is not valid JSON |
 | 401 | `unauthorized`, `key_expired` | Missing, wrong, or revoked key, or an expired key |
 | 403 | `forbidden` | Key does not have the sales scope |
-| 404 | `unknown_prospect` | No prospect with that `prospect_id` (history or logging), or no prospect with that email (logging). Add it first |
-| 409 | `ambiguous_prospect` | The email matches several prospects. Use `prospect_id` |
+| 404 | `unknown_prospect`, `unknown_person`, `unknown_company`, `not_found` | No record with that id, or (logging) no prospect or person with that email. Add it first. `not_found` is the answer to GET on one record |
+| 405 | | A method that is not offered. There is no DELETE anywhere |
+| 409 | `ambiguous_prospect`, `email_in_use` | The email matches several records (use an id), or a person update would give someone an email another person already has |
 | 413 | `too_large` | Body over 50,000 characters |
-| 422 | `unknown_field`, `unknown_filter`, `invalid_field`, `invalid_filter`, `invalid_filters`, `invalid_body`, `invalid_idempotency_key`, `idempotency_conflict` | A field or value is wrong, or an Idempotency-Key was reused with a different body. Read `error` and `allowed` |
+| 422 | `unknown_field`, `unknown_filter`, `invalid_field`, `invalid_filter`, `invalid_filters`, `invalid_body`, `invalid_id`, `person_not_at_prospect`, `invalid_idempotency_key`, `idempotency_conflict` | A field or value is wrong, or an Idempotency-Key was reused with a different body. Read `error` and `allowed` |
 | 429 | `rate_limited` | Too many requests. See `Retry-After` |
 | 500 | `server_error` | Our side. Retry later |
-| 503 | `not_configured` | Migration 161 (or 162 for history, 163 for the newer logging) has not been run |
+| 503 | `not_configured` | Migration 161 (or 162 for history, 163 for the newer logging, 166 for people, companies and updates) has not been run |
 
 Rejected requests (422) count toward your rate limit, so fix the request instead of retrying it unchanged.
 
 ## Staff view
 
-Settings, then Bots, shows each key with its last use, 24 hour call count, prospects added, touches logged, and a recent activity list. Prospects added by a bot are marked in the database with `created_by_bot_id`, so they can be reviewed or removed.
+Settings, then Bots, shows each key with its last use, 24 hour call count, prospects, people and companies added, touches logged, and a recent activity list. Everything a bot adds is marked in the database with `created_by_bot_id`, so it can be reviewed or removed by an owner. Every change a bot makes to an existing record is saved in the audit log with the value before and after.
 
 Every touch a bot logs, every sequence email, and mail from a connected mailbox shows in the Touches section of the Person, Property and Company popups. A touch on a person also shows on their property and company, labeled with the person's name.

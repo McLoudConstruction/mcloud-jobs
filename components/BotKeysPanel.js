@@ -17,6 +17,14 @@ const ACTION_LABELS = {
   'prospects.create': 'Added a prospect',
   'outreach.log': 'Logged outreach',
   'outreach.history': 'Read outreach history',
+  'prospects.update': 'Updated a prospect',
+  'people.list': 'Read people',
+  'people.create': 'Added a person',
+  'people.update': 'Filled in a person',
+  'companies.list': 'Read companies',
+  'companies.create': 'Added a company',
+  'companies.update': 'Filled in a company',
+  follow_up: 'Read the follow up lists',
 };
 
 function when(value) {
@@ -129,8 +137,9 @@ export default function BotKeysPanel() {
       </div>
 
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
-        A bot key lets an outside tool read leads, read and add prospects, and log outreach, and nothing else. It cannot
-        reach jobs, financials, subcontractors or settings. Bots call <code>{origin || 'your site'}/api/bot/sales</code> with the key
+        A bot key lets an outside tool work the sales side: read leads, people, properties and companies, add new ones, fill in blanks,
+        move prospects along, read the follow up lists, and log outreach. It cannot delete anything, overwrite what staff entered,
+        or reach jobs, financials, subcontractors or settings. Bots call <code>{origin || 'your site'}/api/bot/sales</code> with the key
         as a bearer token. The full guide is BOT_API.md in the repo.
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '-6px 0 14px', lineHeight: 1.5 }}>
@@ -210,7 +219,7 @@ export default function BotKeysPanel() {
 
                 <div style={{ flex: '2 1 240px', fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
                   Last used: {when(k.last_used_at)}<br />
-                  Last 24 hours: {k.calls_24h} calls. All time: {k.prospects_created} prospects added, {k.touches_logged} touches logged.<br />
+                  Last 24 hours: {k.calls_24h} calls. All time: {k.prospects_created} prospects, {k.people_created ?? 0} people and {k.companies_created ?? 0} companies added, {k.touches_logged} touches logged.<br />
                   Limit {k.rate_limit_per_min}/min{k.expires_at ? `. Expires ${new Date(k.expires_at).toLocaleDateString()}` : ''}.
                 </div>
 
