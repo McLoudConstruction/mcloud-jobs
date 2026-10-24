@@ -69,8 +69,11 @@ export async function GET(request) {
 
   async function isOptedOut(email) {
     if (!email) return false;
-    const { data } = await supabase.from('contacts').select('automated_emails_opt_out').eq('contact_email', email).maybeSingle();
-    return data?.automated_emails_opt_out === true;
+    // An inactive contact (migration 170) gets no automated email either. Before that migration is run
+    // there is no is_active column, so ask again for the opt out alone.
+    let { data, error } = await supabase.from('contacts').select('automated_emails_opt_out, is_active').eq('contact_email', email).maybeSingle();
+    if (error) ({ data } = await supabase.from('contacts').select('automated_emails_opt_out').eq('contact_email', email).maybeSingle());
+    return data?.automated_emails_opt_out === true || data?.is_active === false;
   }
 
   // ── Opportunity follow-ups: 2 days and 4 days after date_taken ──

@@ -145,7 +145,7 @@ curl -s "https://YOUR-SITE/api/bot/sales/people?company_id=COMPANY_ID&can_email=
 
 Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`. Also `email_confidence` (`verified` or `pattern_guess`), to pick people whose address is safe to use.
 
-Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
+Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `inactive`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
 
 `POST /api/bot/sales/people` adds a person:
 

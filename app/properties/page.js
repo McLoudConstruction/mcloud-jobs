@@ -123,7 +123,7 @@ export default function PropertiesPage() {
   const loadPropertyContacts = useCallback(async (propertyId) => {
     if (!propertyId) { setPropertyContacts([]); return; }
     // Everyone linked to this property, including people whose main property is a different one.
-    setPropertyContacts(await contactsAtProperty(propertyId));
+    setPropertyContacts(await contactsAtProperty(propertyId, { activeOnly: false }));
   }, []);
 
   // Jobs at the property being edited, so a win can point at the job it became.
@@ -681,7 +681,7 @@ export default function PropertiesPage() {
                 {propertyContacts.length === 0 && <div className="empty-state">No contacts linked to this property yet.</div>}
                 {propertyContacts.map(c => (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-                    <span><b>{c.name}</b> {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${formatPhone(c.contact_phone)}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}</span>
+                    <span style={c.is_active === false ? { opacity: 0.6 } : undefined}><b>{c.name}</b>{c.is_active === false ? <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>Inactive</span> : null} {c.role ? `— ${c.role}` : ''} {c.contact_phone ? `· ${formatPhone(c.contact_phone)}` : ''} {c.contact_email ? `· ${c.contact_email}` : ''}</span>
                     <button type="button" className="btn btn-sm btn-danger" onClick={() => removePropertyContact(c.id, c.name)}>Remove</button>
                   </div>
                 ))}

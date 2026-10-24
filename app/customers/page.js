@@ -24,6 +24,8 @@ import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumn
 import { linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { resolveMainPropertyId } from '../../lib/contactProperties';
 import ContactPropertiesCard from '../../components/ContactPropertiesCard';
+import ContactHistoryCard from '../../components/ContactHistoryCard';
+import { jobChanged, jobTitle, logPreviousJob, setContactActive } from '../../lib/contactHistory';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
@@ -158,6 +160,9 @@ export default function CustomersPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [addColumnOpen, setAddColumnOpen] = useState(false);
   const [showTest, setShowTest] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0); // bumped to reload the Contact history card
+  const [popupError, setPopupError] = useState('');
   const [dupMatches, setDupMatches] = useState(null); // people who already have the email being saved
   const [emailStatus, setEmailStatus] = useState(null); // why this saved person cannot be emailed right now
   const [dupGroups, setDupGroups] = useState(null); // duplicate email groups, when that view is open
@@ -223,6 +228,19 @@ export default function CustomersPage() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
+  // Switch a saved person on or off straight away (it does not wait for Save). Off hides them from
+  // People and stops automated email to them. Their touches and history are kept.
+  async function changeActive(next) {
+    if (!editingId || (form.is_active !== false) === next) return;
+    const who = [form.first_name, form.last_name].filter(Boolean).join(' ') || 'this person';
+    if (!next && !confirm(`Make ${who} inactive?\n\nThey are hidden from People unless Show inactive is ticked, and no automated email is sent to them. Their touches and history stay. You can switch them back any time.`)) return;
+    setPopupError('');
+    const res = await setContactActive(editingId, next);
+    if (!res.ok) { setPopupError(res.error); return; }
+    setForm(prev => ({ ...prev, is_active: next, inactive_since: res.inactive_since || null }));
+    await loadContacts();
+  }
+
   // After a property is linked or removed in the Properties card, the main property can change
   // (the first link becomes the main one, and removing the main one promotes the next). Pull the
   // saved value back into the form so Save does not undo it.
@@ -255,6 +273,9 @@ export default function CustomersPage() {
     }
     setDupMatches(null);
 
+    // The person as saved before this edit, so a change of job can be offered for the history.
+    const before = editingId ? contacts.find(c => c.id === editingId) : null;
+
     const payload = {
       ...form,
       name: [form.first_name, form.last_name].filter(Boolean).join(' '),
@@ -263,6 +284,7 @@ export default function CustomersPage() {
     // These are set by the database, so never send them back.
     delete payload.email_blocked_at;
     delete payload.email_verified_at;
+    delete payload.inactive_since;
     // Team/Office only applies to real estate agents; clear it if the type changed.
     if (!isRealEstateAgent) payload.team_office = '';
     if (isHomeowner) {
@@ -320,9 +342,26 @@ export default function CustomersPage() {
     // Don't rely solely on the realtime subscription — refresh directly
     // so the change shows up immediately.
     await loadContacts();
+
+    // A new company or position on someone who already had one: offer to keep the old job in their history.
+    if (before && jobChanged(
+      { company: before.management_company, position: before.position },
+      { company: payload.management_company, position: payload.position },
+    )) {
+      const was = jobTitle({ company_name: before.management_company, position: before.position });
+      const now = (payload.management_company || payload.position)
+        ? jobTitle({ company_name: payload.management_company, position: payload.position })
+        : 'no job on file';
+      if (confirm(`${payload.name}'s job changed.\n\nWas: ${was}\nNow: ${now}\n\nAdd the old job to their contact history?`)) {
+        const logged = await logPreviousJob(before.id, { company: before.management_company, position: before.position, property: before.property });
+        if (logged.ok) setHistoryVersion(v => v + 1);
+        else setPopupError(logged.error);
+      }
+    }
   }
 
   function startEdit(contact) {
+    setPopupError('');
     setForm({ ...EMPTY_FORM, ...contact, contact_phone: formatPhone(contact.contact_phone) });
     setBillingDifferent(billingDiffers(contact));
     setEditingId(contact.id);
@@ -456,8 +495,11 @@ export default function CustomersPage() {
   }
 
   const testCount = contacts.filter(c => c.is_test).length;
+  const inactiveCount = contacts.filter(c => c.is_active === false && !c.is_test).length;
   const filtered = contacts.filter(c => {
     if (c.is_test && !showTest) return false;
+    // Inactive people are hidden unless asked for, but a search still finds them.
+    if (c.is_active === false && !showInactive && !search.trim()) return false;
     if (typeFilter !== 'all' && c.contact_type !== typeFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -526,10 +568,29 @@ export default function CustomersPage() {
         <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200}>
             <div className="contact-popup-head">
               <h3>{!editingId ? 'New contact' : editMode ? 'Edit contact' : 'More information'}</h3>
-              {editingId && !editMode && (
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {editingId && typeof form.is_active === 'boolean' && (
+                  <div className="tab-sections-pills" role="group" aria-label="Contact status">
+                    <button type="button" className={`tab-section-btn${form.is_active ? ' active' : ''}`} onClick={() => changeActive(true)}>Active</button>
+                    <button
+                      type="button"
+                      className={`tab-section-btn${!form.is_active ? ' active' : ''}`}
+                      style={!form.is_active ? { background: 'var(--ink-soft)' } : undefined}
+                      onClick={() => changeActive(false)}
+                    >Inactive</button>
+                  </div>
+                )}
+                {editingId && !editMode && (
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
+                )}
+              </div>
             </div>
+            {editingId && form.is_active === false && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '8px 10px', margin: '6px 0 10px' }}>
+                Inactive{form.inactive_since ? ` since ${new Date(form.inactive_since).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}. Hidden from People unless Show inactive is ticked, and no automated email is sent to them. Their touches and history are kept.
+              </div>
+            )}
+            {popupError && <div style={{ fontSize: 12.5, color: '#a13f3f', margin: '6px 0 10px' }}>{popupError}</div>}
             <div className={editingId ? 'contact-popup-grid' : undefined}>
             <div>
             <form onSubmit={submit}>
@@ -730,6 +791,12 @@ export default function CustomersPage() {
 
             {editingId && (
               <div>
+                <ContactHistoryCard
+                  contactId={editingId}
+                  canEdit={editMode}
+                  reloadKey={historyVersion}
+                  current={{ company: form.management_company, position: form.position, property: form.property }}
+                />
                 <div className="contact-touches-panel">
                   <TouchTimeline kind="contact" recordId={editingId} bare />
                 </div>
@@ -741,6 +808,12 @@ export default function CustomersPage() {
         <div className="search-bar">
           <input placeholder="Search by name, company or team/office…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {inactiveCount > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
+            Show inactive ({inactiveCount})
+          </label>
+        )}
         {testCount > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={showTest} onChange={e => setShowTest(e.target.checked)} />
@@ -783,7 +856,7 @@ export default function CustomersPage() {
             {filtered.map(c => (
               <button key={c.id} className="entity-mobile-row" onClick={() => startEdit(c)}>
                 <span className="entity-mobile-row-text">
-                  <span className="entity-mobile-row-title">{c.name}</span>
+                  <span className="entity-mobile-row-title">{c.name}{c.is_active === false ? <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'var(--ink-soft)' }}>Inactive</span> : null}</span>
                   <span className="entity-mobile-row-sub">
                     {[c.management_company, c.team_office, c.position].filter(Boolean).join(' · ') || c.contact_type || 'No company on file'}
                   </span>
@@ -801,7 +874,7 @@ export default function CustomersPage() {
             stickyHeader
             onVisibleRowsChange={rows => { visibleRowsRef.current = rows; }}
             columns={[
-              { key: 'name', label: 'Name', defaultWidth: 180, render: c => c.name },
+              { key: 'name', label: 'Name', defaultWidth: 180, render: c => (c.is_active === false ? <span>{c.name}<span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>Inactive</span></span> : c.name) },
               { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },
               { key: 'management_company', label: 'Company', defaultWidth: 170, render: c => c.management_company || '—' },
               { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },
