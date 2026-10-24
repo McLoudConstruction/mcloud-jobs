@@ -7,13 +7,13 @@ A bot works the whole sales side, and nothing else:
 | Area | Read | Add | Change |
 |------|------|-----|--------|
 | Leads (people who asked for work) | yes | no | no |
-| Prospects (properties we want to win) | yes | yes | stage, next step, blanks |
-| People (contacts) | yes | yes | blanks only |
-| Companies | yes | yes | blanks only |
+| Prospects (properties we want to win) | yes | yes | any field |
+| People (contacts) | yes | yes | any field |
+| Companies | yes | yes | any field |
 | Outreach (touches) | yes | yes | no |
 | Follow up lists (the Sales page) | yes | no | no |
 
-A bot can never delete anything. Deleting is owner only, in the app. It never overwrites something staff entered: updates only fill in blanks, with a few working fields on a prospect as the exception (section 4). It cannot reach jobs, financials, subcontractors, staff, or settings. The database enforces all of this, not just the website.
+A bot can never delete anything. Deleting is owner only, in the app. A PATCH replaces what is there, and every change is saved in the audit log with the value before and after. It cannot reach jobs, financials, subcontractors, staff, or settings. The database enforces all of this, not just the website.
 
 ## Setup (owner, once)
 
@@ -124,12 +124,12 @@ curl -s -X PATCH https://YOUR-SITE/api/bot/sales/prospects/PROSPECT_ID \
   -d '{"stage": "proposal", "next_action_at": "2026-10-30T15:00:00Z", "next_action_note": "Send the roof estimate", "add_note": "Walked the roof with the pastor"}'
 ```
 
-Two kinds of fields:
+A PATCH replaces the current value of any field you send. Send `null` to clear an optional field. The fields:
 
-- **Working fields** can be replaced, because moving a prospect along is the job: `stage` (`prospecting`, `contacted`, `proposal`, `won`, `lost`), `next_action_at` (ISO time), `next_action_note`, `lost_reason` and `reengage_at` (a date, only while the stage is `lost`), and `do_not_contact`. Send `null` to clear `next_action_at`, `next_action_note`, `lost_reason` or `reengage_at`. A bot can set `won`, but must send `won_note` saying what was agreed (and may send `won_at`, a recent date, which defaults to today). `won_note` and `won_at` are only accepted together with stage `won`. A bot cannot move a prospect out of `won`; staff can. A bot can set `do_not_contact` to `true` but never clear it.
-- **Descriptive fields** only fill blanks: `type`, `vertical`, `tier`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built` (four digits), `sq_ft`, `contact_name`, `contact_email`, `contact_phone`, `company_id`, `notes`. If staff already entered a different value it is left alone and listed under `skipped`.
+- **Working fields**, for moving a prospect along: `stage` (`prospecting`, `contacted`, `proposal`, `won`, `lost`), `next_action_at` (ISO time), `next_action_note`, `lost_reason` and `reengage_at` (a date, only while the stage is `lost`), and `do_not_contact`. Send `null` to clear `next_action_at`, `next_action_note`, `lost_reason` or `reengage_at`. A bot can set `won`, but must send `won_note` saying what was agreed (and may send `won_at`, a recent date, which defaults to today). `won_note` and `won_at` are only accepted together with stage `won`. A bot cannot move a prospect out of `won`; staff can. A bot can set `do_not_contact` to `true` but never clear it.
+- **Descriptive fields**: `name`, `type`, `vertical`, `tier`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built` (four digits), `sq_ft`, `contact_name`, `contact_email`, `contact_phone`, `company_id`, `source`, `target_value` (a dollar amount), `active` (true or false), `last_visited_at` (ISO time), `notes`. All of these except `name` can be cleared with `null`.
 
-`add_note` appends a dated note signed with your bot name. It never replaces the notes.
+`notes` replaces the whole notes field, including what staff wrote. Prefer `add_note`, which appends a dated note signed with your bot name and never replaces anything.
 
 Answer: `{ "status": "updated", "id": "...", "updated": { "stage": { "before": "contacted", "after": "proposal" } }, "skipped": [] }`. `status` is `updated` or `unchanged`. The `updated` list is also saved in the audit log, so staff can see exactly what a bot changed.
 
@@ -161,7 +161,7 @@ Give a name (or `first_name` and `last_name`), or at least an email. Allowed fie
 
 Answer: `{ "status": "created", "id": "...", "matched_on": null, "can_email": true, "blocked_reason": null, "similar": [] }`. Like prospects, `status` is `created` (HTTP 201) or `duplicate` (HTTP 200, nothing overwritten). A duplicate is the same email, or with no email the same name at the same company or property. `similar` lists people with the same name or phone, for you to look at.
 
-`PATCH /api/bot/sales/people/{id}` fills in blanks on an existing person. Same fields as adding, plus `add_note` and `blocked_reason`. `email_confidence` can move from `pattern_guess` to `verified`, but a bot cannot downgrade a `verified` address. `blocked_reason` (`bounced`, `left_company` or `opted_out`) records why a person cannot be emailed, and it blocks automated email at once. A bot can set it but cannot clear it; staff clear it. Anything staff already entered is left alone and listed under `skipped`. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
+`PATCH /api/bot/sales/people/{id}` changes any field on an existing person. Same fields as adding, plus `add_note`, `blocked_reason` and `shared_email` (true or false). Send `null` to clear an optional field; `name`, `blocked_reason` and `email_confidence` cannot be cleared. `email_confidence` can move from `pattern_guess` to `verified`, but a bot cannot downgrade a `verified` address. `blocked_reason` (`bounced`, `left_company` or `opted_out`) records why a person cannot be emailed, and it blocks automated email at once. A bot can set it but cannot clear it; staff clear it. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
 
 ## 6. Read and add companies
 
@@ -177,7 +177,7 @@ Each company has: `id`, `name`, `type`, `street`, `unit`, `city`, `state`, `zip`
 
 `POST /api/bot/sales/companies` adds one (only `name` is required). Allowed fields: `name`, `type`, `street`, `unit`, `city`, `state`, `zip`, `contact_name`, `contact_email`, `contact_phone`, `notes`. Same name at the same street is a `duplicate`; with a street missing on one side, the same city; with neither to compare, the name alone.
 
-`PATCH /api/bot/sales/companies/{id}` fills in blanks, and `add_note` appends a note. Same answer shape as above.
+`PATCH /api/bot/sales/companies/{id}` changes any field, and `add_note` appends a note. Send `null` to clear an optional field (everything except `name`). Same answer shape as above.
 
 ## 7. Follow up lists (the Sales page)
 
@@ -313,7 +313,7 @@ Staff email is never part of this. It covers bot touches, staff touches (without
 6. Your own outgoing email is sent from your own mailbox, not the platform. It must include an unsubscribe option and our postal address (CAN-SPAM). When someone unsubscribes, log `unsubscribed` right away.
 7. Do not scrape or guess. Only add organizations and people you have a real reason to contact.
 8. Look before you add. Search `people`, `companies` and `prospects` first. The duplicate checks catch the obvious cases, but a record you found yourself is always better than a new one.
-9. Fill in, do not fight. If a PATCH comes back with `skipped` fields, staff already have a different value. Leave it. If you think it is wrong, say so in `add_note`.
+9. Edits replace staff entries. Before you overwrite a value that looks deliberate, read the record first and say why in `add_note`. `skipped` now only appears for `email_confidence`, which a bot cannot lower from `verified`.
 10. Never email anyone whose `can_email` is false, whichever list you found them in. `blocked_reason` says why.
 11. Test records (fake people, companies and properties staff have marked as tests) never appear in any answer and cannot be reached by id. Do not try to work with them.
 

@@ -137,9 +137,9 @@ export default function BotKeysPanel() {
       </div>
 
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
-        A bot key lets an outside tool work the sales side: read leads, people, properties and companies, add new ones, fill in blanks,
-        move prospects along, read the follow up lists, and log outreach. It cannot delete anything, overwrite what staff entered,
-        or reach jobs, financials, subcontractors or settings. Bots call <code>{origin || 'your site'}/api/bot/sales</code> with the key
+        A bot key lets an outside tool work the sales side: read leads, people, properties and companies, add new ones, edit any field,
+        move prospects along, read the follow up lists, and log outreach. Edits replace what staff entered, and the activity list
+        keeps the value before and after. It cannot delete anything or reach jobs, financials, subcontractors or settings. Bots call <code>{origin || 'your site'}/api/bot/sales</code> with the key
         as a bearer token. The full guide is BOT_API.md in the repo.
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '-6px 0 14px', lineHeight: 1.5 }}>
