@@ -49,7 +49,7 @@ function shortDay(value) {
   return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function LogTouchButton({ kind, recordId, onLogged, className = 'btn btn-sm' }) {
+export default function LogTouchButton({ kind, recordId, onLogged, className = 'btn btn-sm', label = 'Log a touch' }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,7 +174,7 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
 
   return (
     <>
-      <button type="button" className={className} onClick={openDialog}>Log a touch</button>
+      <button type="button" className={className} onClick={openDialog}>{label}</button>
       <PopupModal open={open} onClose={() => { if (!saving) setOpen(false); }} maxWidth={520}>
         <div onClick={e => e.stopPropagation()}>
           <h3 style={{ margin: '0 0 4px' }}>Log a touch</h3>

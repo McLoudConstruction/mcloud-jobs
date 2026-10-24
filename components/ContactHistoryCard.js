@@ -5,9 +5,9 @@ import {
   dateToMonth, formatRange, jobTitle,
 } from '../lib/contactHistory';
 
-// Where this person has worked before, newest first, on the right side of the Person popup.
+// Where this person has worked before, newest first, on the Overview tab of the Person popup.
 //
-// Their current job stays in the form on the left. It is repeated here as the first row so the card
+// Their current job is edited on the Details tab. It is repeated here as the first row so the card
 // reads as one timeline. Past jobs can be added, changed and removed while the contact is being edited.
 // When a person's company or position changes, the Person page offers to log the old job here.
 
@@ -150,8 +150,8 @@ export default function ContactHistoryCard({ contactId, canEdit, current, reload
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', margin: '2px 0 6px' }}>
         {canEdit
-          ? 'Where they have worked before. Their current job is in the form.'
-          : 'Where they have worked before. Press Edit Contact to add or change jobs.'}
+          ? 'Where they have worked before. Their current job is shown first.'
+          : 'Where they have worked before.'}
       </div>
 
       {missing && <div style={{ fontSize: 12.5, color: '#a13f3f' }}>{MIGRATION_HINT}</div>}

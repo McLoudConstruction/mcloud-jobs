@@ -2362,3 +2362,62 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .quick-actions-item:hover:not(:disabled){ background: var(--panel); }
 .quick-actions-item:disabled{ opacity: .55; cursor: default; }
+
+/* Recency dot: how recently a person was contacted. Green within 30 days, yellow 31 to 60, red beyond that or never. */
+.recency-dot{ display: inline-block; flex: none; border-radius: 50%; vertical-align: middle; margin-right: 7px; box-shadow: 0 0 0 1px rgba(0,0,0,0.12) inset; }
+.recency-green{ background: #3f9a55; }
+.recency-yellow{ background: #e0b030; }
+.recency-red{ background: #c24a4a; }
+
+/* Contact popup header and tabs */
+.cp-header{ min-width: 0; }
+.cp-top{ display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; padding-right: 36px; }
+.cp-title{ display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.cp-title h3{ margin: 0; display: flex; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.cp-chip{ display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 9px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+.cp-chip-main{ color: var(--ink); font-weight: 700; }
+.cp-top-actions{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-sub{ font-size: 13.5px; color: var(--ink); margin-top: 4px; overflow-wrap: anywhere; }
+.cp-reach{ font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; display: flex; gap: 4px 14px; flex-wrap: wrap; }
+.cp-reach a{ color: inherit; text-decoration: none; }
+.cp-reach a:hover{ color: var(--accent); }
+.cp-actions{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.cp-actions a.btn{ text-decoration: none; display: inline-block; }
+.cp-props{ display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.cp-last{ font-size: 12px; color: var(--ink-soft); margin-top: 8px; }
+.cp-tabs{ margin: 14px 0 14px; }
+.cp-notice{ font-size: 12.5px; color: var(--ink-soft); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 10px 0 0; display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+
+/* Overview: two even columns that stack on a phone */
+.contact-popup-grid.even{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 800px){ .contact-popup-grid.even{ grid-template-columns: minmax(0, 1fr); } }
+
+/* Details, read view: only the fields that are filled in */
+.contact-kv{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; margin: 0; }
+.contact-kv > div{ min-width: 0; }
+.contact-kv .kv-wide{ grid-column: 1 / -1; }
+.contact-kv dt{ font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 2px; }
+.contact-kv dd{ margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.contact-kv dd a{ color: inherit; }
+.contact-kv .kv-tag{ margin-left: 6px; font-size: 11px; color: var(--ink-soft); }
+
+/* Details, edit form: four columns on desktop, two on a phone */
+.cf-grid{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; }
+.cf-grid > div{ min-width: 0; }
+.cf-grid label{ margin: 10px 0 4px; }
+.cf-span-2{ grid-column: span 2; }
+.cf-span-4{ grid-column: 1 / -1; }
+@media (max-width: 700px){ .cf-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cf-actions{ position: sticky; bottom: 0; background: var(--card-bg); padding: 10px 0 2px; margin-top: 14px; border-top: 1px solid var(--line); z-index: 2; }
+
+/* Collapsible group inside the edit form */
+.cf-group{ border-top: 1px solid var(--line); margin-top: 14px; }
+.cf-group-head{ all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 0; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ink); }
+.cf-group-head:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+.cf-group-chevron{ display: inline-block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--ink-soft); transition: transform .12s; transform: rotate(-90deg); }
+.cf-group.open .cf-group-chevron{ transform: rotate(0deg); }
+.cf-group-hint{ font-weight: 400; font-size: 12px; color: var(--ink-soft); }
+.cf-group-body{ padding-bottom: 6px; }
+.cf-address .two-col{ grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; }
+.cf-address label{ margin: 4px 0 4px; }
+@media (max-width: 700px){ .cf-address .two-col{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }

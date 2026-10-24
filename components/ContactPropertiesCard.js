@@ -6,9 +6,9 @@ import {
 
 // Every property one person is linked to. Shown on the Person popup.
 //
-// The first one marked Main is the property named in the Property field on the form. The rest are
-// extra links: a manager who looks after several buildings is one person here, and shows up under
-// each of those properties. Adding and removing is only offered while the contact is being edited.
+// The one marked Main is the property named in the Main property field on the Details tab. The rest
+// are extra links: a manager who looks after several buildings is one person here, and shows up under
+// each of those properties. This card is on the Overview tab, where adding and removing is always on.
 
 export default function ContactPropertiesCard({ contactId, canEdit, onChanged }) {
   const [links, setLinks] = useState(null);
@@ -78,7 +78,7 @@ export default function ContactPropertiesCard({ contactId, canEdit, onChanged })
   const count = links ? links.length : 0;
 
   return (
-    <div style={{ margin: '14px 0 4px', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+    <div className="contact-history-panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
         <h4 style={{ margin: 0 }}>Properties{links && count > 0 ? ` (${count})` : ''}</h4>
         {canEdit && !adding && (
@@ -87,8 +87,8 @@ export default function ContactPropertiesCard({ contactId, canEdit, onChanged })
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', margin: '2px 0 8px' }}>
         {canEdit
-          ? 'One person can be linked to several properties. The Property field above sets the main one.'
-          : 'Press Edit Contact to link more properties.'}
+          ? 'One person can be linked to several properties. Their main property is set under Edit Contact, on the Details tab.'
+          : 'Every property this person is linked to.'}
       </div>
 
       {links === null && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Loading…</div>}

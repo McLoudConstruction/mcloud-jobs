@@ -25,6 +25,11 @@ import { linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { resolveMainPropertyId } from '../../lib/contactProperties';
 import ContactPropertiesCard from '../../components/ContactPropertiesCard';
 import ContactHistoryCard from '../../components/ContactHistoryCard';
+import ContactHeader from '../../components/ContactHeader';
+import ContactDetailsView from '../../components/ContactDetailsView';
+import Collapsible from '../../components/Collapsible';
+import RecencyDot from '../../components/RecencyDot';
+import { loadLastContacts } from '../../lib/contactRecency';
 import { jobChanged, jobTitle, logPreviousJob, setContactActive } from '../../lib/contactHistory';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
@@ -163,6 +168,10 @@ export default function CustomersPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0); // bumped to reload the Contact history card
   const [popupError, setPopupError] = useState('');
+  const [tab, setTab] = useState('overview'); // Person popup tab: 'overview' or 'details'
+  const [propsVersion, setPropsVersion] = useState(0); // bumped when a property is linked or removed, to reload the header chips
+  const [touchVersion, setTouchVersion] = useState(0); // bumped when a touch is logged from the header, to reload the Touches list
+  const [lastContacts, setLastContacts] = useState(null); // { contactId: lastContactedIso }, null until loaded (and before migration 171)
   const [dupMatches, setDupMatches] = useState(null); // people who already have the email being saved
   const [emailStatus, setEmailStatus] = useState(null); // why this saved person cannot be emailed right now
   const [dupGroups, setDupGroups] = useState(null); // duplicate email groups, when that view is open
@@ -181,6 +190,18 @@ export default function CustomersPage() {
     const { data } = await supabase.from('contacts').select('*').order('name', { ascending: true });
     if (data) setContacts(data);
   }, []);
+
+  // When each person was last contacted, for the coloured dots (migration 171). Before that migration
+  // is run this stays null and no dots show.
+  const refreshRecency = useCallback(async () => {
+    const { map } = await loadLastContacts();
+    setLastContacts(map);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    refreshRecency();
+  }, [session, refreshRecency]);
 
   useEffect(() => {
     if (!session) return;
@@ -249,7 +270,14 @@ export default function CustomersPage() {
       const { data } = await supabase.from('contacts').select('property').eq('id', editingId).maybeSingle();
       if (data) setForm(prev => ({ ...prev, property: data.property || '' }));
     }
+    setPropsVersion(v => v + 1);
     loadContacts();
+  }
+
+  // A touch logged from the popup header: reload the Touches list and the recency dot.
+  async function handleTouchLogged() {
+    setTouchVersion(v => v + 1);
+    await refreshRecency();
   }
 
   async function submit(e, { allowDuplicate = false } = {}) {
@@ -366,6 +394,7 @@ export default function CustomersPage() {
     setBillingDifferent(billingDiffers(contact));
     setEditingId(contact.id);
     setEditMode(false);
+    setTab('overview');
     setTipOpen(false);
     setShowForm(true);
   }
@@ -375,6 +404,7 @@ export default function CustomersPage() {
     setBillingDifferent(false);
     setEditingId(null);
     setEditMode(true);
+    setTab('details');
     setTipOpen(false);
     setShowForm(true);
   }
@@ -386,7 +416,10 @@ export default function CustomersPage() {
     setEditMode(false);
     setTipOpen(false);
     setSaveError('');
+    setPopupError('');
+    setTab('overview');
     setShowForm(false);
+    refreshRecency();
   }
 
   // Cancel while editing an existing contact: drop unsaved changes and go
@@ -506,6 +539,10 @@ export default function CustomersPage() {
     return (c.name || '').toLowerCase().includes(q) || (c.management_company || '').toLowerCase().includes(q) || (c.team_office || '').toLowerCase().includes(q);
   });
 
+  // The coloured dot beside a name: green within 30 days, yellow 31 to 60, red beyond that or never.
+  // Hidden for inactive people, and until the dates have loaded.
+  const dotFor = c => (lastContacts && c.is_active !== false ? <RecencyDot lastAt={lastContacts[c.id]} /> : null);
+
   function exportContacts() {
     exportToSheet({ fileName: 'contacts', sheetName: 'Contacts', columns: contactExportColumns(customColumns), rows: visibleRowsRef.current || filtered });
   }
@@ -566,243 +603,257 @@ export default function CustomersPage() {
         )}
 
         <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200}>
-            <div className="contact-popup-head">
-              <h3>{!editingId ? 'New contact' : editMode ? 'Edit contact' : 'More information'}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                {editingId && typeof form.is_active === 'boolean' && (
-                  <div className="tab-sections-pills" role="group" aria-label="Contact status">
-                    <button type="button" className={`tab-section-btn${form.is_active ? ' active' : ''}`} onClick={() => changeActive(true)}>Active</button>
-                    <button
-                      type="button"
-                      className={`tab-section-btn${!form.is_active ? ' active' : ''}`}
-                      style={!form.is_active ? { background: 'var(--ink-soft)' } : undefined}
-                      onClick={() => changeActive(false)}
-                    >Inactive</button>
-                  </div>
-                )}
-                {editingId && !editMode && (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
-                )}
-              </div>
-            </div>
+            {!editingId ? (
+              <div className="contact-popup-head"><h3>New contact</h3></div>
+            ) : (
+              <ContactHeader
+                contactId={editingId}
+                form={form}
+                lastAt={lastContacts ? lastContacts[editingId] : undefined}
+                recencyReady={Boolean(lastContacts)}
+                editMode={editMode}
+                propsVersion={propsVersion}
+                onActive={changeActive}
+                onEdit={() => { setTab('details'); setEditMode(true); }}
+                onTouchLogged={handleTouchLogged}
+                onShowProperties={() => setTab('overview')}
+              />
+            )}
+
             {editingId && form.is_active === false && (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '8px 10px', margin: '6px 0 10px' }}>
+              <div className="cp-notice">
                 Inactive{form.inactive_since ? ` since ${new Date(form.inactive_since).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}. Hidden from People unless Show inactive is ticked, and no automated email is sent to them. Their touches and history are kept.
               </div>
             )}
-            {popupError && <div style={{ fontSize: 12.5, color: '#a13f3f', margin: '6px 0 10px' }}>{popupError}</div>}
-            <div className={editingId ? 'contact-popup-grid' : undefined}>
-            <div>
-            <form onSubmit={submit}>
-            <fieldset className="contact-fieldset" disabled={!editMode}>
+            {editingId && emailStatus && emailStatus !== form.email_blocked_reason && emailStatus !== 'no_email' && emailStatus !== 'inactive' && (
+              <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
+                Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}.
+                {emailStatus === 'suppressed' && isOwner && (
+                  <> <button type="button" className="btn btn-sm" style={{ marginLeft: 6 }} onClick={liftSuppression}>Take off the do not email list</button></>
+                )}
+              </div>
+            )}
+            {editingId && emailStatus && emailStatus === form.email_blocked_reason && (
+              <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
+                Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}. Change Email status to Good on the Details tab to allow it again.
+              </div>
+            )}
+            {popupError && <div style={{ fontSize: 12.5, color: '#a13f3f', margin: '8px 0 0' }}>{popupError}</div>}
+            {editingId && editMode && tab === 'overview' && (
+              <div className="cp-notice">
+                You are editing this contact. Your changes are on the Details tab until you save or cancel.
+                <button type="button" className="btn btn-sm" onClick={() => setTab('details')}>Go to Details</button>
+              </div>
+            )}
 
-            <label>Contact type{editingId && !editMode ? '' : ' *'}</label>
-            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required={!editingId || editMode} style={{ maxWidth: 320 }}>
-              <option value="">Select…</option>
-              {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            {editingId && (
+              <div className="stage-tabs cp-tabs" role="tablist">
+                <button type="button" role="tab" aria-selected={tab === 'overview'} className={`stage-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+                <button type="button" role="tab" aria-selected={tab === 'details'} className={`stage-tab${tab === 'details' ? ' active' : ''}`} onClick={() => setTab('details')}>Details</button>
+              </div>
+            )}
 
-            {showDetails && (
+            {(!editingId || tab === 'details') && (
               <div>
-                <div>
-                  <div className="two-col-3" style={{ marginTop: 12 }}>
-                    <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
-                    <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
-                    <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder={editMode ? 'e.g. Property Manager' : undefined} /></div>
-                    <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder={editMode ? '(555) 555-5555' : undefined} /></div>
-                    <div>
-                      <label>Phone type</label>
-                      <select value={form.phone_type || ''} onChange={e => update('phone_type', e.target.value)}>
-                        <option value="">Not set</option>
-                        {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div><label>Second phone</label><input value={form.contact_phone2 || ''} onChange={e => update('contact_phone2', e.target.value)} placeholder={editMode ? '(555) 555-5555' : undefined} /></div>
-                    <div>
-                      <label>Second phone type</label>
-                      <select value={form.phone2_type || ''} onChange={e => update('phone2_type', e.target.value)} disabled={!form.contact_phone2}>
-                        <option value="">Not set</option>
-                        {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
-                    <div>
-                      <label>Email confidence</label>
-                      <select value={form.email_confidence || ''} onChange={e => update('email_confidence', e.target.value)} disabled={!form.contact_email}>
-                        <option value="">Not set</option>
-                        {EMAIL_CONFIDENCE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label>Email status</label>
-                      <select value={form.email_blocked_reason || ''} onChange={e => update('email_blocked_reason', e.target.value)} disabled={!form.contact_email}>
-                        <option value="">Good, OK to email</option>
-                        {EMAIL_BLOCKED_REASONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div><label>{editingId ? 'Main property' : 'Property'}</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
-                  </div>
+                {editingId && !editMode && (
+                  <ContactDetailsView form={form} billingDifferent={billingDifferent} isHomeowner={isHomeowner} isRealEstateAgent={isRealEstateAgent} />
+                )}
 
-                  {editingId && emailStatus && emailStatus !== form.email_blocked_reason && emailStatus !== 'no_email' && (
-                    <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
-                      Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}.
-                      {emailStatus === 'suppressed' && isOwner && (
-                        <> <button type="button" className="btn btn-sm" style={{ marginLeft: 6 }} onClick={liftSuppression}>Take off the do not email list</button></>
-                      )}
-                    </div>
-                  )}
-                  {editingId && emailStatus && emailStatus === form.email_blocked_reason && (
-                    <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
-                      Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}. Change Email status to Good to allow it again.
-                    </div>
-                  )}
-                  {dupMatches && dupMatches.length > 0 && (
-                    <div className="card" style={{ marginTop: 10, borderColor: '#d9a441', fontSize: 13 }}>
-                      <b>{dupMatches.length === 1 ? 'Someone in People already has this email:' : 'These people already have this email:'}</b>
-                      <ul style={{ margin: '6px 0 8px 18px' }}>
-                        {dupMatches.map(m => (
-                          <li key={m.id}>
-                            {m.name}{[m.company, m.property].filter(Boolean).length ? ' (' + [m.company, m.property].filter(Boolean).join(', ') + ')' : ''}
-                            {' '}<button type="button" className="btn btn-sm" onClick={() => { const found = contacts.find(c => c.id === m.id); if (found) { cancelForm(); startEdit(found); } }}>Open</button>
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className="btn btn-sm" disabled={saving} onClick={() => submit(null, { allowDuplicate: true })}>Save anyway, they share this email</button>
-                    </div>
-                  )}
-
-                  {!isHomeowner && (
-                    <div className={isRealEstateAgent ? 'two-col' : undefined} style={{ marginTop: 12 }}>
-                      <div>
-                        <label>{isRealEstateAgent ? 'Brokerage' : 'Company'}</label>
-                        <input value={form.management_company} onChange={e => update('management_company', e.target.value)} placeholder={editMode && isRealEstateAgent ? 'e.g. Keller Williams' : undefined} />
+                {(!editingId || editMode) && (
+                  <form onSubmit={submit}>
+                    <div className="cf-grid">
+                      <div className="cf-span-2">
+                        <label>Contact type *</label>
+                        <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required>
+                          <option value="">Select…</option>
+                          {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
                       </div>
-                      {isRealEstateAgent && (
-                        <div>
-                          <label>Team/Office</label>
-                          <input value={form.team_office} onChange={e => update('team_office', e.target.value)} placeholder={editMode ? "e.g. The Smith Group, Lee's Summit office" : undefined} />
+                      {showDetails && !isHomeowner && (
+                        <div className="cf-span-2">
+                          <label>{isRealEstateAgent ? 'Brokerage' : 'Company'}</label>
+                          <input value={form.management_company} onChange={e => update('management_company', e.target.value)} placeholder={isRealEstateAgent ? 'e.g. Keller Williams' : undefined} />
                         </div>
                       )}
-                    </div>
-                  )}
+                      {showDetails && isRealEstateAgent && (
+                        <div className="cf-span-2">
+                          <label>Team/Office</label>
+                          <input value={form.team_office} onChange={e => update('team_office', e.target.value)} placeholder="e.g. The Smith Group, Lee's Summit office" />
+                        </div>
+                      )}
 
-                  <label style={{ marginTop: 16 }}>Address</label>
-                  <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
-
-                  {!isHomeowner && (
-                    <>
-                      <div className="two-col" style={{ marginTop: 16 }}>
-                        <div><label>Billing email</label><input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
-                      </div>
-
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-                        <input type="checkbox" style={{ width: 'auto' }} checked={billingDifferent} onChange={e => setBillingDifferent(e.target.checked)} />
-                        Billing Address different from Street Address
-                      </label>
-                      {billingDifferent && (
+                      {showDetails && (
                         <>
-                          <label>Billing address</label>
-                          <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
+                          <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
+                          <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
+                          <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Property Manager" /></div>
+                          <div><label>{editingId ? 'Main property' : 'Property'}</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
+
+                          <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
+                          <div>
+                            <label>Phone type</label>
+                            <select value={form.phone_type || ''} onChange={e => update('phone_type', e.target.value)}>
+                              <option value="">Not set</option>
+                              {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+                          <div><label>Second phone</label><input value={form.contact_phone2 || ''} onChange={e => update('contact_phone2', e.target.value)} placeholder="(555) 555-5555" /></div>
+                          <div>
+                            <label>Second phone type</label>
+                            <select value={form.phone2_type || ''} onChange={e => update('phone2_type', e.target.value)} disabled={!form.contact_phone2}>
+                              <option value="">Not set</option>
+                              {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+
+                          <div className="cf-span-2"><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                          <div>
+                            <label>Email confidence</label>
+                            <select value={form.email_confidence || ''} onChange={e => update('email_confidence', e.target.value)} disabled={!form.contact_email}>
+                              <option value="">Not set</option>
+                              {EMAIL_CONFIDENCE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label>Email status</label>
+                            <select value={form.email_blocked_reason || ''} onChange={e => update('email_blocked_reason', e.target.value)} disabled={!form.contact_email}>
+                              <option value="">Good, OK to email</option>
+                              {EMAIL_BLOCKED_REASONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
                         </>
                       )}
-                    </>
+                    </div>
+
+                    {showDetails && (
+                      <>
+                        {dupMatches && dupMatches.length > 0 && (
+                          <div className="card" style={{ marginTop: 10, borderColor: '#d9a441', fontSize: 13 }}>
+                            <b>{dupMatches.length === 1 ? 'Someone in People already has this email:' : 'These people already have this email:'}</b>
+                            <ul style={{ margin: '6px 0 8px 18px' }}>
+                              {dupMatches.map(m => (
+                                <li key={m.id}>
+                                  {m.name}{[m.company, m.property].filter(Boolean).length ? ' (' + [m.company, m.property].filter(Boolean).join(', ') + ')' : ''}
+                                  {' '}<button type="button" className="btn btn-sm" onClick={() => { const found = contacts.find(c => c.id === m.id); if (found) { cancelForm(); startEdit(found); } }}>Open</button>
+                                </li>
+                              ))}
+                            </ul>
+                            <button type="button" className="btn btn-sm" disabled={saving} onClick={() => submit(null, { allowDuplicate: true })}>Save anyway, they share this email</button>
+                          </div>
+                        )}
+
+                        <Collapsible key={`address-${isHomeowner}`} title="Address" hint={isHomeowner ? '' : 'Street address'} defaultOpen={isHomeowner || ADDRESS_FIELDS.some(f => (form[`address_${f}`] || '').trim())}>
+                          <div className="cf-address"><AddressFields prefix="address" values={form} onChange={update} placesEnabled /></div>
+                        </Collapsible>
+
+                        {!isHomeowner && (
+                          <Collapsible title="Billing" hint="Billing email and address" defaultOpen={Boolean((form.billing_email || '').trim()) || billingDifferent}>
+                            <div className="cf-grid">
+                              <div className="cf-span-2"><label style={{ marginTop: 4 }}>Billing email</label><input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                              <input type="checkbox" style={{ width: 'auto' }} checked={billingDifferent} onChange={e => setBillingDifferent(e.target.checked)} />
+                              Billing Address different from Street Address
+                            </label>
+                            {billingDifferent && (
+                              <>
+                                <label>Billing address</label>
+                                <div className="cf-address"><AddressFields prefix="billing" values={form} onChange={update} placesEnabled /></div>
+                              </>
+                            )}
+                          </Collapsible>
+                        )}
+
+                        <label style={{ marginTop: 14 }}>Notes</label>
+                        <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+                        <Collapsible title="Record settings" hint="Shared email, test record, automated emails">
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontWeight: 400, fontSize: 13 }}>
+                            <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.shared_email)} onChange={e => update('shared_email', e.target.checked)} />
+                            Shares this email with someone else (skips the duplicate check)
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontWeight: 400, fontSize: 13 }}>
+                            <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.is_test)} onChange={e => update('is_test', e.target.checked)} />
+                            Test record (hidden from lists, routes and the bot)
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontWeight: 400, fontSize: 13, color: 'var(--ink)' }}>
+                              <input
+                                type="checkbox"
+                                style={{ width: 'auto' }}
+                                checked={!form.automated_emails_opt_out}
+                                onChange={e => update('automated_emails_opt_out', !e.target.checked)}
+                              />
+                              Send this contact automated emails
+                            </label>
+                            <span
+                              className={`info-tip${tipOpen ? ' open' : ''}`}
+                              tabIndex={0}
+                              role="button"
+                              aria-label="What automated emails are sent"
+                              onClick={() => setTipOpen(o => !o)}
+                              onBlur={() => setTipOpen(false)}
+                            >
+                              i
+                              <span className="info-tip-body" role="tooltip">
+                                Uncheck to opt this contact out of every automated email below. Manual emails you send yourself are never affected. Here's exactly what's currently automated:
+                                <ul>
+                                  <li><b>Lead follow-ups</b>: sent 2 and 4 days after a lead is entered, if it's still Prospecting or Contacted.</li>
+                                  <li><b>Schedule reminders</b>: sent before a job's Scheduled Start Date, on whatever days are configured on that job's Portal Access tab.</li>
+                                  <li><b>Portal invite</b>: sent once, the first time this contact is granted portal access.</li>
+                                </ul>
+                              </span>
+                            </span>
+                          </div>
+                        </Collapsible>
+
+                        {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 8 }}>{saveError}</div>}
+                        <div className="cf-actions section-actions">
+                          <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
+                          {editingId && <button className="btn btn-sm" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>}
+                        </div>
+                      </>
+                    )}
+                  </form>
+                )}
+
+                {editingId && (
+                  <div style={{ margin: '18px 0 4px', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                    <AdminDeleteButton
+                      kind="contact"
+                      recordId={editingId}
+                      name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
+                      onDeleted={() => { cancelForm(); loadContacts(); }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {editingId && tab === 'overview' && (
+              <div className="contact-popup-grid even">
+                <div>
+                  <ContactPropertiesCard contactId={editingId} canEdit onChanged={handlePropertiesChanged} />
+                  <ContactHistoryCard
+                    contactId={editingId}
+                    canEdit
+                    reloadKey={historyVersion}
+                    current={{ company: form.management_company, position: form.position, property: form.property }}
+                  />
+                  {(form.notes || '').trim() && (
+                    <div className="contact-history-panel">
+                      <h4 style={{ margin: 0 }}>Notes</h4>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6 }}>{form.notes}</div>
+                    </div>
                   )}
-
-                  <label style={{ marginTop: 16 }}>Notes</label>
-                  <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontWeight: 400, fontSize: 13 }}>
-                    <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.shared_email)} onChange={e => update('shared_email', e.target.checked)} />
-                    Shares this email with someone else (skips the duplicate check)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontWeight: 400, fontSize: 13 }}>
-                    <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.is_test)} onChange={e => update('is_test', e.target.checked)} />
-                    Test record (hidden from lists, routes and the bot)
-                  </label>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontWeight: 400, fontSize: 13, color: 'var(--ink)' }}>
-                      <input
-                        type="checkbox"
-                        style={{ width: 'auto' }}
-                        checked={!form.automated_emails_opt_out}
-                        onChange={e => update('automated_emails_opt_out', !e.target.checked)}
-                      />
-                      Send this contact automated emails
-                    </label>
-                    <span
-                      className={`info-tip${tipOpen ? ' open' : ''}`}
-                      tabIndex={0}
-                      role="button"
-                      aria-label="What automated emails are sent"
-                      onClick={() => setTipOpen(o => !o)}
-                      onBlur={() => setTipOpen(false)}
-                    >
-                      i
-                      <span className="info-tip-body" role="tooltip">
-                        Uncheck to opt this contact out of every automated email below — manual emails you send yourself are never affected. Here's exactly what's currently automated:
-                        <ul>
-                          <li><b>Lead follow-ups</b> — sent 2 and 4 days after a lead is entered, if it's still Prospecting or Contacted.</li>
-                          <li><b>Schedule reminders</b> — sent before a job's Scheduled Start Date, on whatever days are configured on that job's Portal Access tab.</li>
-                          <li><b>Portal invite</b> — sent once, the first time this contact is granted portal access.</li>
-                        </ul>
-                      </span>
-                    </span>
+                </div>
+                <div>
+                  <div className="contact-touches-panel">
+                    <TouchTimeline kind="contact" recordId={editingId} bare refreshKey={touchVersion} onChange={refreshRecency} />
                   </div>
                 </div>
-
               </div>
             )}
-            </fieldset>
-
-            {editMode && showDetails && (
-              <>
-                {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
-                <div className="section-actions">
-                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
-                  {editingId && <button className="btn btn-sm" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>}
-                </div>
-              </>
-            )}
-            </form>
-            {editingId && (
-              <ContactPropertiesCard contactId={editingId} canEdit={editMode} onChanged={handlePropertiesChanged} />
-            )}
-            {editingId && (
-              <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {form.contact_email && (
-                  <SendEmailButton
-                    to={form.contact_email}
-                    name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-                    company={form.management_company}
-                    property={form.property}
-                    label="Email this contact"
-                  />
-                )}
-                <AdminDeleteButton
-                  kind="contact"
-                  recordId={editingId}
-                  name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-                  onDeleted={() => { cancelForm(); loadContacts(); }}
-                />
-              </div>
-            )}
-            </div>
-
-            {editingId && (
-              <div>
-                <ContactHistoryCard
-                  contactId={editingId}
-                  canEdit={editMode}
-                  reloadKey={historyVersion}
-                  current={{ company: form.management_company, position: form.position, property: form.property }}
-                />
-                <div className="contact-touches-panel">
-                  <TouchTimeline kind="contact" recordId={editingId} bare />
-                </div>
-              </div>
-            )}
-            </div>
         </PopupModal>
 
         <div className="search-bar">
@@ -856,7 +907,7 @@ export default function CustomersPage() {
             {filtered.map(c => (
               <button key={c.id} className="entity-mobile-row" onClick={() => startEdit(c)}>
                 <span className="entity-mobile-row-text">
-                  <span className="entity-mobile-row-title">{c.name}{c.is_active === false ? <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'var(--ink-soft)' }}>Inactive</span> : null}</span>
+                  <span className="entity-mobile-row-title">{dotFor(c)}{c.name}{c.is_active === false ? <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'var(--ink-soft)' }}>Inactive</span> : null}</span>
                   <span className="entity-mobile-row-sub">
                     {[c.management_company, c.team_office, c.position].filter(Boolean).join(' · ') || c.contact_type || 'No company on file'}
                   </span>
@@ -874,7 +925,9 @@ export default function CustomersPage() {
             stickyHeader
             onVisibleRowsChange={rows => { visibleRowsRef.current = rows; }}
             columns={[
-              { key: 'name', label: 'Name', defaultWidth: 180, render: c => (c.is_active === false ? <span>{c.name}<span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>Inactive</span></span> : c.name) },
+              { key: 'name', label: 'Name', defaultWidth: 190, render: c => (
+                <span>{dotFor(c)}{c.name}{c.is_active === false ? <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>Inactive</span> : null}</span>
+              ) },
               { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },
               { key: 'management_company', label: 'Company', defaultWidth: 170, render: c => c.management_company || '—' },
               { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },

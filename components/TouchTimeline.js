@@ -259,7 +259,9 @@ function Headline({ summary, kind }) {
   );
 }
 
-export default function TouchTimeline({ kind, recordId, bare = false }) {
+// refreshKey: change it to reload the list (the Person popup does when a touch is logged from its header).
+// onChange: called after a touch is logged, edited or deleted here, so the page can refresh anything built from touches.
+export default function TouchTimeline({ kind, recordId, bare = false, refreshKey = 0, onChange }) {
   const [items, setItems] = useState(null);
   const [summary, setSummary] = useState(null);
   const [cursor, setCursor] = useState(null);
@@ -299,7 +301,7 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
       })
       .catch(err => { if (!cancelled) { setError(err.message); setItems([]); } });
     return () => { cancelled = true; };
-  }, [fetchPage, recordId, reloadKey]);
+  }, [fetchPage, recordId, reloadKey, refreshKey]);
 
   async function showMore() {
     setMore(true);
@@ -321,7 +323,7 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
     <div style={bare ? undefined : { marginTop: 22, paddingTop: 14, borderTop: '2px solid var(--line)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, margin: '0 0 4px' }}>
         <h4 style={{ margin: 0 }}>Touches</h4>
-        <LogTouchButton kind={kind} recordId={recordId} onLogged={() => setReloadKey(k => k + 1)} />
+        <LogTouchButton kind={kind} recordId={recordId} onLogged={() => { setReloadKey(k => k + 1); if (onChange) onChange(); }} />
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
         {kind === 'contact'
@@ -348,7 +350,7 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
       {notice && <div style={{ fontSize: 12.5, color: '#3a6b45', margin: '6px 0' }}>{notice}</div>}
       {shown.map(item => (
         <Row key={`${item.source}-${item.id}`} item={item} kind={kind} recordId={recordId} isOwner={isOwner}
-          onChanged={msg => { setNotice(msg); setReloadKey(k => k + 1); }} />
+          onChanged={msg => { setNotice(msg); setReloadKey(k => k + 1); if (onChange) onChange(); }} />
       ))}
 
       {cursor && (
