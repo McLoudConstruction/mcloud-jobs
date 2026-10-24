@@ -143,9 +143,9 @@ People are the contacts in the database: property managers, pastors, owners, age
 curl -s "https://YOUR-SITE/api/bot/sales/people?company_id=COMPANY_ID&can_email=true" -H "Authorization: Bearer $KEY"
 ```
 
-Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`. Also `email_confidence` (`verified` or `pattern_guess`), to pick people whose address is safe to use.
+Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `active` (true or false; `active=false` lists inactive people), `created_since`, `limit`, `cursor`. Also `email_confidence` (`verified` or `pattern_guess`), to pick people whose address is safe to use.
 
-Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`, the main property), `properties` (every property they are linked to, main first, each with `id`, `name` and `main`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `inactive`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
+Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`, the main property), `properties` (every property they are linked to, main first, each with `id`, `name` and `main`), `active` (false for someone staff marked inactive), `inactive_since`, `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `inactive`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
 
 `POST /api/bot/sales/people` adds a person:
 
@@ -167,6 +167,7 @@ One person can be linked to several properties (run `supabase-migration-172-bot-
 - `property_id` ADDS that property and keeps the person's other links. A person with no property yet gets it as their main one. Sending a property they already have changes nothing.
 - `main_property_id` makes that property the main one. The old main property stays linked as an extra.
 - `unlink_property_id` removes one link. If it was the main property, the oldest remaining link becomes the main one.
+- `active` (true or false) switches a person active or inactive, the same switch as on the People page. An inactive person gets no automated email (`blocked_reason` `inactive`). The answer lists it under `updated` as `active` with `before` and `after`.
 - `property_id` as a filter on the people list finds everyone linked to that property, main or not. On the prospects list, a prospect's `contact` and `people` include everyone linked to it.
 - On `POST /outreach`, `person_id` together with `prospect_id` is accepted when the person is linked to that prospect in any way. A bare email that belongs to someone at more than one property is answered with 409 `ambiguous_prospect` and the list of `prospect_ids`; send `prospect_id` to say which.
 - `POST /people` with `property_id` still sets the new person's main property.
