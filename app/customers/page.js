@@ -23,6 +23,17 @@ import { linkOrCreateCompanyByName, findPropertyIdByName } from '../../lib/conta
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
+const ADDRESS_FIELDS = ['street', 'unit', 'city', 'state', 'zip'];
+
+// True when a saved contact has its own billing address that is not just a
+// copy of the street address.
+function billingDiffers(c) {
+  const norm = v => (v || '').toString().trim().toLowerCase();
+  const hasBilling = ADDRESS_FIELDS.some(f => norm(c[`billing_${f}`]));
+  if (!hasBilling) return false;
+  return ADDRESS_FIELDS.some(f => norm(c[`billing_${f}`]) !== norm(c[`address_${f}`]));
+}
+
 const EMPTY_FORM = {
   contact_type: '', first_name: '', last_name: '', management_company: '', position: '', team_office: '',
   contact_phone: '', contact_email: '', property: '', notes: '', automated_emails_opt_out: false,
@@ -110,7 +121,9 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [sameAsBilling, setSameAsBilling] = useState(false);
+  const [billingDifferent, setBillingDifferent] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [tipOpen, setTipOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
@@ -147,28 +160,7 @@ export default function CustomersPage() {
 
   function update(field, value) {
     if (field === 'contact_phone') value = formatPhone(value);
-    setForm(prev => {
-      const next = { ...prev, [field]: value };
-      if (sameAsBilling && field.startsWith('billing_') && field !== 'billing_email') {
-        const addrField = field.replace('billing_', 'address_');
-        next[addrField] = value;
-      }
-      return next;
-    });
-  }
-
-  function toggleSameAsBilling(checked) {
-    setSameAsBilling(checked);
-    if (checked) {
-      setForm(prev => ({
-        ...prev,
-        address_street: prev.billing_street,
-        address_unit: prev.billing_unit,
-        address_city: prev.billing_city,
-        address_state: prev.billing_state,
-        address_zip: prev.billing_zip,
-      }));
-    }
+    setForm(prev => ({ ...prev, [field]: value }));
   }
 
   async function submit(e) {
@@ -188,6 +180,12 @@ export default function CustomersPage() {
       payload.billing_state = ''; payload.billing_zip = ''; payload.billing_email = '';
       payload.company_id = null;
     } else {
+      // Billing address only differs when the checkbox says so. Otherwise it
+      // mirrors the street address, so invoices and anything else that reads
+      // the billing fields keep working.
+      if (!billingDifferent) {
+        for (const f of ADDRESS_FIELDS) payload[`billing_${f}`] = form[`address_${f}`] || '';
+      }
       // Mirrors what Properties already does for its own management_company
       // field: find the matching company by name, or create it if it
       // doesn't exist yet, so this contact is really linked rather than
@@ -212,11 +210,18 @@ export default function CustomersPage() {
       setSaveError(mutationError.message);
       return;
     }
-    setForm(EMPTY_FORM);
-    setSameAsBilling(false);
-    setEditingId(null);
-    setShowForm(false);
     setSaveError('');
+    if (editingId) {
+      // Go back to the read-only view of the saved contact.
+      setForm(prev => ({ ...prev, ...payload }));
+      setEditMode(false);
+    } else {
+      setForm(EMPTY_FORM);
+      setBillingDifferent(false);
+      setEditingId(null);
+      setEditMode(false);
+      setShowForm(false);
+    }
     // Don't rely solely on the realtime subscription — refresh directly
     // so the change shows up immediately.
     await loadContacts();
@@ -224,16 +229,42 @@ export default function CustomersPage() {
 
   function startEdit(contact) {
     setForm({ ...EMPTY_FORM, ...contact, contact_phone: formatPhone(contact.contact_phone) });
-    setSameAsBilling(Boolean(contact.billing_street) && contact.billing_street === contact.address_street);
+    setBillingDifferent(billingDiffers(contact));
     setEditingId(contact.id);
+    setEditMode(false);
+    setTipOpen(false);
+    setShowForm(true);
+  }
+
+  function openNew() {
+    setForm(EMPTY_FORM);
+    setBillingDifferent(false);
+    setEditingId(null);
+    setEditMode(true);
+    setTipOpen(false);
     setShowForm(true);
   }
 
   function cancelForm() {
     setForm(EMPTY_FORM);
-    setSameAsBilling(false);
+    setBillingDifferent(false);
     setEditingId(null);
+    setEditMode(false);
+    setTipOpen(false);
+    setSaveError('');
     setShowForm(false);
+  }
+
+  // Cancel while editing an existing contact: drop unsaved changes and go
+  // back to the read-only view.
+  function cancelEdit() {
+    const original = contacts.find(c => c.id === editingId);
+    if (original) {
+      setForm({ ...EMPTY_FORM, ...original, contact_phone: formatPhone(original.contact_phone) });
+      setBillingDifferent(billingDiffers(original));
+    }
+    setSaveError('');
+    setEditMode(false);
   }
 
   async function saveCustomField(contact, key, value) {
@@ -338,7 +369,7 @@ export default function CustomersPage() {
                 {importingVcard ? 'Importing…' : '↑ Import Contact (.vcf)'}
               </button>
               <AddColumnButton addColumn={addColumn} />
-              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add new contact</button>
+              <button className="btn btn-primary" onClick={openNew}>+ Add new contact</button>
             </div>
           )}
           {isMobile && (
@@ -361,7 +392,7 @@ export default function CustomersPage() {
             <MobileFab
               label="Add contact"
               items={[
-                { label: '+ Add new contact', primary: true, onClick: () => setShowForm(true) },
+                { label: '+ Add new contact', primary: true, onClick: openNew },
                 { label: importingVcard ? 'Importing…' : '+ Import Contact (.vcf)', onClick: () => vcardInputRef.current?.click() },
               ]}
             />
@@ -388,8 +419,14 @@ export default function CustomersPage() {
         )}
 
         <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200}>
-            <h3>{editingId ? 'Edit contact' : 'New contact'}</h3>
+            <div className="contact-popup-head">
+              <h3>{!editingId ? 'New contact' : editMode ? 'Edit contact' : 'More information'}</h3>
+              {editingId && !editMode && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
+              )}
+            </div>
             <form onSubmit={submit}>
+            <fieldset className="contact-fieldset" disabled={!editMode}>
 
             <label>Contact type *</label>
             <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required style={{ maxWidth: 320 }}>
@@ -398,13 +435,13 @@ export default function CustomersPage() {
             </select>
 
             {form.contact_type && (
-              <div className="contact-popup-grid">
+              <div className={editingId ? 'contact-popup-grid' : undefined}>
                 <div>
                   <div className="two-col-3" style={{ marginTop: 12 }}>
                     <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
                     <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
-                    <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Property Manager" /></div>
-                    <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder="(555) 555-5555" /></div>
+                    <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder={editMode ? 'e.g. Property Manager' : undefined} /></div>
+                    <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder={editMode ? '(555) 555-5555' : undefined} /></div>
                     <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
                     <div><label>Property</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
                   </div>
@@ -413,61 +450,44 @@ export default function CustomersPage() {
                     <div className={isRealEstateAgent ? 'two-col' : undefined} style={{ marginTop: 12 }}>
                       <div>
                         <label>{isRealEstateAgent ? 'Brokerage' : 'Company'}</label>
-                        <input value={form.management_company} onChange={e => update('management_company', e.target.value)} placeholder={isRealEstateAgent ? 'e.g. Keller Williams' : undefined} />
+                        <input value={form.management_company} onChange={e => update('management_company', e.target.value)} placeholder={editMode && isRealEstateAgent ? 'e.g. Keller Williams' : undefined} />
                       </div>
                       {isRealEstateAgent && (
                         <div>
                           <label>Team/Office</label>
-                          <input value={form.team_office} onChange={e => update('team_office', e.target.value)} placeholder="e.g. The Smith Group, Lee's Summit office" />
+                          <input value={form.team_office} onChange={e => update('team_office', e.target.value)} placeholder={editMode ? "e.g. The Smith Group, Lee's Summit office" : undefined} />
                         </div>
                       )}
                     </div>
                   )}
 
-                  {isHomeowner ? (
-                    <>
-                      <label style={{ marginTop: 16 }}>Address</label>
-                      <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
-                    </>
-                  ) : (
+                  <label style={{ marginTop: 16 }}>Address</label>
+                  <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
+
+                  {!isHomeowner && (
                     <>
                       <div className="two-col" style={{ marginTop: 16 }}>
                         <div><label>Billing email</label><input type="email" value={form.billing_email} onChange={e => update('billing_email', e.target.value)} /></div>
                       </div>
-                      <label style={{ marginTop: 4 }}>Billing address</label>
-                      <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
 
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-                        <input type="checkbox" style={{ width: 'auto' }} checked={sameAsBilling} onChange={e => toggleSameAsBilling(e.target.checked)} />
-                        Address same as billing address
+                        <input type="checkbox" style={{ width: 'auto' }} checked={billingDifferent} onChange={e => setBillingDifferent(e.target.checked)} />
+                        Billing Address different from Street Address
                       </label>
-                      <label>Address</label>
-                      <AddressFields prefix="address" values={form} onChange={update} placesEnabled />
+                      {billingDifferent && (
+                        <>
+                          <label>Billing address</label>
+                          <AddressFields prefix="billing" values={form} onChange={update} placesEnabled />
+                        </>
+                      )}
                     </>
                   )}
 
                   <label style={{ marginTop: 16 }}>Notes</label>
                   <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
-                  {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
-                  <div className="section-actions">
-                    <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
-                    {editingId && (
-                      <AdminDeleteButton
-                        kind="contact"
-                        recordId={editingId}
-                        name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-                        onDeleted={() => { cancelForm(); loadContacts(); }}
-                      />
-                    )}
-                  </div>
-                </div>
 
-                <div>
-                  <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: 14 }}>
-                    <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
-                      Automated Notifications
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontWeight: 400, fontSize: 13, color: 'var(--ink)' }}>
                       <input
                         type="checkbox"
                         style={{ width: 'auto' }}
@@ -476,17 +496,54 @@ export default function CustomersPage() {
                       />
                       Send this contact automated emails
                     </label>
-                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
-                      Uncheck to opt this contact out of every automated email below — manual emails you send yourself are never affected. Here's exactly what's currently automated:
-                    </div>
-                    <ul style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10, paddingLeft: 16, lineHeight: 1.7 }}>
-                      <li><b>Lead follow-ups</b> — sent 2 and 4 days after a lead is entered, if it's still Prospecting or Contacted.</li>
-                      <li><b>Schedule reminders</b> — sent before a job's Scheduled Start Date, on whatever days are configured on that job's Portal Access tab.</li>
-                      <li><b>Portal invite</b> — sent once, the first time this contact is granted portal access.</li>
-                    </ul>
+                    <span
+                      className={`info-tip${tipOpen ? ' open' : ''}`}
+                      tabIndex={0}
+                      role="button"
+                      aria-label="What automated emails are sent"
+                      onClick={() => setTipOpen(o => !o)}
+                      onBlur={() => setTipOpen(false)}
+                    >
+                      i
+                      <span className="info-tip-body" role="tooltip">
+                        Uncheck to opt this contact out of every automated email below — manual emails you send yourself are never affected. Here's exactly what's currently automated:
+                        <ul>
+                          <li><b>Lead follow-ups</b> — sent 2 and 4 days after a lead is entered, if it's still Prospecting or Contacted.</li>
+                          <li><b>Schedule reminders</b> — sent before a job's Scheduled Start Date, on whatever days are configured on that job's Portal Access tab.</li>
+                          <li><b>Portal invite</b> — sent once, the first time this contact is granted portal access.</li>
+                        </ul>
+                      </span>
+                    </span>
                   </div>
                 </div>
+
+                {editingId && (
+                  <div>
+                    <div className="contact-touches-panel">
+                      <TouchTimeline kind="contact" recordId={editingId} bare />
+                    </div>
+                  </div>
+                )}
               </div>
+            )}
+            </fieldset>
+
+            {editMode && form.contact_type && (
+              <>
+                {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
+                <div className="section-actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
+                  {editingId && <button className="btn btn-sm" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>}
+                  {editingId && (
+                    <AdminDeleteButton
+                      kind="contact"
+                      recordId={editingId}
+                      name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
+                      onDeleted={() => { cancelForm(); loadContacts(); }}
+                    />
+                  )}
+                </div>
+              </>
             )}
             </form>
             {editingId && form.contact_email && (
@@ -500,7 +557,6 @@ export default function CustomersPage() {
                 />
               </div>
             )}
-            {editingId && <TouchTimeline kind="contact" recordId={editingId} />}
         </PopupModal>
 
         <div className="search-bar">

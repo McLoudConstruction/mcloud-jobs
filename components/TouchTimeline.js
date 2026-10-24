@@ -142,7 +142,7 @@ function Headline({ summary, kind }) {
   );
 }
 
-export default function TouchTimeline({ kind, recordId }) {
+export default function TouchTimeline({ kind, recordId, bare = false }) {
   const [items, setItems] = useState(null);
   const [summary, setSummary] = useState(null);
   const [cursor, setCursor] = useState(null);
@@ -196,7 +196,7 @@ export default function TouchTimeline({ kind, recordId }) {
   const shown = (items || []).filter(i => filter === 'all' || (filter === 'email' ? i.channel === 'email' : i.channel !== 'email'));
 
   return (
-    <div style={{ marginTop: 22, paddingTop: 14, borderTop: '2px solid var(--line)' }}>
+    <div style={bare ? undefined : { marginTop: 22, paddingTop: 14, borderTop: '2px solid var(--line)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, margin: '0 0 4px' }}>
         <h4 style={{ margin: 0 }}>Touches</h4>
         <LogTouchButton kind={kind} recordId={recordId} onLogged={() => setReloadKey(k => k + 1)} />
