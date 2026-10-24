@@ -171,7 +171,6 @@ export default function CustomersPage() {
   const [popupError, setPopupError] = useState('');
   const [tab, setTab] = useState('overview'); // Person popup tab: 'overview' or 'details'
   const [propsVersion, setPropsVersion] = useState(0); // bumped when a property is linked or removed, to reload the header chips
-  const [touchVersion, setTouchVersion] = useState(0); // bumped when a touch is logged from the header, to reload the Touches list
   const [lastContacts, setLastContacts] = useState(null); // { contactId: lastContactedIso }, null until loaded (and before migration 171)
   const [dupMatches, setDupMatches] = useState(null); // people who already have the email being saved
   const [emailStatus, setEmailStatus] = useState(null); // why this saved person cannot be emailed right now
@@ -284,12 +283,6 @@ export default function CustomersPage() {
     }
     setPropsVersion(v => v + 1);
     loadContacts();
-  }
-
-  // A touch logged from the popup header: reload the Touches list and the recency dot.
-  async function handleTouchLogged() {
-    setTouchVersion(v => v + 1);
-    await refreshRecency();
   }
 
   async function submit(e, { allowDuplicate = false } = {}) {
@@ -614,7 +607,7 @@ export default function CustomersPage() {
           </div>
         )}
 
-        <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200}>
+        <PopupModal open={showForm} onClose={cancelForm} maxWidth={1200} align="top">
             {!editingId ? (
               <div className="contact-popup-head"><h3>New contact</h3></div>
             ) : (
@@ -627,7 +620,6 @@ export default function CustomersPage() {
                 propsVersion={propsVersion}
                 onActive={changeActive}
                 onEdit={() => { setTab('details'); setEditMode(true); }}
-                onTouchLogged={handleTouchLogged}
                 onShowProperties={() => setTab('overview')}
               />
             )}
@@ -862,7 +854,7 @@ export default function CustomersPage() {
                 </div>
                 <div>
                   <div className="contact-touches-panel">
-                    <TouchTimeline kind="contact" recordId={editingId} bare refreshKey={touchVersion} onChange={refreshRecency} />
+                    <TouchTimeline kind="contact" recordId={editingId} bare onChange={refreshRecency} />
                   </div>
                 </div>
               </div>

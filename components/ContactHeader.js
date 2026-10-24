@@ -1,8 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import RecencyDot from './RecencyDot';
-import SendEmailButton from './SendEmailButton';
-import LogTouchButton from './LogTouchButton';
 import { recencyOf } from '../lib/contactRecency';
 import { propertiesOfContact } from '../lib/contactProperties';
 import { jobTitle } from '../lib/contactHistory';
@@ -19,7 +17,7 @@ const MAX_CHIPS = 3;
 
 export default function ContactHeader({
   contactId, form, lastAt, recencyReady, editMode, propsVersion,
-  onActive, onEdit, onTouchLogged, onShowProperties,
+  onActive, onEdit, onShowProperties,
 }) {
   const [links, setLinks] = useState(null);
 
@@ -78,20 +76,6 @@ export default function ContactHeader({
           {form.contact_email && <a href={`mailto:${form.contact_email}`}>{form.contact_email}</a>}
         </div>
       )}
-
-      <div className="cp-actions">
-        {form.contact_phone && <a className="btn btn-sm" href={`tel:${phoneDigits}`}>Call</a>}
-        {form.contact_email && (
-          <SendEmailButton
-            to={form.contact_email}
-            name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-            company={form.management_company}
-            property={form.property}
-            label="Email"
-          />
-        )}
-        <LogTouchButton kind="contact" recordId={contactId} label="Log touch" onLogged={onTouchLogged} />
-      </div>
 
       {links && links.length > 0 && (
         <div className="cp-props" aria-label="Linked properties">

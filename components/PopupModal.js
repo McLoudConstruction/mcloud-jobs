@@ -2,15 +2,17 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function PopupModal({ open, onClose, maxWidth = 640, children }) {
+// align="top" pins the popup near the top of the screen, so its top edge stays put while its height changes
+// (a popup with tabs, say). The default centers it vertically.
+export default function PopupModal({ open, onClose, maxWidth = 640, align = 'center', children }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
   if (!open || !mounted) return null;
 
   return createPortal(
-    <div className="send-doc-overlay" style={overlayStyle} onClick={onClose}>
-      <div style={{ ...modalStyle, maxWidth }} onClick={e => e.stopPropagation()}>
+    <div className="send-doc-overlay" style={align === 'top' ? { ...overlayStyle, alignItems: 'flex-start', paddingTop: 'max(20px, 5vh)' } : overlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, maxWidth, ...(align === 'top' ? { margin: '0 auto' } : null) }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" style={closeButtonStyle}>×</button>
         {children}
       </div>
