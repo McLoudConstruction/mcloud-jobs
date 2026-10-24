@@ -7,10 +7,11 @@ import PopupModal from './PopupModal';
 //
 // Staff add the calls, visits, texts, emails, mailings and notes that happen
 // outside the platform. They land in the same history the bots write to, so
-// there is one list. A touch always belongs to a property, and optionally to
-// one person there:
+// there is one list. A touch belongs to a property, a person, or both:
 //   Property: the property is fixed, pick a person if it was one of them
-//   Person:   the person's property is used (or pick one of their company's)
+//   Person:   the person's linked property is used too, so the property
+//             shows the touch as well. A person with no property still works,
+//             the touch is then recorded on the person only.
 //   Company:  pick which of its properties it was about
 //
 // Saving also does the small bookkeeping a person would otherwise do by hand:
@@ -100,14 +101,8 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
           setPropertyId(c.property_id);
           const { data: prop } = await supabase.from('properties').select('next_action_at, next_action_note').eq('id', c.property_id).maybeSingle();
           if (prop?.next_action_at) setNextStep({ at: prop.next_action_at, note: prop.next_action_note || '' });
-        } else if (c.company_id) {
-          const { data: props } = await supabase.from('properties').select('id, property_name').eq('company_id', c.company_id).order('property_name');
-          setProperties(props || []);
-          if (props?.length === 1) { setPropertyId(props[0].id); await loadProperty(props[0].id); setPersonId(c.id); }
-          if (!props?.length) setError('This person is not linked to a property yet. Link them to one first, so the touch has a home.');
-        } else {
-          setError('This person is not linked to a property yet. Link them to one first, so the touch has a home.');
         }
+        // No linked property: nothing to pick. The touch is recorded on the person only.
       } else {
         const { data: props } = await supabase.from('properties').select('id, property_name').eq('company_id', recordId).order('property_name');
         setProperties(props || []);
@@ -135,7 +130,7 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
 
   async function save() {
     setError('');
-    if (!propertyId) { setError('Pick the property this was about.'); return; }
+    if (!propertyId && kind !== 'contact') { setError('Pick the property this was about.'); return; }
     if (type === 'note' && !note.trim()) { setError('Write the note first.'); return; }
     if (nextNote.trim() && !nextDate) { setError('Pick a date for the next step, or clear its note.'); return; }
     const happened = new Date(when);
@@ -143,7 +138,7 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
 
     setSaving(true);
     const { data, error: rpcError } = await supabase.rpc('crm_log_touch', {
-      p_property_id: propertyId,
+      p_property_id: propertyId || null,
       p_contact_id: personId || null,
       p_channel: TYPES.find(t => t.key === type).channel,
       p_outcome: type === 'note' ? 'note' : outcome,
@@ -168,7 +163,8 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
   // Only ask which property when there is a real choice to make.
   const needsPropertyChoice = properties.length > 1;
   const outcomes = OUTCOMES[type] || [];
-  const blocked = !loading && !propertyId && properties.length === 0;
+  const blocked = !loading && kind !== 'contact' && !propertyId && properties.length === 0;
+  const personOnly = kind === 'contact' && !propertyId;
 
   return (
     <>
@@ -196,7 +192,14 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
               )}
 
               {fixedPerson ? (
-                <div style={{ fontSize: 13, margin: '10px 0 0' }}>With <strong>{fixedPerson.name}</strong></div>
+                <div style={{ fontSize: 13, margin: '10px 0 0' }}>
+                  With <strong>{fixedPerson.name}</strong>
+                  {personOnly && (
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
+                      Not linked to a property, so this touch is recorded on the contact only.
+                    </div>
+                  )}
+                </div>
               ) : (
                 people.length > 0 && (
                   <>
@@ -235,6 +238,7 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
               <label>{type === 'note' ? 'Note' : 'Note (optional)'}</label>
               <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder={type === 'note' ? 'What do you want to remember?' : 'What was said, what they need, who to ask for next time'} />
 
+              {!personOnly && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700 }}>Next step (optional)</div>
                 {nextStep && (
@@ -253,6 +257,7 @@ export default function LogTouchButton({ kind, recordId, onLogged, className = '
                   </div>
                 </div>
               </div>
+              )}
             </>
           )}
 

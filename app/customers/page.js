@@ -425,6 +425,8 @@ export default function CustomersPage() {
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
               )}
             </div>
+            <div className={editingId && form.contact_type ? 'contact-popup-grid' : undefined}>
+            <div>
             <form onSubmit={submit}>
             <fieldset className="contact-fieldset" disabled={!editMode}>
 
@@ -435,7 +437,7 @@ export default function CustomersPage() {
             </select>
 
             {form.contact_type && (
-              <div className={editingId ? 'contact-popup-grid' : undefined}>
+              <div>
                 <div>
                   <div className="two-col-3" style={{ marginTop: 12 }}>
                     <div><label>First name *</label><input value={form.first_name} onChange={e => update('first_name', e.target.value)} required /></div>
@@ -517,13 +519,6 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                {editingId && (
-                  <div>
-                    <div className="contact-touches-panel">
-                      <TouchTimeline kind="contact" recordId={editingId} bare />
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             </fieldset>
@@ -557,6 +552,16 @@ export default function CustomersPage() {
                 />
               </div>
             )}
+            </div>
+
+            {editingId && form.contact_type && (
+              <div>
+                <div className="contact-touches-panel">
+                  <TouchTimeline kind="contact" recordId={editingId} bare />
+                </div>
+              </div>
+            )}
+            </div>
         </PopupModal>
 
         <div className="search-bar">
