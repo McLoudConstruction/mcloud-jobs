@@ -160,6 +160,10 @@ export default function CustomersPage() {
 
   const isHomeowner = form.contact_type === HOMEOWNER_TYPE;
   const isRealEstateAgent = form.contact_type === REAL_ESTATE_AGENT_TYPE;
+  // A saved contact always shows its details, even with no type on file
+  // (imported or bot-added contacts often have none). Only a brand new
+  // contact waits for a type to be picked first.
+  const showDetails = Boolean(editingId) || Boolean(form.contact_type);
 
   function update(field, value) {
     if (field === 'contact_phone') value = formatPhone(value);
@@ -402,18 +406,18 @@ export default function CustomersPage() {
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>Edit Contact</button>
               )}
             </div>
-            <div className={editingId && form.contact_type ? 'contact-popup-grid' : undefined}>
+            <div className={editingId ? 'contact-popup-grid' : undefined}>
             <div>
             <form onSubmit={submit}>
             <fieldset className="contact-fieldset" disabled={!editMode}>
 
-            <label>Contact type *</label>
-            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required style={{ maxWidth: 320 }}>
+            <label>Contact type{editingId && !editMode ? '' : ' *'}</label>
+            <select value={form.contact_type} onChange={e => update('contact_type', e.target.value)} required={!editingId || editMode} style={{ maxWidth: 320 }}>
               <option value="">Select…</option>
               {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
-            {form.contact_type && (
+            {showDetails && (
               <div>
                 <div>
                   <div className="two-col-3" style={{ marginTop: 12 }}>
@@ -500,38 +504,38 @@ export default function CustomersPage() {
             )}
             </fieldset>
 
-            {editMode && form.contact_type && (
+            {editMode && showDetails && (
               <>
                 {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
                 <div className="section-actions">
                   <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save contact')}</button>
                   {editingId && <button className="btn btn-sm" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>}
-                  {editingId && (
-                    <AdminDeleteButton
-                      kind="contact"
-                      recordId={editingId}
-                      name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-                      onDeleted={() => { cancelForm(); loadContacts(); }}
-                    />
-                  )}
                 </div>
               </>
             )}
             </form>
-            {editingId && form.contact_email && (
+            {editingId && (
               <div style={{ margin: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <SendEmailButton
-                  to={form.contact_email}
+                {form.contact_email && (
+                  <SendEmailButton
+                    to={form.contact_email}
+                    name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
+                    company={form.management_company}
+                    property={form.property}
+                    label="Email this contact"
+                  />
+                )}
+                <AdminDeleteButton
+                  kind="contact"
+                  recordId={editingId}
                   name={[form.first_name, form.last_name].filter(Boolean).join(' ')}
-                  company={form.management_company}
-                  property={form.property}
-                  label="Email this contact"
+                  onDeleted={() => { cancelForm(); loadContacts(); }}
                 />
               </div>
             )}
             </div>
 
-            {editingId && form.contact_type && (
+            {editingId && (
               <div>
                 <div className="contact-touches-panel">
                   <TouchTimeline kind="contact" recordId={editingId} bare />
@@ -601,10 +605,6 @@ export default function CustomersPage() {
                   />
                 ),
               })),
-              {
-                key: 'actions', label: '', defaultWidth: 90, filterable: false, sortable: false, stopClickPropagation: true, sticky: true,
-                render: c => <AdminDeleteButton kind="contact" recordId={c.id} name={c.name} onDeleted={loadContacts} />,
-              },
             ]}
           />
         )}
