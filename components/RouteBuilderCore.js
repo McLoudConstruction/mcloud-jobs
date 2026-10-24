@@ -37,7 +37,7 @@ export default function RouteBuilderCore({ onClose, hideChrome }) {
     setError('');
     setRoute(null);
     try {
-      let query = supabase.from('properties').select('*').not('prospect_stage', 'in', '("won","lost")');
+      let query = supabase.from('properties').select('*').not('prospect_stage', 'in', '("won","lost")').eq('is_test', false);
       if (types.length > 0) query = query.in('property_type', types);
       const { data, error: qError } = await query;
       if (qError) throw qError;

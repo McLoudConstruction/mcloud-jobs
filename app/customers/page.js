@@ -16,7 +16,8 @@ import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
-import { CONTACT_TYPES, REAL_ESTATE_AGENT_TYPE, formatPhone } from '../../lib/constants';
+import { CONTACT_TYPES, REAL_ESTATE_AGENT_TYPE, PHONE_TYPES, EMAIL_CONFIDENCE, EMAIL_BLOCKED_REASONS, EMAIL_BLOCK_LABELS, formatPhone } from '../../lib/constants';
+import { useStaffAuth } from '../../lib/staffAuthContext';
 import { parseVCard } from '../../lib/vcard';
 import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
@@ -37,7 +38,9 @@ function billingDiffers(c) {
 
 const EMPTY_FORM = {
   contact_type: '', first_name: '', last_name: '', management_company: '', position: '', team_office: '',
-  contact_phone: '', contact_email: '', property: '', notes: '', automated_emails_opt_out: false,
+  contact_phone: '', phone_type: '', contact_phone2: '', phone2_type: '',
+  contact_email: '', email_confidence: '', email_blocked_reason: '', shared_email: false, is_test: false,
+  property: '', notes: '', automated_emails_opt_out: false,
   address_street: '', address_unit: '', address_city: '', address_state: '', address_zip: '',
   billing_street: '', billing_unit: '', billing_city: '', billing_state: '', billing_zip: '', billing_email: '',
 };
@@ -51,7 +54,11 @@ const HEADER_MAP = {
   position: ['position', 'title', 'job title'],
   team_office: ['team/office', 'team / office', 'team office', 'team', 'office', 'brokerage office'],
   contact_phone: ['phone', 'contact phone', 'phone number', 'mobile'],
+  phone_type: ['phone type'],
+  contact_phone2: ['phone 2', 'second phone', 'secondary phone', 'phone2', 'alt phone', 'other phone'],
+  phone2_type: ['phone 2 type', 'second phone type', 'secondary phone type', 'phone2 type'],
   contact_email: ['email', 'contact email', 'e-mail'],
+  email_confidence: ['email confidence', 'email status'],
   billing_email: ['billing email', 'invoice email'],
   property: ['property', 'property name'],
   notes: ['notes', 'note', 'comments'],
@@ -82,6 +89,12 @@ function mapRow(row) {
     contact.name = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
   }
   if (contact.contact_phone) contact.contact_phone = formatPhone(contact.contact_phone);
+  if (contact.contact_phone2) contact.contact_phone2 = formatPhone(contact.contact_phone2);
+  // Only keep values the database accepts. Anything else is dropped rather than failing the row.
+  const ok = (list, v) => { const m = list.find(o => o.value === (v || '').toLowerCase().replace(/\s+/g, '_') || o.label.toLowerCase() === (v || '').toLowerCase()); return m ? m.value : ''; };
+  contact.phone_type = ok(PHONE_TYPES, contact.phone_type);
+  contact.phone2_type = ok(PHONE_TYPES, contact.phone2_type);
+  contact.email_confidence = ok(EMAIL_CONFIDENCE, contact.email_confidence);
   return contact;
 }
 
@@ -98,7 +111,12 @@ function contactExportColumns(customColumns) {
     { label: 'Position', value: c => c.position },
     { label: 'Team/Office', value: c => c.team_office },
     { label: 'Phone', value: c => (c.contact_phone ? formatPhone(c.contact_phone) : '') },
+    { label: 'Phone Type', value: c => c.phone_type },
+    { label: 'Phone 2', value: c => (c.contact_phone2 ? formatPhone(c.contact_phone2) : '') },
+    { label: 'Phone 2 Type', value: c => c.phone2_type },
     { label: 'Email', value: c => c.contact_email },
+    { label: 'Email Confidence', value: c => c.email_confidence },
+    { label: 'Email Blocked Reason', value: c => c.email_blocked_reason },
     { label: 'Billing Email', value: c => c.billing_email },
     { label: 'Property', value: c => c.property },
     { label: 'Street', value: c => c.address_street },
@@ -137,6 +155,12 @@ export default function CustomersPage() {
   const { customColumns, addColumn } = useCustomColumns('contacts');
   const [isMobile, setIsMobile] = useState(false);
   const [addColumnOpen, setAddColumnOpen] = useState(false);
+  const [showTest, setShowTest] = useState(false);
+  const [dupMatches, setDupMatches] = useState(null); // people who already have the email being saved
+  const [emailStatus, setEmailStatus] = useState(null); // why this saved person cannot be emailed right now
+  const [dupGroups, setDupGroups] = useState(null); // duplicate email groups, when that view is open
+  const { role } = useStaffAuth() || {};
+  const isOwner = role === 'owner';
   const visibleRowsRef = useRef(null); // rows the table currently shows, so export matches column filters and sort
 
   useEffect(() => {
@@ -158,6 +182,32 @@ export default function CustomersPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadContacts]);
 
+  // Ask the database why this person cannot be emailed (covers the do not email list and
+  // do not contact companies, which the form fields alone do not show).
+  useEffect(() => {
+    setEmailStatus(null);
+    if (!showForm || !editingId) return;
+    let cancelled = false;
+    supabase.rpc('crm_contact_email_status', { p_contact_id: editingId }).then(({ data }) => {
+      if (!cancelled) setEmailStatus(data || null);
+    });
+    return () => { cancelled = true; };
+  }, [showForm, editingId, contacts]);
+
+  async function liftSuppression() {
+    if (!form.contact_email) return;
+    if (!confirm('Take ' + form.contact_email + ' off the do not email list? Only do this if they asked to hear from us again.')) return;
+    const { error } = await supabase.rpc('crm_lift_suppression', { p_email: form.contact_email });
+    if (error) { setSaveError(error.message); return; }
+    await loadContacts();
+  }
+
+  async function openDuplicates() {
+    const { data, error } = await supabase.rpc('crm_duplicate_emails');
+    if (error) { setImportResult('Could not load duplicates: ' + error.message); return; }
+    setDupGroups(data || []);
+  }
+
   const isHomeowner = form.contact_type === HOMEOWNER_TYPE;
   const isRealEstateAgent = form.contact_type === REAL_ESTATE_AGENT_TYPE;
   // A saved contact always shows its details, even with no type on file
@@ -166,19 +216,40 @@ export default function CustomersPage() {
   const showDetails = Boolean(editingId) || Boolean(form.contact_type);
 
   function update(field, value) {
-    if (field === 'contact_phone') value = formatPhone(value);
+    if (field === 'contact_phone' || field === 'contact_phone2') value = formatPhone(value);
+    if (field === 'contact_email' || field === 'shared_email') setDupMatches(null);
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
-  async function submit(e) {
-    e.preventDefault();
+  async function submit(e, { allowDuplicate = false } = {}) {
+    e?.preventDefault?.();
     if (!form.first_name.trim() && !form.last_name.trim()) return;
     setSaving(true);
+
+    // Duplicate check on the email before saving. The database enforces it too, this just
+    // lets us show who already has it and offer a way forward.
+    const email = (form.contact_email || '').trim();
+    const emailChanged = !editingId || email.toLowerCase() !== (contacts.find(c => c.id === editingId)?.contact_email || '').trim().toLowerCase();
+    if (email && emailChanged && !form.shared_email && !form.is_test && !allowDuplicate) {
+      const { data: found } = await supabase.rpc('crm_find_people_by_email', { p_email: email, p_exclude: editingId || null });
+      const clash = (found || []).filter(m => !m.shared_email);
+      if (clash.length > 0) {
+        setDupMatches(clash);
+        setSaveError('');
+        setSaving(false);
+        return;
+      }
+    }
+    setDupMatches(null);
 
     const payload = {
       ...form,
       name: [form.first_name, form.last_name].filter(Boolean).join(' '),
     };
+    if (allowDuplicate) payload.shared_email = true;
+    // These are set by the database, so never send them back.
+    delete payload.email_blocked_at;
+    delete payload.email_verified_at;
     // Team/Office only applies to real estate agents; clear it if the type changed.
     if (!isRealEstateAgent) payload.team_office = '';
     if (isHomeowner) {
@@ -214,7 +285,9 @@ export default function CustomersPage() {
     }
     setSaving(false);
     if (mutationError) {
-      setSaveError(mutationError.message);
+      setSaveError(String(mutationError.message || '').startsWith('duplicate_email')
+        ? 'Someone in People already has that email. Open that person, or tick "Shares this email with someone else".'
+        : mutationError.message);
       return;
     }
     setSaveError('');
@@ -283,6 +356,31 @@ export default function CustomersPage() {
     }
   }
 
+  // People already in the database, or earlier in the same file, with the same email are left
+  // out and reported, so an import cannot add a second copy of someone.
+  async function dropDuplicateEmails(rows) {
+    const { data: existing } = await supabase.from('contacts').select('contact_email, is_test, shared_email');
+    const seen = new Set((existing || []).filter(c => c.contact_email && !c.is_test && !c.shared_email).map(c => c.contact_email.trim().toLowerCase()));
+    const toInsert = [];
+    const skipped = [];
+    for (const r of rows) {
+      const e = (r.contact_email || '').trim().toLowerCase();
+      if (e && seen.has(e)) { skipped.push(r.name + ' (' + r.contact_email + ')'); continue; }
+      if (e) seen.add(e);
+      toInsert.push(r);
+    }
+    return { toInsert, skipped };
+  }
+
+  function importSummary(added, skipped, suffix) {
+    let msg = `Imported ${added} contact${added === 1 ? '' : 's'}${suffix}.`;
+    if (skipped.length > 0) {
+      const shown = skipped.slice(0, 8).join(', ');
+      msg += ` Skipped ${skipped.length} already in People by email: ${shown}${skipped.length > 8 ? ', and more' : ''}.`;
+    }
+    return msg;
+  }
+
   async function handleImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -301,9 +399,12 @@ export default function CustomersPage() {
         return;
       }
 
-      const { error } = await supabase.from('contacts').insert(mapped);
-      if (error) throw error;
-      setImportResult(`Imported ${mapped.length} contact${mapped.length === 1 ? '' : 's'}.`);
+      const { toInsert, skipped } = await dropDuplicateEmails(mapped);
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from('contacts').insert(toInsert);
+        if (error) throw error;
+      }
+      setImportResult(importSummary(toInsert.length, skipped, ''));
     } catch (err) {
       setImportResult(`Import failed: ${err.message}`);
     } finally {
@@ -324,9 +425,13 @@ export default function CustomersPage() {
         setImportResult('No contacts with a name were found in that file.');
         return;
       }
-      const { error } = await supabase.from('contacts').insert(parsed);
-      if (error) throw error;
-      setImportResult(`Imported ${parsed.length} contact${parsed.length === 1 ? '' : 's'} from vCard.`);
+      const parsedClean = parsed.map(c => ({ ...c, phone_type: PHONE_TYPES.some(o => o.value === c.phone_type) ? c.phone_type : '', phone2_type: PHONE_TYPES.some(o => o.value === c.phone2_type) ? c.phone2_type : '', contact_phone2: c.contact_phone2 ? formatPhone(c.contact_phone2) : c.contact_phone2 }));
+      const { toInsert, skipped } = await dropDuplicateEmails(parsedClean);
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from('contacts').insert(toInsert);
+        if (error) throw error;
+      }
+      setImportResult(importSummary(toInsert.length, skipped, ' from vCard'));
     } catch (err) {
       setImportResult(`Import failed: ${err.message}`);
     } finally {
@@ -335,7 +440,9 @@ export default function CustomersPage() {
     }
   }
 
+  const testCount = contacts.filter(c => c.is_test).length;
   const filtered = contacts.filter(c => {
+    if (c.is_test && !showTest) return false;
     if (typeFilter !== 'all' && c.contact_type !== typeFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -361,6 +468,7 @@ export default function CustomersPage() {
                   { label: importing ? 'Importing…' : 'Import from Excel', disabled: importing, onClick: () => fileInputRef.current?.click() },
                   { label: importingVcard ? 'Importing…' : 'Import Contact (.vcf)', disabled: importingVcard, onClick: () => vcardInputRef.current?.click() },
                   { label: 'Add column', onClick: () => setAddColumnOpen(true) },
+                  { label: 'Find duplicate emails', onClick: openDuplicates },
                   { label: () => `Export to Excel (${(visibleRowsRef.current || filtered).length})`, disabled: filtered.length === 0, onClick: exportContacts },
                 ]}
               />
@@ -369,6 +477,7 @@ export default function CustomersPage() {
           {isMobile && (
             <MobileOverflowMenu>
               <button className="btn btn-sm" onClick={exportContacts}>↓ Export to Excel</button>
+              <button className="btn btn-sm" onClick={openDuplicates}>Find duplicate emails</button>
               <AddColumnButton addColumn={addColumn} />
             </MobileOverflowMenu>
           )}
@@ -394,7 +503,7 @@ export default function CustomersPage() {
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
             {importResult}
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-              Recognized columns: Type, First Name, Last Name, Company, Position, Team/Office, Phone, Email, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
+              Recognized columns: Type, First Name, Last Name, Company, Position, Team/Office, Phone, Phone Type, Phone 2, Phone 2 Type, Email, Email Confidence, Billing Email, Street/Unit/City/State/Zip, Billing Street/Unit/City/State/Zip, Property, Notes.
             </div>
           </div>
         )}
@@ -425,9 +534,66 @@ export default function CustomersPage() {
                     <div><label>Last name</label><input value={form.last_name} onChange={e => update('last_name', e.target.value)} /></div>
                     <div><label>Position</label><input value={form.position} onChange={e => update('position', e.target.value)} placeholder={editMode ? 'e.g. Property Manager' : undefined} /></div>
                     <div><label>Phone</label><input value={form.contact_phone} onChange={e => update('contact_phone', e.target.value)} placeholder={editMode ? '(555) 555-5555' : undefined} /></div>
+                    <div>
+                      <label>Phone type</label>
+                      <select value={form.phone_type || ''} onChange={e => update('phone_type', e.target.value)}>
+                        <option value="">Not set</option>
+                        {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div><label>Second phone</label><input value={form.contact_phone2 || ''} onChange={e => update('contact_phone2', e.target.value)} placeholder={editMode ? '(555) 555-5555' : undefined} /></div>
+                    <div>
+                      <label>Second phone type</label>
+                      <select value={form.phone2_type || ''} onChange={e => update('phone2_type', e.target.value)} disabled={!form.contact_phone2}>
+                        <option value="">Not set</option>
+                        {PHONE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
                     <div><label>Email</label><input type="email" value={form.contact_email} onChange={e => update('contact_email', e.target.value)} /></div>
+                    <div>
+                      <label>Email confidence</label>
+                      <select value={form.email_confidence || ''} onChange={e => update('email_confidence', e.target.value)} disabled={!form.contact_email}>
+                        <option value="">Not set</option>
+                        {EMAIL_CONFIDENCE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Email status</label>
+                      <select value={form.email_blocked_reason || ''} onChange={e => update('email_blocked_reason', e.target.value)} disabled={!form.contact_email}>
+                        <option value="">Good, OK to email</option>
+                        {EMAIL_BLOCKED_REASONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
                     <div><label>Property</label><input value={form.property} onChange={e => update('property', e.target.value)} /></div>
                   </div>
+
+                  {editingId && emailStatus && emailStatus !== form.email_blocked_reason && emailStatus !== 'no_email' && (
+                    <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
+                      Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}.
+                      {emailStatus === 'suppressed' && isOwner && (
+                        <> <button type="button" className="btn btn-sm" style={{ marginLeft: 6 }} onClick={liftSuppression}>Take off the do not email list</button></>
+                      )}
+                    </div>
+                  )}
+                  {editingId && emailStatus && emailStatus === form.email_blocked_reason && (
+                    <div style={{ marginTop: 10, fontSize: 12.5, color: '#a13f3f' }}>
+                      Automated email is blocked: {EMAIL_BLOCK_LABELS[emailStatus] || emailStatus}. Change Email status to Good to allow it again.
+                    </div>
+                  )}
+                  {dupMatches && dupMatches.length > 0 && (
+                    <div className="card" style={{ marginTop: 10, borderColor: '#d9a441', fontSize: 13 }}>
+                      <b>{dupMatches.length === 1 ? 'Someone in People already has this email:' : 'These people already have this email:'}</b>
+                      <ul style={{ margin: '6px 0 8px 18px' }}>
+                        {dupMatches.map(m => (
+                          <li key={m.id}>
+                            {m.name}{[m.company, m.property].filter(Boolean).length ? ' (' + [m.company, m.property].filter(Boolean).join(', ') + ')' : ''}
+                            {' '}<button type="button" className="btn btn-sm" onClick={() => { const found = contacts.find(c => c.id === m.id); if (found) { cancelForm(); startEdit(found); } }}>Open</button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" className="btn btn-sm" disabled={saving} onClick={() => submit(null, { allowDuplicate: true })}>Save anyway, they share this email</button>
+                    </div>
+                  )}
 
                   {!isHomeowner && (
                     <div className={isRealEstateAgent ? 'two-col' : undefined} style={{ marginTop: 12 }}>
@@ -468,6 +634,15 @@ export default function CustomersPage() {
 
                   <label style={{ marginTop: 16 }}>Notes</label>
                   <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontWeight: 400, fontSize: 13 }}>
+                    <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.shared_email)} onChange={e => update('shared_email', e.target.checked)} />
+                    Shares this email with someone else (skips the duplicate check)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontWeight: 400, fontSize: 13 }}>
+                    <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.is_test)} onChange={e => update('is_test', e.target.checked)} />
+                    Test record (hidden from lists, routes and the bot)
+                  </label>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontWeight: 400, fontSize: 13, color: 'var(--ink)' }}>
@@ -548,6 +723,31 @@ export default function CustomersPage() {
         <div className="search-bar">
           <input placeholder="Search by name, company or team/office…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {testCount > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={showTest} onChange={e => setShowTest(e.target.checked)} />
+            Show test records ({testCount})
+          </label>
+        )}
+
+        <PopupModal open={dupGroups !== null} onClose={() => setDupGroups(null)} maxWidth={760}>
+          <h3 style={{ marginTop: 0 }}>Duplicate emails</h3>
+          {dupGroups && dupGroups.length === 0 && <div className="empty-state">No two people share an email.</div>}
+          {dupGroups && dupGroups.map(g => (
+            <div key={g.email} className="card" style={{ marginBottom: 10 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{g.email} ({g.n})</div>
+              <ul style={{ margin: '6px 0 0 18px', fontSize: 13 }}>
+                {g.people.map(m => (
+                  <li key={m.id}>
+                    {m.name}{[m.company, m.property].filter(Boolean).length ? ' (' + [m.company, m.property].filter(Boolean).join(', ') + ')' : ''}
+                    {' '}<button type="button" className="btn btn-sm" onClick={() => { const found = contacts.find(c => c.id === m.id); if (found) { setDupGroups(null); startEdit(found); } }}>Open</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Open each person to delete the extra one, or tick Shares this email if two people really use one address. Nothing is merged for you.</div>
+        </PopupModal>
 
         <ScrollFadeRow trackClassName="stage-tabs">
           <button className={`stage-tab ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All ({contacts.length})</button>
@@ -589,7 +789,9 @@ export default function CustomersPage() {
               { key: 'position', label: 'Position', defaultWidth: 150, render: c => c.position || '—' },
               { key: 'team_office', label: 'Team/Office', defaultWidth: 170, render: c => c.team_office || '—' },
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
-              { key: 'contact_email', label: 'Email', defaultWidth: 200, render: c => c.contact_email || '—' },
+              { key: 'contact_email', label: 'Email', defaultWidth: 220, render: c => c.contact_email ? (
+                <span>{c.contact_email}{c.email_blocked_reason ? <span style={{ marginLeft: 6, fontSize: 11, color: '#a13f3f' }}>{EMAIL_BLOCK_LABELS[c.email_blocked_reason]}</span> : (c.email_confidence === 'pattern_guess' ? <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>guess</span> : null)}</span>
+              ) : '—' },
               ...customColumns.map(col => ({
                 key: `custom:${col.column_key}`,
                 label: col.label,

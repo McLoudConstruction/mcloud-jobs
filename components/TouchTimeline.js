@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import LogTouchButton from './LogTouchButton';
+import { useStaffAuth } from '../lib/staffAuthContext';
 
 // Every time a Person, Property or Company was contacted, newest first.
 //
@@ -19,6 +20,16 @@ import LogTouchButton from './LogTouchButton';
 //   Company:  the company, its properties, and everyone linked to either
 
 const PAGE = 50;
+
+// Marks touches that were edited by hand. The timeline feed does not carry this, so look it up
+// for the hand logged and bot logged rows on the page.
+async function withEdits(items) {
+  const ids = (items || []).filter(i => i.source === 'staff' || i.source === 'touch').map(i => i.id);
+  if (ids.length === 0) return items || [];
+  const { data } = await supabase.from('outreach_touches').select('id, edited_at, edited_by_name').in('id', ids).not('edited_at', 'is', null);
+  const edits = new Map((data || []).map(r => [r.id, r]));
+  return items.map(i => (edits.has(i.id) ? { ...i, edited_at: edits.get(i.id).edited_at, edited_by: edits.get(i.id).edited_by_name } : i));
+}
 
 // Optional, comma separated. Keeps our own domain from making every internal
 // email look like it belongs to a company. Set NEXT_PUBLIC_INTERNAL_EMAIL_DOMAINS.
@@ -67,8 +78,67 @@ function viaText(item, kind, recordId) {
   return parts.join(' ');
 }
 
-function Row({ item, kind, recordId }) {
+// A date-time-local input value for a timestamp, in local time.
+function toLocalInput(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const EFFECTS = {
+  address_unblocked: 'That change lifted the block on this email address.',
+  address_blocked: 'That change blocked this email address.',
+};
+
+function Row({ item, kind, recordId, isOwner, onChanged }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [rowMessage, setRowMessage] = useState('');
+  // Hand logged and bot logged touches can be fixed. Mail and sequence rows come from
+  // the mailbox and the sequences, so they stay as they are. A bot's touch is for owners only.
+  const canChange = (item.source === 'staff') || (item.source === 'touch' && isOwner);
+
+  function startEdit() {
+    setDraft({
+      channel: item.channel || 'other',
+      outcome: item.kind || 'note',
+      note: item.note || '',
+      at: toLocalInput(item.at),
+    });
+    setEditing(true);
+    setOpen(true);
+    setRowMessage('');
+  }
+
+  async function saveEdit() {
+    setBusy(true);
+    const atIso = draft.at ? new Date(draft.at).toISOString() : null;
+    const { data, error: rpcError } = await supabase.rpc('crm_edit_touch', {
+      p_touch_id: item.id,
+      p_channel: draft.channel,
+      p_outcome: draft.outcome,
+      p_note: draft.note,
+      p_happened_at: atIso,
+      p_clear_note: !draft.note.trim(),
+    });
+    setBusy(false);
+    if (rpcError) { setRowMessage(rpcError.message); return; }
+    setEditing(false);
+    onChanged(EFFECTS[data?.effect] || '');
+  }
+
+  async function remove() {
+    if (!confirm('Delete this touch? It comes off the history. The stage and next step on the record are not changed. A copy is kept in the audit log.')) return;
+    setBusy(true);
+    const { data, error: rpcError } = await supabase.rpc('crm_delete_touch', { p_touch_id: item.id });
+    setBusy(false);
+    if (rpcError) { setRowMessage(rpcError.message); return; }
+    onChanged(EFFECTS[data?.effect] || '');
+  }
+
   const [body, setBody] = useState(null);
   const source = SOURCES[item.source] || SOURCES.touch;
   const via = viaText(item, kind, recordId);
@@ -114,7 +184,54 @@ function Row({ item, kind, recordId }) {
               </div>
             </>
           )}
-          {!item.summary && !item.note && !isMail && <div style={{ color: 'var(--ink-soft)' }}>No note was added.</div>}
+          {!item.summary && !item.note && !isMail && !editing && <div style={{ color: 'var(--ink-soft)' }}>No note was added.</div>}
+
+          {editing && draft && (
+            <div style={{ marginTop: 8 }}>
+              <div className="two-col">
+                <div>
+                  <label>Type</label>
+                  <select value={draft.channel} onChange={e => setDraft({ ...draft, channel: e.target.value })}>
+                    {Object.entries(CHANNELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label>What happened</label>
+                  <select value={draft.outcome} onChange={e => setDraft({ ...draft, outcome: e.target.value })}>
+                    {Object.entries(OUTCOMES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label>When</label>
+                  <input type="datetime-local" value={draft.at} onChange={e => setDraft({ ...draft, at: e.target.value })} />
+                </div>
+              </div>
+              <label style={{ marginTop: 8 }}>Note</label>
+              <textarea value={draft.note} onChange={e => setDraft({ ...draft, note: e.target.value })} maxLength={2000} />
+              {(draft.outcome === 'bounced' || draft.outcome === 'unsubscribed' || item.kind === 'bounced' || item.kind === 'unsubscribed') && draft.outcome !== item.kind && (
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  Changing a bounced or unsubscribed touch also changes whether this email address is blocked.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+                <button type="button" className="btn btn-sm" onClick={() => setEditing(false)} disabled={busy}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {!editing && canChange && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button type="button" className="btn btn-sm" onClick={startEdit} disabled={busy}>Edit</button>
+              <button type="button" className="btn btn-sm" onClick={remove} disabled={busy}>Delete</button>
+            </div>
+          )}
+          {item.edited_at && !editing && (
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+              Edited {when(item.edited_at)}{item.edited_by ? ` by ${item.edited_by}` : ''}
+            </div>
+          )}
+          {rowMessage && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{rowMessage}</div>}
         </div>
       )}
     </div>
@@ -150,6 +267,9 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
   const [more, setMore] = useState(false);
   const [filter, setFilter] = useState('all');
   const [reloadKey, setReloadKey] = useState(0);
+  const [notice, setNotice] = useState('');
+  const { role } = useStaffAuth() || {};
+  const isOwner = role === 'owner';
 
   const fetchPage = useCallback(async (after) => {
     const { data, error: rpcError } = await supabase.rpc('crm_touch_timeline', {
@@ -170,9 +290,10 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
     setItems(null); setSummary(null); setCursor(null); setError(''); setFilter('all');
     if (!recordId) return undefined;
     fetchPage(null)
-      .then(data => {
+      .then(async data => {
+        const list = await withEdits(data.items || []);
         if (cancelled) return;
-        setItems(data.items || []);
+        setItems(list);
         setSummary(data.summary || null);
         setCursor(data.next_cursor || null);
       })
@@ -184,7 +305,8 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
     setMore(true);
     try {
       const data = await fetchPage(cursor);
-      setItems(prev => [...(prev || []), ...(data.items || [])]);
+      const list = await withEdits(data.items || []);
+      setItems(prev => [...(prev || []), ...list]);
       setCursor(data.next_cursor || null);
     } catch (err) {
       setError(err.message);
@@ -223,7 +345,11 @@ export default function TouchTimeline({ kind, recordId, bare = false }) {
         <div className="empty-state">No touches yet. Use Log a touch to add a call, visit or note. Activity from bots and mail from a connected mailbox will show here too.</div>
       )}
       {items && items.length > 0 && shown.length === 0 && <div className="empty-state">Nothing in this view.</div>}
-      {shown.map(item => <Row key={`${item.source}-${item.id}`} item={item} kind={kind} recordId={recordId} />)}
+      {notice && <div style={{ fontSize: 12.5, color: '#3a6b45', margin: '6px 0' }}>{notice}</div>}
+      {shown.map(item => (
+        <Row key={`${item.source}-${item.id}`} item={item} kind={kind} recordId={recordId} isOwner={isOwner}
+          onChanged={msg => { setNotice(msg); setReloadKey(k => k + 1); }} />
+      ))}
 
       {cursor && (
         <div style={{ marginTop: 10 }}>

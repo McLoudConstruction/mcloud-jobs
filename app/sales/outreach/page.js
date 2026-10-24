@@ -9,7 +9,7 @@ import { settingsHref } from '../../../lib/links';
 
 const TABS = ['Today', 'Prospects', 'Sequences', 'Activity', 'Settings'];
 
-const PROPERTY_COLS = 'id, property_name, property_type, property_city, property_state, contact_name, contact_email, contact_phone, prospect_stage, prospect_vertical, prospect_tier, prospect_source, last_contacted_at, next_action_at, next_action_note, do_not_contact';
+const PROPERTY_COLS = 'id, property_name, property_type, property_city, property_state, contact_name, contact_email, contact_phone, prospect_stage, prospect_vertical, prospect_tier, prospect_source, last_contacted_at, next_action_at, next_action_note, do_not_contact, is_test';
 
 const STATUS_LABELS = { active: 'Active', paused: 'Paused', replied: 'Replied', completed: 'Completed', unsubscribed: 'Unsubscribed', bounced: 'Bounced', stopped: 'Stopped' };
 const STATUS_BADGE = { active: 'badge-active', replied: 'badge-approved', completed: 'badge-completed' };
@@ -758,7 +758,7 @@ export default function OutreachPage() {
         supabase.from('app_settings').select('outreach_enabled, outreach_from_email, outreach_from_name, outreach_daily_limit, outreach_postal_address, outreach_warmup_enabled, outreach_warmup_start, outreach_warmup_step, outreach_bounce_pause_pct, outreach_paused_at, outreach_paused_reason').eq('id', 1).maybeSingle(),
       ]);
       for (const r of [seqRes, stepRes, evRes, setRes]) if (r.error) throw new Error(r.error.message);
-      setData({ properties, enrollments, sequences: seqRes.data || [], steps: stepRes.data || [], events: evRes.data || [], settings: setRes.data });
+      setData({ properties: properties.filter(p => !p.is_test), enrollments, sequences: seqRes.data || [], steps: stepRes.data || [], events: evRes.data || [], settings: setRes.data });
     } catch (err) {
       setError(err.message);
     }

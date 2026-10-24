@@ -66,7 +66,7 @@ curl -s "https://YOUR-SITE/api/bot/sales/prospects?vertical=church&city=Kansas%2
 
 Filters (all optional): `id`, `company_id`, `stage`, `vertical`, `tier` (A, B, C), `city`, `state`, `type`, `q`, `email` (finds an org by any contact address), `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`.
 
-Each prospect has: `id`, `name`, `type`, `vertical`, `tier`, `stage`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built`, `sq_ft`, `notes`, `contact` (main contact with `name`, `email`, `phone`, `can_email`), `people` (other contacts, each with `can_email`), `can_email`, `do_not_contact`, `last_contacted_at`, `next_action_at`, `next_action_note`, `stage_changed_at`, `lost_reason`, `reengage_at`, `company_id`, and `touches` (`count`, `last_at`, `last_outcome`).
+Each prospect has: `id`, `name`, `type`, `vertical`, `tier`, `stage`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built`, `sq_ft`, `notes`, `contact` (main contact with `name`, `email`, `phone`, `can_email`), `won_at` and `won_note` (when won), `people` (other contacts, each with `can_email`), `can_email`, `do_not_contact`, `do_not_contact_source` (`company` when the company is do not contact, otherwise `property`), `last_contacted_at`, `next_action_at`, `next_action_note`, `stage_changed_at`, `lost_reason`, `reengage_at`, `company_id`, and `touches` (`count`, `last_at`, `last_outcome`).
 
 ### Paging
 
@@ -106,6 +106,10 @@ Answer:
 - `created`: a new prospect was added (HTTP 201).
 - `duplicate`: we already have this organization (HTTP 200). `id` is the existing one, `matched_on` says why. Nothing was overwritten. If you sent a contact email we did not have, only that contact was added (`contact_added: true`).
 
+One person, one record: if the `contact_email` you send already belongs to someone in People, no second person is created. The prospect is linked to the existing person instead, and `contact_added` stays false.
+
+`type` and `vertical` are one shared list now (`allowed_values.property_types`). Common names such as `church` are accepted and saved as `Religious - Churches`. A value that is not on the list is kept as sent.
+
 A duplicate is the same name at the same street, or the same name in the same city when a street is missing. Two campuses of one church at different streets are separate prospects. `similar` lists soft matches (for example a shared email or phone) for you to look at. They do not block creation.
 
 ## 4. Update a prospect
@@ -122,7 +126,7 @@ curl -s -X PATCH https://YOUR-SITE/api/bot/sales/prospects/PROSPECT_ID \
 
 Two kinds of fields:
 
-- **Working fields** can be replaced, because moving a prospect along is the job: `stage` (`prospecting`, `contacted`, `proposal`, `lost`), `next_action_at` (ISO time), `next_action_note`, `lost_reason` and `reengage_at` (a date, only while the stage is `lost`), and `do_not_contact`. Send `null` to clear `next_action_at`, `next_action_note`, `lost_reason` or `reengage_at`. A bot cannot set `won` (staff decide that), and can set `do_not_contact` to `true` but never clear it.
+- **Working fields** can be replaced, because moving a prospect along is the job: `stage` (`prospecting`, `contacted`, `proposal`, `won`, `lost`), `next_action_at` (ISO time), `next_action_note`, `lost_reason` and `reengage_at` (a date, only while the stage is `lost`), and `do_not_contact`. Send `null` to clear `next_action_at`, `next_action_note`, `lost_reason` or `reengage_at`. A bot can set `won`, but must send `won_note` saying what was agreed (and may send `won_at`, a recent date, which defaults to today). `won_note` and `won_at` are only accepted together with stage `won`. A bot cannot move a prospect out of `won`; staff can. A bot can set `do_not_contact` to `true` but never clear it.
 - **Descriptive fields** only fill blanks: `type`, `vertical`, `tier`, `street`, `unit`, `city`, `state`, `zip`, `management_company`, `year_built` (four digits), `sq_ft`, `contact_name`, `contact_email`, `contact_phone`, `company_id`, `notes`. If staff already entered a different value it is left alone and listed under `skipped`.
 
 `add_note` appends a dated note signed with your bot name. It never replaces the notes.
@@ -139,9 +143,9 @@ People are the contacts in the database: property managers, pastors, owners, age
 curl -s "https://YOUR-SITE/api/bot/sales/people?company_id=COMPANY_ID&can_email=true" -H "Authorization: Bearer $KEY"
 ```
 
-Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`.
+Filters (all optional): `id`, `q` (searches name, email, position, property), `email`, `type` (see `allowed_values.contact_types`), `company_id`, `property_id`, `can_email` (true or false), `contacted` (true or false), `created_since`, `limit`, `cursor`. Also `email_confidence` (`verified` or `pattern_guess`), to pick people whose address is safe to use.
 
-Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `phone`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
+Each person has: `id`, `name`, `first_name`, `last_name`, `email`, `email_confidence` (`verified`, `pattern_guess` or null), `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `notes`, `company` (`id`, `name`), `property` (`id`, `name`), `can_email`, `blocked_reason` (null, or `no_email`, `suppressed`, `opted_out`, `bounced`, `left_company`, `do_not_contact`, `company_do_not_contact`), `touches` (`count`, `last_at`, `last_outcome`), `created_at`. Billing details are never included.
 
 `POST /api/bot/sales/people` adds a person:
 
@@ -153,11 +157,11 @@ curl -s https://YOUR-SITE/api/bot/sales/people \
   -d '{"name": "Dana Reyes", "email": "dana@hopepg.com", "position": "Regional Manager", "type": "Multi-Family", "company_id": "COMPANY_ID"}'
 ```
 
-Give a name (or `first_name` and `last_name`), or at least an email. Allowed fields: `name`, `first_name`, `last_name`, `email`, `phone`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `company_id`, `property_id`, `notes`. Link the person with `company_id` and `property_id` (ids from the lists). A person linked to a property gets the role `Property Contact` unless you give one.
+Give a name (or `first_name` and `last_name`), or at least an email. Allowed fields: `name`, `first_name`, `last_name`, `email`, `email_confidence`, `phone`, `phone_type`, `phone2`, `phone2_type`, `position`, `role`, `type`, `team_office`, `street`, `unit`, `city`, `state`, `zip`, `company_id`, `property_id`, `notes`. Phone types are `office`, `direct`, `mobile`, `home`, `main`, `other`. Say whether an email is `verified` (confirmed, for example from the person or a reply) or a `pattern_guess` (built from the company's email pattern), because guesses bounce more. Link the person with `company_id` and `property_id` (ids from the lists). A person linked to a property gets the role `Property Contact` unless you give one.
 
 Answer: `{ "status": "created", "id": "...", "matched_on": null, "can_email": true, "blocked_reason": null, "similar": [] }`. Like prospects, `status` is `created` (HTTP 201) or `duplicate` (HTTP 200, nothing overwritten). A duplicate is the same email, or with no email the same name at the same company or property. `similar` lists people with the same name or phone, for you to look at.
 
-`PATCH /api/bot/sales/people/{id}` fills in blanks on an existing person. Same fields as adding, plus `add_note`. Anything staff already entered is left alone and listed under `skipped`. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
+`PATCH /api/bot/sales/people/{id}` fills in blanks on an existing person. Same fields as adding, plus `add_note` and `blocked_reason`. `email_confidence` can move from `pattern_guess` to `verified`, but a bot cannot downgrade a `verified` address. `blocked_reason` (`bounced`, `left_company` or `opted_out`) records why a person cannot be emailed, and it blocks automated email at once. A bot can set it but cannot clear it; staff clear it. Anything staff already entered is left alone and listed under `skipped`. An email that already belongs to someone else is refused with 409 `email_in_use` and the other person's id. The answer has the same shape as a prospect update.
 
 ## 6. Read and add companies
 
@@ -166,6 +170,8 @@ Companies are management companies, ownership groups, REITs and developers. Subc
 `GET /api/bot/sales/companies`, `GET /api/bot/sales/companies/{id}`
 
 Filters (all optional): `id`, `q`, `type` (see `allowed_values.company_types`), `city`, `state`, `email` (the company's contact email or any of its people's), `created_since`, `limit`, `cursor`.
+
+A company marked do not contact by staff shows `do_not_contact: true` with its reason. That stops outreach to every property and person under it, so check `can_email` and `blocked_reason` before you write to anyone there.
 
 Each company has: `id`, `name`, `type`, `street`, `unit`, `city`, `state`, `zip`, `contact_name`, `contact_email`, `contact_phone`, `notes`, `people_count` and `people` (up to 25), `properties_count` and `properties` (up to 25, with `stage`), `touches` (with its people and properties: `count`, `last_at`, `last_outcome`), `created_at`.
 
@@ -309,6 +315,7 @@ Staff email is never part of this. It covers bot touches, staff touches (without
 8. Look before you add. Search `people`, `companies` and `prospects` first. The duplicate checks catch the obvious cases, but a record you found yourself is always better than a new one.
 9. Fill in, do not fight. If a PATCH comes back with `skipped` fields, staff already have a different value. Leave it. If you think it is wrong, say so in `add_note`.
 10. Never email anyone whose `can_email` is false, whichever list you found them in. `blocked_reason` says why.
+11. Test records (fake people, companies and properties staff have marked as tests) never appear in any answer and cannot be reached by id. Do not try to work with them.
 
 ## Errors
 
@@ -326,7 +333,7 @@ Errors look like `{ "code": "...", "error": "human readable message" }`, sometim
 | 422 | `unknown_field`, `unknown_filter`, `invalid_field`, `invalid_filter`, `invalid_filters`, `invalid_body`, `invalid_id`, `person_not_at_prospect`, `invalid_idempotency_key`, `idempotency_conflict` | A field or value is wrong, or an Idempotency-Key was reused with a different body. Read `error` and `allowed` |
 | 429 | `rate_limited` | Too many requests. See `Retry-After` |
 | 500 | `server_error` | Our side. Retry later |
-| 503 | `not_configured` | Migration 161 (or 162 for history, 163 for the newer logging, 166 for people, companies and updates) has not been run |
+| 503 | `not_configured` | Migration 161 (or 162 for history, 163 for the newer logging, 166 for people, companies and updates, 167 for the newer people fields, won prospects and test records) has not been run |
 
 Rejected requests (422) count toward your rate limit, so fix the request instead of retrying it unchanged.
 

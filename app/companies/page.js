@@ -25,6 +25,7 @@ const EMPTY_FORM = {
   company_name: '', company_type: '',
   street: '', unit: '', city: '', state: '', zip: '',
   contact_name: '', contact_phone: '', contact_email: '', notes: '',
+  do_not_contact: false, do_not_contact_reason: '', is_test: false,
 };
 
 const HEADER_MAP = {
@@ -77,6 +78,7 @@ export default function CompaniesPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
+  const [showTest, setShowTest] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
@@ -114,10 +116,14 @@ export default function CompaniesPage() {
 
     let companyId = editingId;
     let mutationError;
+    // The date is stamped by the database when the flag changes, so never send it back.
+    const payload = { ...form };
+    delete payload.do_not_contact_at;
+    if (!payload.do_not_contact) payload.do_not_contact_reason = '';
     if (editingId) {
-      ({ error: mutationError } = await supabase.from('companies').update(form).eq('id', editingId));
+      ({ error: mutationError } = await supabase.from('companies').update(payload).eq('id', editingId));
     } else {
-      const { data, error: insertError } = await supabase.from('companies').insert(form).select().single();
+      const { data, error: insertError } = await supabase.from('companies').insert(payload).select().single();
       companyId = data ? data.id : null;
       mutationError = insertError;
     }
@@ -199,7 +205,9 @@ export default function CompaniesPage() {
     }
   }
 
+  const testCount = companies.filter(c => c.is_test).length;
   const filtered = companies.filter(c => {
+    if (c.is_test && !showTest) return false;
     if (!search.trim()) return true;
     return (c.company_name || '').toLowerCase().includes(search.toLowerCase());
   });
@@ -271,6 +279,24 @@ export default function CompaniesPage() {
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontWeight: 600 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.do_not_contact)} onChange={e => update('do_not_contact', e.target.checked)} />
+              Do not contact this company
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
+              Applies to every property and person under this company. Automated email stops, and the bot will not reach out.
+            </div>
+            {form.do_not_contact && (
+              <>
+                <label style={{ marginTop: 8 }}>Reason</label>
+                <input value={form.do_not_contact_reason || ''} onChange={e => update('do_not_contact_reason', e.target.value)} placeholder="e.g. Asked us to stop, has a preferred vendor" />
+              </>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontWeight: 400, fontSize: 13 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.is_test)} onChange={e => update('is_test', e.target.checked)} />
+              Test record (hidden from lists, routes and the bot)
+            </label>
             {saveError && <div style={{ fontSize: 12, color: '#a13f3f', marginTop: 6 }}>{saveError}</div>}
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>{saving ? 'Saving…' : (editingId ? 'Save changes' : 'Save company')}</button>
@@ -300,6 +326,12 @@ export default function CompaniesPage() {
         <div className="search-bar">
           <input placeholder="Search by company name…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {testCount > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={showTest} onChange={e => setShowTest(e.target.checked)} />
+            Show test records ({testCount})
+          </label>
+        )}
 
         {filtered.length === 0 && <div className="empty-state">No companies yet.</div>}
 
@@ -327,7 +359,7 @@ export default function CompaniesPage() {
             exportSheetName="Companies"
             exportColumns={companyExportColumns(customColumns)}
             columns={[
-              { key: 'company_name', label: 'Company Name', defaultWidth: 220, render: c => c.company_name },
+              { key: 'company_name', label: 'Company Name', defaultWidth: 240, render: c => (<span>{c.company_name}{c.do_not_contact ? <span style={{ marginLeft: 6, fontSize: 11, color: '#a13f3f' }}>Do not contact</span> : null}</span>) },
               { key: 'company_type', label: 'Type', defaultWidth: 170, render: c => c.company_type || '—' },
               { key: 'city', label: 'City', defaultWidth: 130, render: c => c.city || '—' },
               { key: 'contact_name', label: 'Contact Name', defaultWidth: 160, render: c => c.contact_name || '—' },

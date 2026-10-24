@@ -196,7 +196,7 @@ function NewOpportunityPageInner() {
         management_company: isCommercial ? form.company.trim() || null : null,
         contact_email: form.customer_email || null,
         contact_phone: form.customer_phone || null,
-        contact_type: isCommercial ? 'Commercial' : 'Residential',
+        contact_type: isCommercial ? 'Commercial' : 'Residential - Homeowner',
       });
     }
 

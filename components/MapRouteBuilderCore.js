@@ -26,7 +26,7 @@ import {
 } from '../lib/mapRouteHelpers';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-const PROPERTY_FIELDS = 'id, property_name, property_type, management_company, property_street, property_city, property_state, property_zip, property_lat, property_lng, prospect_stage, last_visited_at';
+const PROPERTY_FIELDS = 'id, property_name, property_type, management_company, property_street, property_city, property_state, property_zip, property_lat, property_lng, prospect_stage, last_visited_at, is_test';
 const PAGE_SIZE = 1000;
 const IN_VIEW_LIMIT = 100;
 const ROUTE_DEBOUNCE_MS = 500;
@@ -215,7 +215,7 @@ export default function MapRouteBuilderCore({ onClose, onRouteChanged, onRouteSa
       return; // keep whatever is already on screen rather than replacing it with a partial list
     }
     setPropsError('');
-    setAllProps(rows);
+    setAllProps(rows.filter(r => !r.is_test)); // test records stay off the map
     setPropsLoaded(true);
   }, []);
 

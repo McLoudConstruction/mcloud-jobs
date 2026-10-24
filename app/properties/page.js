@@ -29,6 +29,7 @@ const EMPTY_FORM = {
   management_company: '', contact_name: '', contact_phone: '', contact_email: '',
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
   lost_reason: '', reengage_at: '', next_step_date: '', next_action_note: '',
+  won_at: '', won_job_id: '', won_note: '', do_not_contact: false, dnc_source: null, is_test: false,
 };
 
 // A date column value or a timestamp, as the YYYY-MM-DD a date input wants (local time).
@@ -82,6 +83,8 @@ export default function PropertiesPage() {
   const [saveError, setSaveError] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [showTest, setShowTest] = useState(false);
+  const [propertyJobs, setPropertyJobs] = useState([]); // jobs at this property, for linking a win
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState('');
   const fileInputRef = useRef(null);
@@ -119,6 +122,16 @@ export default function PropertiesPage() {
     if (data) setPropertyContacts(data);
   }, []);
 
+  // Jobs at the property being edited, so a win can point at the job it became.
+  useEffect(() => {
+    setPropertyJobs([]);
+    if (!showForm || !editingId) return;
+    let cancelled = false;
+    supabase.from('jobs').select('id, project_number, customer_name, stage').eq('property_id', editingId)
+      .then(({ data }) => { if (!cancelled && data) setPropertyJobs(data); });
+    return () => { cancelled = true; };
+  }, [showForm, editingId]);
+
   function update(field, value) {
     if (field === 'contact_phone') value = formatPhone(value);
     setForm(prev => ({ ...prev, [field]: value }));
@@ -145,8 +158,17 @@ export default function PropertiesPage() {
       // The reason and the try again date only apply while the prospect is lost.
       lost_reason: form.prospect_stage === 'lost' ? String(form.lost_reason || '').trim() : null,
       reengage_at: form.prospect_stage === 'lost' && form.reengage_at ? form.reengage_at : null,
+      // The win details only apply while the prospect is won. Leaving the date blank
+      // lets the database use today.
+      won_at: form.prospect_stage === 'won' && form.won_at ? form.won_at : null,
+      won_job_id: form.prospect_stage === 'won' && form.won_job_id ? form.won_job_id : null,
+      won_note: form.prospect_stage === 'won' ? (String(form.won_note || '').trim() || null) : null,
     };
     delete payload.next_step_date;
+    // Where a do not contact flag came from is the database's to track. A flag inherited from
+    // the company is changed on the company, so it is not sent back from here.
+    delete payload.dnc_source;
+    if (form.dnc_source === 'company') delete payload.do_not_contact;
 
     let propertyId = editingId;
     let mutationError;
@@ -206,6 +228,7 @@ export default function PropertiesPage() {
       ...EMPTY_FORM, ...p,
       target_value: p.target_value ?? '', contact_phone: formatPhone(p.contact_phone),
       lost_reason: p.lost_reason || '', reengage_at: p.reengage_at || '',
+      won_at: p.won_at || '', won_job_id: p.won_job_id || '', won_note: p.won_note || '',
       next_step_date: toDateInput(p.next_action_at), next_action_note: p.next_action_note || '',
     });
     setEditingId(p.id);
@@ -245,7 +268,7 @@ export default function PropertiesPage() {
     e.preventDefault();
     if (!contactForm.name.trim() || !editingId) return;
     setSavingContact(true);
-    await supabase.from('contacts').insert({
+    const { error: contactError } = await supabase.from('contacts').insert({
       name: contactForm.name,
       first_name: contactForm.name.split(' ')[0],
       last_name: contactForm.name.split(' ').slice(1).join(' '),
@@ -264,6 +287,15 @@ export default function PropertiesPage() {
       address_state: form.property_state || null,
       address_zip: form.property_zip || null,
     });
+
+    if (contactError) {
+      setSavingContact(false);
+      setContactNote(String(contactError.message || '').startsWith('duplicate_email')
+        ? 'Someone in People already has that email. Open them there instead of adding a second copy.'
+        : 'Could not add the contact: ' + contactError.message);
+      setTimeout(() => setContactNote(''), 6000);
+      return;
+    }
 
     // If this is the primary "Property Contact" role, reflect their name/phone/email
     // on the property record's own contact fields too, so it doesn't need typing twice.
@@ -377,7 +409,9 @@ export default function PropertiesPage() {
     }
   }
 
+  const testCount = properties.filter(p => p.is_test).length;
   const filtered = properties.filter(p => {
+    if (p.is_test && !showTest) return false;
     if (typeFilter !== 'all' && p.property_type !== typeFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -472,6 +506,26 @@ export default function PropertiesPage() {
                 <label>Next step</label>
                 <input value={form.next_action_note} onChange={e => update('next_action_note', e.target.value)} maxLength={300} placeholder="Call back about the roof estimate" disabled={!form.next_step_date} />
               </div>
+              {form.prospect_stage === 'won' && (
+                <>
+                  <div>
+                    <label>Won on</label>
+                    <input type="date" value={form.won_at} onChange={e => update('won_at', e.target.value)} />
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>Leave blank to use today.</div>
+                  </div>
+                  <div>
+                    <label>Job it became (optional)</label>
+                    <select value={form.won_job_id} onChange={e => update('won_job_id', e.target.value)} disabled={!editingId}>
+                      <option value="">{editingId ? (propertyJobs.length ? 'None linked' : 'No jobs at this property yet') : 'Save first, then link a job'}</option>
+                      {propertyJobs.map(j => <option key={j.id} value={j.id}>{[j.project_number, j.customer_name].filter(Boolean).join(' · ') || 'Job'}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>What was agreed</label>
+                    <input value={form.won_note} onChange={e => update('won_note', e.target.value)} maxLength={300} placeholder="Signed the lobby remodel proposal" />
+                  </div>
+                </>
+              )}
               {form.prospect_stage === 'lost' && (
                 <>
                   <div>
@@ -516,6 +570,18 @@ export default function PropertiesPage() {
             </div>
             <label style={{ marginTop: 12 }}>Notes</label>
             <textarea value={form.notes} onChange={e => update('notes', e.target.value)} />
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontWeight: 600 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.do_not_contact)} disabled={form.dnc_source === 'company'} onChange={e => update('do_not_contact', e.target.checked)} />
+              Do not contact this property
+            </label>
+            {form.dnc_source === 'company' && (
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>This comes from the company being marked do not contact. Change it on the company.</div>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 400, fontSize: 13 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(form.is_test)} onChange={e => update('is_test', e.target.checked)} />
+              Test record (hidden from lists, routes and the bot)
+            </label>
 
             {editingId && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
@@ -590,6 +656,12 @@ export default function PropertiesPage() {
         <div className="search-bar">
           <input placeholder="Search by property or management company…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {testCount > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={showTest} onChange={e => setShowTest(e.target.checked)} />
+            Show test records ({testCount})
+          </label>
+        )}
 
         <ScrollFadeRow trackClassName="stage-tabs">
           <button className={`stage-tab ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All ({properties.length})</button>

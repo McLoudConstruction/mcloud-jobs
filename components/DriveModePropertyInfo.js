@@ -83,7 +83,11 @@ export default function DriveModePropertyInfo({ stop }) {
       address_state: prop?.property_state || stop.property_state || null,
       address_zip: prop?.property_zip || stop.property_zip || null,
     }).select('id').single();
-    if (err) { setBusy(false); setError(err.message); return; }
+    if (err) {
+      setBusy(false);
+      setError(String(err.message || '').startsWith('duplicate_email') ? 'Someone in People already has that email. Open them there instead of adding a second copy.' : err.message);
+      return;
+    }
     // First contact on a property also fills the property's own contact fields.
     if (prop && !prop.contact_name) {
       await supabase.from('properties').update({
