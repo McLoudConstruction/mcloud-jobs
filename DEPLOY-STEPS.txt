@@ -1,0 +1,31 @@
+McLoud Jobs: everything since "Remove Automatic Outreach"
+This one package replaces the two earlier zips (remove-automatic-outreach.zip and
+crm-touch-logging-phase1.zip). Use only this one.
+
+BEFORE YOU DEPLOY
+1. Migrations 161 and 162 must already be run in the Supabase SQL Editor.
+2. Run these two, in order, in the Supabase SQL Editor:
+   supabase-migration-163-staff-touch-log.sql
+   supabase-migration-164-prospect-tracking.sql
+   Both are safe to run twice. The one thing to watch: 164 recalculates "last contacted"
+   from the touch history. It only fills it in where history exists and never blanks a
+   value that is already there.
+
+DEPLOY
+3. Copy the files in this zip over your repo. The folders match the repo.
+4. Delete these three files from the repo (a zip cannot carry deletions):
+   app/sales/outreach/page.js
+   app/api/sales/outreach/test/route.js
+   lib/outreach.js
+5. Push with GitHub Desktop. Vercel deploys.
+
+KEPT ON PURPOSE
+The unsubscribe link endpoint, all database tables and old migrations, the bot sales API,
+and the Touches timeline. Past sequence emails still show in the timeline.
+
+AFTER YOU DEPLOY, TRY THIS
+- Open a property, then Log a touch. Save a call that connected, with a next step date.
+- Open the Sales page. Prospect follow up should list it under the right tab once the
+  date passes, and the Scorecard tab should show counts.
+- On a property, set the stage to Lost with no reason. It should refuse to save.
+- Settings, Bots: the new example shows the short call a bot can send.

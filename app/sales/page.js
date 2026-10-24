@@ -10,6 +10,7 @@ import MobileFab from '../../components/MobileFab';
 import ScrollFadeRow from '../../components/ScrollFadeRow';
 import BidWalkScheduler from '../../components/BidWalkScheduler';
 import OpportunityPhotosPanel from '../../components/OpportunityPhotosPanel';
+import FollowUpPanel from '../../components/FollowUpPanel';
 import { formatPhone } from '../../lib/constants';
 import { verticalLabel } from '../../lib/verticals';
 
@@ -297,6 +298,10 @@ export default function SalesDashboardPage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="dash-section" style={{ paddingTop: isMobile ? 4 : 8 }}>
+          <FollowUpPanel />
         </div>
 
         {showForm && (

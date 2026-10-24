@@ -20,7 +20,6 @@ const NAV_ITEMS = [
       { href: '/properties', label: 'Properties' },
       { href: '/companies', label: 'Companies' },
       { href: '/sales/routes', label: 'Route Builder' },
-      { href: '/sales/outreach', label: 'Outreach' },
       { href: '/deferred-scope', label: 'Deferred Scope' },
     ],
   },

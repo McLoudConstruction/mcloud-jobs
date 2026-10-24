@@ -1,10 +1,12 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import LogTouchButton from './LogTouchButton';
 
 // Every time a Person, Property or Company was contacted, newest first.
 //
 // Sources, merged by the database (crm_touch_timeline, migration 162):
+//   Staff     calls, visits, texts and notes logged by hand (migration 163)
 //   Bot       outreach logged through the bot API
 //   Sequence  emails from the platform's email sequences, and their replies
 //   Email     mail sent or received in a connected mailbox
@@ -23,13 +25,15 @@ const PAGE = 50;
 const INTERNAL_DOMAINS = (process.env.NEXT_PUBLIC_INTERNAL_EMAIL_DOMAINS || '')
   .split(/[,\s]+/).map(d => d.trim().toLowerCase()).filter(Boolean);
 
-const CHANNELS = { email: 'Email', call: 'Call', text: 'Text', mail: 'Mail', other: 'Other' };
+const CHANNELS = { email: 'Email', call: 'Call', text: 'Text', mail: 'Mail', visit: 'Visit', other: 'Other' };
 const OUTCOMES = {
   sent: 'sent', replied: 'replied', bounced: 'bounced', interested: 'interested', not_interested: 'not interested',
   unsubscribed: 'unsubscribed', no_answer: 'no answer', voicemail: 'left a voicemail', meeting_set: 'meeting set',
   wrong_contact: 'wrong contact', opened: 'opened', clicked: 'clicked a link', received: 'received',
+  connected: 'spoke with them', note: 'note',
 };
 const SOURCES = {
+  staff: { label: 'Staff', color: '#8A3F3F' },
   touch: { label: 'Bot', color: '#9B773D' },
   sequence: { label: 'Sequence', color: '#3A6B45' },
   email: { label: 'Email', color: '#2F4858' },
@@ -50,6 +54,7 @@ function titleFor(item) {
     if (item.kind === 'sent') return 'Sequence email sent';
     return `Sequence email ${OUTCOMES[item.kind] || item.kind}`;
   }
+  if (item.kind === 'note') return 'Note';
   const channel = CHANNELS[item.channel] || item.channel;
   const outcome = OUTCOMES[item.kind] || item.kind;
   return item.direction === 'inbound' ? `${channel} from them, ${outcome}` : `${channel}, ${outcome}`;
@@ -92,7 +97,7 @@ function Row({ item, kind, recordId }) {
           <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>{when(item.at)}</span>
         </div>
         <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {[item.actor && (item.source === 'touch' ? `by ${item.actor}` : item.actor), item.email, !open && preview].filter(Boolean).join('  ·  ')}
+          {[item.actor && (item.source === 'touch' || item.source === 'staff' ? `by ${item.actor}` : item.actor), item.email, !open && preview].filter(Boolean).join('  ·  ')}
         </div>
       </button>
       {open && (
@@ -144,6 +149,7 @@ export default function TouchTimeline({ kind, recordId }) {
   const [error, setError] = useState('');
   const [more, setMore] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const fetchPage = useCallback(async (after) => {
     const { data, error: rpcError } = await supabase.rpc('crm_touch_timeline', {
@@ -172,7 +178,7 @@ export default function TouchTimeline({ kind, recordId }) {
       })
       .catch(err => { if (!cancelled) { setError(err.message); setItems([]); } });
     return () => { cancelled = true; };
-  }, [fetchPage, recordId]);
+  }, [fetchPage, recordId, reloadKey]);
 
   async function showMore() {
     setMore(true);
@@ -191,10 +197,13 @@ export default function TouchTimeline({ kind, recordId }) {
 
   return (
     <div style={{ marginTop: 22, paddingTop: 14, borderTop: '2px solid var(--line)' }}>
-      <h4 style={{ margin: '0 0 4px' }}>Touches</h4>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, margin: '0 0 4px' }}>
+        <h4 style={{ margin: 0 }}>Touches</h4>
+        <LogTouchButton kind={kind} recordId={recordId} onLogged={() => setReloadKey(k => k + 1)} />
+      </div>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
         {kind === 'contact'
-          ? 'Every email, call and message with this person.'
+          ? 'Every email, call, visit and message with this person.'
           : `Every touch with this ${kind === 'property' ? 'property' : 'company'} and the people linked to it${kind === 'company' ? ' and its properties' : ''}.`}
       </div>
 
@@ -211,7 +220,7 @@ export default function TouchTimeline({ kind, recordId }) {
       )}
 
       {items && items.length === 0 && !error && (
-        <div className="empty-state">No touches yet. Outreach logged by bots, sequence emails and mail from a connected mailbox will show here.</div>
+        <div className="empty-state">No touches yet. Use Log a touch to add a call, visit or note. Activity from bots and mail from a connected mailbox will show here too.</div>
       )}
       {items && items.length > 0 && shown.length === 0 && <div className="empty-state">Nothing in this view.</div>}
       {shown.map(item => <Row key={`${item.source}-${item.id}`} item={item} kind={kind} recordId={recordId} />)}

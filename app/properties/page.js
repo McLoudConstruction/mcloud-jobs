@@ -28,7 +28,21 @@ const EMPTY_FORM = {
   property_street: '', property_unit: '', property_city: '', property_state: '', property_zip: '', property_lat: null, property_lng: null,
   management_company: '', contact_name: '', contact_phone: '', contact_email: '',
   year_built: '', sq_ft: '', target_value: '', active: true, notes: '',
+  lost_reason: '', reengage_at: '', next_step_date: '', next_action_note: '',
 };
+
+// A date column value or a timestamp, as the YYYY-MM-DD a date input wants (local time).
+function toDateInput(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function shortDate(value) {
+  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 const EMPTY_CONTACT_FORM = { name: '', role: 'Property Contact', contact_phone: '', contact_email: '' };
 
 function propertyExportColumns(customColumns) {
@@ -50,6 +64,9 @@ function propertyExportColumns(customColumns) {
     { label: 'Sq Ft', value: p => p.sq_ft },
     { label: 'Target Value', value: p => p.target_value },
     { label: 'Last Visited', value: p => (p.last_visited_at ? new Date(p.last_visited_at).toLocaleDateString('en-US') : '') },
+    { label: 'Last Contact', value: p => (p.last_contacted_at ? new Date(p.last_contacted_at).toLocaleDateString('en-US') : '') },
+    { label: 'Next Step', value: p => (p.next_action_at ? `${new Date(p.next_action_at).toLocaleDateString('en-US')}${p.next_action_note ? `: ${p.next_action_note}` : ''}` : '') },
+    { label: 'Lost Reason', value: p => p.lost_reason },
     { label: 'Notes', value: p => p.notes },
     ...customColumnsToExport(customColumns),
   ];
@@ -110,6 +127,11 @@ export default function PropertiesPage() {
   async function submit(e) {
     e.preventDefault();
     if (!form.property_name.trim()) return;
+    if (form.prospect_stage === 'lost' && !String(form.lost_reason || '').trim()) {
+      setSaveError('Add a short reason this prospect was lost, so it is useful when you try again.');
+      return;
+    }
+    setSaveError('');
     setSaving(true);
 
     const companyId = await linkOrCreateCompanyByName(form.management_company, { defaultCompanyType: 'Management Company' });
@@ -117,7 +139,14 @@ export default function PropertiesPage() {
       ...form,
       target_value: form.target_value ? parseFloat(String(form.target_value).replace(/[^0-9.]/g, '')) : null,
       company_id: companyId,
+      // The next step is typed as a date plus a note. The note only means something with a date.
+      next_action_at: form.next_step_date ? new Date(`${form.next_step_date}T09:00:00`).toISOString() : null,
+      next_action_note: form.next_step_date ? (String(form.next_action_note || '').trim() || null) : null,
+      // The reason and the try again date only apply while the prospect is lost.
+      lost_reason: form.prospect_stage === 'lost' ? String(form.lost_reason || '').trim() : null,
+      reengage_at: form.prospect_stage === 'lost' && form.reengage_at ? form.reengage_at : null,
     };
+    delete payload.next_step_date;
 
     let propertyId = editingId;
     let mutationError;
@@ -161,8 +190,24 @@ export default function PropertiesPage() {
     await loadProperties();
   }
 
+  // The Sales page follow up lists link here with ?open=<id> to open that prospect.
+  const openedFromLink = useRef(false);
+  useEffect(() => {
+    if (openedFromLink.current || properties.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get('open');
+    openedFromLink.current = true;
+    if (!id) return;
+    const found = properties.find(p => p.id === id);
+    if (found) { startEdit(found); window.scrollTo({ top: 0 }); }
+  }, [properties]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function startEdit(p) {
-    setForm({ ...EMPTY_FORM, ...p, target_value: p.target_value ?? '', contact_phone: formatPhone(p.contact_phone) });
+    setForm({
+      ...EMPTY_FORM, ...p,
+      target_value: p.target_value ?? '', contact_phone: formatPhone(p.contact_phone),
+      lost_reason: p.lost_reason || '', reengage_at: p.reengage_at || '',
+      next_step_date: toDateInput(p.next_action_at), next_action_note: p.next_action_note || '',
+    });
     setEditingId(p.id);
     setShowForm(true);
     loadPropertyContacts(p.id);
@@ -418,6 +463,34 @@ export default function PropertiesPage() {
               </div>
             </div>
 
+            <div className="two-col" style={{ marginTop: 12 }}>
+              <div>
+                <label>Next step date</label>
+                <input type="date" value={form.next_step_date} onChange={e => update('next_step_date', e.target.value)} />
+              </div>
+              <div>
+                <label>Next step</label>
+                <input value={form.next_action_note} onChange={e => update('next_action_note', e.target.value)} maxLength={300} placeholder="Call back about the roof estimate" disabled={!form.next_step_date} />
+              </div>
+              {form.prospect_stage === 'lost' && (
+                <>
+                  <div>
+                    <label>Why was it lost</label>
+                    <input value={form.lost_reason} onChange={e => update('lost_reason', e.target.value)} maxLength={300} placeholder="Chose another contractor, no budget this year" />
+                  </div>
+                  <div>
+                    <label>Try again on (optional)</label>
+                    <input type="date" value={form.reengage_at} onChange={e => update('reengage_at', e.target.value)} />
+                  </div>
+                </>
+              )}
+            </div>
+            {editingId && form.last_contacted_at && (
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
+                Last contact {shortDate(form.last_contacted_at)}. This comes from the touches below and updates by itself.
+              </div>
+            )}
+
             <label style={{ marginTop: 12 }}>Address</label>
             <AddressFields prefix="property" values={form} onChange={update} placesEnabled />
 
@@ -563,6 +636,18 @@ export default function PropertiesPage() {
                 key: 'prospect_stage', label: 'Prospect Stage', defaultWidth: 140,
                 filterValue: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '',
                 render: p => PROSPECT_STAGE_LABELS[p.prospect_stage] || '—',
+              },
+              {
+                key: 'last_contacted_at', label: 'Last Contact', defaultWidth: 130, filterable: false,
+                render: p => p.last_contacted_at ? shortDate(p.last_contacted_at) : 'Never',
+              },
+              {
+                key: 'next_action_at', label: 'Next Step', defaultWidth: 220, filterable: false,
+                render: p => {
+                  if (!p.next_action_at) return 'None';
+                  const overdue = new Date(p.next_action_at).getTime() < Date.now() && !['won', 'lost'].includes(p.prospect_stage);
+                  return <span style={overdue ? { color: '#a13f3f', fontWeight: 600 } : undefined}>{shortDate(p.next_action_at)}{p.next_action_note ? `: ${p.next_action_note}` : ''}</span>;
+                },
               },
               {
                 key: 'last_visited_at', label: 'Last Visited', defaultWidth: 130, filterable: false,

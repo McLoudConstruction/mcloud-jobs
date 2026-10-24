@@ -133,6 +133,11 @@ export default function BotKeysPanel() {
         reach jobs, financials, subcontractors or settings. Bots call <code>{origin || 'your site'}/api/bot/sales</code> with the key
         as a bearer token. The full guide is BOT_API.md in the repo.
       </div>
+      <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '-6px 0 14px', lineHeight: 1.5 }}>
+        To log activity, a bot sends <code>POST {origin || 'your site'}/api/bot/sales/outreach</code> with just
+        {' '}<code>{'{"email": "pat@example.com"}'}</code> to say it emailed that person. It can add a channel (call, visit, text, mail),
+        an outcome and a note, or send up to 25 touches at once in a <code>touches</code> list.
+      </div>
 
       {note && <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 12 }}>{note}</div>}
       {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}

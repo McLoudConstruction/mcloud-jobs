@@ -14,7 +14,7 @@ It cannot reach jobs, financials, subcontractors, staff, or settings. The databa
 
 ## Setup (owner, once)
 
-1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160), then `supabase-migration-162-owner-delete-and-touch-timeline.sql` (adds outreach history).
+1. Run `supabase-migration-161-bot-sales-api.sql` in the Supabase SQL Editor (after migration 160), then `supabase-migration-162-owner-delete-and-touch-timeline.sql` (adds outreach history), then `supabase-migration-163-staff-touch-log.sql` (easier logging, plus staff can log touches by hand).
 2. In the app go to Settings, then the Bots tab, then New bot key. Give it a name (shown on everything it creates), a requests per minute limit, and optionally an expiry date.
 3. Copy the key. It is shown once. It looks like `mcb_` followed by 64 characters.
 4. To cut a bot off, press Revoke on its card. It stops working at once.
@@ -109,38 +109,72 @@ A duplicate is the same name at the same street, or the same name in the same ci
 
 Record every touch you make, so staff and other bots can see it. `POST /api/bot/sales/outreach`
 
+The shortest valid call says "I emailed this person". Channel defaults to `email` and outcome to `sent`:
+
 ```
 curl -s https://YOUR-SITE/api/bot/sales/outreach \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: touch-zion-2026-10-23-intro" \
+  -d '{"email": "ann@zion.org"}'
+```
+
+A fuller call, with everything spelled out:
+
+```
+curl -s https://YOUR-SITE/api/bot/sales/outreach \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: touch-zion-2026-10-23-visit" \
   -d '{
-    "email": "ann@zion.org",
-    "channel": "email",
-    "outcome": "sent",
-    "note": "Intro email about roof inspections"
+    "prospect_id": "PROSPECT_ID",
+    "channel": "visit",
+    "outcome": "connected",
+    "note": "Talked to the office manager, wants a roof inspection",
+    "sent_at": "2026-10-23T14:30:00Z"
   }'
 ```
 
 Fields:
 
 - `prospect_id` or `email`: one is required. An email must match exactly one prospect or one of its contacts. If it matches none (404) or several (409), you get an error, so use `prospect_id` when you have it.
-- `channel` (required): `email`, `call`, `text`, `mail`, `other`.
-- `outcome` (required): `sent`, `replied`, `bounced`, `interested`, `not_interested`, `unsubscribed`, `no_answer`, `voicemail`, `meeting_set`, `wrong_contact`.
-- `direction`: `outbound` (default) or `inbound`.
+- `channel`: `email` (default), `call`, `text`, `mail`, `visit`, `other`.
+- `outcome`: `sent`, `connected`, `replied`, `bounced`, `interested`, `not_interested`, `unsubscribed`, `no_answer`, `voicemail`, `meeting_set`, `wrong_contact`, `note`. Defaults to `sent` for `email`, `text` and `mail`. For `call`, `visit` and `other` you must say what happened.
+- `direction`: `outbound` (default) or `inbound`. A `replied` outcome defaults to `inbound`.
 - `note`: short free text.
 - `sent_at`: ISO time, defaults to now.
 
 Answer: `{ "status": "logged", "touch_id": "...", "prospect_id": "...", "effects": [...] }`. `effects` lists what the platform did because of the outcome.
 
+### Logging many at once
+
+Send up to 25 touches in one call. Put them in a `touches` list and nothing else in the body:
+
+```
+curl -s https://YOUR-SITE/api/bot/sales/outreach \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: batch-2026-10-23-a" \
+  -d '{"touches": [
+    {"email": "ann@zion.org"},
+    {"email": "pastor@grace.org", "channel": "call", "outcome": "voicemail"}
+  ]}'
+```
+
+The answer is HTTP 200 with one result per touch, in order, each with its `index`: `{ "results": [ { "index": 0, "ok": true, "status": "logged", ... }, { "index": 1, "ok": false, "http_status": 404, "code": "unknown_prospect", ... } ], "summary": { "total": 2, "ok": 1, "failed": 1 } }`. One bad touch never blocks the others. Check each result.
+
+- Every touch counts toward your rate limit, the same as if you had sent them one at a time. If you hit the limit, the rest come back as `skipped` and the `Retry-After` header says how long to wait. Resend only those.
+- The Idempotency-Key covers the whole batch (up to 120 characters). Touch number N uses `<key>:N`, so resending the same batch will not log anything twice.
+- A bad or revoked key refuses the whole request, as usual.
+
 ### What each outcome does
 
-- `sent`, `voicemail`, `replied`, `interested`, `not_interested`, `unsubscribed`, `meeting_set`: counts as contact. Updates last contacted, and moves a prospect still at `prospecting` to `contacted`.
+- `sent`, `connected`, `voicemail`, `replied`, `interested`, `not_interested`, `unsubscribed`, `meeting_set`: counts as contact. Updates last contacted, and moves a prospect still at `prospecting` to `contacted`.
 - `replied`, `interested`, `meeting_set`: also stops any platform email sequence for that address and sets the prospect's next action note so staff follow up.
 - `not_interested`: stops platform sequences for that address. The address is not suppressed.
 - `unsubscribed`: suppresses the address, stops sequences, and opts the contact out of automated email. Never email them again.
 - `bounced`: suppresses the address. Does not count as contact.
-- `no_answer`, `wrong_contact`: logged only.
+- `no_answer`, `wrong_contact`, `note`: logged only. Use `note` to leave an observation (for example "looks vacant") that is not a contact.
 
 ## 5. Read outreach history
 
@@ -155,7 +189,7 @@ Filters (all optional): `prospect_id`, `email`, `channel`, `outcome`, `source`, 
 
 - `prospect_id` returns everything for that prospect and the people linked to it.
 - `email` returns exactly that address: touches sent to it, and touches logged for the person who holds it.
-- `source` is `touch` (logged by a bot, including you) or `sequence` (sent by the platform's email sequences, with replies and bounces).
+- `source` is `touch` (logged by a bot, including you) or `sequence` (sent earlier by the platform's email sequences, with replies and bounces). Touches logged by staff by hand also appear, with `by` set to `Staff` and no note. They are there so you do not contact someone staff already reached.
 - `outcome` takes any outcome from section 4, plus `opened` and `clicked` for sequence emails.
 
 Newest first. Each item:
@@ -170,7 +204,7 @@ Newest first. Each item:
 
 `by` is the bot name for a touch and the sequence name for a sequence event. `summary` is the subject line for a sequence email. `prospect` and `person` are null when the touch is not tied to one. Paging works the same as for prospects (`next_cursor`).
 
-Staff email is never part of this. It covers bot touches and platform sequence activity only.
+Staff email is never part of this. It covers bot touches, staff touches (without their notes) and past platform sequence activity only.
 
 ## Rules for bots
 
@@ -197,7 +231,7 @@ Errors look like `{ "code": "...", "error": "human readable message" }`, sometim
 | 422 | `unknown_field`, `unknown_filter`, `invalid_field`, `invalid_filter`, `invalid_filters`, `invalid_body`, `invalid_idempotency_key`, `idempotency_conflict` | A field or value is wrong, or an Idempotency-Key was reused with a different body. Read `error` and `allowed` |
 | 429 | `rate_limited` | Too many requests. See `Retry-After` |
 | 500 | `server_error` | Our side. Retry later |
-| 503 | `not_configured` | Migration 161 (or 162, for history) has not been run |
+| 503 | `not_configured` | Migration 161 (or 162 for history, 163 for the newer logging) has not been run |
 
 Rejected requests (422) count toward your rate limit, so fix the request instead of retrying it unchanged.
 
