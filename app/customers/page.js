@@ -11,6 +11,7 @@ import AdminDeleteButton from '../../components/AdminDeleteButton';
 import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
+import ActionsMenu from '../../components/ActionsMenu';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
@@ -135,6 +136,8 @@ export default function CustomersPage() {
   const [importingVcard, setImportingVcard] = useState(false);
   const { customColumns, addColumn } = useCustomColumns('contacts');
   const [isMobile, setIsMobile] = useState(false);
+  const [addColumnOpen, setAddColumnOpen] = useState(false);
+  const visibleRowsRef = useRef(null); // rows the table currently shows, so export matches column filters and sort
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -336,7 +339,7 @@ export default function CustomersPage() {
   });
 
   function exportContacts() {
-    exportToSheet({ fileName: 'contacts', sheetName: 'Contacts', columns: contactExportColumns(customColumns), rows: filtered });
+    exportToSheet({ fileName: 'contacts', sheetName: 'Contacts', columns: contactExportColumns(customColumns), rows: visibleRowsRef.current || filtered });
   }
 
   if (loading || !session) return null;
@@ -347,29 +350,16 @@ export default function CustomersPage() {
         <div className="top-actions">
           <h2 style={{ margin: 0, color: 'var(--heading)' }}>Contact Database</h2>
           {!isMobile && (
-            <div style={{ display: 'flex', gap: 10 }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleImportFile}
-                style={{ display: 'none' }}
-              />
-              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-                {importing ? 'Importing…' : '↑ Import from Excel'}
-              </button>
-              <input
-                ref={vcardInputRef}
-                type="file"
-                accept=".vcf"
-                onChange={handleVCardImport}
-                style={{ display: 'none' }}
-              />
-              <button className="btn" onClick={() => vcardInputRef.current?.click()} disabled={importingVcard}>
-                {importingVcard ? 'Importing…' : '↑ Import Contact (.vcf)'}
-              </button>
-              <AddColumnButton addColumn={addColumn} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={openNew}>+ Add new contact</button>
+              <ActionsMenu
+                items={[
+                  { label: importing ? 'Importing…' : 'Import from Excel', disabled: importing, onClick: () => fileInputRef.current?.click() },
+                  { label: importingVcard ? 'Importing…' : 'Import Contact (.vcf)', disabled: importingVcard, onClick: () => vcardInputRef.current?.click() },
+                  { label: 'Add column', onClick: () => setAddColumnOpen(true) },
+                  { label: () => `Export to Excel (${(visibleRowsRef.current || filtered).length})`, disabled: filtered.length === 0, onClick: exportContacts },
+                ]}
+              />
             </div>
           )}
           {isMobile && (
@@ -380,15 +370,12 @@ export default function CustomersPage() {
           )}
         </div>
 
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
+        <input ref={vcardInputRef} type="file" accept=".vcf" onChange={handleVCardImport} style={{ display: 'none' }} />
+        {!isMobile && <AddColumnButton addColumn={addColumn} open={addColumnOpen} onOpenChange={setAddColumnOpen} />}
+
         {isMobile && (
           <>
-            <input
-              ref={vcardInputRef}
-              type="file"
-              accept=".vcf"
-              onChange={handleVCardImport}
-              style={{ display: 'none' }}
-            />
             <MobileFab
               label="Add contact"
               items={[
@@ -398,16 +385,6 @@ export default function CustomersPage() {
             />
           </>
         )}
-
-        {/* This isn't a native contacts picker — iOS/Android browsers don't
-            expose one to a plain web file input — so a tap here always
-            opens the Files app, which is empty until a .vcf actually
-            exists there. This note is the fix: it tells people to export
-            the contact into Files first, rather than leaving them to
-            wonder why "Import from iPhone" dead-ends on an empty folder. */}
-        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: -10, marginBottom: 16 }}>
-          To import a contact from your phone: open Contacts, select the contact, choose Share Contact → Save to Files, then use "Import Contact (.vcf)" here to pick that file.
-        </div>
 
         {importResult && (
           <div className="card" style={{ fontSize: 13, color: importResult.startsWith('Import failed') ? '#a13f3f' : '#3a6b45' }}>
@@ -599,9 +576,8 @@ export default function CustomersPage() {
             getRowKey={c => c.id}
             onRowClick={startEdit}
             rows={filtered}
-            exportFileName="contacts"
-            exportSheetName="Contacts"
-            exportColumns={contactExportColumns(customColumns)}
+            stickyHeader
+            onVisibleRowsChange={rows => { visibleRowsRef.current = rows; }}
             columns={[
               { key: 'name', label: 'Name', defaultWidth: 180, render: c => c.name },
               { key: 'contact_type', label: 'Type', defaultWidth: 190, render: c => c.contact_type || '—' },

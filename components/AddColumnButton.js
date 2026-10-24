@@ -7,8 +7,13 @@ import { CUSTOM_COLUMN_FIELD_TYPES, CUSTOM_COLUMN_FIELD_TYPE_LABELS } from '../l
 // function (from useCustomColumns), this handles the label/type/options
 // inputs and surfaces any error (e.g. a blank name) without the parent
 // page needing to know anything about the form itself.
-export default function AddColumnButton({ addColumn }) {
-  const [open, setOpen] = useState(false);
+// Pass open + onOpenChange to control it from outside (e.g. from a dropdown
+// menu item); the trigger button is then not rendered.
+export default function AddColumnButton({ addColumn, open: controlledOpen, onOpenChange }) {
+  const controlled = controlledOpen !== undefined;
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = controlled ? controlledOpen : innerOpen;
+  const setOpen = controlled ? onOpenChange : setInnerOpen;
   const [label, setLabel] = useState('');
   const [fieldType, setFieldType] = useState('text');
   const [optionsText, setOptionsText] = useState('');
@@ -47,7 +52,7 @@ export default function AddColumnButton({ addColumn }) {
 
   return (
     <>
-      <button className="btn" onClick={() => setOpen(true)}>+ Add column</button>
+      {!controlled && <button className="btn" onClick={() => setOpen(true)}>+ Add column</button>}
       <PopupModal open={open} onClose={close} maxWidth={420}>
         <h3>New column</h3>
         <form onSubmit={submit}>

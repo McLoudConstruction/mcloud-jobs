@@ -13,7 +13,12 @@ import { exportToSheet, columnsToExport } from '../lib/exportToSheet';
 // (falls back to filterValue, then row[key]) or exportable: false to leave it
 // out. Pass exportColumns ([{ label, value(row) }]) to export a fuller set of
 // fields than the table displays, e.g. addresses and notes.
-export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName, exportFileName, exportSheetName, exportColumns }) {
+// stickyHeader: keeps the column headings (and filter row) pinned to the top
+// of the page's scroll area while the rows scroll underneath. The table then
+// grows to its full height and the page scrolls, instead of the table having
+// its own scroll box. onVisibleRowsChange(rows) reports the rows currently
+// shown (after filters and sorting), e.g. so a page can export exactly those.
+export default function DataTable({ columns, rows, onRowClick, getRowKey, rowClassName, exportFileName, exportSheetName, exportColumns, stickyHeader = false, onVisibleRowsChange }) {
   const [widths, setWidths] = useState(() => {
     // On a narrow viewport, start columns noticeably tighter so more of
     // the table is visible before scrolling — the user can still drag
@@ -132,6 +137,45 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, sort, columns]);
 
+  useEffect(() => {
+    if (onVisibleRowsChange) onVisibleRowsChange(sortedRows);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedRows]);
+
+  // Page level sticky header. A table that scrolls sideways is its own scroll
+  // container, which stops CSS sticky from following the page, so the header
+  // is nudged down by hand as the page scrolls.
+  const wrapRef = useRef(null);
+  const theadRef = useRef(null);
+  useEffect(() => {
+    if (!stickyHeader) return;
+    const wrap = wrapRef.current;
+    const thead = theadRef.current;
+    if (!wrap || !thead) return;
+    let scroller = wrap.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    const target = scroller || window;
+    let raf = 0;
+    function update() {
+      raf = 0;
+      const topEdge = scroller ? scroller.getBoundingClientRect().top : 0;
+      const box = wrap.getBoundingClientRect();
+      const max = Math.max(0, box.height - thead.offsetHeight - 1);
+      const delta = Math.min(Math.max(topEdge - box.top, 0), max);
+      thead.style.transform = delta ? `translateY(${delta}px)` : '';
+    }
+    function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+    target.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    update();
+    return () => {
+      target.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      thead.style.transform = '';
+    };
+  }, [stickyHeader, sortedRows.length]);
+
   function handleExport() {
     exportToSheet({
       fileName: exportFileName,
@@ -150,12 +194,12 @@ export default function DataTable({ columns, rows, onRowClick, getRowKey, rowCla
         </button>
       </div>
     )}
-    <div className="data-table-wrap">
+    <div className={`data-table-wrap${stickyHeader ? ' data-table-wrap-page' : ''}`} ref={wrapRef}>
       <table className="data-table" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           {columns.map(c => <col key={c.key} style={{ width: widths[c.key] }} />)}
         </colgroup>
-        <thead>
+        <thead ref={theadRef}>
           <tr>
             {columns.map(c => (
               <th

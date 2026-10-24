@@ -1826,6 +1826,22 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .data-table{ border-radius: 0; }
 .data-table thead{ position: sticky; top: 0; z-index: 4; }
 
+/* Page level sticky header (DataTable stickyHeader): no height cap, the page
+   scrolls, and the header is moved by script. Separate borders so the
+   heading borders travel with the heading. */
+.data-table-wrap.data-table-wrap-page{ max-height: none; }
+.data-table-wrap-page .data-table{ border-collapse: separate; border-spacing: 0; }
+.data-table-wrap-page .data-table thead{ position: relative; z-index: 4; will-change: transform; }
+
+/* "+" dropdown for secondary page actions (imports, exports, add column). */
+.actions-menu-wrap{ position: relative; display: inline-block; }
+.actions-menu-trigger{ font-size: 18px; line-height: 1; padding-left: 14px; padding-right: 14px; font-weight: 600; }
+.actions-menu{ position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 230px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 4px; display: flex; flex-direction: column; }
+.actions-menu-item{ background: none; border: none; text-align: left; padding: 9px 12px; font: inherit; font-size: 13px; color: var(--ink); border-radius: 4px; cursor: pointer; }
+.actions-menu-item:hover:not(:disabled){ background: var(--panel); }
+.actions-menu-item:disabled{ opacity: .5; cursor: default; }
+
+
 /* Pins a column (meant for a trailing actions column) to the right edge
    of the table so it's still reachable without scrolling all the way
    right on a wide table — a real problem on the CRM list pages, which
