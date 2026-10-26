@@ -3,11 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { RECEIPT_CATEGORIES, JOB_COST_CATEGORIES, JOB_COST_CATEGORY_LABELS } from '../lib/constants';
 import { compressImage } from '../lib/imageCompress';
-
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import { fmtMoney } from '../lib/format';
+import { authedFetch } from '../lib/aiFetch';
 
 const EMPTY_RECEIPT_FORM = { vendor_name: '', amount: '', receipt_date: new Date().toISOString().slice(0, 10), category: 'materials', payment_status: 'paid', notes: '' };
 const EMPTY_MANUAL_FORM = { category: 'materials', description: '', amount: '', cost_date: new Date().toISOString().slice(0, 10), status: 'actual' };
@@ -83,7 +80,7 @@ export default function ReceiptsCard({ jobId, autoOpen }) {
       setScanning(true);
       try {
         const base64 = await fileToBase64(file);
-        const res = await fetch('/api/extract-receipt', {
+        const res = await authedFetch('/api/extract-receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64, mediaType: file.type || 'image/jpeg' }),

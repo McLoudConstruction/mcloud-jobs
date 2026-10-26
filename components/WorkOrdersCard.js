@@ -6,11 +6,7 @@ import { WORK_ORDER_STATUS_LABELS } from '../lib/constants';
 import { buildNewWorkOrderEmail } from '../lib/emailTemplates';
 import WorkOrderPhotosPanel from './WorkOrderPhotosPanel';
 import { COMPLIANCE_OVERALL, complianceGapText } from '../lib/compliance';
-
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import { fmtMoney } from '../lib/format';
 
 function formatAction(a) {
   const qty = a.quantity ?? 1;

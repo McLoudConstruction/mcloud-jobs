@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { authedFetch } from '../lib/aiFetch';
 
 // Drop-in AI cleanup button for a text field. It doesn't own the field —
 // it just fetches a grammar-cleaned version of `value` and hands it back
@@ -14,7 +15,7 @@ export default function PolishTextButton({ value, onPolished, disabled, label = 
     setPolishing(true);
     setError('');
     try {
-      const res = await fetch('/api/polish-text', {
+      const res = await authedFetch('/api/polish-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: value }),

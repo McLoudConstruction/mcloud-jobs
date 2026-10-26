@@ -1,23 +1,13 @@
 import { buildPhaseSkeleton } from '../../../lib/scheduleTemplate';
 import { recomputeSequentialDates } from '../../../lib/scheduleDates';
-
-function extractJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {}
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1));
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {}
-  }
-  return null;
-}
+import { extractJson } from '../../../lib/extractJson';
+import { guardAI, logAI, anthropicKeyFor } from '../../../lib/aiClient';
 
 export async function POST(request) {
+  // Staff only, with an hourly limit and a usage log. 150 an hour because this one is
+  // cheap and gets used in bursts (a stack of receipts, a day of notes).
+  const gate = await guardAI(request, 'generate_schedule', { hourlyLimit: 150 });
+  if (gate.error) return Response.json({ error: gate.error }, { status: gate.status });
   try {
     const { tradeActions, startDate, projectType, allowWeekendWork } = await request.json();
 
@@ -27,7 +17,7 @@ export async function POST(request) {
     if (!startDate) {
       return Response.json({ error: 'A start date is required.' }, { status: 400 });
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!anthropicKeyFor(gate)) {
       return Response.json(
         { error: 'AI schedule generation is not configured yet — add ANTHROPIC_API_KEY in Vercel environment variables.' },
         { status: 500 }
@@ -79,7 +69,7 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': anthropicKeyFor(gate),
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
@@ -96,6 +86,7 @@ Respond with a single JSON object mapping each phase key to a whole number of bu
     }
 
     const data = await response.json();
+    await logAI(gate, { usage: data.usage, ok: response.ok });
     const fullText = data.content?.find(block => block.type === 'text')?.text || '';
     const parsed = extractJson(fullText);
     const durations = parsed?.durations && typeof parsed.durations === 'object' ? parsed.durations : {};

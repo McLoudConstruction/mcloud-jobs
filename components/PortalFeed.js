@@ -2,17 +2,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { contractPathFor } from '../lib/constants';
+import { fmtMoneyLoose as fmtMoney } from '../lib/format';
 
 function fmtDate(v) {
   if (!v) return '—';
   const d = new Date((v || '').length === 10 ? v + 'T00:00:00' : v);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, ''));
-  if (isNaN(n)) return '—';
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: n % 1 === 0 ? 0 : 2 });
 }
 function badgeLabel(e) {
   if (e.kind === 'invoice') return 'Payment due';

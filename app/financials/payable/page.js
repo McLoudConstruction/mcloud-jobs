@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { WORK_ORDER_STATUS_LABELS } from '../../../lib/constants';
 import { jobHref } from '../../../lib/links';
+import { agingLabel } from '../../../lib/format';
 
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
@@ -16,14 +16,6 @@ function daysAgo(dateStr) {
   if (!dateStr) return null;
   const diff = Date.now() - new Date(dateStr).getTime();
   return Math.floor(diff / (1000 * 60 * 60 * 24));
-}
-
-function agingLabel(days) {
-  if (days === null) return '—';
-  if (days <= 30) return `${days}d`;
-  if (days <= 60) return `${days}d (30+)`;
-  if (days <= 90) return `${days}d (60+)`;
-  return `${days}d (90+)`;
 }
 
 export default function PayablePage() {

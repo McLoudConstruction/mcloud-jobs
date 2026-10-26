@@ -6,13 +6,10 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import MobileFab from '../../../components/MobileFab';
 import { WORK_ORDER_STATUS_LABELS, FIELD_PROGRESS_LABELS } from '../../../lib/constants';
+import { fmtMoney } from '../../../lib/format';
 
 const ACTIVE_JOB_STAGES = ['approved', 'scheduled', 'active'];
 
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function formatAction(a) {
   const qty = a.quantity ?? 1;
   const unit = a.unit_label ? ` ${a.unit_label}${qty === 1 ? '' : 's'}` : '';

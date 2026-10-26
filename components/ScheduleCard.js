@@ -8,6 +8,7 @@ import { recomputeSequentialDates, countWorkableDays, splitAtWeekends, insertPha
 import { phaseBackground, tradesForPhase } from '../lib/tradeColors';
 import { defaultWorkLocationForPhase } from '../lib/tradeWeather';
 import { SERVICES_OFFERED, SCHEDULE_PHASE_TYPES, PROJECT_COORDINATION_TYPE } from '../lib/constants';
+import { authedFetch } from '../lib/aiFetch';
 
 const WORK_LOCATION_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
@@ -221,7 +222,7 @@ export default function ScheduleCard({ jobId, job, onAddVisit }) {
     setError('');
     setWarning('');
     try {
-      const res = await fetch('/api/generate-schedule', {
+      const res = await authedFetch('/api/generate-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tradeActions: scopeActions, startDate, projectType: job?.project_type, allowWeekendWork: genAllowWeekend }),

@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import { formatPhone, nextProjectNumber } from '../../../lib/constants';
+import { peekNextProjectNumber } from '../../../lib/assignProjectNumber';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
 
@@ -42,16 +43,14 @@ function NewOpportunityPageInner() {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const searchTimer = useRef(null);
 
-  // Computes the next project number from the true numeric max across
-  // every existing project_number for this year — not from "whichever
-  // row was created most recently." Project numbers aren't always
-  // assigned in the same order rows are created, so sorting by
-  // created_at can hand back a number that's already taken. See
-  // nextProjectNumber in constants.js for the full explanation.
-  async function computeNextProjectNumber(projectType) {
-    const { data } = await supabase.from('jobs').select('project_number').not('project_number', 'is', null);
-    const existing = (data || []).map(row => row.project_number);
-    return nextProjectNumber(existing, projectType);
+  // Suggests the next project number for the form. A failed read falls back to
+  // the first number of the year; the unique-index retry on save fixes any clash.
+  async function suggestProjectNumber(projectType) {
+    try {
+      return await peekNextProjectNumber(projectType);
+    } catch {
+      return nextProjectNumber([], projectType);
+    }
   }
 
   // The project number's trailing letter depends on Commercial vs.
@@ -60,7 +59,7 @@ function NewOpportunityPageInner() {
   useEffect(() => {
     if (!form.project_type) return;
     let cancelled = false;
-    computeNextProjectNumber(form.project_type).then(next => {
+    suggestProjectNumber(form.project_type).then(next => {
       if (!cancelled) setForm(prev => ({ ...prev, project_number: next }));
     });
     return () => { cancelled = true; };
@@ -191,7 +190,7 @@ function NewOpportunityPageInner() {
     for (let attempt = 0; attempt < 3; attempt++) {
       ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
       if (!insertError || insertError.code !== '23505') break;
-      payload.project_number = await computeNextProjectNumber(form.project_type);
+      payload.project_number = await suggestProjectNumber(form.project_type);
     }
     if (insertError && 'contact_id' in payload && /contact_id/.test(insertError.message || '')) {
       delete payload.contact_id;

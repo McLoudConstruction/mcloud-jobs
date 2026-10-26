@@ -2,11 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
-
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import { fmtMoney } from '../lib/format';
 
 const STATUS_LABELS = { not_sent: 'Not Sent', sent: 'Sent', paid: 'Paid' };
 const EMPTY_FORM = { description: '', amount: '' };

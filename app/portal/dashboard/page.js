@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePortalAuth } from '../../../lib/usePortalAuth';
 import { useSettings } from '../../../lib/useSettings';
-import { STAGE_LABELS, phaseForStage, contractPathFor } from '../../../lib/constants';
+import { STAGE_LABELS, contractPathFor } from '../../../lib/constants';
 import { useTheme } from '../../../lib/useTheme';
 import { SunIcon, MoonIcon } from '../../../components/icons';
 import { flattenJobFinancials } from '../../../lib/jobFinancials';

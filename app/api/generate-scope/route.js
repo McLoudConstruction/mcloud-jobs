@@ -1,25 +1,10 @@
 import { SERVICES_OFFERED } from '../../../lib/constants';
+import { extractJson } from '../../../lib/extractJson';
+import { guardAI, logAI, anthropicKeyFor } from '../../../lib/aiClient';
 
 // Tries increasingly forgiving strategies to pull the model's JSON object
 // out of its response, so a stray preamble or trailing note doesn't waste
 // the whole (paid-for) API call.
-function extractJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {}
-
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1));
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {}
-  }
-
-  return null;
-}
 
 // If the full object didn't parse (most often because the response got
 // cut off mid-way through the much longer trade_actions array), this
@@ -39,13 +24,17 @@ function extractCustomerItemsOnly(text) {
 }
 
 export async function POST(request) {
+  // Staff only, with an hourly limit and a usage log. 150 an hour because this one is
+  // cheap and gets used in bursts (a stack of receipts, a day of notes).
+  const gate = await guardAI(request, 'generate_scope', { hourlyLimit: 150 });
+  if (gate.error) return Response.json({ error: gate.error }, { status: gate.status });
   try {
     const { description, projectType, includeTradeBreakdown } = await request.json();
 
     if (!description || !description.trim()) {
       return Response.json({ error: 'Describe the job first.' }, { status: 400 });
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!anthropicKeyFor(gate)) {
       return Response.json(
         { error: 'AI scope generation is not configured yet — add ANTHROPIC_API_KEY in Vercel environment variables.' },
         { status: 500 }
@@ -90,7 +79,7 @@ Do not include any preamble, explanation, or markdown code fences — your entir
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': anthropicKeyFor(gate),
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
@@ -114,6 +103,7 @@ Do not include any preamble, explanation, or markdown code fences — your entir
     }
 
     const data = await response.json();
+    await logAI(gate, { usage: data.usage, ok: response.ok });
     // Find the text block specifically rather than assuming it's always
     // at index 0 — some responses can include other block types first,
     // which would silently produce an empty string here otherwise.

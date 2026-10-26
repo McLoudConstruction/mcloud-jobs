@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { authedFetch } from '../lib/aiFetch';
 
 // By default this renders its own "Generate scope with AI" button. A parent
 // that wants the button somewhere else (the Scope card puts it in its header)
@@ -19,7 +20,7 @@ export default function AIScopeGenerator({ projectType, jobId, onGenerate, onTra
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/generate-scope', {
+      const res = await authedFetch('/api/generate-scope', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description, projectType, includeTradeBreakdown: Boolean(jobId) }),

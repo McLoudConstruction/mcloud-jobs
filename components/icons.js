@@ -48,15 +48,6 @@ export function SalesIcon(props) {
   );
 }
 
-export function PersonIcon(props) {
-  return (
-    <svg {...common} {...props}>
-      <circle cx="10" cy="7" r="3.3" />
-      <path d="M3.5 17c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
-    </svg>
-  );
-}
-
 export function CalculatorIcon(props) {
   return (
     <svg {...common} {...props}>
@@ -207,15 +198,6 @@ export function SignOutIcon(props) {
   );
 }
 
-export function ReceiptIcon(props) {
-  return (
-    <svg {...common} {...props}>
-      <path d="M5.5 2.5h9v14l-1-.8-1 .8-1-.8-1 .8-1-.8-1 .8-1-.8-1 .8V2.5z" />
-      <path d="M7.3 6h5.4M7.3 8.6h5.4M7.3 11.2h3.5" />
-    </svg>
-  );
-}
-
 export function WorkOrderIcon(props) {
   return (
     <svg {...common} {...props}>
@@ -225,27 +207,6 @@ export function WorkOrderIcon(props) {
       <path d="M12 9h2.3" />
       <path d="M6.7 13l1.3 1.3L10.3 12" />
       <path d="M12 13h2.3" />
-    </svg>
-  );
-}
-
-export function ChangeOrderIcon(props) {
-  return (
-    <svg {...common} {...props}>
-      <path d="M6 2.5h5.5l3 3v12H6z" />
-      <path d="M11.5 2.5v3h3" />
-      <path d="M8 15.5l1.2-3.4 5-5 2.2 2.2-5 5-3.4 1.2z" />
-    </svg>
-  );
-}
-
-export function InternalUpdatesIcon(props) {
-  return (
-    <svg {...common} {...props}>
-      <rect x="3.5" y="3" width="9.5" height="14" rx="1.3" />
-      <path d="M6 6.5h4.5M6 9h4.5M6 11.5h3" />
-      <rect x="12" y="10.3" width="5.3" height="4.4" rx="1" />
-      <path d="M13.1 10.3V9a1.55 1.55 0 013.1 0v1.3" />
     </svg>
   );
 }
@@ -288,32 +249,6 @@ export function UpdatesTabIcon(props) {
       <circle cx="3" cy="14.3" r="1.3" />
       <circle cx="10" cy="5.3" r="1.3" />
       <circle cx="17" cy="14.3" r="1.3" />
-    </svg>
-  );
-}
-
-export function ProjectFeedIcon(props) {
-  return (
-    <svg {...common} {...props}>
-      <rect x="3" y="3.5" width="14" height="4" rx="1" />
-      <rect x="3" y="8.5" width="14" height="4" rx="1" />
-      <rect x="3" y="13.5" width="9" height="3" rx="1" />
-    </svg>
-  );
-}
-
-// Project Updates: a person on the left handing an update to a person on the
-// right, with a bold arched arrow between them. Drawn heavier than the other
-// icons so it still reads at button size.
-export function PersonToPersonIcon(props) {
-  return (
-    <svg {...common} strokeWidth="1.8" {...props}>
-      <circle cx="4.6" cy="10.6" r="2.2" />
-      <path d="M1.3 17.6c0-2.5 1.5-4.1 3.3-4.1s3.3 1.6 3.3 4.1" />
-      <circle cx="15.4" cy="10.6" r="2.2" />
-      <path d="M12.1 17.6c0-2.5 1.5-4.1 3.3-4.1s3.3 1.6 3.3 4.1" />
-      <path d="M5 6.6C6 1.6 14 1.6 15 6.2" />
-      <path d="M12.4 5.8l2.7.7.9-2.6" />
     </svg>
   );
 }

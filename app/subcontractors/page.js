@@ -19,7 +19,7 @@ import { COMPLIANCE_OVERALL } from '../../lib/compliance';
 import { formatPhone, SERVICES_OFFERED } from '../../lib/constants';
 import { buildSubInviteEmail, buildSubApplicationApprovedEmail, buildSubApplicationDeclinedEmail } from '../../lib/emailTemplates';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
-import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
+import { exportToSheet } from '../../lib/exportToSheet';
 import { syncCompanyContact } from '../../lib/contactSync';
 
 const DECLINE_REASONS = [

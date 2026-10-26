@@ -6,14 +6,11 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSubPortalData } from '../../../lib/useSubPortalData';
 import { subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
+import { fmtMoney } from '../../../lib/format';
 
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function SubPortalInvoicesPage() {

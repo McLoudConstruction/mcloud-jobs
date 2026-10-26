@@ -9,7 +9,7 @@ import PopupModal from '../../../components/PopupModal';
 import MobileFab from '../../../components/MobileFab';
 import NewEventModal from '../../../components/NewEventModal';
 import { setTodoDone, deleteTodo } from '../../../lib/salesTodos';
-import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber, subPortalJobHeading, SCHEDULE_REQUEST_STATUS_LABELS } from '../../../lib/constants';
+import { STAGE_LABELS, EVENT_TYPE_LABELS, formattedProjectNumber, subPortalJobHeading } from '../../../lib/constants';
 import { appHref, jobHref } from '../../../lib/links';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

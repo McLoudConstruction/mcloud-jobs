@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
-import AddressFields, { formatAddress } from '../../components/AddressFields';
+import AddressFields from '../../components/AddressFields';
 import PopupModal from '../../components/PopupModal';
 import TouchTimeline from '../../components/TouchTimeline';
 import AdminDeleteButton from '../../components/AdminDeleteButton';
@@ -17,7 +17,7 @@ import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import { formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncCompanyContact } from '../../lib/contactSync';
-import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
+import { exportToSheet } from '../../lib/exportToSheet';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 

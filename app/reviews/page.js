@@ -6,6 +6,7 @@ import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
 import { REVIEW_STATUS, holdLabel, starText, CATEGORY_LABELS } from '../../lib/reviews';
 import { aiFetch } from '../../lib/aiFetch';
+import { fmtDateShort as fmt } from '../../lib/format';
 
 const FILTERS = [
   { key: 'follow', label: 'Needs follow-up' },
@@ -14,10 +15,6 @@ const FILTERS = [
   { key: 'received', label: 'All received' },
   { key: 'pending', label: 'Pending' },
 ];
-
-function fmt(v) {
-  return v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-}
 
 // Every review request in one place: what came back, who needs a call, and
 // what goes on the website. What the customer wrote can't be edited here (the

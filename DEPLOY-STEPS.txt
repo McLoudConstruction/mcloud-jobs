@@ -1,5 +1,28 @@
-Bot edit-all-fields (migration 168)
-1. Run supabase-migration-168-bot-edit-all-fields.sql in the Supabase SQL Editor (after 167). Safe to run twice.
-2. Copy BOT_API.md and components/BotKeysPanel.js into the repo, push with GitHub Desktop.
-3. Give the bot the new BOT_API.md. Start with a low rate limit and watch the activity list.
-No route changes are needed: the existing PATCH routes call the updated database functions.
+Code audit cleanup plus AI route security fix (no migration needed)
+
+1. Copy the files in this zip into the repo, keeping the folder structure.
+2. From the repo root run: sh apply-deletions.sh
+   (It deletes the files listed in DELETE-THESE-FILES.txt. GitHub Desktop will show them as deleted.)
+3. Push with GitHub Desktop. Vercel deploys.
+
+What changed
+- Dead code removed, duplicated helpers merged (details in the project doc claude/code-audit-2026-10-25.md).
+- Job approval bug fixed (it called a removed function).
+- Five AI routes now require a signed in, active staff account, have an hourly limit
+  of 150 requests per person, and write to the AI usage log:
+  polish-text, generate-scope, generate-schedule, suggest-materials, extract-receipt.
+  The screens that use them now send the sign in token.
+
+Test after deploy
+- Open a job and advance one from Proposal Delivered to Approved.
+- Create a new job and check the Project number still suggests the next free number.
+- On a job, use each AI feature once: Generate scope, Generate schedule,
+  Suggest materials (Estimate tab), scan a receipt, and any Polish text button.
+  Each should work exactly as before. If one says "Not signed in", sign out and back in.
+- The ai_generations table in Supabase should show the new feature names:
+  polish_text, generate_scope, generate_schedule, suggest_materials, extract_receipt.
+- Dollar amounts on contracts, invoices, Financials, and the sub portal look the same.
+- Portal notification times ("5m ago").
+- Sales page follow up lists load. The old Outreach page is gone (it was already off the menu).
+
+Nothing here changes the database. Safe to roll back by reverting the commit.

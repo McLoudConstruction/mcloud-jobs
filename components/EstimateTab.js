@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import TradeBreakdownCard from './TradeBreakdownCard';
 import MaterialImageChooser from './MaterialImageChooser';
 import { SERVICES_OFFERED, COST_TYPES, costTypeLabel } from '../lib/constants';
+import { authedFetch } from '../lib/aiFetch';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '$0.00';
@@ -133,7 +134,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
     setSuggesting(true);
     setSuggestError('');
     try {
-      const res = await fetch('/api/suggest-materials', {
+      const res = await authedFetch('/api/suggest-materials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actions }),

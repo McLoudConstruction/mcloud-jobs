@@ -1,27 +1,18 @@
-function extractJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {}
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1));
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {}
-  }
-  return null;
-}
+import { extractJson } from '../../../lib/extractJson';
+import { guardAI, logAI, anthropicKeyFor } from '../../../lib/aiClient';
 
 export async function POST(request) {
+  // Staff only, with an hourly limit and a usage log. 150 an hour because this one is
+  // cheap and gets used in bursts (a stack of receipts, a day of notes).
+  const gate = await guardAI(request, 'suggest_materials', { hourlyLimit: 150 });
+  if (gate.error) return Response.json({ error: gate.error }, { status: gate.status });
   try {
     const { actions } = await request.json();
 
     if (!Array.isArray(actions) || actions.length === 0) {
       return Response.json({ error: 'No action list to work from — build the trade breakdown on the job first.' }, { status: 400 });
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!anthropicKeyFor(gate)) {
       return Response.json(
         { error: 'AI suggestions are not configured yet — add ANTHROPIC_API_KEY in Vercel environment variables.' },
         { status: 500 }
@@ -48,7 +39,7 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': anthropicKeyFor(gate),
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
@@ -73,6 +64,7 @@ Respond with a single JSON object shaped exactly like this, and nothing else:
     }
 
     const data = await response.json();
+    await logAI(gate, { usage: data.usage, ok: response.ok });
     // Find the text block specifically rather than assuming it's always
     // at index 0 — a response can include other block types first,
     // which would silently produce an empty string here otherwise.

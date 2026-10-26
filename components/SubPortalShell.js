@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { formattedProjectNumber } from '../lib/constants';
 import { SignOutIcon, BellIcon } from './icons';
+import { timeAgo } from '../lib/format';
 
 // Wide, text-only nav (pnav-* classes) — shared shape with
 // CustomerPortalShell, deliberately different from AppShell's own 84px
@@ -27,18 +28,6 @@ const PORTAL_NOTIFICATION_CATEGORY_LABELS = {
   rfp_awarded: 'Awarded',
   general: 'Update',
 };
-
-function timeAgo(dateStr) {
-  const diffMs = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 // Notification CENTER (persisted history — portal_notifications,
 // migration 126) — a distinct concept from the "Needs Your Attention"

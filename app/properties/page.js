@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useRequireAuth } from '../../lib/useAuth';
 import AppShell from '../../components/AppShell';
-import AddressFields, { formatAddress } from '../../components/AddressFields';
+import AddressFields from '../../components/AddressFields';
 import PlacesAutocompleteInput from '../../components/PlacesAutocompleteInput';
 import DataTable from '../../components/DataTable';
 import LogVisitPopover from '../../components/LogVisitPopover';
@@ -21,7 +21,7 @@ import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } f
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { contactsAtProperty, searchPeople, linkContactToProperty, unlinkContactFromProperty } from '../../lib/contactProperties';
-import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
+import { exportToSheet } from '../../lib/exportToSheet';
 import { mapRow, splitDuplicates } from '../../lib/propertyImport';
 
 const EMPTY_FORM = {

@@ -4,7 +4,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
-import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS, fmtBand } from '../../../lib/assemblies';
+import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS } from '../../../lib/assemblies';
 import { appHref } from '../../../lib/links';
 
 // Reusable Low/Medium/High scope-item kits for Kitchen and Bath remodels.

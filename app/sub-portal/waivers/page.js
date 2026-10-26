@@ -7,14 +7,11 @@ import { subPortalJobHeading } from '../../../lib/constants';
 import SubPortalShell from '../../../components/SubPortalShell';
 import SignaturePad from '../../../components/SignaturePad';
 import { WAIVER_TYPE_LABELS, WAIVER_STATUS } from '../../../lib/lienWaivers';
+import { fmtMoney } from '../../../lib/format';
 
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function SubPortalWaiversPage() {

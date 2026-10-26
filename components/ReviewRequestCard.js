@@ -5,10 +5,7 @@ import { buildReviewInviteEmail } from '../lib/emailTemplates';
 import { supabase } from '../lib/supabaseClient';
 import { reviewUrl, holdLabel, REVIEW_STATUS, starText, CATEGORY_LABELS } from '../lib/reviews';
 import { appHref } from '../lib/links';
-
-function fmt(v) {
-  return v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-}
+import { fmtDateShort as fmt } from '../lib/format';
 
 // Per-job view of the private review request (migration 138): what state it's
 // in, why it's waiting, the customer's answer once it arrives, and the manual

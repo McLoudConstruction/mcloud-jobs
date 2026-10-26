@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { delayAnchor, followerCandidates, applyCascade } from '../lib/scheduleCascade';
+import { delayAnchor, followerCandidates } from '../lib/scheduleCascade';
 
 const CATEGORIES = [
   { key: 'weather', label: 'Weather' },

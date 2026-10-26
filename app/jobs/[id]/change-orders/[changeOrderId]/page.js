@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useDocumentAuth } from '../../../../../lib/useDocumentAuth';
 import SendDocModal from '../../../../../components/SendDocModal';
@@ -13,6 +12,7 @@ import SignatureAuditTrail from '../../../../../components/SignatureAuditTrail';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useStaffAuth } from '../../../../../lib/staffAuthContext';
 import { jobHref } from '../../../../../lib/links';
+import { fmtMoneyLoose as fmtMoney } from '../../../../../lib/format';
 
 const LOGO_SRC = '/mcloud-logo.png';
 
@@ -20,12 +20,6 @@ function fmtDate(v) {
   if (!v) return '—';
   const d = new Date(v.length === 10 ? v + 'T00:00:00' : v);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, ''));
-  if (isNaN(n)) return '—';
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: n % 1 === 0 ? 0 : 2 });
 }
 
 export default function ChangeOrderDocumentPage() {

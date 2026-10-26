@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
-import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS, fmtBand } from '../lib/assemblies';
+import { ASSEMBLY_CATEGORIES, ASSEMBLY_TIERS } from '../lib/assemblies';
 import { appHref } from '../lib/links';
 
 // Lets an estimator pull a Low/Medium/High assembly's items straight into the

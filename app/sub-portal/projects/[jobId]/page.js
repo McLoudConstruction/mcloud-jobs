@@ -5,11 +5,8 @@ import Link from 'next/link';
 import { supabase } from '../../../../lib/supabaseClient';
 import { WORK_ORDER_STATUS_LABELS, STAGE_LABELS, subPortalJobHeading } from '../../../../lib/constants';
 import SubPortalShell from '../../../../components/SubPortalShell';
+import { fmtMoney } from '../../../../lib/format';
 
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '—';
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v.length === 10 ? v + 'T00:00:00' : v).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
