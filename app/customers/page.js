@@ -939,7 +939,7 @@ export default function CustomersPage() {
               { key: 'team_office', label: 'Team/Office', defaultWidth: 170, render: c => c.team_office || '—' },
               { key: 'contact_phone', label: 'Phone', defaultWidth: 140, filterValue: c => formatPhone(c.contact_phone), render: c => c.contact_phone ? formatPhone(c.contact_phone) : '—' },
               { key: 'contact_email', label: 'Email', defaultWidth: 220, render: c => c.contact_email ? (
-                <span>{c.contact_email}{c.email_blocked_reason ? <span style={{ marginLeft: 6, fontSize: 11, color: '#a13f3f' }}>{EMAIL_BLOCK_LABELS[c.email_blocked_reason]}</span> : (c.email_confidence === 'pattern_guess' ? <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>guess</span> : null)}</span>
+                <span>{c.contact_email}{c.email_blocked_reason ? <span style={{ marginLeft: 6, fontSize: 11, color: '#a13f3f' }}>{EMAIL_BLOCK_LABELS[c.email_blocked_reason]}</span> : null}</span>
               ) : '—' },
               ...customColumns.map(col => ({
                 key: `custom:${col.column_key}`,
