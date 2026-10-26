@@ -71,21 +71,46 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     return () => supabase.removeChannel(channel);
   }, [jobId, updateId, loadPhotos]);
 
+  // Signs only the photos that don't have a working URL yet, and merges the
+  // results into what is already there. It used to re-sign every photo and
+  // replace the whole map on each change, so one failed request (or an older
+  // run finishing late) left a tile blank until the page was reloaded.
+  const signPhotos = useCallback(async (list) => {
+    const results = await Promise.all(
+      list.map(async p => {
+        // Mirrored sub-uploaded photos live in the subcontractor-docs
+        // bucket under their original path — source_bucket says which
+        // bucket to sign against instead of assuming job-photos.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const { data, error } = await supabase.storage.from(p.source_bucket || 'job-photos').createSignedUrl(p.storage_path, 3600);
+            if (!error && data?.signedUrl) return [p.id, data.signedUrl];
+          } catch (_) { /* retry */ }
+          await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+        }
+        return null;
+      })
+    );
+    const got = Object.fromEntries(results.filter(Boolean));
+    if (Object.keys(got).length) setUrls(prev => ({ ...prev, ...got }));
+  }, []);
+
   useEffect(() => {
-    async function loadUrls() {
-      const entries = await Promise.all(
-        photos.map(async p => {
-          // Mirrored sub-uploaded photos live in the subcontractor-docs
-          // bucket under their original path — source_bucket says which
-          // bucket to sign against instead of assuming job-photos.
-          const { data } = await supabase.storage.from(p.source_bucket || 'job-photos').createSignedUrl(p.storage_path, 3600);
-          return [p.id, data?.signedUrl];
-        })
-      );
-      setUrls(Object.fromEntries(entries));
-    }
-    if (photos.length) loadUrls();
-  }, [photos]);
+    const missing = photos.filter(p => !urls[p.id]);
+    if (missing.length) signPhotos(missing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos, signPhotos]);
+
+  // A tile whose image fails to load (expired or half-written file) gets a
+  // fresh URL once instead of staying empty.
+  function retryImage(photo) {
+    setUrls(prev => {
+      const next = { ...prev };
+      delete next[photo.id];
+      return next;
+    });
+    signPhotos([photo]);
+  }
 
   async function uploadOnePhoto(file) {
     const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
@@ -207,13 +232,17 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
       const path = `${jobId}/${Date.now()}-markup.jpg`;
       const { error: uploadError } = await supabase.storage.from('job-photos').upload(path, blob, { contentType: 'image/jpeg' });
       if (uploadError) throw uploadError;
-      await supabase.from('job_photos').insert({
+      const { error: insertError } = await supabase.from('job_photos').insert({
         job_id: jobId,
         update_id: updateId || null,
         storage_path: path,
         derived_from_photo_id: markupPhoto.id,
       });
+      if (insertError) throw insertError;
       setMarkupPhoto(null);
+      // job_photos isn't reliably in the realtime publication, so refresh
+      // the list here instead of waiting for an event that may not come.
+      await loadPhotos();
     } catch (err) {
       alert('Failed to save markup: ' + err.message);
     } finally {
@@ -352,7 +381,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             <div className="photo-tile" key={p.id}>
               {urls[p.id] ? (
                 <a href={urls[p.id]} target="_blank" rel="noopener noreferrer">
-                  <img src={urls[p.id]} alt="" />
+                  <img src={urls[p.id]} alt="" loading="lazy" onError={() => { if (!p._retried) { p._retried = true; retryImage(p); } }} />
                 </a>
               ) : (
                 <div className="photo-tile-loading" />

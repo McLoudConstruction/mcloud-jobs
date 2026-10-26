@@ -26,6 +26,21 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
   const [textValue, setTextValue] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // iOS shifts the whole page up when the text box takes focus (and zooms in
+  // on inputs under 16px) and does not always put it back, which left the
+  // fixed bottom menu sitting higher after every markup. Lock the page
+  // behind the editor while it is open, and reset the scroll when it closes.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      window.scrollTo(0, 0);
+      setTimeout(() => window.scrollTo(0, 0), 50);
+    };
+  }, []);
+
   // Load the source photo once, size the canvas to it (capped), draw the base image.
   useEffect(() => {
     const img = new Image();

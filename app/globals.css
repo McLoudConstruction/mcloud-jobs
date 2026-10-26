@@ -545,7 +545,7 @@ a { color: inherit; text-decoration: none; }
 
 .markup-overlay{
   position: fixed; inset: 0; background: #1a1812; z-index: 200;
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; overscroll-behavior: contain;
 }
 .markup-toolbar{
   display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
@@ -574,7 +574,7 @@ a { color: inherit; text-decoration: none; }
 .markup-text-input-wrap{ position: absolute; transform: translate(-2px, -2px); }
 .markup-text-input-wrap input{
   background: rgba(0,0,0,0.6); border: 2px solid; border-radius: 4px; padding: 4px 8px;
-  font-size: 15px; font-weight: 700; min-width: 140px;
+  font-size: 16px; font-weight: 700; min-width: 140px; /* 16px: iOS zooms the page on smaller inputs */
 }
 
 .topbar{
