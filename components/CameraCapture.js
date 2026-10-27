@@ -16,6 +16,7 @@ import { FlashOnIcon, FlashOffIcon, FlipCameraIcon } from './photoIcons';
 //   title          optional small caption in the top bar
 
 const MAX_DIGITAL_ZOOM = 5;
+const ZOOM_PRESETS = [0.5, 1, 2, 5];
 let lastStopAt = 0; // module level: lets a re-open wait for the old stream to release
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -419,6 +420,19 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, destinat
             >
               <div className="camera-zoom-fill" style={{ height: `${zoomRatio * 100}%` }} />
               <div className="camera-zoom-thumb" style={{ bottom: `calc(${zoomRatio * 100}% - 11px)` }} />
+            </div>
+            <div className="camera-zoom-presets">
+              {ZOOM_PRESETS.filter(v => v >= zoomRange.min - 0.01 && v <= zoomRange.max + 0.01).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  className={`camera-zoom-preset${Math.abs(zoom - v) < 0.06 ? ' is-active' : ''}`}
+                  onClick={() => applyZoom(v)}
+                  aria-label={`Zoom ${v}x`}
+                >
+                  {v}x
+                </button>
+              ))}
             </div>
           </div>
         )}
