@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import PhotoViewer from './PhotoViewer';
 import { supabase } from '../lib/supabaseClient';
 
 // Photo updates feed for Home — merges customer_visible_work_order_photos
@@ -18,6 +19,7 @@ function fmtDate(v) {
 export default function PortalPhotoFeed({ jobId }) {
   const [photos, setPhotos] = useState([]);
   const [urls, setUrls] = useState({});
+  const [viewerIndex, setViewerIndex] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -53,6 +55,11 @@ export default function PortalPhotoFeed({ jobId }) {
     return () => supabase.removeChannel(channel);
   }, [jobId, load]);
 
+  const viewerItems = useMemo(
+    () => photos.filter(p => urls[p.id]).map(p => ({ key: p.id, thumb: urls[p.id], full: urls[p.id] })),
+    [photos, urls]
+  );
+
   if (!jobId || !loaded || photos.length === 0) return null;
 
   return (
@@ -60,7 +67,12 @@ export default function PortalPhotoFeed({ jobId }) {
       <h3>Photo Updates</h3>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         {photos.map(p => (
-          <a key={p.id} href={urls[p.id] || '#'} target="_blank" rel="noopener noreferrer" style={{ width: 140 }}>
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => { const i = viewerItems.findIndex(v => v.key === p.id); if (i >= 0) setViewerIndex(i); }}
+            style={{ width: 140, padding: 0, border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+          >
             {urls[p.id] ? (
               <img src={urls[p.id]} alt={p.caption || p.trade || ''} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 6, display: 'block' }} />
             ) : (
@@ -71,9 +83,10 @@ export default function PortalPhotoFeed({ jobId }) {
               {fmtDate(p.created_at)}
             </div>
             {p.caption && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{p.caption}</div>}
-          </a>
+          </button>
         ))}
       </div>
+      <PhotoViewer items={viewerItems} index={viewerIndex} onClose={() => setViewerIndex(null)} onNavigate={setViewerIndex} />
     </div>
   );
 }

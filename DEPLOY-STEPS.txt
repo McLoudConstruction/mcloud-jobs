@@ -1,28 +1,17 @@
-Code audit cleanup plus AI route security fix (no migration needed)
+Photos round: deploy steps
 
-1. Copy the files in this zip into the repo, keeping the folder structure.
-2. From the repo root run: sh apply-deletions.sh
-   (It deletes the files listed in DELETE-THESE-FILES.txt. GitHub Desktop will show them as deleted.)
-3. Push with GitHub Desktop. Vercel deploys.
+1. Copy the files in this zip over the matching files in mcloud-jobs (same folder structure), including package.json and package-lock.json (adds fflate for zip downloads).
+2. In Supabase SQL Editor, run supabase-migration-175-photo-folders.sql (after 174). Safe to re-run.
+3. Push with GitHub Desktop. Vercel runs npm install and deploys.
+4. In Settings, check "Photo file names" (set to McLoud by the migration).
 
-What changed
-- Dead code removed, duplicated helpers merged (details in the project doc claude/code-audit-2026-10-25.md).
-- Job approval bug fixed (it called a removed function).
-- Five AI routes now require a signed in, active staff account, have an hourly limit
-  of 150 requests per person, and write to the AI usage log:
-  polish-text, generate-scope, generate-schedule, suggest-materials, extract-receipt.
-  The screens that use them now send the sign in token.
+If you push before running the migration the app still works: folders come from photo names, no thumbnails yet, no Initial Inspection folder until the migration runs.
 
-Test after deploy
-- Open a job and advance one from Proposal Delivered to Approved.
-- Create a new job and check the Project number still suggests the next free number.
-- On a job, use each AI feature once: Generate scope, Generate schedule,
-  Suggest materials (Estimate tab), scan a receipt, and any Polish text button.
-  Each should work exactly as before. If one says "Not signed in", sign out and back in.
-- The ai_generations table in Supabase should show the new feature names:
-  polish_text, generate_scope, generate_schedule, suggest_materials, extract_receipt.
-- Dollar amounts on contracts, invoices, Financials, and the sub portal look the same.
-- Portal notification times ("5m ago").
-- Sales page follow up lists load. The old Outreach page is gone (it was already off the menu).
-
-Nothing here changes the database. Safe to roll back by reverting the commit.
+Test on your iPhone (Safari and, if you use it, the home-screen app):
+- Take photos, tap DONE, reopen the camera: it should start without "access denied".
+- Brand-new job: camera should preset Initial Inspection, with Today as the next option.
+- Older job: camera presets Today (2026-10-27 style), photos land in that day folder.
+- Change folder in the camera, pick a named folder: no day folder is created.
+- Review screen: Retake (black) / Use Photo (white).
+- Photos tab: tap a photo for the viewer; Select, then Actions: Share, Markup (Done moves to next), Download (one photo = .jpg, several = .zip), Move, Delete.
+- Turn on airplane mode, take a photo, turn it off: it uploads on its own.

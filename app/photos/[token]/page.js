@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import PhotoViewer from '../../../components/PhotoViewer';
 import { useParams } from 'next/navigation';
 
 export default function PublicPhotoFolderPage() {
@@ -19,16 +20,10 @@ export default function PublicPhotoFolderPage() {
       .catch(err => setError(err.message));
   }, [token]);
 
-  useEffect(() => {
-    if (openIndex === null) return;
-    function onKey(e) {
-      if (e.key === 'Escape') setOpenIndex(null);
-      if (e.key === 'ArrowRight') setOpenIndex(i => (i === null ? i : Math.min(i + 1, data.photos.length - 1)));
-      if (e.key === 'ArrowLeft') setOpenIndex(i => (i === null ? i : Math.max(i - 1, 0)));
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [openIndex, data]);
+  const items = useMemo(
+    () => (data?.photos || []).map(p => ({ key: p.id, thumb: p.url, full: p.url })),
+    [data]
+  );
 
   if (error) {
     return <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--ink-soft)', maxWidth: 480, margin: '0 auto' }}>{error}</div>;
@@ -56,31 +51,15 @@ export default function PublicPhotoFolderPage() {
         ))}
       </div>
 
-      {openIndex !== null && data.photos[openIndex] && (
-        <div
-          onClick={() => setOpenIndex(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <img
-            src={data.photos[openIndex].url}
-            alt=""
-            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-          />
-          <div style={{ position: 'absolute', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-            <span style={{ color: '#fff', fontSize: 13 }}>{openIndex + 1} / {data.photos.length}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <a className="btn btn-sm" href={data.photos[openIndex].url} download target="_blank" rel="noopener noreferrer">Save</a>
-              <button className="btn btn-sm" type="button" onClick={() => setOpenIndex(null)}>Close</button>
-            </div>
-          </div>
-          {openIndex > 0 && (
-            <button className="btn btn-sm" type="button" style={{ position: 'absolute', left: 10 }} onClick={e => { e.stopPropagation(); setOpenIndex(openIndex - 1); }}>‹</button>
-          )}
-          {openIndex < data.photos.length - 1 && (
-            <button className="btn btn-sm" type="button" style={{ position: 'absolute', right: 10 }} onClick={e => { e.stopPropagation(); setOpenIndex(openIndex + 1); }}>›</button>
-          )}
-        </div>
-      )}
+      <PhotoViewer
+        items={items}
+        index={openIndex}
+        onClose={() => setOpenIndex(null)}
+        onNavigate={setOpenIndex}
+        footer={(item) => (
+          <a className="btn btn-sm" href={item.full} download target="_blank" rel="noopener noreferrer">Save photo</a>
+        )}
+      />
     </div>
   );
 }

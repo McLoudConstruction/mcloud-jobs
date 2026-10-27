@@ -252,6 +252,7 @@ function SettingsPageInner() {
           proposal_followup_interval_days: form.proposal_followup_interval_days,
           notification_email: form.notification_email || null,
           timezone: form.timezone || 'America/Chicago',
+          photo_file_prefix: (form.photo_file_prefix || '').trim() || null,
         })
         .eq('id', 1);
       if (updateError) throw updateError;
@@ -382,6 +383,15 @@ function SettingsPageInner() {
               Use main logo instead
             </button>
           )}
+        </div>
+
+        <div className="card">
+          <h3>Photo file names</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Photos download with your name on them, for example {(form.photo_file_prefix || 'YourCompany').trim().replace(/[^A-Za-z0-9]+/g, '-') || 'YourCompany'}-MC26012-2026-10-27-091422.jpg. This also replaces the text stamped on photos when no watermark logo is set.
+          </div>
+          <label htmlFor="photoFilePrefix">Name prefix</label>
+          <input id="photoFilePrefix" value={form.photo_file_prefix || ''} onChange={e => update('photo_file_prefix', e.target.value)} maxLength={30} placeholder="Company name" />
         </div>
 
         <div className="card">

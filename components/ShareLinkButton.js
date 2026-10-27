@@ -97,7 +97,7 @@ export default function ShareLinkButton({ kind, jobId, proposalId, folder, custo
         style={{ background: 'var(--panel, #fff)', color: 'var(--ink, #1C1B19)', width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', borderRadius: 14, padding: 18, boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <h3 style={{ margin: 0, color: 'var(--heading)' }}>{kind === 'proposal' ? 'Share estimate link' : `Share “${folder}”`}</h3>
+          <h3 style={{ margin: 0, color: 'var(--heading)' }}>{kind === 'proposal' ? 'Share estimate link' : `Share ${folder}`}</h3>
           <button className="btn btn-sm" type="button" onClick={() => setOpen(false)} aria-label="Close">×</button>
         </div>
         <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 14px' }}>
@@ -116,7 +116,7 @@ export default function ShareLinkButton({ kind, jobId, proposalId, folder, custo
               {canNativeShare && <button className="btn btn-primary" type="button" onClick={nativeShare}>Share…</button>}
               <a className={canNativeShare ? 'btn' : 'btn btn-primary'} href={smsHref} style={{ textAlign: 'center' }}>Text message</a>
               <a className="btn" href={emailHref} style={{ textAlign: 'center' }}>Email</a>
-              <button className="btn" type="button" onClick={copy}>{copied ? 'Copied ✓' : 'Copy link'}</button>
+              <button className="btn" type="button" onClick={copy}>{copied ? 'Copied' : 'Copy link'}</button>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 12, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <span>Expires {expires}</span>

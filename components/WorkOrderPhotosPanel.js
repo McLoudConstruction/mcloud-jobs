@@ -78,7 +78,7 @@ export default function WorkOrderPhotosPanel({ workOrderId }) {
               onClick={() => toggleShared(p)}
               disabled={togglingId === p.id}
             >
-              {togglingId === p.id ? '…' : p.is_internal ? 'Share with customer' : '✓ Shared with customer'}
+              {togglingId === p.id ? '…' : p.is_internal ? 'Share with customer' : 'Shared with customer'}
             </button>
           </div>
         ))}

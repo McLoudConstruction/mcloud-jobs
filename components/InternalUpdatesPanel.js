@@ -2,12 +2,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { watermarkImage } from '../lib/watermark';
+import { enqueuePhoto, onPhotoSynced, usePhotoDestination, usePhotoQueue, discardPhoto } from '../lib/jobPhotos';
 import { queueInternalUpdate, queueChecklistToggle } from '../lib/syncQueue';
 import { useOfflineSync } from '../lib/useOfflineSync';
 import { cacheJobPatch, getCachedJob } from '../lib/offlineDb';
-import { INTERNAL_UPDATE_CATEGORIES, categoryPhotoFolder } from '../lib/constants';
+import { INTERNAL_UPDATE_CATEGORIES } from '../lib/constants';
 import CameraCapture from './CameraCapture';
+import DestinationPicker from './DestinationPicker';
 import PolishTextButton from './PolishTextButton';
 import PopupModal from './PopupModal';
 import { uploadPunchPhotoFile } from '../lib/punchPhotos';
@@ -15,25 +16,13 @@ import { uploadPunchPhotoFile } from '../lib/punchPhotos';
 const PUNCH_CATEGORY = 'Punch List';
 const newPunchRow = () => ({ id: crypto.randomUUID(), title: '', location: '', files: [] });
 
-// Photos on an Internal Update now go through the exact same path as the
-// Photos tab's "Take Photos" / "Upload from library" buttons (see
-// uploadOnePhoto in PhotoGallery.js): watermark, upload to Storage, insert
-// the job_photos row — immediately, one photo at a time, no offline queue
-// in between. That path has never lost a photo. The previous design routed
-// internal-update photos through IndexedDB + a promise-chained sync queue
-// instead (to support offline capture), and across several rounds of fixes
-// that queue kept stranding photos in ways that were genuinely hard to see
-// from the client (see the sync queue's own history) — right down to items
-// getting stuck in a 'syncing' limbo state invisible to every diagnostic.
-// Rather than keep chasing that, this drops the queue for photos entirely
-// and copies the mechanism that's actually proven reliable. The one
-// difference from the Photos tab: each photo is tagged with a folder named
-// after the update's category (see categoryPhotoFolder) instead of landing
-// in General, and linked to this update via update_id from the moment it's
-// inserted. This does mean taking a photo on an Internal Update now
-// requires a connection, same as the Photos tab always has — the note text
-// itself still queues offline via queueInternalUpdate below when no photos
-// are involved.
+// Photos on an Internal Update use the same local-first photo queue as the
+// Photos tab (lib/jobPhotos.js): the photo is saved on this device the moment
+// it is accepted, then watermarked and uploaded in the background with a
+// client-made id, so a dropped signal or a closed tab never loses it. The
+// job_updates row is still created up front (see ensureDraftRow) so every
+// photo has a real update_id to attach to. Folder follows the camera's
+// folder choice (the day folder by default), not the update category.
 
 function SyncBadge({ isOnline, pendingCount, failedCount, sync }) {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
@@ -59,6 +48,8 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
   const createdByEmail = session?.user?.email || null;
   const { isOnline, pendingCount, failedCount, pending, sync } = useOfflineSync(jobId);
   const { settings } = useSettings();
+  const destination = usePhotoDestination(jobId);
+  const photoQueue = usePhotoQueue(jobId);
 
   const [noteText, setNoteText] = useState('');
   const [workCompleted, setWorkCompleted] = useState('');
@@ -239,48 +230,42 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
   // picked, exactly like "Take Photos" on the Photos tab, just tagged with
   // this update's id and a category-named folder instead of landing in
   // General.
-  async function uploadDraftPhoto(file) {
-    const localId = crypto.randomUUID();
+  async function uploadDraftPhoto(file, takenAt) {
     const previewUrl = URL.createObjectURL(file);
-    setDraftPhotos(prev => [...prev, { id: localId, url: previewUrl, uploading: true }]);
+    let queuedId = null;
     try {
       await ensureDraftRow();
-      const watermarked = await watermarkImage(file, settings.watermark_logo_url || settings.logo_url);
-      const folder = category ? categoryPhotoFolder(category, new Date().toISOString().slice(0, 10)) : null;
-      const path = `${jobId}/${crypto.randomUUID()}-field-photo.jpg`;
-      const { error: uploadErr } = await supabase.storage.from('job-photos').upload(path, watermarked, { contentType: 'image/jpeg' });
-      if (uploadErr) throw uploadErr;
-      const { data: inserted, error: insertErr } = await supabase
-        .from('job_photos')
-        .insert({
-          job_id: jobId,
-          update_id: draftIdRef.current,
-          storage_path: path,
-          folder: folder || null,
-          created_by_email: createdByEmail,
-        })
-        .select('id')
-        .single();
-      if (insertErr) throw insertErr;
-      setDraftPhotos(prev => prev.map(p => (p.id === localId ? { ...p, dbId: inserted.id, uploading: false } : p)));
+      const at = takenAt || Date.now();
+      queuedId = await enqueuePhoto({
+        file, jobId, updateId: draftIdRef.current,
+        destination: destination.resolve(at), takenAt: at,
+        logoUrl: settings.watermark_logo_url || settings.logo_url || null,
+        brandName: settings.photo_file_prefix || null,
+      });
+      // The queue id is also the job_photos row id, so it doubles as dbId.
+      setDraftPhotos(prev => [...prev, { id: queuedId, url: previewUrl, uploading: true }]);
     } catch (err) {
-      setPhotoError(`A photo didn't upload: ${err.message || err}`);
-      setDraftPhotos(prev => prev.filter(p => p.id !== localId));
+      setPhotoError(`A photo was not saved: ${err.message || err}`);
       URL.revokeObjectURL(previewUrl);
     }
   }
 
+  // Flip a draft photo from "uploading" to done when the queue confirms it.
+  useEffect(() => onPhotoSynced(item => {
+    setDraftPhotos(prev => prev.map(p => (p.id === item.id ? { ...p, dbId: item.id, uploading: false } : p)));
+  }), []);
+
   function handleAddPhotos(e) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    files.forEach(uploadDraftPhoto);
+    files.forEach(f => uploadDraftPhoto(f, Date.now()));
   }
 
   // Same camera component the Photos tab uses. Each shot uploads as soon
   // as it's accepted (retake/use flow) while the camera stays open for the
   // next one — matching "Take Photos" on the Photos tab exactly.
-  function handleCameraPhoto(file) {
-    uploadDraftPhoto(file);
+  function handleCameraPhoto(file, meta) {
+    uploadDraftPhoto(file, meta?.takenAt);
   }
 
   // The photo is already a real row by the time it's in draftPhotos, so
@@ -288,10 +273,12 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
   // Delete button on the Photos tab.
   async function removeDraftPhoto(photo) {
     setDraftPhotos(prev => prev.filter(p => p.id !== photo.id));
-    if (!photo.dbId) return; // still uploading or never made it in — nothing to delete
-    const { data: row } = await supabase.from('job_photos').select('storage_path').eq('id', photo.dbId).maybeSingle();
-    if (row?.storage_path) await supabase.storage.from('job-photos').remove([row.storage_path]);
+    if (photo.uploading) { await discardPhoto(photo.id); return; } // never uploaded: just drop it from the queue
+    if (!photo.dbId) return;
+    const { data: row } = await supabase.from('job_photos').select('storage_path, thumb_path').eq('id', photo.dbId).maybeSingle();
     await supabase.from('job_photos').delete().eq('id', photo.dbId);
+    const paths = [row?.storage_path, row?.thumb_path].filter(Boolean);
+    if (paths.length) await supabase.storage.from('job-photos').remove(paths);
   }
 
   function resetDraft() {
@@ -581,6 +568,7 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
 
           <div className="section-actions" style={{ marginTop: 0 }}>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)}>Take Photos</button>
+            <DestinationPicker destination={destination} variant="light" />
             <label className="btn btn-sm field-photo-button" style={{ margin: 0 }}>
               Upload from library
               <input type="file" accept="image/*" multiple onChange={handleAddPhotos} style={{ display: 'none' }} />
@@ -591,6 +579,12 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
           )}
 
           {photoError && <div className="error-text">{photoError}</div>}
+          {photoQueue.failedCount > 0 && (
+            <div className="error-text">
+              {photoQueue.failedCount} {photoQueue.failedCount === 1 ? 'photo' : 'photos'} not uploaded.{' '}
+              <button type="button" className="btn btn-sm" onClick={photoQueue.retryAll}>Retry</button>
+            </div>
+          )}
           {postError && <div className="error-text">{postError}</div>}
 
           <button
@@ -605,7 +599,14 @@ export default function InternalUpdatesPanel({ jobId, session, autoOpen }) {
             {posting ? 'Posting…' : draftPhotos.some(p => p.uploading) ? 'Photo uploading…' : category === PUNCH_CATEGORY ? 'Add to punch list' : 'Post update'}
           </button>
         </form>
-        <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} onPhotoAccepted={handleCameraPhoto} title="Internal Update Photos" />
+        <CameraCapture
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onPhotoAccepted={handleCameraPhoto}
+          destination={destination}
+          uploadStatus={{ pending: photoQueue.pendingCount, failed: photoQueue.failedCount, onRetry: photoQueue.retryAll }}
+          title="Internal Update Photos"
+        />
       </PopupModal>
 
       <section className="field-log-section">

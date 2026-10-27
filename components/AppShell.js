@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
 import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon, MoreIcon, BellIcon, RefreshIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
+import { startPhotoQueueWatchers } from '../lib/jobPhotos';
 import ScrollFadeRow from './ScrollFadeRow';
 import BottomSheet from './BottomSheet';
 
@@ -125,6 +126,9 @@ export default function AppShell({ children }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState('');
+
+  // Resume any photos left in the local upload queue, on every page.
+  useEffect(() => startPhotoQueueWatchers(), []);
 
   useEffect(() => {
     let mounted2 = true;

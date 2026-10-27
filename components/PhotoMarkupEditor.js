@@ -13,7 +13,9 @@ const TOOL_LABELS = { rectangle: 'Rectangle', circle: 'Circle', arrow: 'Arrow', 
 const MAX_CANVAS_DIMENSION = 1600;
 const LINE_WIDTH_RATIO = 0.006; // relative to canvas width, so strokes scale with photo size
 
-export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
+// progress: optional { index, total } when marking up a selected set in turn.
+// saveLabel / cancelLabel let the queue say "Done" and "Skip".
+export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, progress, saveLabel, cancelLabel }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -25,6 +27,7 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
   const [textPrompt, setTextPrompt] = useState(null); // { x, y } in canvas coords, awaiting text input
   const [textValue, setTextValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // iOS shifts the whole page up when the text box takes focus (and zooms in
   // on inputs under 16px) and does not always put it back, which left the
@@ -53,6 +56,7 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
       imgRef.current = img;
       setReady(true);
     };
+    img.onerror = () => setLoadFailed(true);
     img.src = imageUrl;
   }, [imageUrl]);
 
@@ -165,9 +169,8 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
 
   async function handleSave() {
     setSaving(true);
-    canvasRef.current.toBlob(blob => {
-      onSave(blob);
-      setSaving(false);
+    canvasRef.current.toBlob(async blob => {
+      try { await onSave(blob); } finally { setSaving(false); }
     }, 'image/jpeg', 0.88);
   }
 
@@ -193,16 +196,18 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose }) {
           ))}
         </div>
         <div className="markup-actions">
+          {progress && <span className="markup-progress">{progress.index + 1} of {progress.total}</span>}
           <button className="btn btn-sm" onClick={undo} disabled={annotations.length === 0}>Undo</button>
-          <button className="btn btn-sm" onClick={onClose}>Cancel</button>
+          {onStop && <button className="btn btn-sm" onClick={onStop}>Stop</button>}
+          <button className="btn btn-sm" onClick={onClose}>{cancelLabel || 'Cancel'}</button>
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !ready}>
-            {saving ? 'Saving…' : 'Save Markup'}
+            {saving ? 'Saving' : (saveLabel || 'Save Markup')}
           </button>
         </div>
       </div>
 
       <div className="markup-canvas-wrap" ref={containerRef}>
-        {!ready && <div className="empty-state">Loading photo…</div>}
+        {!ready && <div className="empty-state">{loadFailed ? 'This photo could not be loaded.' : 'Loading photo'}</div>}
         <canvas
           ref={canvasRef}
           className="markup-canvas"
