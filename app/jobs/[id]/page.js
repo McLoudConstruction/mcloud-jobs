@@ -611,6 +611,7 @@ export default function JobDetailPage() {
 
         <div className="top-actions">
           <div>
+            {isMobile && (<>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
             {job.project_address && (
               <MapLinkMenu
@@ -626,6 +627,8 @@ export default function JobDetailPage() {
               <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
               {flash && <span className="saved-flash">{flash}</span>}
             </div>
+            </>)}
+            {!isMobile && flash && <div><span className="saved-flash">{flash}</span></div>}
             {job.stage === 'lost' && job.loss_reason && (
               <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>Loss reason: {job.loss_reason}</div>
             )}

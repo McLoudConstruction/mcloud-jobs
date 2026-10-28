@@ -2629,10 +2629,11 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 /* ---------- Job navigation tree (left sidebar on a computer, Sections sheet on a phone) ---------- */
 .job-nav{ display: flex; flex-direction: column; gap: 2px; }
 .job-nav-head{ display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 0 12px 14px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
-.job-nav-back{ margin-bottom: 10px; font-size: 13px; color: var(--ink-soft); text-decoration: none; }
-.job-nav-back:hover{ color: var(--ink); text-decoration: underline; }
-.job-nav-number{ font-size: 16px; font-weight: 700; color: var(--heading); }
-.job-nav-address{ font-size: 13px; color: var(--ink-soft); }
+.job-nav-back{ display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 6px 12px 6px 9px; font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none; background: var(--card, transparent); border: 1px solid var(--line); border-radius: 8px; }
+.job-nav-back:hover{ border-color: var(--accent); color: var(--heading); }
+.job-nav-customer{ font-size: 15px; font-weight: 700; color: var(--heading); }
+.job-nav-number{ font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.job-nav-address{ text-align: left;  font-size: 13px; color: var(--ink-soft); }
 .job-nav-head .badge{ margin-top: 6px; }
 .job-nav-group-btn{
   display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; min-height: 40px;

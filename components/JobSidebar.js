@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STAGE_LABELS } from '../lib/constants';
+import MapLinkMenu from './MapLinkMenu';
 
 // The job page's navigation tree. On a computer it is the left sidebar; on a
 // phone the same tree opens inside the Sections sheet.
@@ -36,9 +37,21 @@ export default function JobSidebar({ job, tabs, tab, section, currentStageTab, o
   return (
     <nav className={`job-nav job-nav-${variant}`} aria-label="Project sections">
       <div className="job-nav-head">
-        {variant === 'sidebar' && <Link href="/jobs" className="job-nav-back">All projects</Link>}
+        {variant === 'sidebar' && (
+          <Link href="/jobs" className="job-nav-back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            All projects
+          </Link>
+        )}
+        <div className="job-nav-customer">{job.customer_name || 'Unnamed customer'}</div>
         <div className="job-nav-number">{job.project_number ? `#${job.project_number}` : 'No project number'}</div>
-        {job.project_address && <div className="job-nav-address">{job.project_address}</div>}
+        {job.project_address && (
+          <div className="job-nav-address">
+            <MapLinkMenu address={job.project_address} style={{ color: 'inherit', textDecoration: 'none', textAlign: 'left', display: 'block' }}>
+              {job.project_address}
+            </MapLinkMenu>
+          </div>
+        )}
         <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
       </div>
 
