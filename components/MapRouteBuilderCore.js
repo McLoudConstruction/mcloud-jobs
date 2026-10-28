@@ -11,7 +11,7 @@ import {
   getActiveRoute, startRoute, updateRouteStops, updateRouteTiming, finishRoute, cancelRoute,
   saveRoute, shelveRoute, getCurrentLocation, haversineMiles,
 } from '../lib/salesRoutes';
-import { DEFAULT_DWELL_MINUTES, isPending, legsByStop, buildTimeline, formatClock, formatMinutes, timeStringToToday, dateToTimeString } from '../lib/routeTiming';
+import { DEFAULT_DWELL_MINUTES, isPending, routeStopsOf, legsByStop, buildTimeline, formatClock, formatMinutes, timeStringToToday, dateToTimeString } from '../lib/routeTiming';
 import { orderStops, cheapestInsertionIndex, pointsKey } from '../lib/routeOrdering';
 import {
   MAPBOX_MAX_POINTS, VISIT_BUCKETS, visitBucket, daysSince,
