@@ -2419,7 +2419,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .quick-actions{ position: relative; display: inline-block; }
 .quick-actions-menu{
   position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 30;
-  min-width: 250px; max-height: 70vh; overflow-y: auto;
+  min-width: 250px;
   background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.18); padding: 4px 0;
 }
@@ -2677,3 +2677,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .job-sections-bar-kicker{ font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-soft); }
 .job-sections-bar-value{ font-size: 16px; font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-crumb{ margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }
+
+/* Scrollbars follow the chosen theme (not the operating system's). */
+:root{ color-scheme: light; scrollbar-color: #b9b4aa #efece6; }
+[data-theme="dark"]{ color-scheme: dark; scrollbar-color: #4a4a50 #1f1f23; }

@@ -23,7 +23,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
     Sell: [
       { key: 'scope', label: 'Add or edit scope', run: () => go('scope') },
       { key: 'estimate-doc', label: 'Generate estimate document', run: () => push(`/jobs/${job.id}/proposal`) },
-      { key: 'floorplan', label: 'Plans: build or upload', run: () => go('floorplan') },
+      { key: 'floorplan', label: 'Sketch the floorplan', run: () => go('floorplan') },
       canRfp && { key: 'rfp', label: 'Send an RFP to subs', run: onRfp },
     ],
     Plan: [
@@ -52,6 +52,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
     // A visit, walk, inspection or any other event on this job. Available at
     // every stage because you walk a site before, during and after the work.
     onAddScheduleItem && { key: 'schedule-item', label: 'Add visit (site visit, walk, event)', run: onAddScheduleItem },
+    { key: 'photos', label: 'Add photos', run: () => go('photos') },
     { key: 'message', label: 'Message the customer', run: () => go('messages') },
     { key: 'email', label: 'Email the customer', run: () => go('email') },
     { key: 'invite', label: inviting ? 'Sending invite…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to customer portal', run: onInvite, disabled: inviting },
@@ -71,9 +72,9 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
   return out;
 }
 
-// Desktop dropdown. (On mobile the page renders the same groups inside its
-// bottom sheet.)
-export default function JobQuickActions({ groups }) {
+// Desktop dropdown: the same flat list as the phone's "+" sheet. `items` is
+// built by the job page from buildQuickActions, so gating stays in one place.
+export default function JobQuickActions({ items }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -93,22 +94,17 @@ export default function JobQuickActions({ groups }) {
       </button>
       {open && (
         <div className="quick-actions-menu" role="menu">
-          {groups.map(g => (
-            <div key={g.key} className="quick-actions-group">
-              <div className={`quick-actions-heading ${g.current ? 'is-current' : ''}`}>{g.label}</div>
-              {g.items.map(item => (
-                <button
-                  key={item.key}
-                  type="button"
-                  role="menuitem"
-                  className="quick-actions-item"
-                  disabled={item.disabled}
-                  onClick={() => { setOpen(false); item.run(); }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+          {items.map(item => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              className="quick-actions-item"
+              disabled={item.disabled}
+              onClick={() => { setOpen(false); item.run(); }}
+            >
+              {item.label}
+            </button>
           ))}
         </div>
       )}

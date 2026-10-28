@@ -8,7 +8,7 @@ import PlansPanel from '../../components/PlansPanel';
 import { jobHref } from '../../lib/links';
 
 // Standalone entry to the floorplan tool. The tool itself is FloorplanPanel
-// (also embedded in each job under Sell > Floorplan). Open as
+// (also embedded in each job under the Sketch tab). Open as
 // /floorplan?job=<job id>; with no job this is just a job picker.
 
 export default function FloorplanPage() {
@@ -36,8 +36,8 @@ export default function FloorplanPage() {
     return (
       <AppShell>
         <div className="container">
-          <h2 style={{ color: 'var(--heading)' }}>Plans</h2>
-          <p style={{ color: 'var(--muted, #666)' }}>Pick a job to sketch a floorplan or upload plans for an AI takeoff. You can also open it from any job under Sell &gt; Plans.</p>
+          <h2 style={{ color: 'var(--heading)' }}>Sketch</h2>
+          <p style={{ color: 'var(--muted, #666)' }}>Pick a job to sketch a floorplan or upload an existing sketch for an AI takeoff. You can also open it from any job under Sketch.</p>
           <input className="input" placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 420, marginBottom: 12 }} />
           {list.map(j => (
             <div key={j.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border, #ddd)' }}>

@@ -25,7 +25,7 @@ import EmailThreadCard from '../../../components/EmailThreadCard';
 import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
 import MapLinkMenu from '../../../components/MapLinkMenu';
 import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
-import { OverviewIcon, CalculatorIcon, JobDashboardIcon, InvoiceIcon, PhotosIcon, MaterialSelectionsTabIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon } from '../../../components/icons';
+import { OverviewIcon, CalculatorIcon, JobDashboardIcon, InvoiceIcon, PhotosIcon, SketchIcon, MaterialSelectionsTabIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon } from '../../../components/icons';
 
 // Sub-nav restructure Part 2 (Sep 2026): this file used to also define
 // the 12 card components below directly — now each lives in its own
@@ -59,8 +59,8 @@ import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
 import PlansPanel from '../../../components/PlansPanel';
 import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
 
-// What the phone's "+" button offers, in this order. One flat list: unlike the
-// desktop Quick actions menu it is not regrouped by the stage the job is in.
+// What the "+" button (phone) and the Quick actions menu (computer) offer, in this
+// order. One flat list, not regrouped by the stage the job is in.
 // Each entry names an action from buildQuickActions (components/JobQuickActions.js)
 // so gating (who may send an RFP, which actions wait for approval) stays there.
 const FAB_ACTIONS = [
@@ -73,6 +73,7 @@ const FAB_ACTIONS = [
   ['draw', 'Create New Invoice'],
   ['waiver', 'Request Lien Waiver'],
   ['work-order', 'Create New Work Order'],
+  ['photos', 'Add Photos'],
 ];
 
 // Job page structure (Oct 2026): tabs follow the life of a project instead
@@ -105,7 +106,6 @@ const TABS = [
       { key: 'scope', label: 'Scope' },
       { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
-      { key: 'floorplan', label: 'Plans' },
     ],
   },
   {
@@ -140,6 +140,7 @@ const TABS = [
   },
   { key: 'Schedule', label: 'Schedule', icon: JobDashboardIcon, group: 'always' },
   { key: 'Photos', label: 'Photos', icon: PhotosIcon, group: 'always' },
+  { key: 'Sketch', label: 'Sketch', icon: SketchIcon, group: 'always' },
   { key: 'Documents', label: 'Documents', icon: UpdatesTabIcon, group: 'always' },
   {
     key: 'Messages', label: 'Messages', icon: MessagesIcon, group: 'always',
@@ -638,7 +639,7 @@ export default function JobDetailPage() {
                 shortcuts that duplicate their own tabs — on mobile these
                 move into the ever-present FAB below instead of crowding
                 this row. */}
-            {!isMobile && <JobQuickActions groups={quickGroups} />}
+            {!isMobile && <JobQuickActions items={fabItems} />}
             {/* Stage Advance dropped on mobile — it's an easy accidental
                 tap on a small screen next to Close Lost/Reopen, and the
                 job's stage badge is already visible right above. */}
@@ -810,7 +811,7 @@ export default function JobDetailPage() {
           </EstimateTab>
         )}
 
-        {tab === 'Sell' && section === 'floorplan' && (
+        {tab === 'Sketch' && (
           <PlansPanel jobId={id} embedded onDone={loadJob} />
         )}
 

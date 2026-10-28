@@ -252,3 +252,12 @@ export function UpdatesTabIcon(props) {
     </svg>
   );
 }
+
+export function SketchIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M3 17l1-4L14.5 2.5a1.8 1.8 0 012.5 0l.5.5a1.8 1.8 0 010 2.5L7 16z" />
+      <path d="M12.5 4.5l3 3" />
+    </svg>
+  );
+}

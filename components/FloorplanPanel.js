@@ -9,10 +9,10 @@ import { appHref } from '../lib/links';
 // (fp:ready / fp:load / fp:prefill / fp:changed).
 //
 // Used in two places:
-//   - the job page, Sell > Floorplan  (embedded: no title, no "Change job")
+//   - the job page, the Sketch tab  (embedded: no title, no "Change job")
 //   - the standalone /floorplan?job=<id> page
 // Both pass a jobId; the job picker for /floorplan with no job stays on the page.
-export default function FloorplanPanel({ jobId, embedded = false }) {
+export default function FloorplanPanel({ jobId, embedded = false, extraActions = null }) {
   const [job, setJob] = useState(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -131,10 +131,11 @@ export default function FloorplanPanel({ jobId, embedded = false }) {
     <div>
       <div className="top-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: embedded ? 0 : undefined }}>
         {!embedded && (
-          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Plans{job ? ` — ${job.customer_name || job.estimate_number || ''}` : ''}</h2>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Sketch{job ? ` — ${job.customer_name || job.estimate_number || ''}` : ''}</h2>
         )}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 12, opacity: 0.7 }}>{status}</span>
+        {extraActions}
         <button className="btn btn-sm" disabled={busy} onClick={save}>Save</button>
         <button className="btn btn-sm" disabled={busy} onClick={addScope}>Add scope to job</button>
         <button className="btn btn-sm btn-primary" disabled={busy} onClick={sendToEstimate}>Send to estimate</button>
