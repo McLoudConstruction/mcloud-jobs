@@ -73,7 +73,10 @@ export default function ScopeCard({ job, jobId, onSave }) {
           scope_items: items.filter(t => t.trim()).map(text => ({ text })),
         });
       }
-      rows.push({ job_id: jobId, label: label.trim(), sort_order: (existing?.length || 0) + rows.length });
+      // scope_items must be set explicitly: in a multi-row insert, PostgREST
+      // fills any key missing from a row with null (not the column default),
+      // and the column is NOT NULL.
+      rows.push({ job_id: jobId, label: label.trim(), scope_items: [], sort_order: (existing?.length || 0) + rows.length });
       const { error: insertError } = await supabase.from('estimate_scope_options').insert(rows);
       if (insertError) throw insertError;
       await onSave({ estimate_mode: 'multi' });
