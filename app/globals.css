@@ -2547,3 +2547,132 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .pg-menu .danger{ color: #ff8a80; }
 .pg-status{ font-size: 12.5px; margin-bottom: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pg-status .failed{ color: #a13f3f; font-weight: 600; }
+
+
+/* ---------- Desktop shell: main nav in the top bar, area sidebar on the left ---------- */
+/* Phones keep the bottom nav (see the max-width: 899px block above); every
+   rule here is only reached by markup that AppShell renders on a computer. */
+.shell-topnav{ display: flex; align-items: center; gap: 2px; margin-left: 14px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.shell-topnav::-webkit-scrollbar{ display: none; }
+.shell-topnav-link{
+  position: relative; flex-shrink: 0; padding: 8px 12px; border-radius: 6px;
+  font-size: 14px; font-weight: 500; color: var(--header-text); opacity: 0.72;
+  text-decoration: none; white-space: nowrap;
+}
+.shell-topnav-link:hover{ opacity: 1; background: rgba(255,255,255,0.08); }
+.shell-topnav-link.active{ opacity: 1; color: #f3dca3; background: rgba(201,161,74,0.16); font-weight: 600; }
+.shell-topnav-dot{
+  position: absolute; top: 5px; right: 4px; width: 7px; height: 7px; border-radius: 50%;
+  background: #c0524f; border: 1.5px solid var(--header-bg);
+}
+
+.shell-account{ position: relative; }
+.shell-account-btn{
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--header-line); background: rgba(255,255,255,0.08);
+  color: var(--header-text); font-size: 14px; font-weight: 600;
+}
+.shell-account-btn:hover{ background: rgba(255,255,255,0.14); }
+.shell-account-menu{
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px; z-index: 80;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 6px;
+}
+.shell-account-item{
+  display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
+  padding: 10px 12px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); font: inherit; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer;
+}
+.shell-account-item:hover{ background: var(--panel); }
+.shell-account-icon{ width: 18px; height: 18px; opacity: 0.8; flex-shrink: 0; }
+.shell-account-divider{ height: 1px; background: var(--line); margin: 6px 4px; }
+
+.jump-search{ position: relative; }
+.jump-search-box{
+  display: flex; align-items: center; gap: 8px; width: 240px; height: 36px; box-sizing: border-box;
+  padding: 0 10px; border: 1px solid var(--header-line); border-radius: 8px;
+  background: rgba(255,255,255,0.06); color: var(--header-text);
+}
+.jump-search-box:focus-within{ border-color: #c9a161; }
+.jump-search-box input{
+  flex: 1; min-width: 0; width: 100%; height: auto; min-height: 0; margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
+  color: inherit; font: inherit; font-size: 14px;
+}
+.jump-search-box input::placeholder{ color: var(--header-text); opacity: 0.55; }
+.jump-search-hint{ font-size: 11px; line-height: 1; padding: 2px 6px; border: 1px solid var(--header-line); border-radius: 4px; opacity: 0.7; }
+.jump-search-panel{
+  position: absolute; right: 0; top: calc(100% + 8px); width: 380px; max-width: 90vw; z-index: 80;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 6px;
+}
+.jump-search-row{
+  display: flex; flex-direction: column; gap: 2px; width: 100%; box-sizing: border-box;
+  padding: 9px 12px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.jump-search-row.active{ background: var(--panel); }
+.jump-search-main{ font-size: 14px; }
+.jump-search-sub{ font-size: 12px; color: var(--ink-soft); }
+.jump-search-empty{ padding: 12px; font-size: 13px; color: var(--ink-soft); }
+
+.shell-sidebar-wide{ width: 256px; box-sizing: border-box; padding: 18px 10px 24px; }
+.area-nav{ display: flex; flex-direction: column; gap: 2px; }
+.area-nav-title{ padding: 0 12px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+.area-nav-link{ display: block; padding: 10px 12px; border-radius: 6px; font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
+.area-nav-link:hover{ background: var(--line); }
+.area-nav-link.active{
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ---------- Job navigation tree (left sidebar on a computer, Sections sheet on a phone) ---------- */
+.job-nav{ display: flex; flex-direction: column; gap: 2px; }
+.job-nav-head{ display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 0 12px 14px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.job-nav-back{ margin-bottom: 10px; font-size: 13px; color: var(--ink-soft); text-decoration: none; }
+.job-nav-back:hover{ color: var(--ink); text-decoration: underline; }
+.job-nav-number{ font-size: 16px; font-weight: 700; color: var(--heading); }
+.job-nav-address{ font-size: 13px; color: var(--ink-soft); }
+.job-nav-head .badge{ margin-top: 6px; }
+.job-nav-group-btn{
+  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; min-height: 40px;
+  padding: 0 12px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.job-nav-group-btn:hover{ background: var(--line); }
+.job-nav-chevron{ flex-shrink: 0; transform: rotate(-90deg); transition: transform 0.15s ease; }
+.job-nav-chevron.open{ transform: none; }
+.job-nav-current{ margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent); }
+.job-nav-current::before{ content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.job-nav-link, .job-nav-top{
+  display: block; width: 100%; box-sizing: border-box; border: 0; border-radius: 6px; background: transparent;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.job-nav-link{ min-height: 36px; padding: 0 12px 0 34px; font-size: 14px; color: var(--ink-soft); }
+.job-nav-top{ min-height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.job-nav-link:hover, .job-nav-top:hover{ background: var(--line); color: var(--ink); }
+.job-nav-link.active, .job-nav-top.active{
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent);
+}
+.job-nav-divider{ height: 1px; margin: 10px 12px; background: var(--line); }
+.job-nav-always{ display: flex; flex-direction: column; gap: 2px; }
+.job-nav-always-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+
+/* Phone: the sheet is the same tree with bigger tap targets. */
+.job-nav-sheet .job-nav-head{ flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.job-nav-sheet .job-nav-address{ flex-basis: 100%; order: 3; }
+.job-nav-sheet .job-nav-head .badge{ margin-top: 0; }
+.job-nav-sheet .job-nav-group-btn{ min-height: 46px; font-size: 15px; }
+.job-nav-sheet .job-nav-link{ min-height: 44px; font-size: 15px; }
+.job-nav-sheet .job-nav-top{ min-height: 44px; font-size: 15px; }
+
+.job-sections-bar{
+  display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; min-height: 56px;
+  margin: 0 0 18px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card-bg); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.job-sections-bar-text{ flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.job-sections-bar-kicker{ font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-soft); }
+.job-sections-bar-value{ font-size: 16px; font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-crumb{ margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }

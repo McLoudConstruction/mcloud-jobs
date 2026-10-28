@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
@@ -7,6 +7,7 @@ import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import BottomSheet from '../../../components/BottomSheet';
+import JobSidebar from '../../../components/JobSidebar';
 import JobQuickActions, { buildQuickActions } from '../../../components/JobQuickActions';
 import PhotoGallery from '../../../components/PhotoGallery';
 import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
@@ -57,6 +58,22 @@ import WarrantyCard from '../../../components/WarrantyCard';
 import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
 import PlansPanel from '../../../components/PlansPanel';
 import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
+
+// What the phone's "+" button offers, in this order. One flat list: unlike the
+// desktop Quick actions menu it is not regrouped by the stage the job is in.
+// Each entry names an action from buildQuickActions (components/JobQuickActions.js)
+// so gating (who may send an RFP, which actions wait for approval) stays there.
+const FAB_ACTIONS = [
+  ['internal', 'Create Internal Update'],
+  ['rfp', 'Create RFP'],
+  ['job-cost', 'Add Job Cost/Receipt'],
+  ['update', 'Post Project Update'],
+  ['schedule-item', 'Add New Visit'],
+  ['change-order', 'Create Change Order'],
+  ['draw', 'Create New Invoice'],
+  ['waiver', 'Request Lien Waiver'],
+  ['work-order', 'Create New Work Order'],
+];
 
 // Job page structure (Oct 2026): tabs follow the life of a project instead
 // of the feature that produced the data.
@@ -151,6 +168,7 @@ export default function JobDetailPage() {
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const [isMobile, setIsMobile] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
   const [rfpPanelOpen, setRfpPanelOpen] = useState(false);
   const [scheduleItemOpen, setScheduleItemOpen] = useState(false);
 
@@ -538,10 +556,32 @@ export default function JobDetailPage() {
     onRfp: () => setRfpPanelOpen(true), onInvite: invitePortal,
     onAddScheduleItem: () => setScheduleItemOpen(true),
   });
+  const allQuickItems = quickGroups.flatMap(g => g.items);
+  const fabItems = FAB_ACTIONS
+    .map(([key, label]) => { const item = allQuickItems.find(i => i.key === key); return item ? { ...item, label } : null; })
+    .filter(Boolean);
+
+  // "Plan / Budget": where you are, shown above the title on a computer and
+  // on the Sections bar on a phone.
+  const activeSectionDef = activeTabDef.sections?.find(sec => sec.key === section);
+  const locationLabel = activeSectionDef ? `${activeTabDef.label} / ${activeSectionDef.label}` : activeTabDef.label;
+  const jobNav = (variant, after) => (
+    <JobSidebar
+      job={job}
+      tabs={TABS}
+      tab={tab}
+      section={section}
+      currentStageTab={currentStageTab}
+      variant={variant}
+      onSelect={(tabKey, sectionKey) => { goToTab(tabKey, sectionKey); if (after) after(); }}
+    />
+  );
   return (
-    <AppShell>
+    <AppShell sidebar={jobNav('sidebar')}>
       <div className="container">
-        <Breadcrumb href="/jobs" label="Back to Overview" />
+        {isMobile
+          ? <Breadcrumb href="/jobs" label="Back to Overview" />
+          : <div className="job-crumb">{locationLabel}</div>}
 
         {offlineViewing && (
           <div className="sync-badge sync-badge-offline">
@@ -618,15 +658,10 @@ export default function JobDetailPage() {
               <PlusIcon width={24} height={24} />
             </button>
             <BottomSheet open={fabOpen} onClose={() => setFabOpen(false)} title="Quick actions">
-              {quickGroups.map(g => (
-                <div key={g.key}>
-                  <div className={`quick-actions-heading ${g.current ? 'is-current' : ''}`}>{g.label}</div>
-                  {g.items.map(item => (
-                    <button key={item.key} type="button" className="more-sheet-link" disabled={item.disabled} onClick={() => { setFabOpen(false); item.run(); }}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+              {fabItems.map(item => (
+                <button key={item.key} type="button" className="more-sheet-link" disabled={item.disabled} onClick={() => { setFabOpen(false); item.run(); }}>
+                  {item.label}
+                </button>
               ))}
             </BottomSheet>
           </>
@@ -650,51 +685,34 @@ export default function JobDetailPage() {
             {inviteResult}
           </div>
         )}
-        <div className="stage-tabs">
-          {TABS.map((t, i) => {
-            // A thin divider marks where one group of tabs ends (home | the
-            // four project stages | tabs that matter at every stage).
-            const startsGroup = i > 0 && TABS[i - 1].group !== t.group;
-            const isCurrentStage = t.group === 'stage' && t.key === currentStageTab;
-            return (
-              <Fragment key={t.key}>
-                {startsGroup && <span className="stage-tabs-divider" aria-hidden="true" />}
-                <button
-                  className={`stage-tab ${tab === t.key ? 'active' : ''} ${isCurrentStage ? 'is-current' : ''}`}
-                  onClick={() => goToTab(t.key)}
-                  title={isCurrentStage ? `This job is in ${STAGE_LABELS[job.stage]}` : undefined}
-                >
-                  {t.icon && <t.icon width={16} height={16} />}
-                  {t.label}
-                </button>
-              </Fragment>
-            );
-          })}
-        </div>
+        {isMobile && (
+          <>
+            <button type="button" className="job-sections-bar" aria-haspopup="dialog" onClick={() => setSectionsOpen(true)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="14" y2="17" />
+              </svg>
+              <span className="job-sections-bar-text">
+                <span className="job-sections-bar-kicker">SECTIONS</span>
+                <span className="job-sections-bar-value">{locationLabel}</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <BottomSheet open={sectionsOpen} onClose={() => setSectionsOpen(false)} title="Sections">
+              {jobNav('sheet', () => setSectionsOpen(false))}
+            </BottomSheet>
+          </>
+        )}
 
-        {activeTabDef?.sections && (
-          <div className="tab-sections">
-            <div className="tab-sections-pills">
-              {activeTabDef.sections.map(s => (
-                <button
-                  key={s.key}
-                  className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
-                  onClick={() => goToSection(s.key)}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            {/* Generating the estimate is the primary action for the whole
-                estimating side of Sell, so it is reachable from Scope, Cost
-                and Pricing without hunting for it. */}
-            {tab === 'Sell' && ['scope', 'cost', 'pricing'].includes(section) && (
-              <div className="tab-sections-actions">
-                <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
-                {job.proposal_sent_at && (
-                  <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
-                )}
-              </div>
+        {/* Generating the estimate is the primary action for the whole
+            estimating side of Sell, so it is reachable from Scope, Cost
+            and Pricing without hunting for it. */}
+        {tab === 'Sell' && ['scope', 'cost', 'pricing'].includes(section) && (
+          <div className="tab-sections-actions" style={{ marginBottom: 18 }}>
+            <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
+            {job.proposal_sent_at && (
+              <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
             )}
           </div>
         )}

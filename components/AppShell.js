@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
@@ -9,6 +9,7 @@ import { useTheme } from '../lib/useTheme';
 import { startPhotoQueueWatchers } from '../lib/jobPhotos';
 import ScrollFadeRow from './ScrollFadeRow';
 import BottomSheet from './BottomSheet';
+import JobJumpSearch from './JobJumpSearch';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -115,7 +116,9 @@ function isMoreSheetActive(pathname) {
   return MORE_SHEET_ITEMS.some(item => pathname === item.href || pathname.startsWith(item.href + '/'));
 }
 
-export default function AppShell({ children }) {
+// `sidebar` (optional, desktop only) replaces the area's own page list in the
+// left sidebar. The job page uses it to show its stage and section tree.
+export default function AppShell({ children, sidebar }) {
   const { theme, setTheme } = useTheme();
   const { settings } = useSettings();
   const pathname = usePathname();
@@ -126,6 +129,28 @@ export default function AppShell({ children }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState('');
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [userInitial, setUserInitial] = useState('');
+  const accountRef = useRef(null);
+
+  // The account button shows the first letter of the signed-in email.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getSession().then(({ data }) => {
+      const email = data?.session?.user?.email || '';
+      if (alive) setUserInitial(email ? email[0].toUpperCase() : '');
+    });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onDown = e => { if (accountRef.current && !accountRef.current.contains(e.target)) setAccountOpen(false); };
+    const onKey = e => { if (e.key === 'Escape') setAccountOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [accountOpen]);
 
   // Resume any photos left in the local upload queue, on every page.
   useEffect(() => startPhotoQueueWatchers(), []);
@@ -192,7 +217,9 @@ export default function AppShell({ children }) {
 
   const logoSize = isMobile ? settings.logo_size_mobile : settings.logo_size_desktop;
 
-  const sidebarWidth = isMobile ? 0 : 84;
+  // Computer layout: main nav lives in the top bar, and the left sidebar holds
+  // whatever belongs to the area you are in. Phones keep the bottom nav.
+  const showDesktopNav = mounted && !isMobile;
   const currentSection = getCurrentSection(pathname);
   // Messages' only child is Notifications, which the Inbox page (both
   // mobile and now desktop) merges into its own All/Messages/System chip
@@ -200,6 +227,19 @@ export default function AppShell({ children }) {
   // that would just duplicate the same switch with a second, redundant
   // control.
   const showSubnav = shouldShowSubnav(currentSection, pathname) && currentSection?.href !== '/messages';
+
+  const areaNav = showSubnav && (
+    <nav className="area-nav">
+      <div className="area-nav-title">{currentSection.label}</div>
+      <Link href={currentSection.href} className={`area-nav-link ${pathname === currentSection.href ? 'active' : ''}`}>Overview</Link>
+      {currentSection.children.map(child => (
+        <Link key={child.href} href={child.href} className={`area-nav-link ${pathname === child.href || pathname.startsWith(child.href + '/') ? 'active' : ''}`}>
+          {child.label}
+        </Link>
+      ))}
+    </nav>
+  );
+  const asideContent = showDesktopNav ? (sidebar || areaNav || null) : null;
 
   const subnavStrip = showSubnav && (
     <ScrollFadeRow trackClassName="section-subnav">
@@ -220,7 +260,23 @@ export default function AppShell({ children }) {
             ? <img src={settings.logo_url} alt="Logo" style={{ height: logoSize || 32, width: 'auto' }} />
             : <span className="brand">McLoud <span>Jobs</span></span>}
         </div>
+        {showDesktopNav && (
+          <nav className="shell-topnav" aria-label="Main">
+            {NAV_ITEMS.map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`shell-topnav-link ${isSectionActive(item, pathname) ? 'active' : ''}`}
+                aria-current={isSectionActive(item, pathname) ? 'page' : undefined}
+              >
+                {item.label}
+                {item.href === '/messages' && unreadCount > 0 && <span className="shell-topnav-dot" />}
+              </Link>
+            ))}
+          </nav>
+        )}
         <div className="shell-topbar-actions">
+          {showDesktopNav && <JobJumpSearch />}
           <button
             type="button"
             className={`shell-topbar-icon-btn ${refreshing ? 'spinning' : ''}`}
@@ -235,62 +291,46 @@ export default function AppShell({ children }) {
             <BellIcon />
             {unreadCount > 0 && <span className="shell-topbar-dot" />}
           </Link>
+          {showDesktopNav && (
+            <div ref={accountRef} className="shell-account">
+              <button
+                type="button"
+                className="shell-account-btn"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                aria-label="Account menu: theme, settings, sign out"
+                onClick={() => setAccountOpen(o => !o)}
+              >
+                {userInitial}
+              </button>
+              {accountOpen && (
+                <div className="shell-account-menu" role="menu">
+                  <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
+                    {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
+                    {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+                  </button>
+                  <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
+                    <SettingsIcon className="shell-account-icon" />
+                    Settings
+                  </Link>
+                  <div className="shell-account-divider" />
+                  <button type="button" role="menuitem" className="shell-account-item" onClick={handleSignOut}>
+                    <SignOutIcon className="shell-account-icon" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="shell-body">
-        <div
-          className="shell-sidebar"
-          style={{ width: mounted ? sidebarWidth : 0 }}
-        >
-          <div className="shell-sidebar-inner">
-            <div className="shell-nav-links">
-              {NAV_ITEMS.map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`shell-nav-link ${isSectionActive(item, pathname) ? 'active' : ''}`}
-                >
-                  {item.icon && (
-                    <span style={{ position: 'relative', display: 'inline-flex' }}>
-                      <item.icon className="shell-nav-icon" />
-                      {item.href === '/messages' && unreadCount > 0 && <span className="shell-nav-dot" />}
-                    </span>
-                  )}
-                  <span className="shell-nav-label">{item.label}</span>
-                </Link>
-              ))}
-              <div className="shell-nav-divider" />
-            </div>
-
-            <div>
-              <button
-                className="shell-nav-link theme-icon-toggle"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                aria-label="Toggle light/dark mode"
-                type="button"
-              >
-                {theme === 'dark' ? <MoonIcon className="shell-nav-icon" /> : <SunIcon className="shell-nav-icon" />}
-                <span className="shell-nav-label">Theme</span>
-              </button>
-              <div className="shell-nav-divider" />
-              <Link
-                href="/settings"
-                className={`shell-nav-link ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'active' : ''}`}
-              >
-                <SettingsIcon className="shell-nav-icon" />
-                <span className="shell-nav-label">Settings</span>
-              </Link>
-              <button
-                className="shell-nav-link signout-link"
-                onClick={handleSignOut}
-              >
-                <SignOutIcon className="shell-nav-icon" />
-                <span className="shell-nav-label">Sign out</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        {asideContent && (
+          <aside className="shell-sidebar shell-sidebar-wide" aria-label={sidebar ? 'Page navigation' : `${currentSection.label} pages`}>
+            {asideContent}
+          </aside>
+        )}
 
         {isMobile && (
           <nav className="shell-bottomnav">
@@ -360,7 +400,7 @@ export default function AppShell({ children }) {
             leaving a dead strip of page between the icon rail and the real
             content that belonged to neither — unscrollable, unclickable. */}
         <div className="shell-content">
-          {subnavStrip}
+          {isMobile ? subnavStrip : null}
           {children}
         </div>
       </div>
