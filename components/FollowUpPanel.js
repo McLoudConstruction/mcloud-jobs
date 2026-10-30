@@ -133,16 +133,17 @@ export default function FollowUpPanel() {
 
       {data && (
         <>
-          <div className="tab-sections-pills">
+          <select
+            value={tab}
+            onChange={e => setTab(e.target.value)}
+            aria-label="Follow up list"
+            style={{ width: '100%', marginBottom: 4 }}
+          >
             {TABS.map(t => {
               const count = t.key === 'scorecard' ? null : data[t.key]?.count;
-              return (
-                <button key={t.key} type="button" className={`tab-section-btn ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-                  {t.label}{count ? ` (${count})` : ''}
-                </button>
-              );
+              return <option key={t.key} value={t.key}>{t.label}{count ? ` (${count})` : ''}</option>;
             })}
-          </div>
+          </select>
 
           {list && list.items.length === 0 && <div className="empty-state" style={{ marginTop: 10 }}>{current.empty}</div>}
 
