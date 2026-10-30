@@ -17,7 +17,7 @@ import MobileOverflowMenu from '../../components/MobileOverflowMenu';
 import { formatPhone } from '../../lib/constants';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncCompanyContact } from '../../lib/contactSync';
-import { exportToSheet } from '../../lib/exportToSheet';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 
 const COMPANY_TYPES = ['Management Company', 'Ownership Group', 'REIT', 'Developer', 'Other'];
 

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 import { compressImage } from '../lib/imageCompress';
 import { aiFetch } from '../lib/aiFetch';
+import PhotoGallery from './PhotoGallery';
 
 function fmtDate(v) {
   if (!v) return '—';

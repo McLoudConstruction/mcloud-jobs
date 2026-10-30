@@ -1733,6 +1733,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   max-height: 80vh; overflow-y: auto;
 }
 .bottom-sheet-handle{ width: 36px; height: 4px; border-radius: 3px; background: var(--panel-line); margin: 4px auto 14px; }
+/* Drag-to-close zones: the handle, the title, and anything marked
+   data-sheet-drag. touch-action none keeps the browser from turning a
+   downward drag there into a scroll of the sheet. */
+.bottom-sheet-handle, .bottom-sheet-title, .bottom-sheet [data-sheet-drag]{ touch-action: none; }
+.bottom-sheet-handle{ position: relative; }
+.bottom-sheet-handle::before{ content: ''; position: absolute; left: -40px; right: -40px; top: -10px; bottom: -10px; }
 .bottom-sheet-title{ font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); padding: 0 10px 10px; }
 
 /* The More sheet's own contents: nav links styled like a taller version of

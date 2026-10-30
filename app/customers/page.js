@@ -19,7 +19,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import { CONTACT_TYPES, REAL_ESTATE_AGENT_TYPE, PHONE_TYPES, EMAIL_CONFIDENCE, EMAIL_BLOCKED_REASONS, EMAIL_BLOCK_LABELS, formatPhone } from '../../lib/constants';
 import { useStaffAuth } from '../../lib/staffAuthContext';
 import { parseVCard } from '../../lib/vcard';
-import { exportToSheet } from '../../lib/exportToSheet';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { resolveMainPropertyId } from '../../lib/contactProperties';

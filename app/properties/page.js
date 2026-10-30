@@ -21,7 +21,7 @@ import { PROPERTY_TYPES, PROSPECT_STAGES, PROSPECT_STAGE_LABELS, formatPhone } f
 import { useCustomColumns, updateCustomFieldValue } from '../../lib/customColumns';
 import { syncPropertyContact, linkOrCreateCompanyByName } from '../../lib/contactSync';
 import { contactsAtProperty, searchPeople, linkContactToProperty, unlinkContactFromProperty } from '../../lib/contactProperties';
-import { exportToSheet } from '../../lib/exportToSheet';
+import { exportToSheet, customColumnsToExport } from '../../lib/exportToSheet';
 import { mapRow, splitDuplicates } from '../../lib/propertyImport';
 
 const EMPTY_FORM = {
