@@ -188,6 +188,15 @@ export function RefreshIcon(props) {
   );
 }
 
+export function UserIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="10" cy="6.5" r="3" />
+      <path d="M3.5 17c.6-3 3.2-4.7 6.5-4.7s5.9 1.7 6.5 4.7" />
+    </svg>
+  );
+}
+
 export function SignOutIcon(props) {
   return (
     <svg {...common} {...props}>

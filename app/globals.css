@@ -2583,8 +2583,23 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   color: var(--header-text); font-size: 14px; font-weight: 600;
 }
 .shell-account-btn:hover{ background: rgba(255,255,255,0.14); }
+/* two initials need a little less size and tighter tracking than one letter */
+.shell-account-btn{ font-size: 13px; letter-spacing: 0.02em; padding: 0; line-height: 1; }
+.shell-account-head{ padding: 8px 12px 6px; max-width: 260px; }
+.shell-account-name{ font-size: 14px; font-weight: 600; color: var(--heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-account-sub{ font-size: 12px; color: var(--ink-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.account-hero{ display: flex; align-items: center; gap: 16px; }
+.account-avatar{
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--header-bg); color: var(--header-text);
+  font-size: 20px; font-weight: 600; letter-spacing: 0.02em;
+}
+.account-hero-name{ font-size: 18px; font-weight: 600; color: var(--heading); }
+.account-hero-sub{ font-size: 13px; color: var(--ink-soft); margin-top: 2px; word-break: break-all; }
 .shell-account-menu{
-  position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px; z-index: 80;
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; z-index: 80;
   background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 6px;
 }

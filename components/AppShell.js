@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { useSettings } from '../lib/useSettings';
-import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, ScheduleIcon, MoreIcon, BellIcon, RefreshIcon } from './icons';
+import { DashboardIcon, SalesIcon, JobDashboardIcon, SubcontractorsIcon, FinanceIcon, SettingsIcon, SignOutIcon, MessagesIcon, SunIcon, MoonIcon, UserIcon, ScheduleIcon, MoreIcon, BellIcon, RefreshIcon } from './icons';
 import { useTheme } from '../lib/useTheme';
+import { useStaffAuth } from '../lib/staffAuthContext';
+import { canAccessPath, ROLE_LABELS } from '../lib/permissions';
+import { initialsFor, displayNameFor } from '../lib/userDisplay';
 import { startPhotoQueueWatchers } from '../lib/jobPhotos';
 import ScrollFadeRow from './ScrollFadeRow';
 import BottomSheet from './BottomSheet';
@@ -78,6 +81,7 @@ const MORE_SHEET_ITEMS = [
   { href: '/messages', label: 'Inbox', icon: MessagesIcon, showUnreadDot: true },
   { href: '/subcontractors', label: 'Subcontractors', icon: SubcontractorsIcon },
   { href: '/financials', label: 'Financials', icon: FinanceIcon },
+  { href: '/settings/account', label: 'Account', icon: UserIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -112,8 +116,15 @@ function shouldShowSubnav(item, pathname) {
   return item.children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'));
 }
 
+// /settings/account is its own More-sheet entry, so it must not also light up
+// the broader /settings entry.
+function isMoreItemActive(item, pathname) {
+  if (item.href === '/settings' && pathname.startsWith('/settings/account')) return false;
+  return pathname === item.href || pathname.startsWith(item.href + '/');
+}
+
 function isMoreSheetActive(pathname) {
-  return MORE_SHEET_ITEMS.some(item => pathname === item.href || pathname.startsWith(item.href + '/'));
+  return MORE_SHEET_ITEMS.some(item => isMoreItemActive(item, pathname));
 }
 
 // `sidebar` (optional, desktop only) replaces the area's own page list in the
@@ -130,18 +141,15 @@ export default function AppShell({ children, sidebar }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
-  const [userInitial, setUserInitial] = useState('');
   const accountRef = useRef(null);
 
-  // The account button shows the first letter of the signed-in email.
-  useEffect(() => {
-    let alive = true;
-    supabase.auth.getSession().then(({ data }) => {
-      const email = data?.session?.user?.email || '';
-      if (alive) setUserInitial(email ? email[0].toUpperCase() : '');
-    });
-    return () => { alive = false; };
-  }, []);
+  // The account button shows the signed-in person's first and last initial,
+  // and the menu opens with their full name.
+  const { fullName, email, role } = useStaffAuth();
+  const userInitials = initialsFor(fullName, email);
+  const userName = displayNameFor(fullName, email);
+  const roleLabel = role ? (ROLE_LABELS[role] || role) : '';
+  const canOpenSettings = canAccessPath(role, '/settings');
 
   useEffect(() => {
     if (!accountOpen) return;
@@ -298,21 +306,35 @@ export default function AppShell({ children, sidebar }) {
                 className="shell-account-btn"
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
-                aria-label="Account menu: theme, settings, sign out"
+                aria-label={userName ? `Account menu for ${userName}` : 'Account menu'}
+                title={userName || undefined}
                 onClick={() => setAccountOpen(o => !o)}
               >
-                {userInitial}
+                {userInitials}
               </button>
               {accountOpen && (
                 <div className="shell-account-menu" role="menu">
+                  <div className="shell-account-head">
+                    <div className="shell-account-name">{userName || 'Signed in'}</div>
+                    {(roleLabel || email) && (
+                      <div className="shell-account-sub">{roleLabel}{roleLabel && email ? ' · ' : ''}{email && email !== userName ? email : ''}</div>
+                    )}
+                  </div>
+                  <div className="shell-account-divider" />
+                  <Link href="/settings/account" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
+                    <UserIcon className="shell-account-icon" />
+                    Account
+                  </Link>
                   <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
                     {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
                     {theme === 'dark' ? 'Dark mode' : 'Light mode'}
                   </button>
-                  <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
-                    <SettingsIcon className="shell-account-icon" />
-                    Settings
-                  </Link>
+                  {canOpenSettings && (
+                    <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
+                      <SettingsIcon className="shell-account-icon" />
+                      Settings
+                    </Link>
+                  )}
                   <div className="shell-account-divider" />
                   <button type="button" role="menuitem" className="shell-account-item" onClick={handleSignOut}>
                     <SignOutIcon className="shell-account-icon" />
@@ -363,8 +385,8 @@ export default function AppShell({ children, sidebar }) {
         )}
 
         <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
-          {MORE_SHEET_ITEMS.map(item => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/');
+          {MORE_SHEET_ITEMS.filter(item => canAccessPath(role, item.href)).map(item => {
+            const active = isMoreItemActive(item, pathname);
             return (
               <Link
                 key={item.href}

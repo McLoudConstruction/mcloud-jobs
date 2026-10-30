@@ -7,6 +7,7 @@ import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import StaffUsersPanel from '../../components/StaffUsersPanel';
 import BotKeysPanel from '../../components/BotKeysPanel';
+import AccountPanel from '../../components/AccountPanel';
 import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
 import ColorField from '../../components/ColorField';
@@ -18,7 +19,7 @@ import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 import { settingsHref } from '../../lib/links';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users', 'Bots'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users', 'Bots', 'Account'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -295,6 +296,8 @@ function SettingsPageInner() {
             <button key={t} className={`stage-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
           ))}
         </div>
+
+        {tab === 'Account' && <AccountPanel />}
 
         {tab === 'Cosmetic' && (
         <>
