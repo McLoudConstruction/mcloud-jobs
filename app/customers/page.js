@@ -12,6 +12,7 @@ import SendEmailButton from '../../components/SendEmailButton';
 import DataTable from '../../components/DataTable';
 import AddColumnButton from '../../components/AddColumnButton';
 import ActionsMenu from '../../components/ActionsMenu';
+import FilterMenu from '../../components/FilterMenu';
 import CustomFieldCell from '../../components/CustomFieldCell';
 import MobileFab from '../../components/MobileFab';
 import MobileOverflowMenu from '../../components/MobileOverflowMenu';
@@ -554,6 +555,12 @@ export default function CustomersPage() {
 
   if (loading || !session) return null;
 
+  // The list toggles that used to be loose checkboxes under the search bar.
+  const filterOptions = [
+    { label: `Show inactive (${inactiveCount})`, checked: showInactive, onChange: setShowInactive, hidden: inactiveCount === 0 },
+    { label: `Show test records (${testCount})`, checked: showTest, onChange: setShowTest, hidden: testCount === 0 },
+  ];
+
   return (
     <AppShell>
       <div className="container">
@@ -562,6 +569,7 @@ export default function CustomersPage() {
           {!isMobile && (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={openNew}>+ Add new contact</button>
+              <FilterMenu options={filterOptions} />
               <ActionsMenu
                 items={[
                   { label: importing ? 'Importing…' : 'Import from Excel', disabled: importing, onClick: () => fileInputRef.current?.click() },
@@ -574,11 +582,14 @@ export default function CustomersPage() {
             </div>
           )}
           {isMobile && (
-            <MobileOverflowMenu>
-              <button className="btn btn-sm" onClick={exportContacts}>↓ Export to Excel</button>
-              <button className="btn btn-sm" onClick={openDuplicates}>Find duplicate emails</button>
-              <AddColumnButton addColumn={addColumn} />
-            </MobileOverflowMenu>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FilterMenu options={filterOptions} />
+              <MobileOverflowMenu>
+                <button className="btn btn-sm" onClick={exportContacts}>↓ Export to Excel</button>
+                <button className="btn btn-sm" onClick={openDuplicates}>Find duplicate emails</button>
+                <AddColumnButton addColumn={addColumn} />
+              </MobileOverflowMenu>
+            </div>
           )}
         </div>
 
@@ -864,18 +875,6 @@ export default function CustomersPage() {
         <div className="search-bar">
           <input placeholder="Search by name, company or team/office…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {inactiveCount > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
-            Show inactive ({inactiveCount})
-          </label>
-        )}
-        {testCount > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 400, margin: '0 0 8px' }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={showTest} onChange={e => setShowTest(e.target.checked)} />
-            Show test records ({testCount})
-          </label>
-        )}
 
         <PopupModal open={dupGroups !== null} onClose={() => setDupGroups(null)} maxWidth={760}>
           <h3 style={{ marginTop: 0 }}>Duplicate emails</h3>

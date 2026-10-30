@@ -300,10 +300,8 @@ export default function SalesDashboardPage() {
           )}
         </div>
 
-        <div className="dash-section" style={{ paddingTop: isMobile ? 4 : 8 }}>
-          <FollowUpPanel />
-        </div>
-
+        <div className="sales-grid">
+        <div className="sales-main">
         {showForm && (
           <form className="card" onSubmit={submit}>
             <h3>{editingId ? 'Edit lead' : 'New lead'}</h3>
@@ -417,14 +415,30 @@ export default function SalesDashboardPage() {
               const badgeLabel = o.stage === 'converted' ? 'Converted' : STAGE_LABELS[o.stage];
               return (
                 <div className="opp-card" key={o.id}>
-                  <button type="button" className="opp-card-head" onClick={() => toggleExpanded(o.id)}>
-                    <span className="opp-card-text">
-                      <span className="opp-card-title">{o.company || o.contact_name || 'Unnamed'}{o.project ? ` — ${o.project}` : ''}</span>
-                      <span className="opp-card-sub">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
-                    </span>
-                    <span className={`badge ${badgeClass}`} style={{ flexShrink: 0 }}>{badgeLabel}</span>
-                    <span className={`opp-card-chevron ${expanded ? 'open' : ''}`} aria-hidden="true">›</span>
-                  </button>
+                  <div className="opp-card-head">
+                    <button type="button" className="opp-card-toggle" onClick={() => toggleExpanded(o.id)} aria-expanded={expanded}>
+                      <span className="opp-card-text">
+                        <span className="opp-card-title">{o.company || o.contact_name || 'Unnamed'}{o.project ? ` — ${o.project}` : ''}</span>
+                        <span className="opp-card-sub">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
+                      </span>
+                    </button>
+                    {/* Quick stage change: the pill is the dropdown. A converted
+                        lead is now a job, so it stays a plain badge. Choosing
+                        Lost opens the reason prompt, same as before. */}
+                    {o.stage === 'converted' ? (
+                      <span className={`badge ${badgeClass}`} style={{ flexShrink: 0 }}>{badgeLabel}</span>
+                    ) : (
+                      <select
+                        className={`badge stage-pill ${badgeClass}`}
+                        value={o.stage}
+                        aria-label={`Stage for ${o.company || o.contact_name || 'lead'}`}
+                        onChange={e => setStage(o.id, e.target.value)}
+                      >
+                        {['prospecting', 'contacted', 'site_request', 'lost'].map(st => <option key={st} value={st}>{STAGE_LABELS[st]}</option>)}
+                      </select>
+                    )}
+                    <button type="button" className={`opp-card-chevron ${expanded ? 'open' : ''}`} onClick={() => toggleExpanded(o.id)} aria-label={expanded ? 'Collapse' : 'Expand'}>›</button>
+                  </div>
 
                   {/* Convert to Opportunity (and View Job, for a converted
                       lead) only appear once the card is expanded — a
@@ -466,9 +480,6 @@ export default function SalesDashboardPage() {
                         o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>
                       ) : (
                         <>
-                          <select value={o.stage} onChange={e => setStage(o.id, e.target.value)}>
-                            {['prospecting', 'contacted', 'site_request', 'lost'].map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                          </select>
                           {ACTIVE_STAGES.includes(o.stage) && (
                             <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
                           )}
@@ -492,20 +503,44 @@ export default function SalesDashboardPage() {
           </div>
         )}
 
+        </div>
+        <aside className="sales-aside">
+          <FollowUpPanel />
+        </aside>
+        </div>
+
         <style jsx>{`
+          .sales-grid{ display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 36px; align-items: start; padding-top: 8px; }
+          .sales-main{ min-width: 0; }
+          .sales-aside{ min-width: 0; border-left: 1px solid var(--line); padding-left: 28px; }
+          @media (max-width: 1100px){
+            .sales-grid{ grid-template-columns: minmax(0, 1fr); gap: 8px; }
+            .sales-aside{ border-left: none; padding-left: 0; border-top: 1px solid var(--line); padding-top: 18px; }
+          }
           .opp-mobile-list{ display: flex; flex-direction: column; }
           .opp-card{ border-bottom: 1px solid var(--line); }
           .opp-card:last-child{ border-bottom: none; }
           .opp-card-head{
             display: flex; align-items: center; gap: 10px; width: 100%;
-            padding: 14px 4px; border: none; background: transparent;
+            padding: 6px 4px; background: transparent;
+          }
+          .opp-card-head:hover{ background: var(--panel); }
+          .opp-card-toggle{
+            display: flex; align-items: center; flex: 1; min-width: 0;
+            padding: 8px 0; border: none; background: transparent;
             text-align: left; cursor: pointer; font-family: inherit;
           }
-          .opp-card-head:active, .opp-card-head:hover{ background: var(--panel); }
+          .stage-pill{
+            flex-shrink: 0; width: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
+            border: none; margin: 0; padding: 4px 24px 4px 12px; color: #fff;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center;
+          }
+          .stage-pill option{ color: var(--ink); background: var(--card-bg); }
           .opp-card-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
           .opp-card-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
           .opp-card-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
-          .opp-card-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); transition: transform 0.15s; }
+          .opp-card-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); transition: transform 0.15s; background: none; border: none; cursor: pointer; padding: 6px 8px; font-family: inherit; }
           .opp-card-chevron.open{ transform: rotate(90deg); }
           .opp-card-primary{ padding: 0 4px 14px; }
           .opp-card-details{ padding: 0 4px 16px; display: flex; flex-direction: column; gap: 10px; }

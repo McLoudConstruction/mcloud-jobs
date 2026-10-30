@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 
-// A "+" button that opens a small dropdown of secondary actions (imports,
+// An "Actions" button that opens a small dropdown of secondary actions (imports,
 // exports, add column). Items: [{ label, onClick, disabled? }]; label may be a
 // function, called each time the menu renders. The menu
 // closes after a pick, on an outside click, or on Escape. Anything an item
@@ -36,7 +36,8 @@ export default function ActionsMenu({ items, label = 'More actions' }) {
         title={label}
         onClick={() => setOpen(v => !v)}
       >
-        +
+        Actions
+        <svg className="menu-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="actions-menu" role="menu">

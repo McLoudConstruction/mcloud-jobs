@@ -212,8 +212,14 @@ export default function CompaniesPage() {
     return (c.company_name || '').toLowerCase().includes(search.toLowerCase());
   });
 
+  // Rows the table currently shows (after column filters and sorting), so the
+  // header Export button matches what is on screen. Only the count is kept in
+  // state; the rows live in a ref so reporting them cannot cause a render loop.
+  const visibleRowsRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(null);
+
   function exportCompanies() {
-    exportToSheet({ fileName: 'companies', sheetName: 'Companies', columns: companyExportColumns(customColumns), rows: filtered });
+    exportToSheet({ fileName: 'companies', sheetName: 'Companies', columns: companyExportColumns(customColumns), rows: visibleRowsRef.current || filtered });
   }
 
   if (loading || !session) return null;
@@ -228,6 +234,9 @@ export default function CompaniesPage() {
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
               <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                 {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <button className="btn" onClick={exportCompanies} disabled={filtered.length === 0}>
+                ↓ Export to Excel ({visibleCount ?? filtered.length})
               </button>
               <AddColumnButton addColumn={addColumn} />
               <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add company</button>
@@ -355,9 +364,7 @@ export default function CompaniesPage() {
             getRowKey={c => c.id}
             onRowClick={startEdit}
             rows={filtered}
-            exportFileName="companies"
-            exportSheetName="Companies"
-            exportColumns={companyExportColumns(customColumns)}
+            onVisibleRowsChange={rows => { visibleRowsRef.current = rows; setVisibleCount(rows.length); }}
             columns={[
               { key: 'company_name', label: 'Company Name', defaultWidth: 240, render: c => (<span>{c.company_name}{c.do_not_contact ? <span style={{ marginLeft: 6, fontSize: 11, color: '#a13f3f' }}>Do not contact</span> : null}</span>) },
               { key: 'company_type', label: 'Type', defaultWidth: 170, render: c => c.company_type || '—' },

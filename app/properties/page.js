@@ -454,8 +454,14 @@ export default function PropertiesPage() {
     return (p.property_name || '').toLowerCase().includes(q) || (p.management_company || '').toLowerCase().includes(q);
   });
 
+  // Rows the table currently shows (after column filters and sorting), so the
+  // header Export button matches what is on screen. Only the count is kept in
+  // state; the rows live in a ref so reporting them cannot cause a render loop.
+  const visibleRowsRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(null);
+
   function exportProperties() {
-    exportToSheet({ fileName: 'properties', sheetName: 'Properties', columns: propertyExportColumns(customColumns), rows: filtered });
+    exportToSheet({ fileName: 'properties', sheetName: 'Properties', columns: propertyExportColumns(customColumns), rows: visibleRowsRef.current || filtered });
   }
 
   if (loading || !session) return null;
@@ -470,6 +476,9 @@ export default function PropertiesPage() {
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: 'none' }} />
               <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                 {importing ? 'Importing…' : '↑ Import from Excel'}
+              </button>
+              <button className="btn" onClick={exportProperties} disabled={filtered.length === 0}>
+                ↓ Export to Excel ({visibleCount ?? filtered.length})
               </button>
               <AddColumnButton addColumn={addColumn} />
               <button className="btn btn-primary" onClick={() => (showForm ? cancelForm() : setShowForm(true))}>
@@ -757,9 +766,7 @@ export default function PropertiesPage() {
             getRowKey={p => p.id}
             onRowClick={startEdit}
             rows={filtered}
-            exportFileName="properties"
-            exportSheetName="Properties"
-            exportColumns={propertyExportColumns(customColumns)}
+            onVisibleRowsChange={rows => { visibleRowsRef.current = rows; setVisibleCount(rows.length); }}
             columns={[
               { key: 'property_name', label: 'Property Name', defaultWidth: 220, render: p => <>{p.property_name}{!p.active && ' (inactive)'}</> },
               { key: 'property_type', label: 'Property Type', defaultWidth: 170, render: p => p.property_type || '—' },
