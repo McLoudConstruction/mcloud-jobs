@@ -9,7 +9,8 @@ import AppShell from '../../../components/AppShell';
 import Breadcrumb from '../../../components/Breadcrumb';
 import BottomSheet from '../../../components/BottomSheet';
 import JobSidebar from '../../../components/JobSidebar';
-import JobQuickActions, { buildQuickActions } from '../../../components/JobQuickActions';
+import { buildQuickActions } from '../../../components/JobQuickActions';
+import JobStageOverview from '../../../components/JobStageOverview';
 import PhotoGallery from '../../../components/PhotoGallery';
 import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
 import JobCostSummary from '../../../components/JobCostSummary';
@@ -87,6 +88,9 @@ const FAB_ACTIONS = [
 // Documents, Messages). A job opens on the tab for the stage it is in; the
 // other stage tabs stay one click away because plans change mid-project.
 //
+// Each group's first section is its overview page (`hidden`: the sidebar
+// reaches it through the group name instead of listing it again).
+//
 // A tab can offer `sections` for content that is related but distinct
 // enough to want its own toggle. Every link into this page goes through
 // lib/links.js (JOB_DESTINATIONS), which is checked against this array at
@@ -96,7 +100,7 @@ const TABS = [
   {
     key: 'Overview', label: 'Overview', icon: OverviewIcon, group: 'home',
     sections: [
-      { key: 'summary', label: 'Summary' },
+      { key: 'summary', label: 'Summary', hidden: true },
       { key: 'customer', label: 'Customer' },
       { key: 'financials', label: 'Financials' },
     ],
@@ -104,6 +108,7 @@ const TABS = [
   {
     key: 'Sell', label: 'Sell', icon: CalculatorIcon, group: 'stage',
     sections: [
+      { key: 'overview', label: 'Overview', hidden: true },
       { key: 'scope', label: 'Scope' },
       { key: 'cost', label: 'Cost' },
       { key: 'pricing', label: 'Pricing' },
@@ -112,6 +117,7 @@ const TABS = [
   {
     key: 'Plan', label: 'Plan', icon: MaterialSelectionsTabIcon, group: 'stage',
     sections: [
+      { key: 'overview', label: 'Overview', hidden: true },
       { key: 'budget', label: 'Budget' },
       { key: 'approved', label: 'Approved Materials' },
       { key: 'all', label: 'Selection Sheets' },
@@ -121,6 +127,7 @@ const TABS = [
   {
     key: 'Build', label: 'Build', icon: WorkOrderIcon, group: 'stage',
     sections: [
+      { key: 'overview', label: 'Overview', hidden: true },
       { key: 'updates', label: 'Project Updates' },
       { key: 'internal', label: 'Internal Updates' },
       { key: 'change_orders', label: 'Change Orders' },
@@ -133,6 +140,7 @@ const TABS = [
   {
     key: 'Closeout', label: 'Closeout', icon: InvoiceIcon, group: 'stage',
     sections: [
+      { key: 'overview', label: 'Overview', hidden: true },
       { key: 'punch', label: 'Punch List' },
       { key: 'warranty', label: 'Warranty' },
       { key: 'invoice', label: 'Final Invoice' },
@@ -567,6 +575,9 @@ export default function JobDetailPage() {
   // on the Sections bar on a phone.
   const activeSectionDef = activeTabDef.sections?.find(sec => sec.key === section);
   const locationLabel = activeSectionDef ? `${activeTabDef.label} / ${activeSectionDef.label}` : activeTabDef.label;
+  const lastStage = STAGE_ORDER[STAGE_ORDER.length - 1];
+  const canAdvance = STAGE_ORDER.includes(job.stage) && job.stage !== lastStage;
+  const advanceLabel = canAdvance ? STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]] : '';
   const jobNav = (variant, after) => (
     <JobSidebar
       job={job}
@@ -575,15 +586,16 @@ export default function JobDetailPage() {
       section={section}
       currentStageTab={currentStageTab}
       variant={variant}
+      quickItems={variant === 'sidebar' ? fabItems : undefined}
+      onAdvance={variant === 'sidebar' && canAdvance ? advanceStage : undefined}
+      advanceLabel={advanceLabel}
       onSelect={(tabKey, sectionKey) => { goToTab(tabKey, sectionKey); if (after) after(); }}
     />
   );
   return (
     <AppShell sidebar={jobNav('sidebar')}>
       <div className="container">
-        {isMobile
-          ? <Breadcrumb href="/jobs" label="Back to Overview" />
-          : <div className="job-crumb">{locationLabel}</div>}
+        {isMobile && <Breadcrumb href="/jobs" label="Back to Overview" />}
 
         {offlineViewing && (
           <div className="sync-badge sync-badge-offline">
@@ -611,6 +623,7 @@ export default function JobDetailPage() {
           </div>
         )}
 
+        {(isMobile || flash || (job.stage === 'lost' && job.loss_reason)) && (
         <div className="top-actions">
           <div>
             {isMobile && (<>
@@ -635,22 +648,8 @@ export default function JobDetailPage() {
               <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>Loss reason: {job.loss_reason}</div>
             )}
           </div>
-          <div className="section-actions">
-            {/* Messages / Project Updates / portal invite are quick-access
-                shortcuts that duplicate their own tabs — on mobile these
-                move into the ever-present FAB below instead of crowding
-                this row. */}
-            {!isMobile && <JobQuickActions items={fabItems} />}
-            {/* Stage Advance dropped on mobile — it's an easy accidental
-                tap on a small screen next to Close Lost/Reopen, and the
-                job's stage badge is already visible right above. */}
-            {!isMobile && STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
-              <button className="btn btn-primary" onClick={advanceStage}>
-                Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
-              </button>
-            )}
-          </div>
         </div>
+        )}
 
         {isMobile && (
           <>
@@ -790,6 +789,23 @@ export default function JobDetailPage() {
           <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
         )}
 
+        {/* ------------------- STAGE OVERVIEW PAGES -------------------------- */}
+        {['Sell', 'Plan', 'Build', 'Closeout'].includes(tab) && section === 'overview' && (
+          <JobStageOverview
+            stage={tab}
+            job={job}
+            jobId={id}
+            currentStageTab={currentStageTab}
+            updates={updates}
+            changeOrders={changeOrders}
+            afterOpportunity={afterOpportunity}
+            inFieldPhase={inFieldPhase}
+            isDone={isDone}
+            onGo={goDest}
+            onCreate={goCreate}
+          />
+        )}
+
         {/* ------------------------------ SELL ------------------------------ */}
         {tab === 'Sell' && section === 'scope' && (
           <>
@@ -885,7 +901,7 @@ export default function JobDetailPage() {
               <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
                 Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
               </div>
-              <PunchItemsPanel jobId={id} kind="punch" autoOpen={autoOpen === 'punch'} />
+              <PunchItemsPanel jobId={id} kind="punch" autoOpen={autoOpen === 'punchList'} />
             </div>
           ) : (
             <div className="card">

@@ -3,19 +3,25 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STAGE_LABELS } from '../lib/constants';
 import MapLinkMenu from './MapLinkMenu';
+import JobQuickActions from './JobQuickActions';
 
 // The job page's navigation tree. On a computer it is the left sidebar; on a
 // phone the same tree opens inside the Sections sheet.
 //
 // It reads the page's own TABS list, so a section added to TABS shows up here
 // with no second list to keep in step:
-//   - Overview and the four stages are groups you can fold open and shut.
-//     The group you are in stays open, and the stage the job is in carries a
-//     "Current" mark. Nothing is hidden, because plans change mid-project.
+//   - Overview and the four stages are groups. The name is a link to that
+//     group's overview page; the chevron beside it folds the sections open and
+//     shut. The group you are in stays open, and the stage the job is in carries
+//     a "Current" mark with an arrow that advances the job to its next stage.
+//     Nothing is hidden, because plans change mid-project.
+//   - A section marked `hidden` in TABS (the group's overview page) is reached
+//     through the group name, so it is not listed again underneath.
+//   - On a computer the Quick actions "+" sits in the header of this sidebar.
 //   - Tabs that matter at every stage (Schedule, Photos, Documents, Messages)
 //     sit below a divider as plain links. A tab with sections of its own
 //     (Messages) lists them as separate links, so Email is one tap away.
-export default function JobSidebar({ job, tabs, tab, section, currentStageTab, onSelect, variant = 'sidebar' }) {
+export default function JobSidebar({ job, tabs, tab, section, currentStageTab, onSelect, variant = 'sidebar', quickItems, onAdvance, advanceLabel }) {
   const [open, setOpen] = useState(() => new Set([tab]));
 
   // Moving to a group (by a link, a quick action, anything) opens it.
@@ -38,10 +44,13 @@ export default function JobSidebar({ job, tabs, tab, section, currentStageTab, o
     <nav className={`job-nav job-nav-${variant}`} aria-label="Project sections">
       <div className="job-nav-head" {...(variant === 'sheet' ? { 'data-sheet-drag': '' } : {})}>
         {variant === 'sidebar' && (
-          <Link href="/jobs" className="job-nav-back">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-            All projects
-          </Link>
+          <div className="job-nav-toprow">
+            <Link href="/jobs" className="job-nav-back">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+              All projects
+            </Link>
+            {quickItems && quickItems.length > 0 && <JobQuickActions items={quickItems} />}
+          </div>
         )}
         <div className="job-nav-customer">{job.customer_name || 'Unnamed customer'}</div>
         <div className="job-nav-number">{job.project_number ? `#${job.project_number}` : 'No project number'}</div>
@@ -58,21 +67,44 @@ export default function JobSidebar({ job, tabs, tab, section, currentStageTab, o
       {grouped.map(t => {
         const isOpen = open.has(t.key);
         const isCurrent = t.group === 'stage' && t.key === currentStageTab;
+        const landing = t.sections?.[0]?.key;
+        const onLanding = tab === t.key && section === landing;
         return (
           <div key={t.key} className="job-nav-group">
-            <button
-              type="button"
-              className={`job-nav-group-btn ${tab === t.key ? 'in-tab' : ''}`}
-              aria-expanded={isOpen}
-              onClick={() => toggle(t.key)}
-            >
-              <svg className={`job-nav-chevron ${isOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              <span>{t.label}</span>
+            <div className={`job-nav-group-row ${onLanding ? 'active' : ''} ${tab === t.key ? 'in-tab' : ''}`}>
+              <button
+                type="button"
+                className="job-nav-chev-btn"
+                aria-label={`${isOpen ? 'Fold' : 'Open'} ${t.label} sections`}
+                aria-expanded={isOpen}
+                onClick={() => toggle(t.key)}
+              >
+                <svg className={`job-nav-chevron ${isOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="job-nav-group-label"
+                aria-current={onLanding ? 'page' : undefined}
+                onClick={() => { setOpen(prev => (prev.has(t.key) ? prev : new Set(prev).add(t.key))); onSelect(t.key); }}
+              >
+                {t.label}
+              </button>
               {isCurrent && <span className="job-nav-current" title={`This job is in ${STAGE_LABELS[job.stage]}`}>Current</span>}
-            </button>
-            {isOpen && (t.sections || []).map(s => (
+              {isCurrent && onAdvance && variant === 'sidebar' && (
+                <button
+                  type="button"
+                  className="job-nav-advance"
+                  title={`Advance to ${advanceLabel}`}
+                  aria-label={`Advance job to ${advanceLabel}`}
+                  onClick={onAdvance}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                </button>
+              )}
+            </div>
+            {isOpen && (t.sections || []).filter(s => !s.hidden).map(s => (
               <button
                 key={s.key}
                 type="button"

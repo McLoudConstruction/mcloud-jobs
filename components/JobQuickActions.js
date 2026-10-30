@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { PlusIcon } from './icons';
 
 // The job's "do something" menu. Everything you might want to START from a
 // job - post an update, raise a change order, request a waiver - is here, so
@@ -41,7 +42,7 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
       { key: 'pay-app', label: 'Pay application', run: () => go('payApps') },
     ] : [],
     Closeout: inFieldPhase ? [
-      { key: 'punch', label: 'Add a punch item', run: () => create('punch') },
+      { key: 'punch', label: 'Add a punch item', run: () => create('punchList') },
       { key: 'warranty', label: 'Warranty claims', run: () => go('warranty') },
       isDone && { key: 'final-invoice', label: 'Final invoice', run: () => go('finalInvoice') },
       isDone && { key: 'review', label: 'Request a review', run: () => go('reviews') },
@@ -72,28 +73,49 @@ export function buildQuickActions({ job, role, stageTab, afterOpportunity, inFie
   return out;
 }
 
-// Desktop dropdown: the same flat list as the phone's "+" sheet. `items` is
-// built by the job page from buildQuickActions, so gating stays in one place.
+// Desktop menu: a "+" button in the job sidebar's header, the same "+" the phone
+// shows as a floating button. The list is the same flat list as the phone's
+// sheet. `items` is built by the job page from buildQuickActions, so gating
+// stays in one place. The menu is drawn at a fixed spot under the button so the
+// sidebar's own scrolling cannot clip it.
 export default function JobQuickActions({ items }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ left: 0, top: 0 });
   const wrapRef = useRef(null);
+  const btnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
+    const close = () => setOpen(false);
     const onDown = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
     const onKey = e => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
   }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 268)), top: r.bottom + 6 });
+    }
+    setOpen(o => !o);
+  }
 
   return (
     <div ref={wrapRef} className="quick-actions">
-      <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        Quick actions <span aria-hidden="true" style={{ marginLeft: 4, fontSize: 10 }}>▾</span>
+      <button ref={btnRef} type="button" className="quick-actions-btn" title="Quick actions" aria-label="Quick actions" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+        <PlusIcon width={18} height={18} />
       </button>
       {open && (
-        <div className="quick-actions-menu" role="menu">
+        <div className="quick-actions-menu" role="menu" style={{ position: 'fixed', left: pos.left, top: pos.top, right: 'auto', marginTop: 0 }}>
           {items.map(item => (
             <button
               key={item.key}

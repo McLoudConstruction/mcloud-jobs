@@ -2426,7 +2426,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .dest-cancel{ margin-top: 12px; height: 50px; border-radius: 25px; border: 2px solid #fff; background: #000; color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 
 /* ---------- Job page: Quick actions menu ---------- */
-.quick-actions{ position: relative; display: inline-block; }
+.quick-actions{ position: relative; display: inline-block; flex: none; }
+.quick-actions-btn{
+  display: grid; place-items: center; width: 34px; height: 34px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card, transparent); color: var(--accent);
+}
+.quick-actions-btn:hover, .quick-actions-btn[aria-expanded="true"]{ border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .quick-actions-menu{
   position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 30;
   min-width: 250px;
@@ -2660,16 +2665,21 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .job-nav-number{ font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .job-nav-address{ text-align: left;  font-size: 13px; color: var(--ink-soft); }
 .job-nav-head .badge{ margin-top: 6px; }
-.job-nav-group-btn{
-  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; min-height: 40px;
-  padding: 0 12px; border: 0; border-radius: 6px; background: transparent;
-  color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
-}
-.job-nav-group-btn:hover{ background: var(--line); }
+.job-nav-toprow{ display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin-bottom: 12px; }
+.job-nav-toprow .job-nav-back{ margin-bottom: 0; }
+.job-nav-group-row{ display: flex; align-items: center; min-height: 40px; padding-right: 8px; border-radius: 6px; }
+.job-nav-group-row:hover{ background: var(--line); }
+.job-nav-group-row.active{ background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.job-nav-chev-btn{ display: grid; place-items: center; flex: none; width: 34px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.job-nav-chev-btn:hover{ color: var(--ink); }
+.job-nav-group-label{ flex: 1; min-width: 0; min-height: 40px; padding: 0 4px 0 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.job-nav-group-row.active .job-nav-group-label{ color: var(--accent); }
 .job-nav-chevron{ flex-shrink: 0; transform: rotate(-90deg); transition: transform 0.15s ease; }
 .job-nav-chevron.open{ transform: none; }
-.job-nav-current{ margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent); }
+.job-nav-current{ margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent); }
 .job-nav-current::before{ content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.job-nav-advance{ display: grid; place-items: center; flex: none; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid var(--accent); border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer; }
+.job-nav-advance:hover{ background: var(--accent); color: #fff; }
 .job-nav-link, .job-nav-top{
   display: block; width: 100%; box-sizing: border-box; border: 0; border-radius: 6px; background: transparent;
   font: inherit; text-align: left; cursor: pointer;
@@ -2689,7 +2699,9 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .job-nav-sheet .job-nav-head{ flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .job-nav-sheet .job-nav-address{ flex-basis: 100%; order: 3; }
 .job-nav-sheet .job-nav-head .badge{ margin-top: 0; }
-.job-nav-sheet .job-nav-group-btn{ min-height: 46px; font-size: 15px; }
+.job-nav-sheet .job-nav-group-row, .job-nav-sheet .job-nav-chev-btn, .job-nav-sheet .job-nav-group-label{ min-height: 46px; }
+.job-nav-sheet .job-nav-group-label{ font-size: 15px; }
+.job-nav-sheet .job-nav-chev-btn{ height: 46px; width: 40px; }
 .job-nav-sheet .job-nav-link{ min-height: 44px; font-size: 15px; }
 .job-nav-sheet .job-nav-top{ min-height: 44px; font-size: 15px; }
 
@@ -2702,6 +2714,25 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .job-sections-bar-kicker{ font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-soft); }
 .job-sections-bar-value{ font-size: 16px; font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-crumb{ margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }
+
+/* Stage overview pages (Sell, Plan, Build, Closeout) on a job. */
+.stage-head .stage-blurb{ margin: 0 0 10px; font-size: 14px; color: var(--ink-soft); max-width: 62ch; }
+.stage-pill{ display: inline-block; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.stage-pill.current{ border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.stage-next{ margin: 12px 0 0; font-size: 13.5px; color: var(--ink); }
+.stage-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stage-tile{ display: flex; flex-direction: column; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stage-tile:hover{ border-color: var(--accent); }
+.stage-tile.locked{ opacity: .6; }
+.stage-tile-main{ display: flex; flex-direction: column; gap: 4px; flex: 1; padding: 14px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.stage-tile-top{ display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.stage-tile-label{ font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--gold); }
+.stage-tile-go{ font-size: 18px; line-height: 1; color: var(--ink-soft); }
+.stage-tile:hover .stage-tile-go{ color: var(--accent); }
+.stage-tile-stat{ margin-top: 4px; font-size: 18px; font-weight: 700; color: var(--heading); }
+.stage-tile-sub{ font-size: 12.5px; color: var(--ink-soft); }
+.stage-tile-add{ padding: 9px 16px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--accent); font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.stage-tile-add:hover{ background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 /* Scrollbars follow the chosen theme (not the operating system's). */
 :root{ color-scheme: light; scrollbar-color: #b9b4aa #efece6; }
