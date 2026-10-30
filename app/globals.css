@@ -2691,3 +2691,12 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 /* Scrollbars follow the chosen theme (not the operating system's). */
 :root{ color-scheme: light; scrollbar-color: #b9b4aa #efece6; }
 [data-theme="dark"]{ color-scheme: dark; scrollbar-color: #4a4a50 #1f1f23; }
+
+/* Stage pill that is a real dropdown (Sales list and lead popup). */
+.stage-pill{
+  flex-shrink: 0; width: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
+  border: none; margin: 0; padding: 4px 24px 4px 12px; color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.stage-pill option{ color: var(--ink); background: var(--card-bg); }

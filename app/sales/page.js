@@ -11,6 +11,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import BidWalkScheduler from '../../components/BidWalkScheduler';
 import OpportunityPhotosPanel from '../../components/OpportunityPhotosPanel';
 import FollowUpPanel from '../../components/FollowUpPanel';
+import LeadPopup from '../../components/LeadPopup';
 import { formatPhone } from '../../lib/constants';
 import { verticalLabel } from '../../lib/verticals';
 
@@ -28,14 +29,14 @@ const STAGES = ['prospecting', 'contacted', 'site_request', 'lost', 'converted']
 const STAGE_LABELS = { prospecting: 'Prospecting', contacted: 'Contacted', site_request: 'Site Request', lost: 'Lost', converted: 'Converted' };
 const ACTIVE_STAGES = ['prospecting', 'contacted', 'site_request'];
 
-const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '', referral_name: '' };
+const EMPTY_FORM = { project_type: '', company: '', project: '', contact_name: '', contact_email: '', contact_phone: '', anticipated_timeline: '', date_taken: new Date().toISOString().slice(0, 10), notes: '', referral_name: '', address: '' };
 
 export default function SalesDashboardPage() {
   const { session, loading } = useRequireAuth();
   const router = useRouter();
   const [opps, setOpps] = useState([]);
   const [isMobile, setIsMobile] = useState(false);
-  const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const [openLeadId, setOpenLeadId] = useState(null);
 
   useEffect(() => {
     function checkSize() { setIsMobile(window.innerWidth < 900); }
@@ -44,13 +45,6 @@ export default function SalesDashboardPage() {
     return () => window.removeEventListener('resize', checkSize);
   }, []);
 
-  function toggleExpanded(id) {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -162,7 +156,8 @@ export default function SalesDashboardPage() {
   }
 
   function startEdit(o) {
-    setForm({ ...EMPTY_FORM, ...o });
+    setOpenLeadId(null);
+    setForm({ ...EMPTY_FORM, ...o, address: o.address || '' });
     setEditingId(o.id);
     setShowForm(true);
     // The page content now scrolls inside .shell-content (not the window
@@ -219,8 +214,11 @@ export default function SalesDashboardPage() {
     if (!confirm('Delete this opportunity?')) return;
     const { error } = await supabase.from('opportunities').delete().eq('id', id);
     if (error) { setSaveError(error.message); return; }
+    setOpenLeadId(null);
     await loadOpps();
   }
+
+  const openLead = useMemo(() => opps.find(o => o.id === openLeadId) || null, [opps, openLeadId]);
 
   const stats = useMemo(() => {
     const byStage = {};
@@ -318,6 +316,7 @@ export default function SalesDashboardPage() {
                 <div><label>Company</label><input value={form.company} onChange={e => update('company', e.target.value)} /></div>
               )}
               <div><label>Project</label><input value={form.project} onChange={e => update('project', e.target.value)} /></div>
+              <div><label>Address</label><input value={form.address || ''} onChange={e => update('address', e.target.value)} placeholder="Street, city, state" /></div>
               <div style={{ position: 'relative' }}>
                 <label>Contact name</label>
                 <input
@@ -400,31 +399,24 @@ export default function SalesDashboardPage() {
 
         {filtered.length === 0 && <div className="empty-state">No opportunities here yet.</div>}
 
-        {/* One list, one row style, at every width — collapsed by default,
-            same idea as the mobile card list this used to be limited to.
-            Desktop used to render a second, parallel version of this list
-            as bordered/shadowed .job-row cards with Edit and Delete exposed
-            on every row; that's now just this list, so there's one place to
-            keep this behavior right instead of two drifting in and out of
-            sync. */}
+        {/* One list, one row style, at every width. Clicking a row opens the
+            lead popup, which holds the details, map and every action. The
+            stage pill is a real dropdown for a quick stage change and does
+            not open the popup. */}
         {filtered.length > 0 && (
           <div className="opp-mobile-list">
             {filtered.map(o => {
-              const expanded = expandedIds.has(o.id);
               const badgeClass = STAGE_BADGE_CLASS[o.stage] || 'badge-new';
               const badgeLabel = o.stage === 'converted' ? 'Converted' : STAGE_LABELS[o.stage];
               return (
                 <div className="opp-card" key={o.id}>
                   <div className="opp-card-head">
-                    <button type="button" className="opp-card-toggle" onClick={() => toggleExpanded(o.id)} aria-expanded={expanded}>
+                    <button type="button" className="opp-card-toggle" onClick={() => setOpenLeadId(o.id)}>
                       <span className="opp-card-text">
                         <span className="opp-card-title">{o.company || o.contact_name || 'Unnamed'}{o.project ? ` — ${o.project}` : ''}</span>
                         <span className="opp-card-sub">{o.contact_name}{o.anticipated_timeline ? ` · ${o.anticipated_timeline}` : ''}</span>
                       </span>
                     </button>
-                    {/* Quick stage change: the pill is the dropdown. A converted
-                        lead is now a job, so it stays a plain badge. Choosing
-                        Lost opens the reason prompt, same as before. */}
                     {o.stage === 'converted' ? (
                       <span className={`badge ${badgeClass}`} style={{ flexShrink: 0 }}>{badgeLabel}</span>
                     ) : (
@@ -437,66 +429,8 @@ export default function SalesDashboardPage() {
                         {['prospecting', 'contacted', 'site_request', 'lost'].map(st => <option key={st} value={st}>{STAGE_LABELS[st]}</option>)}
                       </select>
                     )}
-                    <button type="button" className={`opp-card-chevron ${expanded ? 'open' : ''}`} onClick={() => toggleExpanded(o.id)} aria-label={expanded ? 'Collapse' : 'Expand'}>›</button>
+                    <button type="button" className="opp-card-chevron" onClick={() => setOpenLeadId(o.id)} aria-label="Open lead">›</button>
                   </div>
-
-                  {/* Convert to Opportunity (and View Job, for a converted
-                      lead) only appear once the card is expanded — a
-                      collapsed row is just the header, so these primary
-                      actions can't be tapped by accident while scanning
-                      the list. */}
-                  {expanded && (
-                    <div className="opp-card-details">
-                      {(o.lead_vertical || o.source === 'website') && (
-                        <div className="opp-card-detail-line">
-                          Source: {o.source === 'website' ? 'Website' : o.source}
-                          {o.lead_vertical ? ` · ${verticalLabel(o.lead_vertical)} page` : ''}
-                          {o.utm_campaign ? ` · campaign ${o.utm_campaign}` : ''}
-                          {o.referrer ? ` · from ${o.referrer}` : ''}
-                        </div>
-                      )}
-                      {o.stage === 'lost' && o.loss_reason && (
-                        <div className="opp-card-detail-line">Loss reason: {o.loss_reason}</div>
-                      )}
-                      {o.stage === 'site_request' && (
-                        <>
-                          {o.site_address && <div className="opp-card-detail-line">Site: {o.site_address}</div>}
-                          {(o.contact_email || o.contact_phone) && (
-                            <div className="opp-card-detail-line">
-                              {[o.contact_email, o.contact_phone ? formatPhone(o.contact_phone) : null].filter(Boolean).join(' · ')}
-                            </div>
-                          )}
-                          {o.notes && <div className="opp-card-detail-line" style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</div>}
-                          <OpportunityPhotosPanel opportunityId={o.id} />
-                        </>
-                      )}
-                      {o.bid_walk_scheduled_at && (
-                        <div className="opp-card-detail-line">
-                          Bid walk scheduled: {new Date(o.bid_walk_scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        </div>
-                      )}
-
-                      {o.stage === 'converted' ? (
-                        o.job_id && <Link href={`/jobs/${o.job_id}`} className="btn btn-sm">View Job →</Link>
-                      ) : (
-                        <>
-                          {ACTIVE_STAGES.includes(o.stage) && (
-                            <button className="btn btn-primary btn-sm" onClick={() => convertToJob(o.id)}>Convert to Opportunity</button>
-                          )}
-                          {ACTIVE_STAGES.includes(o.stage) && !o.bid_walk_scheduled_at && (
-                            <button className="btn btn-sm" onClick={() => setSchedulingId(o.id)}>
-                              Schedule Bid Walk
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      <div className="opp-card-detail-actions">
-                        <button className="btn btn-sm" onClick={() => startEdit(o)}>Edit</button>
-                        <button className="btn btn-sm btn-danger" onClick={() => removeOpp(o.id)}>Delete</button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -530,25 +464,24 @@ export default function SalesDashboardPage() {
             padding: 8px 0; border: none; background: transparent;
             text-align: left; cursor: pointer; font-family: inherit;
           }
-          .stage-pill{
-            flex-shrink: 0; width: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
-            border: none; margin: 0; padding: 4px 24px 4px 12px; color: #fff;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 8px center;
-          }
-          .stage-pill option{ color: var(--ink); background: var(--card-bg); }
           .opp-card-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
           .opp-card-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
           .opp-card-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
           .opp-card-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); transition: transform 0.15s; background: none; border: none; cursor: pointer; padding: 6px 8px; font-family: inherit; }
-          .opp-card-chevron.open{ transform: rotate(90deg); }
-          .opp-card-primary{ padding: 0 4px 14px; }
-          .opp-card-details{ padding: 0 4px 16px; display: flex; flex-direction: column; gap: 10px; }
-          .opp-card-detail-line{ font-size: 12.5px; color: var(--ink-soft); }
-          .opp-card-detail-actions{ display: flex; gap: 8px; flex-wrap: wrap; }
         `}</style>
       </div>
       <ManualRouteBuilderModal open={manualRouteModalOpen} onClose={() => setManualRouteModalOpen(false)} />
+      <LeadPopup
+        lead={openLead}
+        stageLabels={STAGE_LABELS}
+        badgeClass={openLead ? (STAGE_BADGE_CLASS[openLead.stage] || 'badge-new') : ''}
+        onClose={() => setOpenLeadId(null)}
+        onStageChange={(id, st) => { if (st === 'lost') setOpenLeadId(null); setStage(id, st); }}
+        onConvert={convertToJob}
+        onScheduleWalk={id => setSchedulingId(id)}
+        onEdit={startEdit}
+        onDelete={removeOpp}
+      />
       <BidWalkScheduler
         open={!!schedulingId}
         onCancel={() => setSchedulingId(null)}
