@@ -2692,11 +2692,16 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 :root{ color-scheme: light; scrollbar-color: #b9b4aa #efece6; }
 [data-theme="dark"]{ color-scheme: dark; scrollbar-color: #4a4a50 #1f1f23; }
 
-/* Stage pill that is a real dropdown (Sales list and lead popup). */
-.stage-pill{
+/* Stage pill that is a real dropdown (Sales list and lead popup).
+   The arrow is a background image. The dark theme badge colors use the
+   `background` shorthand, which wiped it out, so these rules are
+   !important and carry the image on their own. */
+.badge.stage-pill{
   flex-shrink: 0; width: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
-  border: none; margin: 0; padding: 4px 24px 4px 12px; color: #fff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 8px center;
+  border: none; margin: 0; padding: 5px 30px 5px 12px; color: #fff; font-family: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 10px center !important; background-size: 12px 12px !important;
 }
-.stage-pill option{ color: var(--ink); background: var(--card-bg); }
+.badge.stage-pill:hover{ filter: brightness(1.12); }
+.badge.stage-pill:focus-visible{ outline: 2px solid var(--heading); outline-offset: 2px; }
+.badge.stage-pill option{ color: var(--ink); background: var(--card-bg); text-transform: none; letter-spacing: normal; font-weight: 500; }
