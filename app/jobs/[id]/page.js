@@ -1,4 +1,5 @@
 'use client';
+import LossReasonPicker from '../../../components/LossReasonPicker';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -735,11 +736,7 @@ export default function JobDetailPage() {
                 {closingLost ? (
                   <>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>Reason for loss</div>
-                    <textarea
-                      value={lossReasonText}
-                      onChange={e => setLossReasonText(e.target.value)}
-                      placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…"
-                    />
+                    <LossReasonPicker value={lossReasonText} onChange={setLossReasonText} />
                     <div className="section-actions">
                       <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
                       <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>

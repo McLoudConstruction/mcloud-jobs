@@ -11,6 +11,7 @@ import ScrollFadeRow from '../../components/ScrollFadeRow';
 import BidWalkScheduler from '../../components/BidWalkScheduler';
 import OpportunityPhotosPanel from '../../components/OpportunityPhotosPanel';
 import FollowUpPanel from '../../components/FollowUpPanel';
+import LossReasonPicker from '../../components/LossReasonPicker';
 import LeadPopup from '../../components/LeadPopup';
 import { formatPhone } from '../../lib/constants';
 import { verticalLabel } from '../../lib/verticals';
@@ -366,7 +367,7 @@ export default function SalesDashboardPage() {
         {lossReasonPromptId && (
           <div className="card">
             <h3>Reason for loss</h3>
-            <textarea value={lossReasonText} onChange={e => setLossReasonText(e.target.value)} placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…" />
+            <LossReasonPicker value={lossReasonText} onChange={setLossReasonText} />
             <div className="section-actions">
               <button className="btn btn-primary btn-sm" onClick={confirmLoss}>Save &amp; mark lost</button>
               <button className="btn btn-sm" onClick={() => setLossReasonPromptId(null)}>Cancel</button>
