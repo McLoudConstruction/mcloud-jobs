@@ -32,7 +32,7 @@ export default function EstimateGroupsPicker({ isAdmin, locked, isMulti, groups,
           <h3 style={{ margin: '0 0 4px', color: '#1C1B19' }}>Alternates</h3>
           {isAdmin ? (
             <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-              Preview only — the customer picks these when they view this estimate. Build or edit alternates from the job's Estimate tab.
+              Preview only. The customer picks these when they view this estimate. Build or edit alternates from the job's Scope tab.
             </div>
           ) : locked ? (
             <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 14 }}>
@@ -40,7 +40,7 @@ export default function EstimateGroupsPicker({ isAdmin, locked, isMulti, groups,
             </div>
           ) : (
             <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-              Independently includable add-ons, on top of whichever scope is above. Review, then submit your picks — the total updates as you choose.
+              Each alternate is a separate estimate that can be added to the scope above. Choose any one, several or none of them. The total updates as you choose.
             </div>
           )}
         </>
@@ -56,14 +56,19 @@ export default function EstimateGroupsPicker({ isAdmin, locked, isMulti, groups,
               width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 6, cursor: isAdmin || locked ? 'default' : 'pointer',
               border: g.included ? '2px solid #9B773D' : '1px solid #ded7c0',
               background: g.included ? '#fff' : '#fdfcf8',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+              fontFamily: 'inherit',
             }}
           >
-            <span>
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <span style={{ fontWeight: 600, fontSize: 13, color: '#1C1B19' }}>{g.included ? '☑ ' : '☐ '}{g.label}</span>
-              {g.description && <span style={{ display: 'block', fontSize: 11.5, color: '#6b6350', marginTop: 2 }}>{g.description}</span>}
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#1C1B19', whiteSpace: 'nowrap' }}>{fmtMoney(g.price)}</span>
             </span>
-            <span style={{ fontWeight: 700, fontSize: 13, color: '#1C1B19', whiteSpace: 'nowrap' }}>{fmtMoney(g.price)}</span>
+            {g.description && <span style={{ display: 'block', fontSize: 11.5, color: '#6b6350', marginTop: 4 }}>{g.description}</span>}
+            {(g.scope_items || []).length > 0 && (
+              <ul className="doc-list" style={{ marginTop: 8 }}>
+                {g.scope_items.map((it, i) => <li key={i}>{it.text}</li>)}
+              </ul>
+            )}
           </button>
         </div>
       ))}

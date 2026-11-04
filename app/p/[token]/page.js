@@ -112,9 +112,10 @@ export default function PublicProposalPage() {
         scopeOptionsSlot={scopeOptionsSlot}
       />
 
-      {data.isMulti && data.alternates.length > 0 && (
+      {(data.alternates || []).length > 0 && (
         <div className="no-print" style={{ maxWidth: 780, margin: '20px auto 0', padding: '0 16px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Optional alternates</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Optional alternates</div>
+          <div style={{ fontSize: 11.5, color: '#6b6350', marginBottom: 8 }}>Each alternate is a separate estimate that can be added to the scope above.</div>
           <div style={{ display: 'grid', gap: 10 }}>
             {data.alternates.map(a => <OptionCard key={a.id} o={a} />)}
           </div>

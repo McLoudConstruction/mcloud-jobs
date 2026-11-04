@@ -11,7 +11,13 @@ const ALL_TRADES = 'All';
 // `trade` and `onTradeChange` are optional. When a parent passes them it
 // controls which trade is showing (the Cost tab switches this to the trade of
 // whichever cost line you are editing, so that trade's action list is in view).
-export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: tradeProp, onTradeChange }) {
+//
+// `groupId` points the card at one alternate's own action list
+// (estimate_group_actions) instead of the job's (job_scope_actions). The
+// job's list drives work orders and the schedule, so an alternate's work
+// stays out of it until the customer includes that alternate.
+export default function TradeBreakdownCard({ jobId, groupId, title, readOnly, linkHref, trade: tradeProp, onTradeChange }) {
+  const table = groupId ? 'estimate_group_actions' : 'job_scope_actions';
   const [actions, setActions] = useState([]);
   const [view, setView] = useState('trade'); // 'trade' | 'area' | 'flat'
   const [selectedTrade, setSelectedTrade] = useState(ALL_TRADES);
@@ -21,15 +27,18 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: t
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('job_scope_actions').select('*').eq('job_id', jobId).order('trade', { ascending: true });
+    let query = supabase.from(table).select('*').eq('job_id', jobId);
+    if (groupId) query = query.eq('group_id', groupId);
+    const { data } = await query.order('trade', { ascending: true });
     if (data) setActions(data);
-  }, [jobId]);
+  }, [jobId, groupId, table]);
 
   useEffect(() => {
     load();
-    const channel = supabase.channel(`scope-actions-${jobId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'job_scope_actions', filter: `job_id=eq.${jobId}` }, load).subscribe();
+    const filter = groupId ? `group_id=eq.${groupId}` : `job_id=eq.${jobId}`;
+    const channel = supabase.channel(`scope-actions-${groupId || jobId}`).on('postgres_changes', { event: '*', schema: 'public', table, filter }, load).subscribe();
     return () => supabase.removeChannel(channel);
-  }, [jobId, load]);
+  }, [jobId, groupId, table, load]);
 
   function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
 
@@ -63,9 +72,9 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: t
     }
     let error;
     if (editingId) {
-      ({ error } = await supabase.from('job_scope_actions').update(payload).eq('id', editingId));
+      ({ error } = await supabase.from(table).update(payload).eq('id', editingId));
     } else {
-      ({ error } = await supabase.from('job_scope_actions').insert({ ...payload, job_id: jobId }));
+      ({ error } = await supabase.from(table).insert({ ...payload, job_id: jobId, ...(groupId ? { group_id: groupId } : {}) }));
     }
     if (error) { setError(error.message); return; }
     setShowForm(false);
@@ -75,21 +84,21 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: t
     // Don't rely solely on the realtime subscription — refresh directly
     // so the change shows up immediately.
     await load();
-    await flagScheduleStale(jobId);
+    if (!groupId) await flagScheduleStale(jobId);
   }
 
   async function markVerified(id) {
-    const { error } = await supabase.from('job_scope_actions').update({ needs_verification: false, verify_note: null }).eq('id', id);
+    const { error } = await supabase.from(table).update({ needs_verification: false, verify_note: null }).eq('id', id);
     if (error) { setError(error.message); return; }
     await load();
   }
 
   async function remove(id) {
     if (!confirm('Remove this action?')) return;
-    const { error } = await supabase.from('job_scope_actions').delete().eq('id', id);
+    const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) { setError(error.message); return; }
     await load();
-    await flagScheduleStale(jobId);
+    if (!groupId) await flagScheduleStale(jobId);
   }
 
   const grouped = actions.reduce((acc, a) => {
@@ -118,7 +127,7 @@ export default function TradeBreakdownCard({ jobId, readOnly, linkHref, trade: t
 
   return (
     <div className="card">
-      <h3>Exhaustive Action List &amp; Trade Breakdown</h3>
+      <h3>{title || 'Exhaustive Action List & Trade Breakdown'}</h3>
       {readOnly && linkHref && (
         <div style={{ fontSize: 11.5, marginBottom: 12 }}>
           <a href={linkHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Edit on the Scope tab →</a>

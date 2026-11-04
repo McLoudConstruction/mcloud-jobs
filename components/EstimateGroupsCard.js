@@ -2,7 +2,9 @@
 import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
-import { appHref } from '../lib/links';
+import { appHref, jobHref } from '../lib/links';
+import ScopeBuilder from './ScopeBuilder';
+import TradeBreakdownCard from './TradeBreakdownCard';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '—';
@@ -13,10 +15,12 @@ function fmtDate(v) {
   return new Date(v).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-// Alternates: independently toggleable optional items layered on top of
-// whichever scope is in play (single scope, or the picked scope option in
-// multi-option mode) — the customer can include or leave each one out
-// (e.g. defer to next budget year). The customer picks interactively on
+// Alternates: separate, optional estimates layered on top of whichever scope
+// is in play (single scope, or the picked scope option in multi-option mode).
+// Each one is built like the main estimate: its own scope (Generate scope
+// with AI, From assembly), its own trade breakdown, and its own price from
+// the Cost and Pricing tabs. The customer can include any one, several or
+// none of them (e.g. defer to next budget year). The customer picks interactively on
 // the estimate document; submitting there flattens the picks into
 // jobs.scope_items / job_financials.contract_price via
 // submit_estimate_groups(), so nothing else in the app needs to know
@@ -71,6 +75,7 @@ const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }
       job_id: jobId,
       kind: 'alternate',
       label: label.trim(),
+      scope_items: [],
       sort_order: groups.length,
     });
     setBusy(false);
@@ -117,8 +122,19 @@ const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }
     if (!window.confirm('Unlock this estimate? The scope and price revert to what they were before the customer submitted, and the customer can pick again.')) return;
     setBusy(true);
     setError('');
+    // Take out the alternate work that submit copied into the job (work
+    // orders, schedule and budget read the job). Best effort: before
+    // migration 178 there is nothing to remove.
+    await supabase.from('job_scope_actions').delete().eq('job_id', jobId).not('merged_from_group_id', 'is', null);
+    await supabase.from('job_estimate_items').delete().eq('job_id', jobId).not('merged_from_group_id', 'is', null);
     const patch = { estimate_groups_submitted_at: null, selected_scope_option_id: null };
     if (job.estimate_base_scope_items != null) patch.scope_items = job.estimate_base_scope_items;
+    if (job.estimate_base_projected_cost != null) patch.projected_cost = job.estimate_base_projected_cost;
+    // The saved base is cleared once restored, so the next submit takes a
+    // fresh copy of whatever the base is by then, edits included.
+    patch.estimate_base_scope_items = null;
+    patch.estimate_base_price = null;
+    if ('estimate_base_projected_cost' in job) patch.estimate_base_projected_cost = null;
     const { error: jobError } = await supabase.from('jobs').update(patch).eq('id', jobId);
     if (jobError) { setBusy(false); setError(jobError.message); return; }
     if (job.estimate_base_price != null) {
@@ -169,7 +185,7 @@ const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }
     <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
       <h4 style={{ margin: '0 0 4px' }}>Alternates</h4>
       <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-        Optional add-ons the customer can include or leave out on the estimate document. The price updates from their picks once they submit.
+        Each alternate is its own estimate with its own scope and price. The customer can include any one, several or none of them on the estimate document, and the total updates from their picks.
       </div>
 
       {isLocked && (
@@ -184,69 +200,19 @@ const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }
       {error && <div style={{ fontSize: 12, color: '#a13f3f', marginBottom: 10 }}>{error}</div>}
 
       {groups.map((g, idx) => (
-        <div key={g.id} style={{ border: '1px solid var(--panel-line)', borderRadius: 6, padding: 14, marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <input
-                value={g.label}
-                onChange={e => setGroups(prev => prev.map(x => x.id === g.id ? { ...x, label: e.target.value } : x))}
-                onBlur={e => updateGroup(g.id, { label: e.target.value })}
-                style={{ fontWeight: 700, marginBottom: 6 }}
-                disabled={isLocked}
-              />
-              <textarea
-                value={g.description || ''}
-                placeholder="Description shown to the customer (optional)"
-                onChange={e => setGroups(prev => prev.map(x => x.id === g.id ? { ...x, description: e.target.value } : x))}
-                onBlur={e => updateGroup(g.id, { description: e.target.value })}
-                disabled={isLocked}
-                rows={2}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button className="btn btn-sm" onClick={() => moveGroup(g, -1)} disabled={busy || idx === 0}>↑</button>
-              <button className="btn btn-sm" onClick={() => moveGroup(g, 1)} disabled={busy || idx === groups.length - 1}>↓</button>
-              <button className="btn btn-sm btn-danger" onClick={() => deleteGroup(g)} disabled={busy || isLocked}>Delete</button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 10, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ fontSize: 11 }}>Price</label>
-              <input
-                type="number" step="0.01" style={{ width: 130 }}
-                value={g.price ?? ''}
-                onChange={e => setGroups(prev => prev.map(x => x.id === g.id ? { ...x, price: e.target.value } : x))}
-                onBlur={e => updateGroup(g.id, { price: e.target.value ? parseFloat(e.target.value) : null })}
-                disabled={isLocked}
-              />
-            </div>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <label style={{ fontSize: 11 }}>Scope lines (one per line)</label>
-              <textarea
-                value={(g.scope_items || []).map(i => i.text).join('\n')}
-                onChange={e => setGroups(prev => prev.map(x => x.id === g.id ? { ...x, _scopeText: e.target.value } : x))}
-                onBlur={e => updateGroup(g.id, { scope_items: e.target.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text })) })}
-                rows={2}
-                disabled={isLocked}
-              />
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 400 }}>
-              <input
-                type="checkbox" style={{ width: 'auto' }}
-                checked={!!g.default_included}
-                onChange={e => updateGroup(g.id, { default_included: e.target.checked })}
-                disabled={isLocked}
-              />
-              Pre-checked for the customer
-            </label>
-            {isLocked && (
-              <span className={`badge ${g.included ? '' : 'badge-active'}`} style={{ background: g.included ? '#3a6b45' : '#8a5a3f' }}>
-                {g.included ? 'Included' : 'Declined'}
-              </span>
-            )}
-          </div>
-        </div>
+        <AlternateEditor
+          key={g.id}
+          group={g}
+          job={job}
+          jobId={jobId}
+          isLocked={isLocked}
+          isFirst={idx === 0}
+          isLast={idx === groups.length - 1}
+          busy={busy}
+          onUpdate={updateGroup}
+          onDelete={() => deleteGroup(g)}
+          onMove={dir => moveGroup(g, dir)}
+        />
       ))}
 
       {isLocked && (declinedAlternates.length > 0 || declinedScopeOptions.length > 0) && (
@@ -280,3 +246,97 @@ const EstimateGroupsCard = forwardRef(function EstimateGroupsCard({ job, jobId }
 });
 
 export default EstimateGroupsCard;
+
+// One alternate, built like the main estimate. Keeps its own copy of the
+// name and description (same pattern as the scope option editor) so a
+// refresh never overwrites what is being typed.
+function AlternateEditor({ group, job, jobId, isLocked, isFirst, isLast, busy, onUpdate, onDelete, onMove }) {
+  const [label, setLabel] = useState(group.label);
+  const [description, setDescription] = useState(group.description || '');
+  const [showActions, setShowActions] = useState(false);
+
+  async function saveScope(scopeItems) {
+    const { error: updateError } = await supabase.from('estimate_groups').update({ scope_items: scopeItems }).eq('id', group.id);
+    if (updateError) throw updateError;
+  }
+
+  const priced = group.price !== null && group.price !== undefined && group.price !== '';
+
+  return (
+    <div style={{ border: '1px solid var(--panel-line)', borderRadius: 6, padding: 14, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <input
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            onBlur={e => { if (e.target.value.trim() && e.target.value !== group.label) onUpdate(group.id, { label: e.target.value.trim() }); }}
+            style={{ fontWeight: 700, marginBottom: 6 }}
+            disabled={isLocked}
+          />
+          <textarea
+            value={description}
+            placeholder="Description shown to the customer (optional)"
+            onChange={e => setDescription(e.target.value)}
+            onBlur={e => { if (e.target.value !== (group.description || '')) onUpdate(group.id, { description: e.target.value }); }}
+            disabled={isLocked}
+            rows={2}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {isLocked && (
+            <span className="badge" style={{ background: group.included ? '#3a6b45' : '#8a5a3f' }}>
+              {group.included ? 'Included' : 'Declined'}
+            </span>
+          )}
+          <button className="btn btn-sm" onClick={() => onMove(-1)} disabled={busy || isFirst}>↑</button>
+          <button className="btn btn-sm" onClick={() => onMove(1)} disabled={busy || isLast}>↓</button>
+          <button className="btn btn-sm btn-danger" onClick={onDelete} disabled={busy || isLocked}>Delete</button>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 6, padding: '8px 12px' }}>
+        <div style={{ fontSize: 13 }}>
+          <span style={{ color: 'var(--ink-soft)' }}>Price: </span>
+          <b>{priced ? fmtMoney(group.price) : 'Not priced yet'}</b>
+        </div>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 400, margin: 0 }}>
+            <input
+              type="checkbox" style={{ width: 'auto' }}
+              checked={!!group.default_included}
+              onChange={e => onUpdate(group.id, { default_included: e.target.checked })}
+              disabled={isLocked}
+            />
+            Pre-checked for the customer
+          </label>
+          <Link href={jobHref(jobId, 'cost', { costAlternate: group.id })} className="btn btn-sm">
+            {priced ? 'Update cost & price' : 'Price on Cost tab'} →
+          </Link>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <ScopeBuilder
+          jobId={jobId}
+          groupId={group.id}
+          projectType={job.project_type}
+          initialItems={group.scope_items}
+          disabled={isLocked}
+          onSave={saveScope}
+          onActionsAdded={() => setShowActions(true)}
+        />
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <button type="button" className="btn btn-sm" onClick={() => setShowActions(o => !o)}>
+          {showActions ? 'Hide trade breakdown' : 'Show trade breakdown'}
+        </button>
+        {showActions && (
+          <div style={{ marginTop: 10 }}>
+            <TradeBreakdownCard jobId={jobId} groupId={group.id} title="Trade breakdown for this alternate" readOnly={isLocked} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

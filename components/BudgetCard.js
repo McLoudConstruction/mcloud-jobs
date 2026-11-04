@@ -23,7 +23,10 @@ export default function BudgetCard({ jobId, job }) {
       supabase.from('job_estimate_items').select('*').eq('job_id', jobId).order('created_at'),
     ]);
     if (c) setCosts(c);
-    if (e) setEstimateItems(e);
+    // Cost lines that belong to an alternate the customer has not chosen are
+    // not part of the budget. Ones copied in from an included alternate
+    // (merged_from_group_id) are, because they carry no group_id.
+    if (e) setEstimateItems(e.filter(it => !it.group_id));
     setLoaded(true);
   }, [jobId]);
 

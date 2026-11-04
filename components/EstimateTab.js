@@ -21,6 +21,12 @@ function lineTotal(it) { return (Number(it.quantity) || 0) * (Number(it.unit_pri
 // below (Cost and Pricing sections both) picks which option's numbers
 // you're looking at/editing; the choice is kept in the URL (?costOption=)
 // so it survives navigating between the Cost and Pricing sub-tabs.
+//
+// Alternates are priced the same way. Each one is its own estimate: its cost
+// lines carry job_estimate_items.group_id, its margin, sales tax and price
+// live on the estimate_groups row, and its action list is
+// estimate_group_actions. The switcher lists them after the base scope or
+// options, and the choice is kept in the URL (?costAlternate=).
 export default function EstimateTab({ job, jobId, section, children }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -53,6 +59,25 @@ export default function EstimateTab({ job, jobId, section, children }) {
   const urlOptionId = searchParams.get('costOption');
   const [selectedOptionId, setSelectedOptionId] = useState(urlOptionId || null);
 
+  // ─── Alternates (separate optional estimates) ──────────────────────────
+  const [alternates, setAlternates] = useState([]);
+  const [altsLoaded, setAltsLoaded] = useState(false);
+  const urlAlternateId = searchParams.get('costAlternate');
+  const [selectedAlternateId, setSelectedAlternateId] = useState(urlAlternateId || null);
+  // Only counts once the alternates have loaded, so a stale id in the URL
+  // never points the page at something that is gone.
+  const selectedAlternate = alternates.find(a => a.id === selectedAlternateId) || null;
+  const inAlt = !!selectedAlternate;
+  const altId = inAlt ? selectedAlternate.id : null;
+  // Which scope option's lines are in view (null for the base or an alternate).
+  const optionScopeId = !inAlt && isMulti ? selectedOptionId : null;
+  // Multi-option mode with nothing chosen yet: there is nothing to price.
+  const needsOption = !inAlt && isMulti && !selectedOptionId;
+  // Fields that tag a new cost line to what is in view. Only the alternate
+  // case sends group_id, so the base keeps working before migration 178.
+  const scopeFields = inAlt ? { group_id: altId } : { option_id: optionScopeId };
+  const loadSeq = useRef(0);
+
   const loadScopeOptions = useCallback(async () => {
     if (!isMulti) { setScopeOptions([]); return; }
     const { data } = await supabase.from('estimate_scope_options').select('*').eq('job_id', jobId).order('sort_order');
@@ -67,6 +92,25 @@ export default function EstimateTab({ job, jobId, section, children }) {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, isMulti, loadScopeOptions]);
+
+  const loadAlternates = useCallback(async () => {
+    const { data } = await supabase.from('estimate_groups').select('*').eq('job_id', jobId).order('sort_order');
+    setAlternates(data || []);
+    setAltsLoaded(true);
+  }, [jobId]);
+
+  useEffect(() => {
+    loadAlternates();
+    const channel = supabase.channel(`estimate-alternates-costing-${jobId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_groups', filter: `job_id=eq.${jobId}` }, loadAlternates)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [jobId, loadAlternates]);
+
+  // Drops a selection that no longer exists (an alternate that was deleted).
+  useEffect(() => {
+    if (altsLoaded && selectedAlternateId && !alternates.some(a => a.id === selectedAlternateId)) setSelectedAlternateId(null);
+  }, [altsLoaded, alternates, selectedAlternateId]);
 
   // Keeps the selected option valid as options load/change; defaults to
   // the first one. Deliberately not re-running on every scopeOptions
@@ -87,37 +131,70 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   function selectOption(id) {
     setSelectedOptionId(id);
+    setSelectedAlternateId(null);
     const params = new URLSearchParams(searchParams.toString());
     params.set('costOption', id);
+    params.delete('costAlternate');
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function selectAlternate(id) {
+    setSelectedAlternateId(id);
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set('costAlternate', id); else params.delete('costAlternate');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  // The thing being priced: an alternate, a scope option, or the job itself.
+  const targetLabel = inAlt ? selectedAlternate.label : (isMulti && selectedOption ? selectedOption.label : null);
+  function costTarget() {
+    if (inAlt) return { table: 'estimate_groups', id: altId };
+    if (isMulti) return selectedOptionId ? { table: 'estimate_scope_options', id: selectedOptionId } : null;
+    return { table: 'jobs', id: jobId };
   }
 
   // Margin/sales-tax fields track whichever target (the job, or the
   // selected option) is currently in view — reset only when the target
   // itself changes, not on every refetch, so typing isn't clobbered.
   useEffect(() => {
-    if (isMulti) {
-      setMargin(selectedOption?.estimate_margin_percent != null ? String(selectedOption.estimate_margin_percent) : '');
-      setSalesTax(selectedOption?.estimate_sales_tax_percent != null ? String(selectedOption.estimate_sales_tax_percent) : '');
-    } else {
-      setMargin(job.estimate_margin_percent != null ? String(job.estimate_margin_percent) : '');
-      setSalesTax(job.estimate_sales_tax_percent != null ? String(job.estimate_sales_tax_percent) : '');
-    }
+    const t = inAlt ? selectedAlternate : (isMulti ? selectedOption : job);
+    setMargin(t?.estimate_margin_percent != null ? String(t.estimate_margin_percent) : '');
+    setSalesTax(t?.estimate_sales_tax_percent != null ? String(t.estimate_sales_tax_percent) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMulti, selectedOptionId]);
+  }, [isMulti, selectedOptionId, altId]);
 
+  // A fast switch between estimates can leave an older fetch finishing last,
+  // so each load only applies if no newer one has started since.
   const loadActions = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    if (inAlt) {
+      const { data } = await supabase.from('estimate_group_actions').select('*').eq('job_id', jobId).eq('group_id', altId).order('trade');
+      if (seq === loadSeq.current) setActions(data || []);
+      return;
+    }
     const { data } = await supabase.from('job_scope_actions').select('*').eq('job_id', jobId).order('trade');
-    if (data) setActions(data);
-  }, [jobId]);
+    // Rows copied in from an included alternate are not part of what is being priced here.
+    if (data && seq === loadSeq.current) setActions(data.filter(a => !a.merged_from_group_id));
+  }, [jobId, inAlt, altId]);
 
+  const loadItemsSeq = useRef(0);
   const loadItems = useCallback(async () => {
-    if (isMulti && !selectedOptionId) { setItems([]); return; }
+    const seq = ++loadItemsSeq.current;
+    if (needsOption) { setItems([]); return; }
     let query = supabase.from('job_estimate_items').select('*').eq('job_id', jobId).order('created_at');
-    query = isMulti ? query.eq('option_id', selectedOptionId) : query.is('option_id', null);
-    const { data } = await query;
-    if (data) setItems(data);
-  }, [jobId, isMulti, selectedOptionId]);
+    if (inAlt) query = query.eq('group_id', altId);
+    else query = optionScopeId ? query.eq('option_id', optionScopeId) : query.is('option_id', null);
+    const { data, error: loadError } = await query;
+    if (seq !== loadItemsSeq.current) return;
+    if (loadError) {
+      setItems([]);
+      if (inAlt) setTradesError('Alternate pricing needs migration 178 run in Supabase first.');
+      return;
+    }
+    // Cost lines that belong to an alternate, or were copied in from one on
+    // submit, are not part of the base estimate or a scope option.
+    if (data) setItems(inAlt ? data : data.filter(it => !it.group_id && !it.merged_from_group_id));
+  }, [jobId, inAlt, altId, optionScopeId, needsOption]);
 
   useEffect(() => {
     loadActions();
@@ -126,6 +203,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
     const channel = supabase.channel(`estimate-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_estimate_items', filter: `job_id=eq.${jobId}` }, loadItems)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'job_scope_actions', filter: `job_id=eq.${jobId}` }, loadActions)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimate_group_actions', filter: `job_id=eq.${jobId}` }, loadActions)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [jobId, loadActions, loadItems]);
@@ -144,7 +222,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
       if (!data.materials || data.materials.length === 0) throw new Error('The AI returned no materials to add.');
       const { error: insertError } = await supabase.from('job_estimate_items').insert(data.materials.map(m => ({
         job_id: jobId,
-        option_id: isMulti ? selectedOptionId : null,
+        ...scopeFields,
         category: 'material',
         description: m.description,
         quantity: m.quantity,
@@ -184,9 +262,11 @@ export default function EstimateTab({ job, jobId, section, children }) {
       // before inserting, rather than trusting React state — closes the
       // race where a second click (or a slow realtime update) sees a
       // stale list and re-adds a trade that was just added a moment ago.
-      let existingQuery = supabase.from('job_estimate_items').select('unit_label, cost_type').eq('job_id', jobId).eq('category', 'labor');
-      existingQuery = isMulti ? existingQuery.eq('option_id', selectedOptionId) : existingQuery.is('option_id', null);
-      const { data: currentLabor } = await existingQuery;
+      let existingQuery = supabase.from('job_estimate_items').select('*').eq('job_id', jobId).eq('category', 'labor');
+      if (inAlt) existingQuery = existingQuery.eq('group_id', altId);
+      else existingQuery = optionScopeId ? existingQuery.eq('option_id', optionScopeId) : existingQuery.is('option_id', null);
+      const { data: currentRows } = await existingQuery;
+      const currentLabor = inAlt ? currentRows : (currentRows || []).filter(it => !it.group_id && !it.merged_from_group_id);
       // Only subcontractor lines count: a Labor or Supervision line for
       // Framing does not mean Framing already has its subcontractor row.
       const existingTrades = new Set((currentLabor || []).filter(it => (it.cost_type || 'subcontractor') === 'subcontractor').map(it => it.unit_label));
@@ -194,7 +274,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
       if (toAdd.length === 0) return;
       const { error: insertError } = await supabase.from('job_estimate_items').insert(toAdd.map(trade => ({
         job_id: jobId,
-        option_id: isMulti ? selectedOptionId : null,
+        ...scopeFields,
         category: 'labor',
         cost_type: 'subcontractor',
         description: `${trade} subcontractor cost`,
@@ -312,10 +392,10 @@ export default function EstimateTab({ job, jobId, section, children }) {
   async function addManualItem(e) {
     e.preventDefault();
     if (!newItem.description.trim()) return;
-    if (isMulti && !selectedOptionId) return;
+    if (needsOption) return;
     const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
-      option_id: isMulti ? selectedOptionId : null,
+      ...scopeFields,
       category: 'material',
       description: newItem.description.trim(),
       quantity: parseFloat(newItem.quantity) || 1,
@@ -329,7 +409,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   async function addLaborItem(e) {
     e.preventDefault();
-    if (isMulti && !selectedOptionId) return;
+    if (needsOption) return;
     const isSupervision = newLabor.cost_type === 'supervision';
     const trade = isSupervision ? (newLabor.trade || '') : (newLabor.trade || SERVICES_OFFERED[0]);
     const fallbackDescription = isSupervision
@@ -337,7 +417,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
       : `${trade} ${costTypeLabel(newLabor.cost_type).toLowerCase()} cost`;
     const { data, error } = await supabase.from('job_estimate_items').insert({
       job_id: jobId,
-      option_id: isMulti ? selectedOptionId : null,
+      ...scopeFields,
       category: 'labor',
       cost_type: newLabor.cost_type,
       description: newLabor.description.trim() || fallbackDescription,
@@ -359,13 +439,11 @@ export default function EstimateTab({ job, jobId, section, children }) {
   function saveMargin(value) {
     setMargin(value);
     clearTimeout(marginSaveTimer.current);
-    marginSaveTimer.current = setTimeout(() => {
-      if (isMulti) {
-        if (!selectedOptionId) return;
-        supabase.from('estimate_scope_options').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', selectedOptionId);
-      } else {
-        supabase.from('jobs').update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', jobId);
-      }
+    marginSaveTimer.current = setTimeout(async () => {
+      const t = costTarget();
+      if (!t) return;
+      // Awaited on purpose: a Supabase query only goes out once it is awaited.
+      await supabase.from(t.table).update({ estimate_margin_percent: value ? parseFloat(value) : null }).eq('id', t.id);
     }, 500);
   }
 
@@ -390,13 +468,10 @@ export default function EstimateTab({ job, jobId, section, children }) {
   function saveSalesTax(value) {
     setSalesTax(value);
     clearTimeout(taxSaveTimer.current);
-    taxSaveTimer.current = setTimeout(() => {
-      if (isMulti) {
-        if (!selectedOptionId) return;
-        supabase.from('estimate_scope_options').update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', selectedOptionId);
-      } else {
-        supabase.from('jobs').update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', jobId);
-      }
+    taxSaveTimer.current = setTimeout(async () => {
+      const t = costTarget();
+      if (!t) return;
+      await supabase.from(t.table).update({ estimate_sales_tax_percent: value ? parseFloat(value) : null }).eq('id', t.id);
     }, 500);
   }
 
@@ -421,7 +496,9 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   async function pushToContractPrice() {
     setPushing(true);
-    if (isMulti) {
+    if (inAlt) {
+      await supabase.from('estimate_groups').update({ price: salePrice, projected_cost: subtotal }).eq('id', altId);
+    } else if (isMulti) {
       if (selectedOptionId) {
         await supabase.from('estimate_scope_options').update({ price: salePrice, projected_cost: subtotal }).eq('id', selectedOptionId);
       }
@@ -432,26 +509,40 @@ export default function EstimateTab({ job, jobId, section, children }) {
       ]);
     }
     setPushing(false);
-    setPushedFlash(isMulti ? `Saved as ${selectedOption?.label || 'this option'}’s price.` : 'Saved as this job’s Contract Price.');
+    setPushedFlash(inAlt || isMulti ? `Saved as ${targetLabel || 'this option'}’s price.` : 'Saved as this job’s Contract Price.');
     setTimeout(() => setPushedFlash(''), 6000);
   }
 
-  const optionSwitcher = isMulti && (
+  const showSwitcher = isMulti || alternates.length > 0;
+  const optionSwitcher = showSwitcher && (
     <div className="section-actions" style={{ marginTop: 0, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-      <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Pricing which option:</span>
-      {scopeOptions.map(o => (
-        <button key={o.id} className={`btn btn-sm ${selectedOptionId === o.id ? 'btn-primary' : ''}`} onClick={() => selectOption(o.id)}>
+      <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{isMulti ? 'Pricing which option:' : 'Pricing which estimate:'}</span>
+      {isMulti ? scopeOptions.map(o => (
+        <button key={o.id} className={`btn btn-sm ${!inAlt && selectedOptionId === o.id ? 'btn-primary' : ''}`} onClick={() => selectOption(o.id)}>
           {o.label}
         </button>
-      ))}
+      )) : (
+        <button className={`btn btn-sm ${!inAlt ? 'btn-primary' : ''}`} onClick={() => selectAlternate(null)}>Base scope</button>
+      )}
+      {alternates.length > 0 && (
+        <>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginLeft: 8 }}>Alternates:</span>
+          {alternates.map(a => (
+            <button key={a.id} className={`btn btn-sm ${altId === a.id ? 'btn-primary' : ''}`} onClick={() => selectAlternate(a.id)}>
+              {a.label}
+            </button>
+          ))}
+        </>
+      )}
     </div>
   );
 
   if (section === 'cost') {
-    if (isMulti && scopeOptions.length === 0) {
+    if (!inAlt && isMulti && scopeOptions.length === 0) {
       return (
         <div className="estimate-grid-wide">
           <div className="estimate-main">
+            {optionSwitcher}
             <div className="card">
               <h3>Cost Build-Up</h3>
               <div className="empty-state">No scope options yet — add two or more on the Scope page, then come back here to price each one.</div>
@@ -465,7 +556,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
         <div className="estimate-main">
           {optionSwitcher}
           <div className="card">
-            <h3>Materials{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
+            <h3>Materials{targetLabel ? ` — ${targetLabel}` : ''}</h3>
 
             <div className="section-actions" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={suggestMaterials} disabled={suggesting || actions.length === 0}>
@@ -561,7 +652,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
           </div>
 
           <div className="card">
-            <h3>Costs{isMulti && selectedOption ? ` - ${selectedOption.label}` : ''}</h3>
+            <h3>Costs{targetLabel ? ` - ${targetLabel}` : ''}</h3>
             <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>
               Subcontractors, your own labor, and supervision. Each line has a type. The action list for the trade you are working on stays in view on the right.
             </div>
@@ -674,17 +765,17 @@ export default function EstimateTab({ job, jobId, section, children }) {
         </div>
 
         <div className="estimate-sidebar">
-          <TradeBreakdownCard jobId={jobId} trade={focusTrade || 'All'} onTradeChange={setFocusTrade} />
+          <TradeBreakdownCard jobId={jobId} groupId={altId} title={inAlt ? 'Trade Breakdown for this alternate' : undefined} trade={focusTrade || 'All'} onTradeChange={setFocusTrade} />
         </div>
       </div>
     );
   }
 
   // section === 'pricing'
-  if (isMulti && scopeOptions.length === 0) {
+  if (!inAlt && isMulti && scopeOptions.length === 0) {
     return (
       <div className="estimate-grid">
-        <div className="estimate-main">{children}</div>
+        <div className="estimate-main">{optionSwitcher}{children}</div>
         <div className="estimate-sidebar">
           <div className="card">
             <h3>Margin &amp; Sale Price</h3>
@@ -703,7 +794,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
       <div className="estimate-sidebar">
         <div className="card">
-          <h3>Margin &amp; Sale Price{isMulti && selectedOption ? ` — ${selectedOption.label}` : ''}</h3>
+          <h3>Margin &amp; Sale Price{targetLabel ? ` — ${targetLabel}` : ''}</h3>
           <table className="estimate-margin-table">
             <tbody>
               <tr><td>Materials</td><td>{fmtMoney(materialSubtotal)}</td></tr>
@@ -747,8 +838,8 @@ export default function EstimateTab({ job, jobId, section, children }) {
             </tbody>
           </table>
           <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0 || (isMulti && !selectedOptionId)}>
-              {pushing ? 'Saving…' : isMulti ? `Save as ${selectedOption?.label || 'option'}'s price` : 'Save'}
+            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0 || needsOption}>
+              {pushing ? 'Saving…' : inAlt || isMulti ? `Save as ${targetLabel || 'option'}'s price` : 'Save'}
             </button>
           </div>
           {pushedFlash && <div style={{ fontSize: 12, color: '#3a6b45', marginTop: 8 }}>{pushedFlash}</div>}

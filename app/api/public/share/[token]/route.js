@@ -82,28 +82,33 @@ export async function GET(_request, { params }) {
     }
 
     // Materials shown on the document: description + photo only, no prices.
+    // Read in full and filtered here, so the cost lines that belong to an
+    // alternate (group_id) never show up as part of the base scope.
     const { data: materialRows } = await admin
       .from('job_estimate_items')
-      .select('description, image_url, image_storage_path')
+      .select('*')
       .eq('job_id', link.job_id)
       .eq('category', 'material');
     const materials = (await Promise.all((materialRows || [])
-      .filter(m => m.image_url || m.image_storage_path)
+      .filter(m => !m.group_id && !m.merged_from_group_id && (m.image_url || m.image_storage_path))
       .map(async m => {
         if (m.image_url) return { description: m.description, url: m.image_url };
         const { data } = await admin.storage.from('job-photos').createSignedUrl(m.image_storage_path, SIGNED_URL_SECONDS);
         return data?.signedUrl ? { description: m.description, url: data.signedUrl } : null;
       }))).filter(Boolean);
 
-    // Multi-option estimates that haven't been submitted show their scope
-    // options (and alternates) read-only; once submitted, jobs.scope_items
-    // already holds the flattened, picked scope.
-    const isMulti = !proposal && job.estimate_mode === 'multi' && !job.estimate_groups_submitted_at;
+    // Until the customer submits, the scope options (multi-option estimates)
+    // and the alternates (any estimate) are shown read-only; once submitted,
+    // jobs.scope_items already holds the flattened, picked scope.
+    const open = !proposal && !job.estimate_groups_submitted_at;
+    const isMulti = open && job.estimate_mode === 'multi';
     let options = [];
     let alternates = [];
-    if (isMulti) {
+    if (open) {
       const [{ data: o }, { data: g }] = await Promise.all([
-        admin.from('estimate_scope_options').select('id, label, description, scope_items, price').eq('job_id', link.job_id).order('sort_order'),
+        isMulti
+          ? admin.from('estimate_scope_options').select('id, label, description, scope_items, price').eq('job_id', link.job_id).order('sort_order')
+          : Promise.resolve({ data: [] }),
         admin.from('estimate_groups').select('id, label, description, scope_items, price').eq('job_id', link.job_id).order('sort_order'),
       ]);
       options = o || [];
