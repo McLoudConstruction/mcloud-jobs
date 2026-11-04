@@ -69,6 +69,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
   const [selected, setSelected] = useState(() => new Set());
   const [menuOpen, setMenuOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(null);
   const [markupQueue, setMarkupQueue] = useState(null); // { ids, pos }
   const [markupUrl, setMarkupUrl] = useState('');
@@ -291,6 +292,18 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     a.remove();
   }
 
+  // One photo from the viewer: same on-brand file name as the grid download.
+  async function downloadOne(p) {
+    try {
+      const name = fileNameFor(p, [p]);
+      const { data, error } = await supabase.storage.from(bucketOf(p)).createSignedUrl(p.storage_path, 120, { download: name });
+      if (error || !data?.signedUrl) throw error || new Error('Could not prepare the file.');
+      triggerDownload(data.signedUrl, name);
+    } catch (err) {
+      flash(`Download failed: ${err.message || err}`, 8000);
+    }
+  }
+
   async function downloadSelected() {
     setMenuOpen(false);
     const list = selectedPhotos;
@@ -387,6 +400,12 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     setMarkupUrl('');
     setMarkupQueue({ ids: selectedPhotos.map(p => p.id), pos: 0 });
   }
+  // Markup one photo straight from the viewer.
+  function markupOne(p) {
+    setViewerIndex(null);
+    setMarkupUrl('');
+    setMarkupQueue({ ids: [p.id], pos: 0 });
+  }
   const markupPhoto = markupQueue ? photos.find(p => p.id === markupQueue.ids[markupQueue.pos]) : null;
 
   useEffect(() => {
@@ -482,6 +501,15 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
     [visible, thumbUrls, signFull]
   );
   const dateFmt = useMemo(() => new Intl.DateTimeFormat('en-US', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' }), [tz]);
+  // Staff actions in the viewer. Not passed on customer or share pages.
+  const viewerActions = (item, i) => {
+    const p = visible[i];
+    if (!p) return [];
+    return [
+      { key: 'markup', label: 'Markup', icon: <EditIcon size={18} />, onClick: () => markupOne(p) },
+      { key: 'download', label: 'Download', icon: <DownloadIcon size={18} />, onClick: () => downloadOne(p) },
+    ];
+  };
   const viewerFooter = (item, i) => {
     const p = visible[i];
     if (!p) return null;
@@ -507,9 +535,8 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
             <button className="btn btn-primary btn-sm" onClick={() => setCameraOpen(true)} type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <CameraIcon size={16} /> Take Photos
             </button>
-            <button className="btn btn-sm" onClick={() => fileInputRef.current?.click()} type="button">Upload from library</button>
+            <button className="btn btn-sm" onClick={() => (updateId ? fileInputRef.current?.click() : setUploadOpen(true))} type="button">Upload from library</button>
             {updateId && <button className="btn btn-sm" onClick={openPicker} type="button">Attach existing photo</button>}
-            {!updateId && <DestinationPicker destination={destination} variant="light" />}
           </div>
         </>
       )}
@@ -674,6 +701,26 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
         </div>
       )}
 
+      {uploadOpen && (
+        <div className="dest-backdrop" onClick={() => setUploadOpen(false)} role="presentation">
+          <div className="dest-sheet" role="dialog" aria-label="Upload photos" onClick={e => e.stopPropagation()}>
+            <div className="dest-sheet-title">Upload photos to</div>
+            <div style={{ marginBottom: 14 }}>
+              <DestinationPicker destination={destination} variant="camera" />
+            </div>
+            <button
+              type="button"
+              className="camera-review-btn camera-review-use"
+              style={{ flex: 'none', width: '100%' }}
+              onClick={() => { setUploadOpen(false); fileInputRef.current?.click(); }}
+            >
+              Choose photos
+            </button>
+            <button type="button" className="dest-cancel" onClick={() => setUploadOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       <FolderSheet
         open={moveOpen}
         title="Move to"
@@ -692,6 +739,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
         onClose={() => setViewerIndex(null)}
         onNavigate={setViewerIndex}
         footer={viewerFooter}
+        actions={viewerActions}
       />
 
       {markupQueue && markupPhoto && markupUrl && (
@@ -704,6 +752,7 @@ export default function PhotoGallery({ jobId, updateId, title, allowUpload = tru
           progress={markupQueue.ids.length > 1 ? { index: markupQueue.pos, total: markupQueue.ids.length } : undefined}
           saveLabel="Done"
           cancelLabel={markupQueue.ids.length > 1 ? 'Skip' : 'Cancel'}
+          onTop
         />
       )}
 

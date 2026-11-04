@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRequireAuth } from '../../../lib/useAuth';
 import AppShell from '../../../components/AppShell';
-import { formatPhone, nextProjectNumber } from '../../../lib/constants';
+import { formatPhone, nextProjectNumber, COMMERCIAL_JOB_TYPES } from '../../../lib/constants';
 import { peekNextProjectNumber } from '../../../lib/assignProjectNumber';
 
 const HOMEOWNER_TYPE = 'Residential - Homeowner';
@@ -15,6 +15,8 @@ const EMPTY_FORM = {
   project_type: '', // 'residential' | 'commercial'
   work_location: '', // 'indoor' | 'outdoor' — primary/expected; individual schedule phases can differ
   company: '',
+  property_name: '',
+  job_type: '', // commercial only: Multi-Family, Office, Hospitality...
   first_name: '',
   last_name: '',
   customer_email: '',
@@ -86,6 +88,11 @@ function NewOpportunityPageInner() {
 
   function update(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  // Commercial-only fields are cleared when the type switches to Residential.
+  function changeProjectType(value) {
+    setForm(prev => (value === 'commercial' ? { ...prev, project_type: value } : { ...prev, project_type: value, property_name: '', job_type: '' }));
   }
 
   // ---- Customer name autofill suggestions ----
@@ -179,6 +186,8 @@ function NewOpportunityPageInner() {
       customer_contact: fullName,
       ...carriedAddress,
     };
+    if (isCommercial && form.property_name.trim()) payload.property_name = form.property_name.trim();
+    if (isCommercial && form.job_type) payload.job_type = form.job_type;
     // Link the job to the person picked from the suggestions (needs migration 173; dropped if it has not been run).
     if (selectedContactId) payload.contact_id = selectedContactId;
 
@@ -192,9 +201,17 @@ function NewOpportunityPageInner() {
       if (!insertError || insertError.code !== '23505') break;
       payload.project_number = await suggestProjectNumber(form.project_type);
     }
-    if (insertError && 'contact_id' in payload && /contact_id/.test(insertError.message || '')) {
-      delete payload.contact_id;
-      ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
+    // Optional columns from later migrations (173 contact_id, 177 property_name). If one has
+    // not been run yet, save without it so the job still gets created.
+    for (const col of ['contact_id', 'property_name']) {
+      if (insertError && col in payload && new RegExp(col).test(insertError.message || '')) {
+        if (col === 'property_name') {
+          // Do not lose what was typed: keep the property name in the description.
+          payload.description = [`Property: ${payload.property_name}`, payload.description].filter(Boolean).join('\n');
+        }
+        delete payload[col];
+        ({ data, error: insertError } = await supabase.from('jobs').insert(payload).select().single());
+      }
     }
 
     if (!insertError && !selectedContactId) {
@@ -302,7 +319,7 @@ function NewOpportunityPageInner() {
         <form onSubmit={handleSubmit}>
           <div className="card">
             <label>Customer type *</label>
-            <select value={form.project_type} onChange={e => update('project_type', e.target.value)} required>
+            <select value={form.project_type} onChange={e => changeProjectType(e.target.value)} required>
               <option value="">Select…</option>
               <option value="residential">Residential</option>
               <option value="commercial">Commercial</option>
@@ -319,10 +336,25 @@ function NewOpportunityPageInner() {
             </div>
 
             {isCommercial && (
-              <div style={{ marginTop: 12 }}>
-                <label>Company *</label>
-                <input value={form.company} onChange={e => update('company', e.target.value)} required />
-              </div>
+              <>
+                <div style={{ marginTop: 12 }}>
+                  <label>Company *</label>
+                  <input value={form.company} onChange={e => update('company', e.target.value)} required />
+                </div>
+                <div className="two-col" style={{ marginTop: 12 }}>
+                  <div>
+                    <label>Property name</label>
+                    <input value={form.property_name} onChange={e => update('property_name', e.target.value)} placeholder="e.g. Oakwood Apartments" />
+                  </div>
+                  <div>
+                    <label>Job type</label>
+                    <select value={form.job_type} onChange={e => update('job_type', e.target.value)}>
+                      <option value="">Select…</option>
+                      {COMMERCIAL_JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="two-col" style={{ marginTop: 12, position: 'relative' }}>

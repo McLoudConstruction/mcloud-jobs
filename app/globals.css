@@ -2517,10 +2517,20 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .pv-counter{ font-size: 14px; font-weight: 700; }
 .pv-close{ width: 44px; height: 44px; border-radius: 50%; border: none; background: #1c1c1c; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.pv-stage{ position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.pv-stage.is-zoomed{ overflow: auto; display: block; -webkit-overflow-scrolling: touch; }
-.pv-img{ max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; cursor: zoom-in; -webkit-user-drag: none; }
-.pv-stage.is-zoomed .pv-img{ max-width: none; max-height: none; width: 250%; cursor: zoom-out; }
+.pv-stage{ position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pv-img{ max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; -webkit-user-drag: none; transform-origin: center center; will-change: transform; pointer-events: none; }
+.pv-stage.is-zoomed{ cursor: grab; }
+.pv-top-right{ display: flex; align-items: center; gap: 8px; }
+.pv-action{ display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 22px; border: none; background: #1c1c1c; color: #fff; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pv-action:disabled{ opacity: 0.5; cursor: default; }
+.pv-reset{ position: absolute; bottom: 14px; right: 14px; height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid rgba(255,255,255,0.6); background: rgba(0,0,0,0.7); color: #fff; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.markup-overlay.markup-top{ z-index: 2400; }
+.camera-review-markup{
+  position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px;
+  border-radius: 23px; border: 2px solid #fff; background: #000; color: #fff;
+  font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
 .pv-loading{ position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12px; background: rgba(0,0,0,0.7); padding: 5px 12px; border-radius: 14px; }
 .pv-nav{ position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: none; background: rgba(28,28,28,0.8); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .pv-prev{ left: 10px; } .pv-next{ right: 10px; }

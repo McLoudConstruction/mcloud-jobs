@@ -628,6 +628,7 @@ export default function JobDetailPage() {
           <div>
             {isMobile && (<>
             <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
+            {job.property_name && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.property_name}</div>}
             {job.project_address && (
               <MapLinkMenu
                 address={job.project_address}

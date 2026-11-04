@@ -15,7 +15,9 @@ const LINE_WIDTH_RATIO = 0.006; // relative to canvas width, so strokes scale wi
 
 // progress: optional { index, total } when marking up a selected set in turn.
 // saveLabel / cancelLabel let the queue say "Done" and "Skip".
-export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, progress, saveLabel, cancelLabel }) {
+// onTop: draw above the camera and photo viewer (opened from inside them).
+// maxDimension: longest side of the saved picture (camera shots are 1920).
+export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, progress, saveLabel, cancelLabel, onTop, maxDimension }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -49,7 +51,7 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, p
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const scale = Math.min(1, MAX_CANVAS_DIMENSION / Math.max(img.width, img.height));
+      const scale = Math.min(1, (maxDimension || MAX_CANVAS_DIMENSION) / Math.max(img.width, img.height));
       const canvas = canvasRef.current;
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
@@ -58,7 +60,7 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, p
     };
     img.onerror = () => setLoadFailed(true);
     img.src = imageUrl;
-  }, [imageUrl]);
+  }, [imageUrl, maxDimension]);
 
   const redraw = useCallback((liveShape) => {
     const canvas = canvasRef.current;
@@ -175,7 +177,7 @@ export default function PhotoMarkupEditor({ imageUrl, onSave, onClose, onStop, p
   }
 
   return (
-    <div className="markup-overlay">
+    <div className={`markup-overlay${onTop ? ' markup-top' : ''}`}>
       <div className="markup-toolbar">
         <div className="markup-tools">
           {TOOLS.map(t => (

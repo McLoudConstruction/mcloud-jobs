@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import DestinationPicker from './DestinationPicker';
-import { FlashOnIcon, FlashOffIcon, FlipCameraIcon } from './photoIcons';
+import PhotoMarkupEditor from './PhotoMarkupEditor';
+import { FlashOnIcon, FlashOffIcon, FlipCameraIcon, EditIcon } from './photoIcons';
 
 // Full-screen in-browser camera that stays open across shots.
 // Flow: live view -> snap -> review (Retake / Use Photo) -> live view, until
@@ -58,6 +59,7 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, destinat
 
   const [facingMode, setFacingMode] = useState('environment');
   const [reviewFile, setReviewFile] = useState(null); // { blob, previewUrl, takenAt }
+  const [markupOpen, setMarkupOpen] = useState(false);
   const [count, setCount] = useState(0);
   const [error, setError] = useState(null); // { kind, message }
   const [starting, setStarting] = useState(false);
@@ -302,6 +304,19 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, destinat
   function dropReview() {
     if (reviewFile?.previewUrl) URL.revokeObjectURL(reviewFile.previewUrl);
     setReviewFile(null);
+    setMarkupOpen(false);
+  }
+
+  // Markup on the shot before it is kept: the marked up picture replaces the
+  // shot, and Use Photo then saves it like any other photo.
+  async function saveReviewMarkup(blob) {
+    if (!blob) { setMarkupOpen(false); return; }
+    setReviewFile(prev => {
+      if (!prev) return prev;
+      if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return { ...prev, blob, previewUrl: URL.createObjectURL(blob), marked: true };
+    });
+    setMarkupOpen(false);
   }
 
   function handleUsePhoto() {
@@ -402,6 +417,11 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, destinat
           </div>
         )}
         {reviewFile && <img src={reviewFile.previewUrl} alt="Captured preview" className="camera-review-image" />}
+        {reviewFile && (
+          <button type="button" className="camera-review-markup" onClick={() => setMarkupOpen(true)}>
+            <EditIcon size={18} /> Markup
+          </button>
+        )}
 
         {!reviewFile && !error && (
           <div className="camera-zoom" aria-label="Zoom">
@@ -474,6 +494,18 @@ export default function CameraCapture({ open, onClose, onPhotoAccepted, destinat
           <button type="button" className="camera-review-btn camera-review-retake" onClick={dropReview}>Retake</button>
           <button type="button" className="camera-review-btn camera-review-use" onClick={handleUsePhoto}>Use Photo</button>
         </div>
+      )}
+
+      {reviewFile && markupOpen && (
+        <PhotoMarkupEditor
+          imageUrl={reviewFile.previewUrl}
+          onSave={saveReviewMarkup}
+          onClose={() => setMarkupOpen(false)}
+          saveLabel="Done"
+          cancelLabel="Cancel"
+          maxDimension={1920}
+          onTop
+        />
       )}
 
       <input

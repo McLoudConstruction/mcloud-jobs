@@ -72,6 +72,7 @@ export default function JobTrackerPage() {
         (j.project_number || '').toLowerCase().includes(q) ||
         (j.customer_name || '').toLowerCase().includes(q) ||
         (j.project_address || '').toLowerCase().includes(q) ||
+        (j.property_name || '').toLowerCase().includes(q) ||
         (j.loss_reason || '').toLowerCase().includes(q)
       );
     });
@@ -156,7 +157,7 @@ export default function JobTrackerPage() {
                 <span className="entity-mobile-row-text">
                   <span className="entity-mobile-row-title">{job.customer_name || 'Unnamed customer'}</span>
                   <span className="entity-mobile-row-sub">
-                    {formattedProjectNumber(job)}{job.project_address ? ` · ${job.project_address}` : ''}
+                    {formattedProjectNumber(job)}{job.property_name ? ` · ${job.property_name}` : ''}{job.project_address ? ` · ${job.project_address}` : ''}
                   </span>
                 </span>
                 <span className={`badge badge-${job.stage}`} style={{ flexShrink: 0 }}>{STAGE_LABELS[job.stage]}</span>
@@ -170,6 +171,7 @@ export default function JobTrackerPage() {
               <div className="job-main">
                 <span className="job-number">{formattedProjectNumber(job)}</span>
                 <span className="job-customer">{job.customer_name || 'Unnamed customer'}</span>
+                {job.property_name && <span className="job-address" style={{ fontWeight: 600 }}>{job.property_name}</span>}
                 <span className="job-address">{job.project_address || 'No address yet'}</span>
                 {view === 'lost' && job.loss_reason && (
                   <span className="job-address" style={{ color: 'var(--ink-soft)' }}>Loss reason: {job.loss_reason}</span>

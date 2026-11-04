@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { phaseForStage } from '../lib/constants';
+import { phaseForStage, COMMERCIAL_JOB_TYPES } from '../lib/constants';
 import { aiFetch } from '../lib/aiFetch';
 
 export default function ProjectInfoCard({ job, onSave, onNavigate }) {
   const [form, setForm] = useState({
     job_type: job.job_type || '',
+    property_name: job.property_name || '',
     expected_close_date: job.expected_close_date || '',
     scheduled_start_date: job.scheduled_start_date || '',
     scheduled_end_date: job.scheduled_end_date || '',
@@ -35,6 +36,9 @@ export default function ProjectInfoCard({ job, onSave, onNavigate }) {
 
   function save() {
     const patch = { ...form };
+    // Only send the property name when it changed, so saving still works before migration 177 is run.
+    if (patch.property_name === (job.property_name || '')) delete patch.property_name;
+    else patch.property_name = patch.property_name.trim() || null;
     // Postgres date columns reject '' outright ("invalid input syntax for
     // type date"); an empty/cleared date input must go through as null.
     for (const field of ['expected_close_date', 'scheduled_start_date', 'scheduled_end_date', 'approved_at']) {
@@ -59,7 +63,22 @@ export default function ProjectInfoCard({ job, onSave, onNavigate }) {
             <option value="commercial">Commercial</option>
           </select>
         </div>
-        <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
+        {form.project_type === 'commercial' ? (
+          <>
+            <div>
+              <label>Job type</label>
+              <select value={form.job_type} onChange={e => update('job_type', e.target.value)}>
+                <option value="">Select…</option>
+                {/* A job type typed in before this list existed stays selectable. */}
+                {form.job_type && !COMMERCIAL_JOB_TYPES.includes(form.job_type) && <option value={form.job_type}>{form.job_type}</option>}
+                {COMMERCIAL_JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div><label>Property name</label><input value={form.property_name} onChange={e => update('property_name', e.target.value)} placeholder="e.g. Oakwood Apartments" /></div>
+          </>
+        ) : (
+          <div><label>Job type</label><input value={form.job_type} onChange={e => update('job_type', e.target.value)} placeholder="e.g. Kitchen remodel" /></div>
+        )}
         <div>
           <label>Date created</label>
           <input value={job.created_at ? new Date(job.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''} disabled style={{ opacity: 0.7 }} />
