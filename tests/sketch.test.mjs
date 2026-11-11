@@ -206,6 +206,29 @@ test('dragging an angled wall slides its ends along the neighbouring walls, whic
   assert.deepEqual([free[4], free[0]], [[1, 3], [4, 0]]);
 });
 
+test('a diagonal made with wall breaks slides along the real walls behind the breaks', () => {
+  // cut the corner of a room the way it is done in the app: break the top and left walls, drop the corner
+  let r = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 15, 14) };
+  r = insertBreak(r, 0, 3, 0);
+  r = insertBreak(r, r.pts.length - 1, 0, 3);
+  r = removeVertex(r, r.pts.findIndex((p) => p[0] === 0 && p[1] === 0));
+  const diag = r.pts.findIndex((p, k) => {
+    const q = r.pts[(k + 1) % r.pts.length];
+    return p[0] === 0 && p[1] === 3 && q[0] === 3 && q[1] === 0;
+  });
+  assert.ok(diag >= 0);
+  const moved = moveEdge(r.pts, diag, 1.5, 1.5);
+  // every edge stays level, plumb, or the 45 degree diagonal: nothing tilted
+  moved.forEach((p, k) => {
+    const q = moved[(k + 1) % moved.length];
+    const dx = Math.abs(q[0] - p[0]); const dy = Math.abs(q[1] - p[1]);
+    assert.ok(dx < 1e-6 || dy < 1e-6 || Math.abs(dx - dy) < 1e-6, `edge ${k} is tilted: ${JSON.stringify([p, q])}`);
+  });
+  assert.ok(moved.some((p) => p[0] === 0 && p[1] === 6));
+  assert.ok(moved.some((p) => p[0] === 6 && p[1] === 0));
+  assert.equal(polyArea(moved), 15 * 14 - 0.5 * 6 * 6);
+});
+
 test('sliding a wall never runs a neighbour down to nothing', () => {
   const pts = [[3, 0], [15, 0], [15, 14], [0, 14], [0, 3]];
   const far = moveEdge(pts, 4, 50, 50); // way past the far corners
