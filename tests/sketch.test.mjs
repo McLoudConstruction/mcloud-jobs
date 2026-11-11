@@ -4,7 +4,7 @@ import {
   emptyPlan, normalizePlan, newRoom, snap, parseFeet, fmtFeet, roomArea, totalArea, hitRoom,
   hitMarkAt, simplifyStroke, planBounds, fitView, toWorld, toScreen, roomPhotoCounts, distToSegment,
   rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner,
-  removeVertex, tidyPts, moveVertex, moveEdge, moveEdgeSnapped, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
+  removeVertex, dropStraightPoints, tidyPts, moveVertex, moveEdge, moveEdgeSnapped, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
   carveRooms, subtractRect, wetAreas, totalWet, hitWater, newWater, labelPoint,
   MAX_ROOMS, MAX_ROOM, MIN_ROOM,
 } from '../lib/sketch.js';
@@ -227,6 +227,53 @@ test('a diagonal made with wall breaks slides along the real walls behind the br
   assert.ok(moved.some((p) => p[0] === 0 && p[1] === 6));
   assert.ok(moved.some((p) => p[0] === 6 && p[1] === 0));
   assert.equal(polyArea(moved), 15 * 14 - 0.5 * 6 * 6);
+});
+
+test('a point left dead straight after an edit is dropped; breaks and real corners are kept', () => {
+  // a square with its corner cut across: the point halfway along the diagonal is not a corner
+  const cut = [[0, 0], [10, 0], [10, 10], [3, 10], [1.5, 8.5], [0, 7]];
+  assert.deepEqual(dropStraightPoints(cut, [4]), [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]);
+  // only the points asked about are looked at
+  assert.deepEqual(dropStraightPoints(cut, [0, 1]), cut);
+  // real corners stay
+  assert.deepEqual(dropStraightPoints(cut, [3, 5]), cut);
+  // a wall break (two points in one spot) stays
+  const brk = [[0, 0], [5, 0], [5, 0], [10, 0], [10, 10], [0, 10]];
+  assert.deepEqual(dropStraightPoints(brk, [1, 2]), brk);
+  // a point that doubles back is a spike, not a straight line
+  const spike = [[0, 0], [10, 0], [4, 0], [10, 10], [0, 10]];
+  assert.deepEqual(dropStraightPoints(spike, [2]), spike);
+  // a triangle keeps its three points
+  assert.equal(dropStraightPoints([[0, 0], [5, 0], [10, 0]], [1]).length, 3);
+  // indices wrap around the ends of the list
+  assert.deepEqual(dropStraightPoints([[0, 0], [5, 0], [10, 0], [10, 10], [0, 10]], [-4]).length, 4);
+});
+
+test('the full story: square, wall breaks, step, delete the middle points, then drag the angle', () => {
+  let r = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  r = insertBreak(r, 2, 3, 10);                 // bottom wall, 3 ft from the left
+  r = insertBreak(r, r.pts.length - 1, 0, 7);   // left wall, 7 ft down
+  const corner = r.pts.findIndex((p) => p[0] === 0 && p[1] === 10);
+  r = { ...r, pts: moveVertex(r.pts, corner, 3, 7) }; // pull the corner in: a 3 ft step
+  assert.equal(polyArea(r.pts), 91);
+  while (r.pts.some((p) => p[0] === 3 && p[1] === 7)) r = removeVertex(r, r.pts.findIndex((p) => p[0] === 3 && p[1] === 7));
+  assert.deepEqual(r.pts, [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]); // one straight angle, no middle point
+  const diag = 3; // from (3, 10) to (0, 7)
+  for (const [dx, dy, want] of [[1, -1, [[5, 10], [0, 5]]], [2, -2, [[7, 10], [0, 3]]], [-1, 1, [[1, 10], [0, 9]]]]) {
+    const m = moveEdgeSnapped(r.pts, diag, dx, dy);
+    assert.deepEqual([m[3], m[4]], want);
+    assert.deepEqual([m[0], m[1], m[2]], [[0, 0], [10, 0], [10, 10]]); // untouched
+    // the walls either side stay level and plumb: the ends only slide along them
+    assert.equal(m[3][1], 10);
+    assert.equal(m[4][0], 0);
+  }
+  // an in-between drag still lands on tidy numbers, never on a tilted neighbour
+  const odd = moveEdgeSnapped(r.pts, diag, 0.8, -1.3);
+  assert.equal(odd[3][1], 10);
+  assert.equal(odd[4][0], 0);
+  assert.equal(odd[3][0] % 0.5, 0);
+  // selecting an end instead moves that corner itself (Alt held = free: the neighbours are not kept square)
+  assert.deepEqual(moveVertex(r.pts, 3, 4, 9, { free: true })[3], [4, 9]);
 });
 
 test('sliding a wall never runs a neighbour down to nothing', () => {
