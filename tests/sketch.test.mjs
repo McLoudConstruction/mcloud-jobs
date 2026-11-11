@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   emptyPlan, normalizePlan, newRoom, snap, parseFeet, fmtFeet, roomArea, totalArea, hitRoom,
   hitMarkAt, simplifyStroke, planBounds, fitView, toWorld, toScreen, roomPhotoCounts, distToSegment,
-  rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner,
+  rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner, addCornerCut,
   removeVertex, dropStraightPoints, tidyPts, moveVertex, moveEdge, moveEdgeSnapped, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
   carveRooms, subtractRect, wetAreas, totalWet, hitWater, newWater, labelPoint,
   MAX_ROOMS, MAX_ROOM, MIN_ROOM,
@@ -276,6 +276,40 @@ test('the full story: square, wall breaks, step, delete the middle points, then 
   assert.deepEqual(moveVertex(r.pts, 3, 4, 9, { free: true })[3], [4, 9]);
 });
 
+test('dragging an angled wall next to a wall break never leaves a stray point behind', () => {
+  // breaks on the bottom (x = 5) and left (y = 7) walls, the old corner pulled in to (2, 7)
+  const pts = [[0, 0], [10, 0], [10, 10], [5, 10], [5, 10], [2, 7], [0, 7], [0, 7]];
+  const m = moveEdgeSnapped(pts, 4, 1, -1);
+  assert.deepEqual(m.slice(0, 3), pts.slice(0, 3));
+  assert.deepEqual([m[3], m[4]], [[7, 10], [7, 10]]); // both halves of the break stay together on the bottom wall
+  assert.deepEqual(m[5], [4, 7]);                      // the other end slides along the level 2 ft wall
+  assert.deepEqual(m.slice(6), pts.slice(6));
+});
+
+test('Add corner: a click adds a corner, and a second click on the next wall cuts the corner off', () => {
+  const sq = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  const one = addCornerCut(sq, 2, 3.1, 10);           // bottom wall, about 3 ft in from the left
+  assert.deepEqual(one.point, [3, 10]);
+  assert.equal(one.cut, false);
+  assert.equal(one.room.pts.length, 5);               // a plain corner point, as before
+  const two = addCornerCut(one.room, 4, 0, 7.2, one.point); // left wall: cuts the corner between them
+  assert.equal(two.cut, true);
+  assert.deepEqual(two.room.pts, [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]);
+  assert.equal(polyArea(two.room.pts), 100 - 0.5 * 3 * 3);
+  // the other order works too, and on the other pair of walls
+  const b1 = addCornerCut(sq, 3, 0, 6);               // left wall, 4 ft up from the bottom corner
+  const b2 = addCornerCut(b1.room, 2, 4, 10, b1.point); // bottom wall
+  assert.equal(b2.cut, true);
+  assert.equal(b2.room.pts.length, 5);
+  assert.equal(polyArea(b2.room.pts), 100 - 0.5 * 4 * 4);
+  // walls that are not next to each other, the same wall, or no earlier click: just a new corner
+  assert.equal(addCornerCut(one.room, 0, 5, 0, one.point).cut, false); // top wall: opposite side
+  assert.equal(addCornerCut(one.room, 2, 6, 10, one.point).cut, false); // same wall as the first click
+  assert.equal(addCornerCut(one.room, 4, 0, 7).cut, false);
+  // a click right on an existing corner adds nothing
+  assert.equal(addCornerCut(one.room, 4, 0, 10, one.point).point, null);
+});
+
 test('sliding a wall never runs a neighbour down to nothing', () => {
   const pts = [[3, 0], [15, 0], [15, 14], [0, 14], [0, 3]];
   const far = moveEdge(pts, 4, 50, 50); // way past the far corners
@@ -464,6 +498,12 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'mark', id: plan.marks[1].id }, draft: { type: 'pen', color: '#000000', pts: [[0, 0], [1, 1]] } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'room', id: 'k', vi: 2, ei: 1 }, wet: wetAreas(plan), hover: { x: 3, y: 0, kind: 'break' } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'water', id: 'w' }, draft: { type: 'water', cat: 2, pts: [[0, 0], [3, 1]] } });
+  // hovering the top wall of the kitchen (12 ft) at 3 ft: 3' on one side and 9' on the other, with the cut preview
+  const kit = plan.rooms[0];
+  const hctx = fakeCtx();
+  drawPlan(hctx, plan, view, { W: 400, H: 300, hover: { x: 3, y: 0, kind: 'corner', a: kit.pts[0], b: kit.pts[1], pts: kit.pts, from: { x: 0, y: 4 } }, pending: { x: 0, y: 4 } });
+  const hoverText = hctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+  assert.ok(hoverText.includes("3'") && hoverText.includes("9'"), `split lengths missing: ${hoverText}`);
   drawPlan(ctx, emptyPlan(), view, { W: 400, H: 300 });
   const text = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
   assert.ok(text.includes('Kitchen'));

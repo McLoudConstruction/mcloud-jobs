@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_WATER, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, WATER_CATS,
-  carveRooms, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitWater, insertBreak, insertCorner, isRect, makeId, moveEdgeSnapped,
+  addCornerCut, carveRooms, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitWater, insertBreak, insertCorner, isRect, makeId, moveEdgeSnapped,
   moveVertex, nearestAnchor, nearestEdge, nearestVertex, newRoom, newWater, normalizePlan, parseFeet, planBounds,
   polyArea, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, tidyPts, toWorld, totalArea, totalWet, translatePts, waterOutline, wetAreas, fmtFeet,
@@ -22,11 +22,11 @@ const TOOLS = [
 ];
 const KEYS = { v: 'select', h: 'pan', r: 'room', b: 'break', c: 'corner', w: 'water', p: 'pen', t: 'text' };
 const HINTS = {
-  select: 'Click a room to select it, then drag its corners or walls. Hold Alt for angled walls. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
+  select: 'Click a room to select it, then drag its corners or walls. Hold Alt (or turn on Angles) to move a corner in any direction. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   pan: 'Drag to move around. Pinch or scroll to zoom.',
   room: 'Drag on the sketch to draw a room. It snaps to the corners and walls of rooms already there.',
   break: 'Hover a wall and click to cut it in two. Switch to Select (V), then drag either side of the cut in or out.',
-  corner: 'Hover a wall and click to add a corner, then drag it with Alt held to bend the wall into an angle. Corners left in a straight line are removed for you.',
+  corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   water: 'Draw around where the water went with your finger or mouse. It is cleaned up and colored when you let go.',
   pen: 'Draw freehand: doors, arrows, anything. Tap a line with Select to remove it.',
   text: 'Tap where the note should go, then type it.',
@@ -49,6 +49,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const viewRef = useRef({ scale: 14, ox: 40, oy: 40 });
   const dragRef = useRef(null);      // gesture in progress: { mode, plan?, draft?, ... }
   const hoverRef = useRef(null);
+  const lastCornerRef = useRef(null); // Add corner: the point the last click added, { roomId, x, y }
   const pointers = useRef(new Map());
   const undoRef = useRef([]);
   const redoRef = useRef([]);
@@ -96,6 +97,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     drawPlan(ctx, d?.plan || committed, viewRef.current, {
       W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current,
       wet: wetRef.current.wet, draft: d?.draft || null, hover: d ? null : hoverRef.current,
+      pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
     });
   }, []);
   const schedule = useCallback(() => {
@@ -105,7 +107,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { hoverRef.current = null; schedule(); }, [tool, schedule]);
+  useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; schedule(); }, [tool, schedule]);
 
   // size the canvas to its box, keep it crisp on high-density screens, and fit the drawing once
   const fittedRef = useRef(false);
@@ -158,6 +160,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const prev = undoRef.current.pop();
     if (!prev) return;
     redoRef.current.push(planRef.current);
+    lastCornerRef.current = null;
     planRef.current = prev;
     setCanUndo(undoRef.current.length > 0);
     setCanRedo(true);
@@ -170,6 +173,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const next = redoRef.current.pop();
     if (!next) return;
     undoRef.current.push(planRef.current);
+    lastCornerRef.current = null;
     planRef.current = next;
     setCanUndo(true);
     setCanRedo(redoRef.current.length > 0);
@@ -318,13 +322,23 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         const ed = nearestEdge(plan.rooms[i], w.x, w.y, edgeTol * 1.3);
         if (ed) hit = { room: plan.rooms[i], ed };
       }
-      if (hit) {
-        const fn = t === 'break' ? insertBreak : insertCorner;
-        const next = fn(hit.room, hit.ed.i, hit.ed.x, hit.ed.y);
+      if (hit && t === 'break') {
+        const next = insertBreak(hit.room, hit.ed.i, hit.ed.x, hit.ed.y);
         if (next !== hit.room) {
           commit({ ...plan, rooms: plan.rooms.map((r) => (r.id === hit.room.id ? next : r)) });
           setSel({ kind: 'room', id: hit.room.id, ei: hit.ed.i });
         }
+      } else if (hit) {
+        // Add corner: the first click adds a corner and waits; a click on the next wall cuts the corner between them
+        const last = lastCornerRef.current;
+        const res = addCornerCut(hit.room, hit.ed.i, hit.ed.x, hit.ed.y, last && last.roomId === hit.room.id ? [last.x, last.y] : null);
+        if (res.point) {
+          commit({ ...plan, rooms: plan.rooms.map((r) => (r.id === hit.room.id ? res.room : r)) });
+          setSel({ kind: 'room', id: hit.room.id });
+          lastCornerRef.current = res.cut ? null : { roomId: hit.room.id, x: res.point[0], y: res.point[1] };
+        }
+      } else {
+        lastCornerRef.current = null; // a click on empty space starts over
       }
       hoverRef.current = null;
       schedule();
@@ -400,8 +414,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         const plan = planRef.current;
         let h = null;
         for (let i = plan.rooms.length - 1; i >= 0 && !h; i -= 1) {
-          const ed = nearestEdge(plan.rooms[i], w.x, w.y, (9 / v.scale) * 1.3);
-          if (ed) { const q = snapOnEdge(plan.rooms[i].pts, ed.i, ed.x, ed.y); h = { x: q.x, y: q.y, kind: t }; }
+          const room = plan.rooms[i];
+          const ed = nearestEdge(room, w.x, w.y, (9 / v.scale) * 1.3);
+          if (ed) {
+            const q = snapOnEdge(room.pts, ed.i, ed.x, ed.y);
+            // the wall's two ends, so the length on each side of the circle can be shown
+            h = { x: q.x, y: q.y, kind: t, a: room.pts[ed.i], b: room.pts[(ed.i + 1) % room.pts.length], pts: room.pts };
+            const last = lastCornerRef.current;
+            if (t === 'corner' && last && last.roomId === room.id && addCornerCut(room, ed.i, ed.x, ed.y, [last.x, last.y]).cut) {
+              h.from = { x: last.x, y: last.y }; // the next click would cut the corner between the two
+            }
+          }
         }
         hoverRef.current = h;
         schedule();
@@ -451,7 +474,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveVertex(base.pts, d.i, q.x, q.y, { free }) } : r)) };
     } else if (d.mode === 'edge') {
       d.moved = true;
-      d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveEdgeSnapped(d.orig, d.i, w.x - d.wx, w.y - d.wy, { free }) } : r)) };
+      // a wall always slides its ends along the walls beside it, with or without Angles / Alt: only corners move freely
+      d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveEdgeSnapped(d.orig, d.i, w.x - d.wx, w.y - d.wy, { free: false }) } : r)) };
     } else if (d.mode === 'wvertex') {
       d.moved = true;
       const base = planRef.current.water.find((x) => x.id === d.id);
@@ -591,6 +615,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) { e.preventDefault(); removeSelected(); return; }
     if (e.key === 'Escape') {
+      if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
       setTextDraft(null);
       setTool('select');
@@ -674,7 +699,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           <button type="button" onClick={addRoom} disabled={plan.rooms.length >= MAX_ROOMS}>+ Room</button>
         </div>
         <div className="sketch-tools">
-          <button type="button" className={freeAngle ? 'on' : ''} aria-pressed={freeAngle} title="Angled walls: move corners and walls in any direction (or hold Alt)" onClick={() => setFreeAngle(!freeAngle)}>Angles</button>
+          <button type="button" className={freeAngle ? 'on' : ''} aria-pressed={freeAngle} title="Angles: move corners in any direction instead of keeping square walls square (or hold Alt). Walls always slide along their neighbours." onClick={() => setFreeAngle(!freeAngle)}>Angles</button>
           <button type="button" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">Undo</button>
           <button type="button" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">Redo</button>
           <button type="button" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out">-</button>
