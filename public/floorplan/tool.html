@@ -882,6 +882,13 @@ function analyze(state) {
     }
   }
 
+  // flooring runs around anything standing on the floor: floorSF is the room's floor less its objects, area stays the full room
+  const objPolys = floorObjectPolys(state);
+  for (const r of rooms) {
+    const o = objPolys.length ? roomObjectSF(r, objPolys) : { sf: 0, count: 0 };
+    r.objSF = Math.min(o.sf, r.area); r.objCount = o.count; r.floorSF = Math.max(0, r.area - r.objSF);
+  }
+
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const w of state.walls) for (const p of [w.a, w.b]) { minx = Math.min(minx, p.x); miny = Math.min(miny, p.y); maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y); }
   const bbox = isFinite(minx) ? { minx, miny, maxx, maxy } : null;
@@ -983,7 +990,7 @@ function buildTakeoff(state, an, more) {
       add('fin:' + fin.id, { name: fin.name, cat: fin.cat, unit: fin.basis, source: 'Computed', wastePct: fin.waste, pack: fin.pack || null, scope: fin.scope, finishId: fin.id }, room, qty);
       reqLines(fin, room, qty);
     };
-    put('floor', room.area);
+    put('floor', room.floorSF);
     put('wall', roomWallNet(room, S));
     put('ceil', room.area);
     put('base', roomBaseLF(room));
@@ -1805,6 +1812,44 @@ const rad = deg => (deg || 0) * Math.PI / 180;
 function localToWorld(b, lx, lz) { const t = rad(b.rot), c = Math.cos(t), s = Math.sin(t); return { x: b.x + lx * c - lz * s, y: b.y + lx * s + lz * c }; }
 function blockCorners(b) { const hw = b.w / 2, hd = b.d / 2; return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(p => localToWorld(b, p[0], p[1])); }
 function fixtureCorners(f) { const def = FIXTURES[f.kind], t = f.rot || 0, c = Math.cos(t), s = Math.sin(t), hw = def.w / 2, hd = def.d / 2; return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(p => ({ x: f.x + p[0] * c - p[1] * s, y: f.y + p[0] * s + p[1] * c })); }
+/* Floor area covered by objects. Clips a room polygon (any shape) against a convex object footprint, Sutherland-Hodgman. */
+function clipByConvex(subj, clip) {
+  const sgn = polyArea(clip) >= 0 ? 1 : -1;
+  let out = subj;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i], b = clip[(i + 1) % clip.length];
+    const side = p => sgn * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+    const inp = out; out = [];
+    for (let j = 0; j < inp.length; j++) {
+      const p = inp[j], q = inp[(j + 1) % inp.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push({ x: p.x + t * (q.x - p.x), y: p.y + t * (q.y - p.y) }); }
+    }
+  }
+  return out;
+}
+/* Objects that stand on the floor and so take up flooring: floor-standing blocks (not wall cabinets, ceiling items, lights or rugs) and fixtures other than outlets, switches, lights and the wall-mounted panel */
+const NO_FLOOR_FIXTURE = { outlet: 1, switch: 1, light: 1, panel: 1 };
+function floorObjectPolys(st) {
+  const out = [];
+  if (typeof BLOCKS !== 'undefined') for (const b of st.blocks || []) if (BLOCKS[b.kind] && solidBlock(b)) out.push(blockCorners(b));
+  for (const f of st.fixtures || []) if (FIXTURES[f.kind] && !NO_FLOOR_FIXTURE[f.kind]) out.push(fixtureCorners(f));
+  return out;
+}
+/* SF of a room's inside floor that objects sit on. Overlapping objects are only counted once. */
+function roomObjectSF(room, polys) {
+  let total = 0, n = 0;
+  const done = [];
+  for (const poly of polys) {
+    const piece = clipByConvex(room.inner, poly);
+    let a = Math.abs(polyArea(piece));
+    if (a < 1) continue;
+    for (const prev of done) { if (!piece.length) break; a -= Math.abs(polyArea(clipByConvex(piece, prev))); }
+    done.push(poly);
+    if (a > 0.5) { total += a; n++; }
+  }
+  return { sf: total / 144, count: n };
+}
 function overlapDepth(A, B) {
   let min = Infinity;
   for (const P of [A, B]) for (let i = 0; i < 4; i++) {
@@ -2958,7 +3003,7 @@ function estimateTakeoff() {
   const tk = B ? B.tk : TK, parts = B ? B.parts : PARTS;
   const out = JSON.parse(exportTakeoffJSON(state, tk || TK));
   out.layout = (state.layouts.find(l => l.id === eid) || {}).name || '';
-  out.floors = parts.map(p => ({ name: p.floor.name, rooms: p.an.rooms.length, floorSF: Math.round(p.an.rooms.reduce((a, r) => a + r.area, 0)), overall: p.an.overall ? { widthIn: p.an.overall.width, lengthIn: p.an.overall.length } : null }));
+  out.floors = parts.map(p => ({ name: p.floor.name, rooms: p.an.rooms.length, floorSF: Math.round(p.an.rooms.reduce((a, r) => a + r.floorSF, 0)), overall: p.an.overall ? { widthIn: p.an.overall.width, lengthIn: p.an.overall.length } : null }));
   const act = parts.find(p => p.an.floorId === (B ? B.parts[0].an.floorId : state.activeFloor)) || parts[0];
   out.overall = act && act.an.overall ? { widthIn: act.an.overall.width, lengthIn: act.an.overall.length, width: fmtFtIn(act.an.overall.width), length: fmtFtIn(act.an.overall.length) } : null;
   return out;
@@ -2975,7 +3020,7 @@ let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: PARTS.reduce((n, p) => n + p.an.rooms.length, 0), heatedSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0), 0)), floorSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + r.area, 0), 0)), checks: CK.length, floors: state.floors.length, overall: AN.overall ? { widthIn: AN.overall.width, lengthIn: AN.overall.length } : null } }, '*'); } catch (e) { /* ignore */ } return; }
+    if (EMBED) { try { window.parent.postMessage({ type: 'fp:changed', plan: state, takeoff: estimateTakeoff(), summary: { rooms: PARTS.reduce((n, p) => n + p.an.rooms.length, 0), heatedSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + (isHeated(r.meta) ? r.area : 0), 0), 0)), floorSF: Math.round(PARTS.reduce((n, p) => n + p.an.rooms.reduce((a, r) => a + r.floorSF, 0), 0)), checks: CK.length, floors: state.floors.length, overall: AN.overall ? { widthIn: AN.overall.width, lengthIn: AN.overall.length } : null } }, '*'); } catch (e) { /* ignore */ } return; }
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }, 300);
 }
@@ -3683,7 +3728,7 @@ function draw() {
     if (pw < 64 || ph < 30) continue;
     const q = W2S(r.label);
     halo(ctx, r.meta.name, q.x, q.y - 8, C.ink, 13, false, true);
-    halo(ctx, fmtNum(r.area, 1) + ' SF', q.x, q.y + 8, C.muted, 11, true, false);
+    halo(ctx, fmtNum(r.floorSF, 1) + ' SF', q.x, q.y + 8, C.muted, 11, true, false);
   }
   // wall handles
   if (sel && sel.type === 'wall') {
@@ -4510,7 +4555,7 @@ $('#insp').addEventListener('change', e => {
 /* ---------- summary ---------- */
 function updateSummary() {
   const multi = state.floors.length > 1, parts = PARTS.length ? PARTS : [{ an: AN, st: state }];
-  const floor = parts.reduce((n, p) => n + p.an.rooms.reduce((s2, r) => s2 + r.area, 0), 0);
+  const floor = parts.reduce((n, p) => n + p.an.rooms.reduce((s2, r) => s2 + r.floorSF, 0), 0);
   const heated = parts.reduce((n, p) => n + p.an.rooms.reduce((s2, r) => s2 + (isHeated(r.meta) ? r.area : 0), 0), 0);
   const rooms = parts.reduce((n, p) => n + p.an.rooms.length, 0);
   const lf = parts.reduce((n, p) => n + p.st.walls.filter(w => !isZone(w)).reduce((s2, w) => s2 + wallGeom(w).L, 0), 0) / 12;
@@ -4573,8 +4618,9 @@ function paneRooms() {
       '<label class="f">Shower or tub door<select data-f="fin.shower">' + finOptions('shower', m.fin.shower) + '</select></label></div>' +
       '<p class="note">Vanity, mirror and door quantities come from the vanities (' + (r.fix.vanity || 0) + ') and tub or shower items (' + (r.fix.tub || 0) + ') placed in this room.</p>' : '';
     return '<details class="room" data-room="' + m.id + '" data-sel="' + (sel && sel.type === 'room' && sel.id === m.id ? 1 : 0) + '"' + (openRooms.has(m.id) ? ' open' : '') + '>' +
-      '<summary><span class="swatch" style="background:var(--t' + ((TINT[m.type] != null ? TINT[m.type] : 4) + 1) + ')"></span><span class="rname">' + esc(m.name) + '</span><span class="rmeta mono">' + fmtNum(r.area, 1) + ' SF</span></summary>' +
+      '<summary><span class="swatch" style="background:var(--t' + ((TINT[m.type] != null ? TINT[m.type] : 4) + 1) + ')"></span><span class="rname">' + esc(m.name) + '</span><span class="rmeta mono">' + fmtNum(r.floorSF, 1) + ' SF</span></summary>' +
       '<div class="rbody">' +
+      (r.objSF > 0.05 ? '<p class="note">Floor area is ' + fmtNum(r.floorSF, 1) + ' SF: the room is ' + fmtNum(r.area, 1) + ' SF less ' + fmtNum(r.objSF, 1) + ' SF under ' + r.objCount + ' object' + (r.objCount === 1 ? '' : 's') + '. Flooring quantities use this number. Heated area, ceiling and demo still use the full room.</p>' : '') +
       '<div class="grid2"><label class="f">Name<input data-f="name" value="' + esc(m.name) + '"></label>' +
       '<label class="f">Room type<select data-f="type">' + Object.keys(ROOM_TYPES).map(k => '<option value="' + k + '"' + (m.type === k ? ' selected' : '') + '>' + ROOM_TYPES[k] + '</option>').join('') + '</select></label></div>' +
       '<div class="grid2">' +
@@ -4949,7 +4995,7 @@ function paneRoomDesign() {
   if (!r) return '<p class="note">Draw walls that close into a room first, then come back here to lay it out.</p>';
   const m = r.meta, g = RD_TYPES[m.type], tag = 'rd:' + m.id, gen = state.blocks.filter(b => b.gen === tag).length, all = state.blocks.filter(b => pointInPoly(b, r.poly)).length;
   let h = '<p class="note">Pick a room and set what goes in it. Generate places cabinets, appliances and fixtures against the walls with the clearances checked. Everything it places is a normal block you can drag, resize or delete.</p>' +
-    '<label class="f">Room<select id="rd-room">' + AN.rooms.map(x => '<option value="' + x.meta.id + '"' + (x.meta.id === m.id ? ' selected' : '') + '>' + esc(x.meta.name) + ' (' + fmtNum(x.area, 0) + ' SF)</option>').join('') + '</select></label>';
+    '<label class="f">Room<select id="rd-room">' + AN.rooms.map(x => '<option value="' + x.meta.id + '"' + (x.meta.id === m.id ? ' selected' : '') + '>' + esc(x.meta.name) + ' (' + fmtNum(x.floorSF, 0) + ' SF)</option>').join('') + '</select></label>';
   if (!g) {
     h += '<div class="rdnote">' + esc(m.name) + ' is set as ' + esc(ROOM_TYPES[m.type] || m.type) + '. Room design works on kitchens, bathrooms and laundry rooms. Set this room to:</div><div class="btnrow">' +
       [['kitchen', 'Kitchen'], ['bathroom', 'Bathroom'], ['laundry', 'Laundry']].map(t => '<button type="button" class="btn" data-rdtype="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
