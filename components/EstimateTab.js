@@ -6,6 +6,7 @@ import TradeBreakdownCard from './TradeBreakdownCard';
 import MaterialImageChooser from './MaterialImageChooser';
 import { SERVICES_OFFERED, COST_TYPES, costTypeLabel } from '../lib/constants';
 import { authedFetch } from '../lib/aiFetch';
+import { useContractMinimumSetting } from '../lib/contractMinimum';
 
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '') return '$0.00';
@@ -36,6 +37,8 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   const [actions, setActions] = useState([]);
   const [items, setItems] = useState([]);
+  const minimum = useContractMinimumSetting(job.project_type);
+  const [floorOn, setFloorOn] = useState(false); // sale price held at the contract minimum
   const [margin, setMargin] = useState(job.estimate_margin_percent != null ? String(job.estimate_margin_percent) : '');
   const [salesTax, setSalesTax] = useState(job.estimate_sales_tax_percent != null ? String(job.estimate_sales_tax_percent) : '');
   const [suggesting, setSuggesting] = useState(false);
@@ -160,6 +163,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
     const t = inAlt ? selectedAlternate : (isMulti ? selectedOption : job);
     setMargin(t?.estimate_margin_percent != null ? String(t.estimate_margin_percent) : '');
     setSalesTax(t?.estimate_sales_tax_percent != null ? String(t.estimate_sales_tax_percent) : '');
+    setFloorOn(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMulti, selectedOptionId, altId]);
 
@@ -438,6 +442,7 @@ export default function EstimateTab({ job, jobId, section, children }) {
 
   function saveMargin(value) {
     setMargin(value);
+    setFloorOn(false);
     clearTimeout(marginSaveTimer.current);
     marginSaveTimer.current = setTimeout(async () => {
       const t = costTarget();
@@ -491,10 +496,24 @@ export default function EstimateTab({ job, jobId, section, children }) {
   // contract_price, which is what showed up as things like
   // "36917.25866666667" anywhere contract_price got used as a starting
   // value for an editable dollar field later (e.g. the Invoicing tab).
-  const salePrice = Math.round((marginNum > 0 && marginNum < 100 ? subtotal / (1 - marginNum / 100) : subtotal) * 100) / 100;
+  const computedSale = Math.round((marginNum > 0 && marginNum < 100 ? subtotal / (1 - marginNum / 100) : subtotal) * 100) / 100;
+  // "Set to minimum" holds the sale price at the contract minimum. It also counts as on when
+  // the job's saved contract price already sits at the minimum, so it survives a reload.
+  const savedAtMinimum = !inAlt && !isMulti && minimum > 0 && Math.abs((Number(job.contract_price) || 0) - minimum) < 0.005;
+  const atFloor = minimum > 0 && (floorOn || savedAtMinimum);
+  const underMinimum = minimum > 0 && computedSale < minimum;
+  const salePrice = atFloor ? Math.max(computedSale, minimum) : computedSale;
+  const salePriceNow = salePrice;
   const marginDollars = salePrice - subtotal;
+  const effectiveMarginPct = salePrice > 0 ? ((salePrice - subtotal) / salePrice) * 100 : 0;
 
-  async function pushToContractPrice() {
+  async function setPriceToMinimum() {
+    setFloorOn(true);
+    await pushToContractPrice(minimum);
+  }
+
+  async function pushToContractPrice(priceOverride) {
+    const salePrice = typeof priceOverride === 'number' ? priceOverride : salePriceNow;
     setPushing(true);
     if (inAlt) {
       await supabase.from('estimate_groups').update({ price: salePrice, projected_cost: subtotal }).eq('id', altId);
@@ -837,8 +856,23 @@ export default function EstimateTab({ job, jobId, section, children }) {
               <tr className="estimate-margin-total-row"><td>Final Sale Price</td><td style={{ fontSize: 16 }}>{fmtMoney(salePrice)}</td></tr>
             </tbody>
           </table>
+          {minimum > 0 && underMinimum && !atFloor && (
+            <div style={{ fontSize: 12.5, margin: '10px 0 0', padding: '10px 12px', borderRadius: 6, border: '1px solid #c0524f', background: 'rgba(192, 82, 79, 0.14)', color: 'var(--ink)' }}>
+              This is under the {job.project_type === 'commercial' ? 'commercial' : 'residential'} contract minimum of {fmtMoney(minimum)}.
+              <div style={{ marginTop: 8 }}>
+                <button type="button" className="btn btn-sm" onClick={setPriceToMinimum} disabled={pushing || needsOption}>
+                  {pushing ? 'Saving…' : `Set contract value to minimum (${fmtMoney(minimum)})`}
+                </button>
+              </div>
+            </div>
+          )}
+          {minimum > 0 && underMinimum && atFloor && (
+            <div style={{ fontSize: 12, marginTop: 10, color: 'var(--ink-soft)' }}>
+              Held at the contract minimum of {fmtMoney(minimum)} (effective margin {effectiveMarginPct.toFixed(1)}%). Raise the margin or costs to price above it.
+            </div>
+          )}
           <div className="section-actions">
-            <button className="btn btn-primary btn-sm" onClick={pushToContractPrice} disabled={pushing || subtotal === 0 || needsOption}>
+            <button className="btn btn-primary btn-sm" onClick={() => pushToContractPrice()} disabled={pushing || subtotal === 0 || needsOption}>
               {pushing ? 'Saving…' : inAlt || isMulti ? `Save as ${targetLabel || 'option'}'s price` : 'Save'}
             </button>
           </div>
