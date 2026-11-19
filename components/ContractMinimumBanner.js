@@ -34,11 +34,12 @@ export default function ContractMinimumBanner({ job, status, onJobPatch }) {
   });
   const clearOverride = () => apply({ min_override_at: null, min_override_by: null, min_override_price: null, min_override_note: null });
 
-  const box = { fontSize: 13, padding: '12px 16px', borderRadius: 6, marginBottom: 14, border: '1px solid' };
+  // Tinted overlays + theme text color so it reads in both light and dark mode.
+  const box = { fontSize: 13, padding: '12px 16px', borderRadius: 6, marginBottom: 14, border: '1px solid', color: 'var(--ink)' };
 
   if (status.overridden && job.min_override_at) {
     return (
-      <div style={{ ...box, background: '#f4f1e6', borderColor: '#c4c1a6' }}>
+      <div style={{ ...box, background: 'rgba(155, 119, 61, 0.14)', borderColor: '#9b773d' }}>
         <b>Under the {status.kind} minimum — overridden</b> by {job.min_override_by || 'an owner'} on {new Date(job.min_override_at).toLocaleDateString('en-US')}
         {' '}(minimum {fmtMoney(status.minimum)}, approved at {fmtMoney(job.min_override_price)}).
         {job.min_override_note && <div style={{ marginTop: 4, color: 'var(--ink-soft)' }}>Reason: {job.min_override_note}</div>}
@@ -51,9 +52,9 @@ export default function ContractMinimumBanner({ job, status, onJobPatch }) {
   }
 
   return (
-    <div style={{ ...box, background: '#fdf0ea', borderColor: '#d9a58f' }}>
+    <div style={{ ...box, background: 'rgba(192, 82, 79, 0.14)', borderColor: '#c0524f' }}>
       <b>Under the {status.kind} contract minimum.</b>{' '}
-      {status.price > 0 ? `This contract is ${fmtMoney(status.price)}` : 'No contract price is entered'}; the minimum is {fmtMoney(status.minimum)}.
+      {status.price > 0 ? `This ${status.measure} is ${fmtMoney(status.price)}` : 'No contract price is entered'}; the minimum is {fmtMoney(status.minimum)}.
       {job.below_minimum_flagged_at && ' The customer has signed, but the job was held here.'}
       {' '}It can&apos;t be approved without an owner override.
       {isOwner ? (

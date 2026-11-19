@@ -341,7 +341,7 @@ function AiSandboxSettings() {
   );
 }
 
-const CONTRACT_MIN_FIELDS = ['contract_min_residential', 'contract_min_commercial'];
+const CONTRACT_MIN_FIELDS = ['contract_min_residential', 'contract_min_commercial', 'contract_min_basis'];
 
 function ContractMinimumSettings() {
   const s = useSection(CONTRACT_MIN_FIELDS);
@@ -370,6 +370,17 @@ function ContractMinimumSettings() {
         {field('contract_min_residential', 'Residential minimum ($)')}
         {field('contract_min_commercial', 'Commercial minimum ($)')}
       </div>
+
+      <label style={{ marginTop: 12 }}>Measure the minimum against</label>
+      {[
+        ['base', 'Contract price only'],
+        ['contract_value', 'Contract value (contract price + accepted change orders)'],
+      ].map(([key, text]) => (
+        <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontWeight: 400, cursor: 'pointer', marginBottom: 4 }}>
+          <input type="radio" name="contract_min_basis" style={{ width: 'auto', marginTop: 3 }} checked={(v.contract_min_basis || 'base') === key} onChange={() => s.set('contract_min_basis', key)} />
+          <span>{text}</span>
+        </label>
+      ))}
     </SectionShell>
   );
 }
