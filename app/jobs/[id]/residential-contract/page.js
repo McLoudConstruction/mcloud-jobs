@@ -140,6 +140,10 @@ export default function ContractDocumentPage() {
       setFlash('Contract submitted and finalized');
       setTimeout(() => setFlash(''), 3000);
       loadJob();
+    } else {
+      // Includes the contract-minimum block: an owner has to override it on the job first.
+      setFlash(`Couldn't submit: ${error.message}`);
+      setTimeout(() => setFlash(''), 8000);
     }
   }
 

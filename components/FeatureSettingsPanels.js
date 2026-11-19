@@ -341,9 +341,43 @@ function AiSandboxSettings() {
   );
 }
 
+const CONTRACT_MIN_FIELDS = ['contract_min_residential', 'contract_min_commercial'];
+
+function ContractMinimumSettings() {
+  const s = useSection(CONTRACT_MIN_FIELDS);
+  const v = s.values || {};
+  const field = (key, label) => (
+    <div>
+      <label>{label}</label>
+      <input
+        inputMode="decimal"
+        value={v[key] ?? ''}
+        placeholder="No minimum"
+        onChange={e => {
+          const raw = e.target.value.replace(/[$,\s]/g, '');
+          s.set(key, raw === '' ? null : (Number.isNaN(Number(raw)) ? v[key] : Number(raw)));
+        }}
+      />
+    </div>
+  );
+  return (
+    <SectionShell
+      title="Contract minimums"
+      intro="The smallest contract price you'll take on, set separately for residential and commercial. A job under its minimum is flagged and can't be moved to Approved until an owner overrides it from the job. Leave blank for no minimum."
+      section={s}
+    >
+      <div className="two-col">
+        {field('contract_min_residential', 'Residential minimum ($)')}
+        {field('contract_min_commercial', 'Commercial minimum ($)')}
+      </div>
+    </SectionShell>
+  );
+}
+
 export default function FeatureSettingsPanels() {
   return (
     <>
+      <ContractMinimumSettings />
       <ComplianceSettings />
       <WaiverSettings />
       <WarrantySettings />

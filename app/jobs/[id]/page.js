@@ -21,6 +21,9 @@ import JobRfpsPanel from '../../../components/JobRfpsCard';
 import PortalAccessCard from '../../../components/PortalAccessCard';
 import EstimateTab from '../../../components/EstimateTab';
 import { assignNextProjectNumber } from '../../../lib/assignProjectNumber';
+import ContractMinimumBanner from '../../../components/ContractMinimumBanner';
+import { useContractMinimum } from '../../../lib/contractMinimum';
+import { fmtMoney } from '../../../lib/format';
 import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
 import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
 import EmailThreadCard from '../../../components/EmailThreadCard';
@@ -169,6 +172,7 @@ export default function JobDetailPage() {
   const [updates, setUpdates] = useState([]);
   const [changeOrders, setChangeOrders] = useState([]);
   const [flash, setFlash] = useState('');
+  const minStatus = useContractMinimum(job);
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
   const [closingLost, setClosingLost] = useState(false);
@@ -448,6 +452,11 @@ export default function JobDetailPage() {
     const idx = STAGE_ORDER.indexOf(job.stage);
     if (idx === -1 || idx >= STAGE_ORDER.length - 1) return;
     const next = STAGE_ORDER[idx + 1];
+    if (next === 'approved' && minStatus.needsOverride) {
+      setFlash(`Under the ${minStatus.kind} contract minimum (${fmtMoney(minStatus.price)} vs ${fmtMoney(minStatus.minimum)}). An owner must override it before this can be approved.`);
+      setTimeout(() => setFlash(''), 8000);
+      return;
+    }
     if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
 
     const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
@@ -610,6 +619,8 @@ export default function JobDetailPage() {
             You're currently offline. Everything on this page is still viewable, but edits won't be saved until you reconnect.
           </div>
         )}
+
+        <ContractMinimumBanner job={job} status={minStatus} onJobPatch={patch => setJob(prev => ({ ...prev, ...patch }))} />
 
         {!isOpportunity(job) && !job.project_number && (
           <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
