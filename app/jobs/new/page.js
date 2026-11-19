@@ -44,6 +44,9 @@ function NewOpportunityPageInner() {
   const [autofillNote, setAutofillNote] = useState('');
   const [selectedContactId, setSelectedContactId] = useState(null);
   const searchTimer = useRef(null);
+  const [companySuggestions, setCompanySuggestions] = useState([]);
+  const [showCompanySuggestions, setShowCompanySuggestions] = useState(false);
+  const companyTimer = useRef(null);
 
   // Suggests the next project number for the form. A failed read falls back to
   // the first number of the year; the unique-index retry on save fixes any clash.
@@ -93,6 +96,46 @@ function NewOpportunityPageInner() {
   // Commercial-only fields are cleared when the type switches to Residential.
   function changeProjectType(value) {
     setForm(prev => (value === 'commercial' ? { ...prev, project_type: value } : { ...prev, project_type: value, property_name: '', job_type: '' }));
+  }
+
+  // ---- Company name autofill suggestions ----
+  // Matches against the Companies list (everything but subcontractors) and
+  // against the company names already saved on contacts, since a company that
+  // came in through a lead or a past opportunity lives only on the contact.
+  function handleCompanyChange(value) {
+    update('company', value);
+    if (companyTimer.current) clearTimeout(companyTimer.current);
+    const term = value.trim();
+    if (term.length < 2) { setCompanySuggestions([]); setShowCompanySuggestions(false); return; }
+    companyTimer.current = setTimeout(async () => {
+      const like = `%${term.replace(/[%,]/g, ' ')}%`;
+      const [{ data: companyRows, error: companyErr }, { data: contactRows, error: contactErr }] = await Promise.all([
+        supabase.from('companies').select('id, company_name, company_type').ilike('company_name', like)
+          .or('company_type.is.null,company_type.neq.Subcontractor').order('company_name').limit(6),
+        supabase.from('contacts').select('management_company').ilike('management_company', like).limit(30),
+      ]);
+      if (companyErr) console.error('Company lookup failed:', companyErr.message);
+      if (contactErr) console.error('Contact company lookup failed:', contactErr.message);
+      const seen = new Set();
+      const merged = [];
+      for (const c of companyRows || []) {
+        const key = c.company_name.trim().toLowerCase();
+        if (!seen.has(key)) { seen.add(key); merged.push({ name: c.company_name.trim(), type: c.company_type }); }
+      }
+      for (const c of contactRows || []) {
+        const name = (c.management_company || '').trim();
+        const key = name.toLowerCase();
+        if (name && !seen.has(key)) { seen.add(key); merged.push({ name, type: null }); }
+      }
+      const next = merged.slice(0, 8);
+      setCompanySuggestions(next);
+      setShowCompanySuggestions(next.length > 0);
+    }, 250);
+  }
+
+  function applyCompanySuggestion(s) {
+    update('company', s.name);
+    setShowCompanySuggestions(false);
   }
 
   // ---- Customer name autofill suggestions ----
@@ -337,9 +380,29 @@ function NewOpportunityPageInner() {
 
             {isCommercial && (
               <>
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: 12, position: 'relative' }}>
                   <label>Company *</label>
-                  <input value={form.company} onChange={e => update('company', e.target.value)} required />
+                  <input
+                    value={form.company}
+                    onChange={e => handleCompanyChange(e.target.value)}
+                    onFocus={() => companySuggestions.length > 0 && setShowCompanySuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 150)}
+                    autoComplete="off"
+                    required
+                  />
+                  {showCompanySuggestions && (
+                    <div style={{ position: 'absolute', top: '100%', zIndex: 10, background: 'var(--card-bg)', border: '1px solid var(--panel-line)', borderRadius: 5, width: '100%', marginTop: 2 }}>
+                      {companySuggestions.map(s => (
+                        <div
+                          key={s.name}
+                          onMouseDown={() => applyCompanySuggestion(s)}
+                          style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--line)' }}
+                        >
+                          <b>{s.name}</b>{s.type ? <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> — {s.type}</span> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="two-col" style={{ marginTop: 12 }}>
                   <div>
