@@ -26,7 +26,7 @@ export default function EstimateAlternatesList({ groups, interactive, picking, o
         Optional add-ons. Each is a separate estimate that can be added to the scope above.
         {canPick ? ' Choose any one, several or none of them.' : ''}
       </p>
-      <div style={{ display: 'grid', gap: 10 }}>
+      <div className="doc-alternates-cards">
         {groups.map(g => {
           const on = !!g.included;
           const Wrapper = canPick ? 'button' : 'div';
@@ -43,7 +43,7 @@ export default function EstimateAlternatesList({ groups, interactive, picking, o
                 cursor: canPick ? 'pointer' : 'default', fontFamily: 'inherit',
                 border: canPick && on ? '2px solid #9B773D' : '1px solid #ded7c0',
                 background: canPick && on ? '#fff' : '#fdfcf8',
-                display: 'block', breakInside: 'avoid',
+                display: 'block', breakInside: 'avoid', marginBottom: 10, boxSizing: 'border-box',
               }}
             >
               <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
