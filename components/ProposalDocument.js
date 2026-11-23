@@ -15,7 +15,7 @@ const LOGO_SRC = '/mcloud-logo.png';
 // individual saved proposal). Both wrap this in their own toolbar,
 // SendDocModal, and sent/viewed tracking — only the markup and print
 // styling live here, so the two documents can never visually drift.
-export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms, materials, scopeOptionsSlot }) {
+export default function ProposalDocument({ docTag, footerLabel, customerName, customerContact, projectAddress, description, price, scope, terms, materials, scopeOptionsSlot, alternatesSlot }) {
   const { settings } = useSettings();
   const logoUrl = settings.logo_url || LOGO_SRC;
   const showContact = customerContact && customerContact.trim().toLowerCase() !== (customerName || '').trim().toLowerCase();
@@ -69,6 +69,7 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
                 <ul className="doc-list">{scope.map((s, i) => <li key={i}>{s.text}</li>)}</ul>
               )
             )}
+            {alternatesSlot}
           </div>
 
           {materials && materials.length > 0 && (
@@ -128,6 +129,9 @@ export default function ProposalDocument({ docTag, footerLabel, customerName, cu
         .material-tile { display: flex; flex-direction: column; gap: 5px; break-inside: avoid; }
         .material-tile img { width: 100%; height: 90px; object-fit: cover; border-radius: 5px; border: 1px solid #ded7c0; }
         .material-tile span { font-size: 10.5px; color: #6b6350; line-height: 1.35; }
+        .doc-alternates { margin-top: 22px; }
+        .doc-alternates-title { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #9B773D; margin: 0 0 4px; break-after: avoid; }
+        .doc-alternates-note { font-size: 11.5px !important; color: #6b6350 !important; margin-bottom: 10px !important; }
         .doc-list li.empty { color: #a8a29a; font-style: italic; }
         .doc-list li.empty::before { content: ""; }
         .price-box { background: #faf6ec; border: 1px solid #ded7c0; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; break-inside: avoid; }

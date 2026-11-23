@@ -1,19 +1,15 @@
 'use client';
 
-function fmtMoney(v) {
-  if (v === null || v === undefined || v === '') return '$0';
-  const n = Number(v);
-  return (n < 0 ? '-$' : '+$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
 function fmtMoneyPlain(v) {
   if (v === null || v === undefined || v === '') return '—';
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 // The interactive, no-print half of the flexible-estimate picker —
-// Alternates (independently includable/deferrable add-ons), the running
-// total, and the final Submit. The other half — the scope-options choice
-// itself, when the job has more than one — lives INSIDE the printable
+// the running total and the final Submit. The Alternates themselves
+// (independently includable/deferrable add-ons) now sit inside the document
+// under the base scope (EstimateAlternatesList) so they print. The other half — the scope-options
+// choice itself, when the job has more than one — lives INSIDE the printable
 // document's own Scope of work section (ScopeOptionsChooser via
 // ProposalDocument's scopeOptionsSlot), not here, so it shows up where a
 // scope belongs on screen, in the PDF, and on paper. Both halves share
@@ -29,10 +25,10 @@ export default function EstimateGroupsPicker({ isAdmin, locked, isMulti, groups,
     <div className="no-print" style={{ marginTop: 24, padding: '18px 24px', background: '#faf6ec', border: '1px solid #ded7c0', borderRadius: 8, maxWidth: 800, marginLeft: 'auto', marginRight: 'auto' }}>
       {groups.length > 0 && (
         <>
-          <h3 style={{ margin: '0 0 4px', color: '#1C1B19' }}>Alternates</h3>
+          <h3 style={{ margin: '0 0 4px', color: '#1C1B19' }}>Alternates and total</h3>
           {isAdmin ? (
             <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-              Preview only. The customer picks these when they view this estimate. Build or edit alternates from the job's Scope tab.
+              Preview only. The customer picks the alternates listed under the scope of work when they view this estimate. Build or edit alternates from the job's Scope tab.
             </div>
           ) : locked ? (
             <div style={{ fontSize: 12, color: '#3a6b45', marginBottom: 14 }}>
@@ -40,38 +36,11 @@ export default function EstimateGroupsPicker({ isAdmin, locked, isMulti, groups,
             </div>
           ) : (
             <div style={{ fontSize: 12, color: '#6b6350', marginBottom: 14 }}>
-              Each alternate is a separate estimate that can be added to the scope above. Choose any one, several or none of them. The total updates as you choose.
+              The alternates are listed under the scope of work above. Tick any one, several or none of them. The total updates as you choose.
             </div>
           )}
         </>
       )}
-
-      {groups.map(g => (
-        <div key={g.id} style={{ marginBottom: 14 }}>
-          <button
-            type="button"
-            disabled={isAdmin || locked || picking === g.id}
-            onClick={() => toggle(g, !g.included)}
-            style={{
-              width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 6, cursor: isAdmin || locked ? 'default' : 'pointer',
-              border: g.included ? '2px solid #9B773D' : '1px solid #ded7c0',
-              background: g.included ? '#fff' : '#fdfcf8',
-              fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontWeight: 600, fontSize: 13, color: '#1C1B19' }}>{g.included ? '☑ ' : '☐ '}{g.label}</span>
-              <span style={{ fontWeight: 700, fontSize: 13, color: '#1C1B19', whiteSpace: 'nowrap' }}>{fmtMoney(g.price)}</span>
-            </span>
-            {g.description && <span style={{ display: 'block', fontSize: 11.5, color: '#6b6350', marginTop: 4 }}>{g.description}</span>}
-            {(g.scope_items || []).length > 0 && (
-              <ul className="doc-list" style={{ marginTop: 8 }}>
-                {g.scope_items.map((it, i) => <li key={i}>{it.text}</li>)}
-              </ul>
-            )}
-          </button>
-        </div>
-      ))}
 
       {groups.length === 0 && (isAdmin || locked) && (
         <div style={{ fontSize: 12, color: '#6b6350' }}>

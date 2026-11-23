@@ -13,6 +13,7 @@ import { contractPathFor, projectNumber } from '../../../../lib/constants';
 import ProposalDocument from '../../../../components/ProposalDocument';
 import ScopeOptionsChooser from '../../../../components/ScopeOptionsChooser';
 import EstimateGroupsPicker from '../../../../components/EstimateGroupsPicker';
+import EstimateAlternatesList from '../../../../components/EstimateAlternatesList';
 import useEstimateGroupsPicker from '../../../../lib/useEstimateGroupsPicker';
 import { jobHref } from '../../../../lib/links';
 
@@ -116,6 +117,21 @@ export default function ProposalDocumentPage() {
     )
     : null;
 
+  // Alternates sit inside the document under the base scope so they print.
+  // Once submitted, the included ones are already merged into jobs.scope_items
+  // (see submit_estimate_groups), so listing them again would double them.
+  const alternatesSlot = !locked && picker.groups.length > 0
+    ? (
+      <EstimateAlternatesList
+        groups={picker.groups}
+        interactive={!isAdmin}
+        readOnly={isAdmin}
+        picking={picker.picking}
+        onToggle={picker.toggle}
+      />
+    )
+    : null;
+
   return (
     <div>
       <div className="no-print doc-toolbar">
@@ -146,6 +162,7 @@ export default function ProposalDocumentPage() {
         terms={allTerms}
         materials={materials}
         scopeOptionsSlot={scopeOptionsSlot}
+        alternatesSlot={alternatesSlot}
       />
 
       <EstimateGroupsPicker

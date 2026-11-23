@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import ProposalDocument from '../../../components/ProposalDocument';
+import EstimateAlternatesList from '../../../components/EstimateAlternatesList';
 import { generatePdfBase64, downloadPdf } from '../../../lib/generatePdf';
 import { projectNumber } from '../../../lib/constants';
 import { docFilename } from '../../../lib/docFilename';
@@ -110,17 +111,8 @@ export default function PublicProposalPage() {
         terms={terms}
         materials={data.materials}
         scopeOptionsSlot={scopeOptionsSlot}
+        alternatesSlot={<EstimateAlternatesList groups={data.alternates || []} readOnly />}
       />
-
-      {(data.alternates || []).length > 0 && (
-        <div className="no-print" style={{ maxWidth: 780, margin: '20px auto 0', padding: '0 16px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Optional alternates</div>
-          <div style={{ fontSize: 11.5, color: '#6b6350', marginBottom: 8 }}>Each alternate is a separate estimate that can be added to the scope above.</div>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {data.alternates.map(a => <OptionCard key={a.id} o={a} />)}
-          </div>
-        </div>
-      )}
 
       <div className="no-print" style={{ maxWidth: 780, margin: '24px auto 40px', padding: '0 16px', fontSize: 12.5, color: 'var(--ink-soft)', textAlign: 'center' }}>
         Questions or ready to move forward? Reach us at{' '}
