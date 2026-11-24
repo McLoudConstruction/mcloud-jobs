@@ -1,1003 +1,961 @@
 'use client';
-import LossReasonPicker from '../../../components/LossReasonPicker';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { supabase } from '../../../lib/supabaseClient';
-import { useRequireAuth } from '../../../lib/useAuth';
-import AppShell from '../../../components/AppShell';
-import Breadcrumb from '../../../components/Breadcrumb';
-import BottomSheet from '../../../components/BottomSheet';
-import JobSidebar from '../../../components/JobSidebar';
-import { buildQuickActions } from '../../../components/JobQuickActions';
-import JobStageOverview from '../../../components/JobStageOverview';
-import PhotoGallery from '../../../components/PhotoGallery';
-import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
-import JobCostSummary from '../../../components/JobCostSummary';
-import DrawsCard from '../../../components/DrawsCard';
-import ReceiptsCard from '../../../components/ReceiptsCard';
-import WorkOrdersCard from '../../../components/WorkOrdersCard';
-import JobRfpsPanel from '../../../components/JobRfpsCard';
-import PortalAccessCard from '../../../components/PortalAccessCard';
-import EstimateTab from '../../../components/EstimateTab';
-import { assignNextProjectNumber } from '../../../lib/assignProjectNumber';
-import ContractMinimumBanner from '../../../components/ContractMinimumBanner';
-import { useContractMinimum } from '../../../lib/contractMinimum';
-import { fmtMoney } from '../../../lib/format';
-import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
-import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
-import EmailThreadCard from '../../../components/EmailThreadCard';
-import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
-import MapLinkMenu from '../../../components/MapLinkMenu';
-import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
-import { OverviewIcon, CalculatorIcon, JobDashboardIcon, InvoiceIcon, PhotosIcon, SketchIcon, MaterialSelectionsTabIcon, MessagesIcon, UpdatesTabIcon, PlusIcon, WorkOrderIcon } from '../../../components/icons';
+import { useParams } from 'next/navigation';
+import AuthGate from '@/components/AuthGate';
+import Breadcrumb from '@/components/Breadcrumb';
+import VisitForm from '@/components/VisitForm';
+import PopupModal from '@/components/PopupModal';
+import VisitActions from '@/components/VisitActions';
+import OnTheWayModal from '@/components/OnTheWayModal';
+import AssignJobModal from '@/components/AssignJobModal';
+import VisitDock from '@/components/VisitDock';
+import ClockCard from '@/components/job/ClockCard';
+import EstimateCard from '@/components/EstimateCard';
+import PhotosTab from '@/components/job/PhotosTab';
+import SketchTab from '@/components/job/SketchTab';
+import MoistureTab from '@/components/job/MoistureTab';
+import WaterDayOne, { DayOneCard } from '@/components/job/WaterDayOne';
+import { usesDayOneSteps, gateFor, canCompleteJob, nextDayOneStep } from '@/lib/waterDayOne';
+import InspectionTab from '@/components/job/InspectionTab';
+import EvalSheetTab from '@/components/job/EvalSheetTab';
+import ReportsTab from '@/components/job/ReportsTab';
+import InvoiceTab from '@/components/job/InvoiceTab';
+import CostsTab from '@/components/job/CostsTab';
+import { normalizePlan } from '@/lib/sketch';
+import { unitsStillOnSite } from '@/lib/equipment';
+import CustomerPageCard from '@/components/job/CustomerPageCard';
+import StreetOffersCard from '@/components/job/StreetOffersCard';
+import DeleteJobCard from '@/components/job/DeleteJobCard';
+import UpdatesTab from '@/components/job/UpdatesTab';
+import ThreadPanel from '@/components/chat/ThreadPanel';
+import { useChatCenter } from '@/lib/useChatInbox';
+import { useChatDock } from '@/components/chat/ChatDockContext';
+import { countForTarget } from '@/lib/chat';
+import JobFab from '@/components/job/JobFab';
+import QuickActionScreen from '@/components/job/QuickActionScreen';
+import QaPageBar from '@/components/job/QaPageBar';
+import PhotoViewer from '@/components/job/PhotoViewer';
+import CameraCapture from '@/components/job/CameraCapture';
+import { useJobRooms } from '@/lib/useJobRooms';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { useSignedUrls } from '@/lib/useSignedUrls';
+import { UploadStatus } from '@/components/job/PhotoUi';
+import { usePhotoUploader } from '@/lib/usePhotoUploader';
+import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
+import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
+import { isTabAction, qaScreenTitle } from '@/lib/quickActions';
+import { reasonText } from '@/lib/visitReasons';
+import { groupVisits } from '@/lib/visitCrew';
+import { getSupabase } from '@/lib/supabaseClient';
+import { doubleBookedIds } from '@/lib/schedule';
+import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
+import MapLink from '@/components/MapLink';
+import PhoneInput from '@/components/PhoneInput';
+import { hasFeature, serviceOf, serviceTitle, tabsFor, SERVICES, SERVICE_HINTS } from '@/lib/services';
+import { displayPhone, telHref } from '@/lib/phone';
+import { staffName, displayNameFor } from '@/lib/userDisplay';
+import { apiFetch } from '@/lib/useAuth';
+import { fetchJobPack, packKey } from '@/lib/jobPack';
+import { sendVisitAction } from '@/lib/offlineActions';
+import { getOps, onOpsFinished, onQueueChange } from '@/lib/offlineClient';
+import { overlayVisits } from '@/lib/offlineOps';
+import { cacheRead } from '@/lib/offlineClient';
+import { savePackLocally } from '@/lib/warmJobs';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
-// Sub-nav restructure Part 2 (Sep 2026): this file used to also define
-// the 12 card components below directly — now each lives in its own
-// file under components/, imported here like everything else. Same
-// behavior, same props, nothing moved data-wise; this just makes it
-// possible to open "the Scope tab" without wading through 1,500+
-// unrelated lines to find it.
-import JobMessagesCard from '../../../components/JobMessagesCard';
-import ReviewRequestCard from '../../../components/ReviewRequestCard';
-import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
-import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
-import CustomerInfoCard from '../../../components/CustomerInfoCard';
-import ProjectInfoCard from '../../../components/ProjectInfoCard';
-import ScopeCard from '../../../components/ScopeCard';
-import ScheduleCard from '../../../components/ScheduleCard';
-import NewEventModal from '../../../components/NewEventModal';
-import ScheduleDelayCard from '../../../components/ScheduleDelayCard';
-import ScheduleRiskBadge from '../../../components/ScheduleRiskBadge';
-import PriceCard from '../../../components/PriceCard';
-import TermsCard from '../../../components/TermsCard';
-import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
-import UpdatesCard from '../../../components/UpdatesCard';
-import InvoiceCard from '../../../components/InvoiceCard';
-import ReadyToInvoiceCard from '../../../components/ReadyToInvoiceCard';
-import BudgetCard from '../../../components/BudgetCard';
-import PayAppsCard from '../../../components/PayAppsCard';
-import LienWaiversCard from '../../../components/LienWaiversCard';
-import PunchItemsPanel from '../../../components/PunchItemsPanel';
-import WarrantyCard from '../../../components/WarrantyCard';
-import BlackoutDatesCard from '../../../components/BlackoutDatesCard';
-import PlansPanel from '../../../components/PlansPanel';
-import { normalizeJobLink, JOB_DESTINATIONS, stageLanding, stageTab, billingDestination } from '../../../lib/links';
-
-// What the "+" button (phone) and the Quick actions menu (computer) offer, in this
-// order. One flat list, not regrouped by the stage the job is in.
-// Each entry names an action from buildQuickActions (components/JobQuickActions.js)
-// so gating (who may send an RFP, which actions wait for approval) stays there.
-const FAB_ACTIONS = [
-  ['internal', 'Create Internal Update'],
-  ['rfp', 'Create RFP'],
-  ['job-cost', 'Add Job Cost/Receipt'],
-  ['update', 'Post Project Update'],
-  ['schedule-item', 'Add New Visit'],
-  ['change-order', 'Create Change Order'],
-  ['draw', 'Create New Invoice'],
-  ['waiver', 'Request Lien Waiver'],
-  ['work-order', 'Create New Work Order'],
-  ['photos', 'Add Photos'],
+// The Updates tab is shelved for now (job chat takes its place). Its code and data stay; flip this to bring the tab back.
+const UPDATES_SHELVED = true;
+const JOB_TABS = [
+  ['overview', 'Overview'],
+  ['details', 'Details'],
+  ['photos', 'Photos'],
+  ['sketch', 'Sketch'],
+  ['moisture', 'Moisture'],
+  ['inspection', 'Inspection'],
+  ['evalsheet', 'Eval sheet'],
+  ['updates', 'Updates'],
+  ['thread', 'Chat'],
+  ['estimate', 'Estimate'],
+  ['invoice', 'Invoice'],
+  ['costs', 'Costs'],
+  ['reports', 'Reports'],
+  ['history', 'History'],
 ];
+// links and bookmarks made before the tabs were reworked (#customer was the first tab)
+const OLD_TABS = { customer: 'overview' };
+const tabFromHash = () => {
+  const raw = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+  const h = OLD_TABS[raw] || raw;
+  return JOB_TABS.some(([k]) => k === h) ? h : 'overview';
+};
 
-// Job page structure (Oct 2026): tabs follow the life of a project instead
-// of the feature that produced the data.
-//   Sell      winning the work   - scope, cost, pricing, plans
-//   Plan      getting ready      - budget, material selections, work orders
-//   Build     doing the work     - updates, change orders, job costs, draws, pay apps, waivers
-//   Closeout  finishing up       - punch list, warranty, final invoice, review request
-// plus tabs that matter at every stage (Overview, Schedule, Photos,
-// Documents, Messages). A job opens on the tab for the stage it is in; the
-// other stage tabs stay one click away because plans change mid-project.
-//
-// Each group's first section is its overview page (`hidden`: the sidebar
-// reaches it through the group name instead of listing it again).
-//
-// A tab can offer `sections` for content that is related but distinct
-// enough to want its own toggle. Every link into this page goes through
-// lib/links.js (JOB_DESTINATIONS), which is checked against this array at
-// build time (scripts/check-link-destinations.mjs) - add a section here and
-// a destination there, and old URLs are handled by normalizeJobLink().
-const TABS = [
-  {
-    key: 'Overview', label: 'Overview', icon: OverviewIcon, group: 'home',
-    sections: [
-      { key: 'summary', label: 'Summary', hidden: true },
-      { key: 'customer', label: 'Customer' },
-      { key: 'financials', label: 'Financials' },
-    ],
-  },
-  {
-    key: 'Sell', label: 'Sell', icon: CalculatorIcon, group: 'stage',
-    sections: [
-      { key: 'overview', label: 'Overview', hidden: true },
-      { key: 'scope', label: 'Scope' },
-      { key: 'cost', label: 'Cost' },
-      { key: 'pricing', label: 'Pricing' },
-    ],
-  },
-  {
-    key: 'Plan', label: 'Plan', icon: MaterialSelectionsTabIcon, group: 'stage',
-    sections: [
-      { key: 'overview', label: 'Overview', hidden: true },
-      { key: 'budget', label: 'Budget' },
-      { key: 'approved', label: 'Approved Materials' },
-      { key: 'all', label: 'Selection Sheets' },
-      { key: 'work_orders', label: 'Work Orders' },
-    ],
-  },
-  {
-    key: 'Build', label: 'Build', icon: WorkOrderIcon, group: 'stage',
-    sections: [
-      { key: 'overview', label: 'Overview', hidden: true },
-      { key: 'updates', label: 'Project Updates' },
-      { key: 'internal', label: 'Internal Updates' },
-      { key: 'change_orders', label: 'Change Orders' },
-      { key: 'job_costs', label: 'Job Costs' },
-      { key: 'draws', label: 'Draws' },
-      { key: 'pay_apps', label: 'Pay Apps' },
-      { key: 'waivers', label: 'Lien Waivers' },
-    ],
-  },
-  {
-    key: 'Closeout', label: 'Closeout', icon: InvoiceIcon, group: 'stage',
-    sections: [
-      { key: 'overview', label: 'Overview', hidden: true },
-      { key: 'punch', label: 'Punch List' },
-      { key: 'warranty', label: 'Warranty' },
-      { key: 'invoice', label: 'Final Invoice' },
-      { key: 'review', label: 'Review Request' },
-    ],
-  },
-  { key: 'Schedule', label: 'Schedule', icon: JobDashboardIcon, group: 'always' },
-  { key: 'Photos', label: 'Photos', icon: PhotosIcon, group: 'always' },
-  { key: 'Sketch', label: 'Sketch', icon: SketchIcon, group: 'always' },
-  { key: 'Documents', label: 'Documents', icon: UpdatesTabIcon, group: 'always' },
-  {
-    key: 'Messages', label: 'Messages', icon: MessagesIcon, group: 'always',
-    sections: [
-      { key: 'messages', label: 'Customer Messages' },
-      { key: 'email', label: 'Email' },
-    ],
-  },
-];
+// A missing table means migration 007 has not been run yet.
+const missingTable = (err) => !!err && (err.code === '42P01' || /does not exist|schema cache|Could not find the table/i.test(err.message || ''));
 
-export default function JobDetailPage() {
-  const { session, loading, role } = useRequireAuth();
-  const { id } = useParams();
-  const router = useRouter();
+const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
 
+// One camera for the whole job page. An "after" photo opens it with the "before" faintly over the live view.
+function JobCamera({ camera, onClose, uploader, jobId, rooms }) {
+  const urls = useSignedUrls(camera?.ghostPath ? [camera.ghostPath] : []);
+  const ghost = camera?.ghostPath ? urls[camera.ghostPath] || null : null;
+  return (
+    <CameraCapture
+      open={!!camera}
+      onClose={onClose}
+      uploader={uploader}
+      jobId={jobId}
+      rooms={rooms}
+      defaultRoom={camera?.room || ''}
+      pairOf={camera?.pairOf || null}
+      ghostUrl={ghost}
+      fixedKind={camera?.pairOf ? 'after' : null}
+      closeAfterOne={!!camera?.pairOf}
+    />
+  );
+}
+
+function JobInner({ id, staff, token }) {
+  const isOffice = staff.role !== 'tech';
+  const chatRows = useChatCenter().rows;
+  const chatDock = useChatDock();
+  const mobile = useIsMobile(); // Quick Actions are for phone-sized screens only (under 900px, same as the bottom navigation)
   const [job, setJob] = useState(null);
+  const [visits, setVisitsRaw] = useState([]);
+  const [waitingOps, setWaitingOps] = useState([]);
+  const setVisits = setVisitsRaw;
+  const [flagged, setFlagged] = useState(new Set());
+  const [contacts, setContacts] = useState([]);
+  const [jobContactIds, setJobContactIds] = useState([]);
+  const [inspLaunch, setInspLaunch] = useState(null); // { kind: 'pre' | 'post', n }: opens that inspection record by itself
+  const [newContact, setNewContact] = useState(null); // inline 'add a contact' form on the Customer card
+  const [events, setEvents] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [msg, setMsg] = useState(null);
+  const jobSave = useSaveStatus();
+  const [form, setForm] = useState(null);
+  const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
+  const [tabState, setTab] = useState('overview');
+  const [sketchId, setSketchId] = useState(null); // the sketch both the Sketch and Moisture tabs have open
+  const [photos, setPhotos] = useState([]);
+  const [sketches, setSketches] = useState([]);
   const [updates, setUpdates] = useState([]);
-  const [changeOrders, setChangeOrders] = useState([]);
-  const [flash, setFlash] = useState('');
-  const minStatus = useContractMinimum(job);
-  const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState('');
-  const [closingLost, setClosingLost] = useState(false);
-  const [lossReasonText, setLossReasonText] = useState('');
-  const [notFound, setNotFound] = useState(false);
-  const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
-  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
-  const [isMobile, setIsMobile] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
-  const [sectionsOpen, setSectionsOpen] = useState(false);
-  const [rfpPanelOpen, setRfpPanelOpen] = useState(false);
-  const [scheduleItemOpen, setScheduleItemOpen] = useState(false);
-
+  const [docsMissing, setDocsMissing] = useState(false);
+  const [fromPhone, setFromPhone] = useState(false); // showing the copy kept on this phone (no signal)
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [viewer, setViewer] = useState(null); // { ids, startId }
+  const roomInput = useRef(null);
+  const roomTarget = useRef(null);
+  const [otwOpen, setOtwOpen] = useState(false);
+  const [qaOpen, setQaOpen] = useState(false); // the Quick Action Screen
+  const [qaLanding, setQaLanding] = useState(false); // on a phone it is the landing page of a job, in place of the Overview tab
+  // Quick Actions mode (phones): the job's home is the Quick Action Screen, and everything else is a screen opened from it.
+  // Tapping the X on it turns the mode off for this visit to the job only; opening any job again lands on it.
+  const qaModeRef = useRef(false);
+  const setQaMode = (on) => { qaModeRef.current = on; };
+  const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches;
   useEffect(() => {
-    function goOnline() { setIsOnline(true); }
-    function goOffline() { setIsOnline(false); }
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
+    if (!isPhone()) return;
+    qaModeRef.current = true;
+    const unit = new URLSearchParams(window.location.search).get('unit');
+    if (!window.location.hash && !unit) { setQaLanding(true); setQaOpen(true); }
+    else { qaFromRef.current = true; setQaFrom(true); } // a screen is already open (reload, scanned label): the way back to Quick Actions is there too
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [assignOpen, setAssignOpen] = useState(false);
+  // widening a window past the phone breakpoint leaves Quick Actions behind
+  useEffect(() => { if (!mobile) { setQaOpen(false); setQaLanding(false); } }, [mobile]);
+  // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
+  const [moistCmd, setMoistCmd] = useState(null);
+  const [updCmd, setUpdCmd] = useState(null);
+  const [clockTick, setClockTick] = useState(0);        // bumped when the job clock changes (phone button or the clock card), so each re-reads it
+  const [clockRunning, setClockRunning] = useState(false); // this person's job clock is running now
+  const [gobacks, setGobacks] = useState({});            // visit id -> tech id, for visits added as a tech's go-back (office and owner only)
+
+  // Screens opened from the Quick Action Screen exit back to it (back bar, or the phone's back gesture)
+  const qaFromRef = useRef(false);
+  const backToQaRef = useRef(null);
+  const [qaFrom, setQaFrom] = useState(false);
+  const [waterRows, setWaterRows] = useState([]);       // Day 1 steps recorded on this job (water losses)
+  const [waterOk, setWaterOk] = useState(false);        // false until the table exists and was read: no gating before migration 051 is run
+  const [dayOneStep, setDayOneStep] = useState(null);   // which Day 1 dialog is open
+  const [dayOneMsg, setDayOneMsg] = useState('');
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [completeMsg, setCompleteMsg] = useState('');
+  // a screen opened from Quick Actions hides the phone's top bar and bottom navigation (see quickactions.css)
+  useEffect(() => {
+    document.body.classList.toggle('qa-page', mobile && qaFrom && !qaOpen);
+    return () => document.body.classList.remove('qa-page');
+  }, [mobile, qaFrom, qaOpen]);
+  // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
+  useEffect(() => {
+    setTab(tabFromHash());
+    const onHash = () => {
+      // the phone's back gesture from a screen opened on the Quick Action Screen returns to it
+      if (!window.location.hash && qaFromRef.current) { backToQaRef.current?.(); return; }
+      setTab(tabFromHash());
     };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
-
+  const openTab = (k) => {
+    if (qaModeRef.current && k === 'overview') { backToQaRef.current?.(); return; } // in Quick Actions mode the job's home is the Quick Action Screen
+    if (qaModeRef.current && !qaFromRef.current) { qaFromRef.current = true; setQaFrom(true); } // any screen opened in the mode has the way back
+    setTab(k);
+    window.history.replaceState(null, '', `#${k}`);
+  };
+  // a scanned equipment label opens the job with ?unit=<id>: go to the Moisture tab and open that unit, once
+  const scanUnit = useRef(typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('unit'));
   useEffect(() => {
-    function checkSize() { setIsMobile(window.innerWidth < 900); }
-    checkSize();
-    window.addEventListener('resize', checkSize);
-    return () => window.removeEventListener('resize', checkSize);
+    if (!scanUnit.current) return;
+    const unitId = scanUnit.current;
+    scanUnit.current = null;
+    setTab('moisture');
+    window.history.replaceState(null, '', `${window.location.pathname}#moisture`);
+    setMoistCmd({ type: 'unit', unitId, n: Date.now() });
   }, []);
-  const [tab, setTab] = useState('Overview');
-  const [section, setSection] = useState(null);
-  // Overview > Customer has two views: the customer's details, and their
-  // portal access and notification settings. Kept out of TABS because it is a
-  // switch inside one section, not a section of its own (see `view` in lib/links.js).
-  const [customerView, setCustomerView] = useState('details');
-  // Landing: a job opens on the tab for its current stage unless the URL
-  // names a destination. These refs carry what the URL said until the job
-  // has loaded and we know its stage.
-  const urlNamedTabRef = useRef(false);
-  const billingPendingRef = useRef(false);
-  const landedRef = useRef(false);
-  // Which destination should open with its "new" form already showing
-  // (set by Quick actions or a ?new=1 link; cleared by any other navigation).
-  const [autoOpen, setAutoOpen] = useState(null);
-
-  // Central place to change tabs so section always lands somewhere valid:
-  // explicit section if given, else that tab's first section, else none.
-  // Also keeps the URL in sync (?tab=&section=) — this used to only set
-  // local state, so refreshing (or bookmarking/sharing a link) while on
-  // any tab besides Overview always landed back on Overview, since the
-  // URL never actually reflected where you'd navigated to.
-  const goToTab = useCallback((tabKey, sectionKey, view) => {
-    const target = TABS.find(t => t.key === tabKey);
-    if (!target) return;
-    const resolvedSection = sectionKey || target.sections?.[0]?.key || null;
-    const resolvedView = tabKey === 'Overview' && resolvedSection === 'customer' && view === 'portal' ? 'portal' : null;
-    setTab(tabKey);
-    setSection(resolvedSection);
-    setCustomerView(resolvedView || 'details');
-    setAutoOpen(null);
-    syncUrl(tabKey, resolvedSection, resolvedView);
-  }, []);
-
-  // Same idea, for switching sections within a tab (e.g. Financials'
-  // Invoicing/Receipts sub-nav) without changing the tab itself.
-  const goToSection = useCallback((sectionKey) => {
-    setSection(sectionKey);
-    setCustomerView('details');
-    setAutoOpen(null);
-    syncUrl(tab, sectionKey, null);
-  }, [tab]);
-
-  // Switches between the two views inside Overview > Customer.
-  const goToCustomerView = useCallback((view) => {
-    setCustomerView(view);
-    syncUrl('Overview', 'customer', view === 'portal' ? 'portal' : null);
-  }, []);
-
-  // Navigate by destination name (see JOB_DESTINATIONS in lib/links.js), so
-  // nothing in this file needs to know which tab a feature lives under.
-  const goDest = useCallback((destination) => {
-    const d = JOB_DESTINATIONS[destination];
-    if (d) goToTab(d.tab, d.section, d.view);
-  }, [goToTab]);
-
-  // Same, but the destination opens with its "new ..." form ready to fill in.
-  const goCreate = useCallback((destination) => {
-    goDest(destination);
-    setAutoOpen(destination);
-  }, [goDest]);
-
-  function syncUrl(tabKey, sectionKey, view) {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    params.set('tab', tabKey);
-    params.delete('new');
-    if (sectionKey) params.set('section', sectionKey); else params.delete('section');
-    if (view) params.set('view', view); else params.delete('view');
-    router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-  }
-
+  // a request left over for a tab that is no longer open is dropped
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    // normalizeJobLink forgives case and retired section names, so old
-    // bookmarks (?tab=schedule, section=proposals) land somewhere real
-    // instead of being silently ignored.
-    const target = normalizeJobLink(TABS, params.get('tab'), params.get('section'), params.get('view'));
-    if (target) {
-      urlNamedTabRef.current = true;
-      billingPendingRef.current = target.stageAware === 'billing';
-      goToTab(target.tab, target.section, target.view);
-      // ?new=1 (jobHref(id, dest, { new: 1 })) opens that destination's create form.
-      if (params.get('new')) {
-        const resolved = target.section || TABS.find(t => t.key === target.tab)?.sections?.[0]?.key || null;
-        const name = Object.keys(JOB_DESTINATIONS).find(k => JOB_DESTINATIONS[k].tab === target.tab && (JOB_DESTINATIONS[k].section || null) === resolved && (JOB_DESTINATIONS[k].view || null) === (target.view || null));
-        if (name) setAutoOpen(name);
-      }
-    }
-  }, [goToTab]);
+    if (tabState !== 'moisture') setMoistCmd(null);
+    if (tabState !== 'updates') setUpdCmd(null);
+  }, [tabState]);
 
-  // Once the job has loaded: land on the right spot for its stage (unless
-  // the URL asked for somewhere specific), and settle old "billing" links
-  // onto draws or the final invoice depending on where the job is now.
-  useEffect(() => {
-    if (!job || landedRef.current) return;
-    landedRef.current = true;
-    if (billingPendingRef.current) {
-      billingPendingRef.current = false;
-      goDest(billingDestination(job.stage));
+  const loadWater = useCallback(async () => {
+    const { data, error } = await getSupabase().from('job_water_steps').select('*').eq('job_id', id).order('created_at');
+    if (error) { setWaterOk(false); return; }
+    setWaterRows(data || []);
+    setWaterOk(true);
+  }, [id]);
+  useEffect(() => { loadWater(); }, [loadWater]);
+
+  // Shows a job pack (fresh from the server, or the copy kept on this phone).
+  const applyPack = useCallback((pack, fromPhone) => {
+    const j = pack.job;
+    setJob(j);
+    if (!j) return;
+    setForm({
+      status: j.status, service: j.service || '', po_number: j.po_number, loss_summary: j.loss_summary,
+      customer_notes: j.customer_notes, internal_notes: j.internal_notes, warning: j.warning, billing_contact_id: j.billing_contact_id || '',
+    });
+    setDocsMissing(missingTable(pack.photos.error) || missingTable(pack.sketches.error) || missingTable(pack.updates.error));
+    setPhotos(pack.photos.data || []);
+    setSketches((pack.sketches.data || []).map(({ plan, updated_at, ...rest }) => rest)); // the list does not carry plans
+    setUpdates(pack.updates.data || []);
+    setVisits(pack.visits);
+    setContacts(pack.contacts);
+    setJobContactIds((pack.jobContacts || []).map((r) => r.contact_id));
+    setEvents(pack.events);
+    setStaffList(pack.staff);
+    setFromPhone(!!fromPhone);
+  }, []);
+
+  const load = useCallback(async () => {
+    const sb = getSupabase();
+    const pack = await fetchJobPack(sb, id, isOffice);
+    if (pack.error) {
+      // no signal: open the copy kept on this phone, if there is one
+      const saved = await cacheRead(packKey(id));
+      if (saved) { applyPack(saved, true); return; }
+      setLoadFailed(true);
       return;
     }
-    if (urlNamedTabRef.current) return;
-    const landing = stageLanding(job.stage);
-    goToTab(landing.tab, landing.section);
-  }, [job, goToTab, goDest]);
-
-  // A tab can disappear out from under the current selection — e.g. the
-  // job just got approved and Financials was hidden while it was still
-  // an opportunity. Land somewhere valid instead of a blank pane.
-  useEffect(() => {
-    if (!job) return;
-    const current = TABS.find(t => t.key === tab);
-    if (!current) {
-      goToTab('Overview');
-    } else if (current.sections && !current.sections.some(s => s.key === section)) {
-      setSection(current.sections[0].key);
-      setCustomerView('details');
+    setLoadFailed(false);
+    applyPack(pack, false);
+    if (pack.job) {
+      savePackLocally(id, pack); // also keeps each sketch's plan for opening offline
     }
-  }, [job, tab, section, goToTab]);
-
-  // Financial fields (contract_price, invoice_amount, invoice_status) live
-  // in job_financials, not on jobs itself — split out so RLS can hide them
-  // from field crew while everything else about the job stays visible.
-  // Merged back onto the same job object here so every existing read of
-  // job.contract_price etc. elsewhere in this file keeps working as-is.
-  const FINANCIAL_FIELDS = ['contract_price', 'invoice_amount', 'invoice_status'];
-
-  const loadJob = useCallback(async () => {
-    try {
-      const [{ data, error }, { data: financials }] = await Promise.all([
-        supabase.from('jobs').select('*').eq('id', id).single(),
-        supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status, priced_at').eq('job_id', id).maybeSingle(),
-      ]);
-      if (error || !data) throw error || new Error('Job not found');
-      const merged = { ...data, ...financials };
-      setJob(merged);
-      setOfflineViewing(null);
-      cacheJobPatch(id, { job: merged });
-    } catch (err) {
-      // Could be genuinely missing, or could just be offline — a fetch
-      // to Supabase failing outright (no response at all) looks
-      // different from Postgres cleanly saying "no rows," so only fall
-      // back to cache when it looks like a network failure, and only
-      // declare not-found when there's no cache to fall back to either.
-      const cached = await getCachedJob(id);
-      if (cached?.data?.job) {
-        setJob(cached.data.job);
-        setOfflineViewing({ cachedAt: cached.cachedAt });
-      } else {
-        setNotFound(true);
-      }
+    // Double-booking flags: compare this job's visits with the same techs' other visits
+    const techIds = [...new Set((pack.visits || []).map((x) => x.tech_id).filter(Boolean))];
+    if (isOffice && techIds.length) {
+      const { data: others } = await sb.from('job_visits').select('id,tech_id,starts_at,ends_at,status').in('tech_id', techIds).in('status', ['scheduled', 'on_the_way', 'started']);
+      const flaggedIds = doubleBookedIds(others || []);
+      setFlagged(flaggedIds);
     }
-  }, [id]);
+  }, [id, isOffice, applyPack]);
 
-  const loadUpdates = useCallback(async () => {
-    const { data } = await supabase.from('job_updates').select('*').eq('job_id', id).eq('is_internal', false).order('update_date', { ascending: false });
-    if (data) setUpdates(data);
-  }, [id]);
-
-  const loadChangeOrders = useCallback(async () => {
-    const { data } = await supabase.from('change_orders').select('*').eq('job_id', id).order('co_date', { ascending: false });
-    if (data) setChangeOrders(data);
-  }, [id]);
-
+  useEffect(() => { load(); }, [load]);
+  // the moment the signal comes back, replace the phone's copy with the real thing
   useEffect(() => {
-    if (!session) return;
-    loadJob();
-    loadUpdates();
-    loadChangeOrders();
+    const back = () => load();
+    window.addEventListener('online', back);
+    return () => window.removeEventListener('online', back);
+  }, [load]);
 
-    const channel = supabase
-      .channel(`job-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${id}` }, loadJob)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials', filter: `job_id=eq.${id}` }, loadJob)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${id}` }, loadUpdates)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'change_orders', filter: `job_id=eq.${id}` }, loadChangeOrders)
-      .subscribe();
+  // Refresh only the history, so edits being typed in the job details form are not wiped.
+  const loadEvents = useCallback(async () => {
+    const { data } = await getSupabase().from('job_events').select('*').eq('job_id', id).order('at', { ascending: false }).limit(50);
+    setEvents(data || []);
+  }, [id]);
 
-    return () => supabase.removeChannel(channel);
-  }, [session, id, loadJob, loadUpdates, loadChangeOrders]);
+  const reloadPhotos = useCallback(async () => {
+    const { data } = await getSupabase().from('job_photos').select('*').eq('job_id', id).order('taken_at', { ascending: false });
+    setPhotos(data || []);
+  }, [id]);
+  const reloadSketches = useCallback(async () => {
+    const { data } = await getSupabase().from('job_sketches').select('id,name,sort_order,created_at').eq('job_id', id).order('sort_order').order('created_at');
+    setSketches(data || []);
+  }, [id]);
+  const reloadUpdates = useCallback(async () => {
+    const { data } = await getSupabase().from('job_updates').select('*').eq('job_id', id).order('created_at', { ascending: false });
+    setUpdates(data || []);
+    loadEvents();
+  }, [id, loadEvents]);
 
-  function flashSaved() {
-    setFlash('Saved');
-    setTimeout(() => setFlash(''), 1500);
+  // is this person's job clock running? (the phone button reads Clock Out while it is, Clock In when it is stopped)
+  const visitStatusKey = visits.map((v) => v.status).join(',');
+  useEffect(() => {
+    let alive = true;
+    getSupabase().from('job_clock_sessions').select('id').eq('job_id', id).eq('staff_id', staff.id).is('ended_at', null).is('voided_at', null).limit(1)
+      .then(({ data, error }) => { if (alive && !error) setClockRunning((data || []).length > 0); });
+    return () => { alive = false; };
+  }, [id, staff.id, clockTick, visitStatusKey]);
+  // go-backs logged on this job's visits (a missing table just means migration 026 is not run yet)
+  useEffect(() => {
+    if (!isOffice) return undefined;
+    let alive = true;
+    getSupabase().from('job_gobacks').select('visit_id,tech_id').eq('job_id', id).is('voided_at', null)
+      .then(({ data, error }) => { if (alive && !error) setGobacks(Object.fromEntries((data || []).filter((g) => g.visit_id).map((g) => [g.visit_id, g.tech_id]))); });
+    return () => { alive = false; };
+  }, [id, isOffice, visits]);
+
+  const logEvent = useCallback(async (kind, details) => {
+    await getSupabase().from('job_events').insert({ job_id: id, actor_id: staff.id, actor_email: staff.email, kind, details });
+    loadEvents();
+  }, [id, staff.id, staff.email, loadEvents]);
+
+  const uploader = usePhotoUploader({ jobId: id, onUploaded: reloadPhotos, logEvent, photos });
+  const rooms = useJobRooms(id, sketches.map((x) => x.id).join(','));
+  const [camera, setCamera] = useState(null); // null = closed, otherwise options for the camera ({ ghost, pairOf, room })
+  const openCamera = (opts = {}) => setCamera(opts);
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => { const o = await getOps(); if (!o) return; const l = await o.list(id); if (alive) setWaitingOps(l.filter((x) => x.type === 'visit_status')); };
+    refresh();
+    const off1 = onQueueChange(refresh);
+    const off2 = onOpsFinished(() => { refresh(); load(); });
+    return () => { alive = false; off1(); off2(); };
+  }, [id, load]);
+  const visitsShown = useMemo(() => overlayVisits(visits, waitingOps), [visits, waitingOps]);
+  const photosById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
+
+  if (loadFailed && !job) {
+    return (
+      <div className="card">
+        <h2>This job is not available offline</h2>
+        <p className="hint">There is no signal, and this job was not opened on this phone before. Pictures you take are not lost: open the job once while you have signal and it will be saved here. Anything already waiting to upload is listed under <Link href="/queue">Waiting to upload</Link>.</p>
+        <button className="secondary" onClick={load}>Try again</button>
+      </div>
+    );
+  }
+  if (!job || !form) return <p className="muted">Loading job...</p>;
+
+  // What this kind of job shows. A tab the service does not have falls back to Overview (its data stays saved).
+  const service = serviceOf(job);
+  const shownTabs = tabsFor(JOB_TABS, service, { customerType: job.customer?.customer_type }).filter(([k]) => k !== 'costs' || staff.role === 'owner').filter(([k]) => !(UPDATES_SHELVED && k === 'updates')); // job costs are for the owner alone
+  const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
+  // Water losses: Day 1 steps, and Finish visit is not Complete job
+  const restoration = usesDayOneSteps(service, job.job_type);
+  const dayOneOn = restoration && waterOk;
+  const activeVisitCount = visits.filter((v) => ['scheduled', 'on_the_way', 'started'].includes(v.status)).length;
+  const canCompleteNow = restoration && visits.some((v) => v.status === 'finished') && canCompleteJob({ jobStatus: job.status, activeVisits: activeVisitCount }).ok && (isOffice || visits.some((v) => v.tech_id === staff.id));
+  const equipGate = dayOneOn ? gateFor('equipment', waterRows) : null;
+  const openDayOne = (step, msg = '') => { setDayOneMsg(msg); setDayOneStep(step === 'next' ? (nextDayOneStep(waterRows)?.step || 'safety') : step); };
+  async function completeJob() {
+    if (!window.confirm('Complete this job? This makes the invoice draft.')) return;
+    setCompleteBusy(true); setCompleteMsg('');
+    try { await apiFetch(`/api/jobs/${id}/complete`, token, { method: 'POST', body: JSON.stringify({}) }); await load(); }
+    catch (e) { setCompleteMsg(e.message); }
+    setCompleteBusy(false);
+  }
+  // a finished job should have all its equipment picked up
+  const shortCount = ['completed', 'closed'].includes(job.status) ? sketches.flatMap((sk) => unitsStillOnSite(normalizePlan(sk.plan))) : [];
+
+  const openViewer = (list, startId) => setViewer({ ids: list.map((p) => p.id), startId });
+  const viewerList = viewer ? viewer.ids.map((i) => photosById.get(i)).filter(Boolean) : [];
+  const authorName = (uid) => {
+    const s = staffList.find((x) => x.id === uid);
+    return s ? staffName(s) : '';
+  };
+  function addRoomPhoto(sketchId, room) {
+    roomTarget.current = { sketchId, roomKey: room.id };
+    roomInput.current?.click();
   }
 
-  // Project numbers are normally assigned when the job is created. This is
-  // the recovery path for a job past Approved that somehow has none, shown
-  // as a fix-it banner rather than something to chase down in the database.
-  async function fixMissingProjectNumber() {
-    try {
-      // assignNextProjectNumber writes the number to this row itself (and
-      // retries on a collision), so there is nothing further to save here.
-      await assignNextProjectNumber(id, job.project_type === 'commercial' ? 'commercial' : 'residential');
-      flashSaved();
-    } catch (err) {
-      setFlash(`Could not assign a project number: ${err.message}`);
-      setTimeout(() => setFlash(''), 8000);
-    }
-  }
+  const name = (uid) => {
+    const s = staffList.find((x) => x.id === uid);
+    return s ? staffName(s) : 'Unassigned';
+  };
+  // Who did it, by name. Falls back to a tidied email for people no longer in the active list.
+  const actorName = (e, none) => {
+    const s = staffList.find((x) => x.id === e.actor_id);
+    if (s) return staffName(s);
+    return e.actor_email ? displayNameFor(null, e.actor_email) : none;
+  };
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  async function saveJob(patch) {
-    if (!isOnline) {
-      // Deliberately not attempting the network call at all — this isn't
-      // queued anywhere the way Field Log entries are, so a failed save
-      // here would otherwise look identical to a successful one (the
-      // form still shows what you typed either way). Blocking outright
-      // and saying so clearly beats a save that silently doesn't happen.
-      setFlash("You're offline — this can't be saved right now. Your edit is still showing here, but it has NOT been saved. Reconnect and save again.");
-      setTimeout(() => setFlash(''), 10000);
-      return false;
+  async function saveJob(e) {
+    e.preventDefault();
+    setMsg(null);
+    const patch = { ...form, service: form.service || null, billing_contact_id: form.billing_contact_id || null };
+    if (patch.status === 'completed' && job.status !== 'completed') patch.completed_at = new Date().toISOString();
+    const { error } = await getSupabase().from('jobs').update(patch).eq('id', id);
+    if (error) { setMsg({ err: true, text: error.message }); return false; }
+    const changed = {};
+    for (const k of Object.keys(form)) {
+      const before = k === 'billing_contact_id' || k === 'service' ? job[k] || '' : job[k];
+      if (before !== form[k]) changed[k] = { from: before, to: form[k] };
     }
-
-    const jobPatch = {};
-    const financialsPatch = {};
-    for (const [key, value] of Object.entries(patch)) {
-      (FINANCIAL_FIELDS.includes(key) ? financialsPatch : jobPatch)[key] = value;
-    }
-
-    if (Object.keys(jobPatch).length > 0) {
-      const { error } = await supabase.from('jobs').update(jobPatch).eq('id', id);
-      if (error) {
-        setFlash(`Save failed: ${error.message}`);
-        setTimeout(() => setFlash(''), 6000);
-        return false;
-      }
-    }
-    if (Object.keys(financialsPatch).length > 0) {
-      const { error } = await supabase.from('job_financials').update(financialsPatch).eq('job_id', id);
-      if (error) {
-        setFlash(`Save failed: ${error.message}`);
-        setTimeout(() => setFlash(''), 6000);
-        return false;
-      }
-    }
-    flashSaved();
-    // Merge locally rather than depending solely on the jobs realtime
-    // channel — this is the single most-used save path in the app, so
-    // it's worth not leaving it dependent on realtime at all.
-    setJob(prev => ({ ...prev, ...patch }));
+    if (Object.keys(changed).length) await logEvent(changed.status ? 'status' : 'edited', changed);
+    setMsg({ text: 'Saved.' });
+    load();
     return true;
   }
 
-  async function advanceStage() {
-    const idx = STAGE_ORDER.indexOf(job.stage);
-    if (idx === -1 || idx >= STAGE_ORDER.length - 1) return;
-    const next = STAGE_ORDER[idx + 1];
-    if (next === 'approved' && minStatus.needsOverride) {
-      setFlash(`Under the ${minStatus.kind} contract minimum (${fmtMoney(minStatus.price)} vs ${fmtMoney(minStatus.minimum)}). An owner must override it before this can be approved.`);
-      setTimeout(() => setFlash(''), 8000);
-      return;
-    }
-    if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
-
-    const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
-
-    if (next === 'approved' && !job.project_number) {
-      try {
-        // Writes project_number to this row directly (with its own
-        // collision retry) before stage/approved_at change, so a job is
-        // never moved to Approved without a number attached.
-        await assignNextProjectNumber(id, job.project_type === 'commercial' ? 'commercial' : 'residential');
-      } catch (err) {
-        setFlash(`Could not assign a project number: ${err.message}. Stage was not changed. Try again.`);
-        setTimeout(() => setFlash(''), 8000);
-        return; // never advance the stage without a project number
-      }
-    }
-    await saveJob(patch);
-
-    if (next === 'approved' && job.contract_price) {
-      const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
-      if (!existing || existing.length === 0) {
-        // Rounded to the cent on both sides — contract_price itself is
-        // rounded at the source now (see EstimateTab.js), but floating-
-        // point subtraction can still reintroduce a fraction-of-a-cent
-        // artifact here (e.g. 100.10 - 50.05 = 50.04999999999999 in JS),
-        // and this also protects against any already-saved contract
-        // price from before that fix.
-        const total = Math.round(parseFloat(job.contract_price) * 100) / 100;
-        const half = Math.round((total / 2) * 100) / 100;
-        await supabase.from('invoices').insert([
-          { job_id: id, description: 'Invoice 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Invoice 2 — Final Payment', amount: Math.round((total - half) * 100) / 100, status: 'not_sent' },
-        ]);
-      }
-    }
+  async function toggleContact(cid) {
+    const sb = getSupabase();
+    if (jobContactIds.includes(cid)) await sb.from('job_contacts').delete().eq('job_id', id).eq('contact_id', cid);
+    else await sb.from('job_contacts').insert({ job_id: id, contact_id: cid });
+    await logEvent('contact_' + (jobContactIds.includes(cid) ? 'removed' : 'added'), { contact_id: cid });
+    load();
   }
 
-  async function invitePortal() {
-    const recipientEmail = job.customer_email || job.billing_email || '';
-    if (!recipientEmail) { setInviteResult('Add a contact email before inviting the customer.'); return; }
-    setInviting(true);
-    setInviteResult('');
-    // Sends a real activation invite — "create your account" with a
-    // password, not a plain magic-link sign-in — the same flow used for
-    // newly created jobs. Idempotent: a no-op (and no duplicate email) if
-    // this customer already activated an account on another job.
-    const { data: { session: adminSession } } = await supabase.auth.getSession();
-    const res = await fetch('/api/portal/create-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken: adminSession?.access_token,
-        email: recipientEmail,
-        customerName: job.customer_name,
-        jobId: id,
-      }),
-    });
-    const data = await res.json();
-    setInviting(false);
-    if (!res.ok) {
-      setInviteResult(data.error || 'Failed to send invite.');
-    } else if (data.alreadyActivated) {
-      setInviteResult(`${recipientEmail} already has an active portal account — nothing to send.`);
-    } else {
-      setInviteResult(`Activation invite sent to ${recipientEmail}.`);
-      await saveJob({ portal_invited_at: new Date().toISOString() });
+  // Creates a new contact on the customer and adds it to this job's notifications in one step.
+  async function addContact(e) {
+    e.preventDefault();
+    const name = newContact.name.trim();
+    if (!name) return;
+    if (!newContact.phone && !newContact.email) { setMsg({ err: true, text: 'Add a phone number or an email so there is a way to notify them.' }); return; }
+    const sb = getSupabase();
+    const { data: created, error } = await sb.from('contacts')
+      .insert({ customer_id: job.customer.id, name, role: newContact.role.trim(), phone: newContact.phone, email: newContact.email.trim(), receives_notifications: true })
+      .select('id').single();
+    if (error) { setMsg({ err: true, text: error.message }); return; }
+    const { error: linkErr } = await sb.from('job_contacts').insert({ job_id: id, contact_id: created.id });
+    if (linkErr) { setMsg({ err: true, text: linkErr.message }); load(); return; }
+    await logEvent('contact_added', { contact_id: created.id, name });
+    setMsg(null);
+    setNewContact(null);
+    load();
+  }
+
+  // Cancel a visit; for a crew, every member who has not started goes with it.
+  async function cancelVisit(v) {
+    const crew = v.crew_id ? visits.filter((x) => x.crew_id === v.crew_id && x.status === 'scheduled') : [v];
+    if (!window.confirm(crew.length > 1 ? `Cancel this visit for all ${crew.length} team members?` : 'Cancel this visit?')) return;
+    await getSupabase().from('job_visits').update({ status: 'cancelled' }).in('id', crew.map((x) => x.id));
+    await logEvent('visit_cancelled', { visit_id: v.id, ...(crew.length > 1 ? { crew: crew.map((x) => x.tech_id).filter(Boolean) } : {}) });
+    load();
+  }
+
+  // the address warning (pets) shows in the Site card; only the job-level warning stays a banner
+  const warnings = [job.warning].filter(Boolean);
+  // the visit "On the way" applies to: the next one still waiting, if this person may act on it
+  const otwVisit = visitsShown.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
+  // a visit still waiting with nobody on it: the office sees a red Assign Job button
+  const unassignedVisit = isOffice ? visits.find((v) => v.status === 'scheduled' && !v.tech_id) : null;
+  // the phone's action bar follows the visit under way, otherwise the next one waiting
+  const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
+  // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
+  // job clock for the phone button: Clock Out while this person's clock runs, Clock In when their visit is under way and it is stopped
+  const myVisitStarted = visitsShown.some((v) => v.status === 'started' && v.tech_id === staff.id);
+  const clockMode = ['closed', 'cancelled'].includes(job.status) ? null : clockRunning ? 'out' : myVisitStarted ? 'in' : null;
+  // Start job is only for the team member the visit is assigned to (office and owner can still send On the way)
+  const canStart = !!dockVisit && dockVisit.tech_id === staff.id;
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true, clock: clockMode, canStart }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
+  // Carpet jobs: Start opens the before-cleaning record, Finish opens the after-cleaning record.
+  const canDoc = hasFeature(service, 'inspectionTab') && !['closed', 'cancelled'].includes(job.status);
+  const onVisitAction = (action) => {
+    if (!canDoc) return;
+    if (action === 'started' || action === 'finished') {
+      openTab('inspection');
+      setInspLaunch({ kind: action === 'started' ? 'pre' : 'post', n: Date.now() });
     }
-  }
+  };
+  const fabRun = {
+    chat: () => chatDock.openJob(id, `Job #${job.job_number}`),
+    photos: () => openCamera(),
+    recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
+    sketch: () => openTab('sketch'),
+    otw: () => setOtwOpen(true),
+    start: async () => {
+      const r = await sendVisitAction({ visit: dockVisit, action: 'started', jobId: id });
+      await load();
+      if (!r?.queued) onVisitAction('started');
+    },
+    clock_out: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'out' }) }); setClockTick((n) => n + 1); },
+    clock_in: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'in' }) }); setClockTick((n) => n + 1); },
+    finish: async () => {
+      if (!window.confirm(restoration ? 'Finish this visit?' : 'Finish this job?')) return;
+      const r = await sendVisitAction({ visit: dockVisit, action: 'finished', jobId: id });
+      await load();
+      if (!r?.queued) onVisitAction('finished');
+    },
+    dayone: () => openDayOne('next'),
+    complete_job: () => completeJob(),
+    complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
+    internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
+  };
+  const jobChatUnread = countForTarget(chatRows, { jobId: id });
+  // Quick Action Screen: tab actions open that tab; the rest use the same handlers as the phone button
+  const enterFromQa = (tabKey) => { qaFromRef.current = true; setQaFrom(true); window.history.pushState(null, '', `#${tabKey}`); };
+  const backToQa = () => {
+    qaFromRef.current = false;
+    setQaFrom(false);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setTab('overview');
+    setQaLanding(window.matchMedia('(max-width: 899px)').matches);
+    setQaOpen(true);
+  };
+  backToQaRef.current = backToQa;
+  // Exit leaves Quick Actions for this visit to the job and lands on the normal Overview
+  const exitQa = () => {
+    setQaMode(false); qaFromRef.current = false; setQaFrom(false); setQaOpen(false); setQaLanding(false); setTab('overview');
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
+  // a screen opened from Quick Actions is its own page: Back arrow and Exit only, no breadcrumb, header or tabs
+  const qaScreen = mobile && qaFrom && !qaOpen;
+  const qaRun = (key) => {
+    if (key === 'eta') return fabRun.otw();
+    if (key === 'recheck') { enterFromQa('moisture'); return fabRun.recheck(); }
+    if (isTabAction(key)) { enterFromQa(key); openTab(key); return undefined; }
+    return fabRun[key]?.();
+  };
+  const fabItems = fabKeys.map((key) => ({ key, badge: key === 'chat' ? jobChatUnread : 0, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
+  const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
+  const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
-  async function deleteJob() {
-    if (!confirm('Permanently delete this job? This cannot be undone.')) return;
-    const { error } = await supabase.from('jobs').delete().eq('id', id);
-    if (error) {
-      setFlash(`Delete failed: ${error.message}`);
-      setTimeout(() => setFlash(''), 8000);
-      return;
-    }
-    router.push('/jobs');
-  }
-
-  // Closing an opportunity as lost before it's ever Approved — a real
-  // terminal stage (with its own DB constraint entry, migration 069)
-  // rather than just hiding the record, so it stays visible/filterable
-  // in the Job Tracker instead of disappearing. Mirrors the same
-  // reason-prompt pattern already used for leads in the Sales pipeline.
-  async function confirmCloseLost() {
-    await saveJob({
-      stage: 'lost',
-      stage_before_lost: job.stage,
-      lost_at: new Date().toISOString(),
-      loss_reason: lossReasonText.trim() || null,
-    });
-    setClosingLost(false);
-    setLossReasonText('');
-  }
-
-  async function reopenLost() {
-    const restoreTo = job.stage_before_lost && STAGE_ORDER.includes(job.stage_before_lost) ? job.stage_before_lost : 'new';
-    if (!confirm(`Reopen this opportunity? It will move back to ${STAGE_LABELS[restoreTo]}.`)) return;
-    await saveJob({ stage: restoreTo, stage_before_lost: null });
-  }
-
-  if (loading || !session) return null;
-  if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Overview</Link></div>;
-  if (!job) return null;
-
-  const activeTabDef = TABS.find(t => t.key === tab) || TABS[0];
-  const currentStageTab = stageTab(job.stage);
-
-  const afterOpportunity = phaseForStage(job.stage) !== 'opportunity';
-  const inFieldPhase = ['active', 'completed', 'invoiced', 'paid'].includes(job.stage);
-  const isDone = ['completed', 'invoiced', 'paid'].includes(job.stage);
-  const quickGroups = buildQuickActions({
-    job, role, stageTab: currentStageTab, afterOpportunity, inFieldPhase, isDone,
-    inviting, go: goDest, create: goCreate, push: (href) => router.push(href),
-    onRfp: () => setRfpPanelOpen(true), onInvite: invitePortal,
-    onAddScheduleItem: () => setScheduleItemOpen(true),
-  });
-  const allQuickItems = quickGroups.flatMap(g => g.items);
-  const fabItems = FAB_ACTIONS
-    .map(([key, label]) => { const item = allQuickItems.find(i => i.key === key); return item ? { ...item, label } : null; })
-    .filter(Boolean);
-
-  // "Plan / Budget": where you are, shown above the title on a computer and
-  // on the Sections bar on a phone.
-  const activeSectionDef = activeTabDef.sections?.find(sec => sec.key === section);
-  const locationLabel = activeSectionDef ? `${activeTabDef.label} / ${activeSectionDef.label}` : activeTabDef.label;
-  const lastStage = STAGE_ORDER[STAGE_ORDER.length - 1];
-  const canAdvance = STAGE_ORDER.includes(job.stage) && job.stage !== lastStage;
-  const advanceLabel = canAdvance ? STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]] : '';
-  const jobNav = (variant, after) => (
-    <JobSidebar
-      job={job}
-      tabs={TABS}
-      tab={tab}
-      section={section}
-      currentStageTab={currentStageTab}
-      variant={variant}
-      quickItems={variant === 'sidebar' ? fabItems : undefined}
-      onAdvance={variant === 'sidebar' && canAdvance ? advanceStage : undefined}
-      advanceLabel={advanceLabel}
-      onSelect={(tabKey, sectionKey) => { goToTab(tabKey, sectionKey); if (after) after(); }}
-    />
-  );
   return (
-    <AppShell sidebar={jobNav('sidebar')}>
-      <div className="container">
-        {isMobile && <Breadcrumb href="/jobs" label="Back to Overview" />}
-
-        {offlineViewing && (
-          <div className="sync-badge sync-badge-offline">
-            Offline — showing cached data from{' '}
-            {new Date(offlineViewing.cachedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
-            Editing is unavailable until you're back online.
-          </div>
-        )}
-
-        {!offlineViewing && !isOnline && (
-          <div className="sync-badge sync-badge-offline">
-            You're currently offline. Everything on this page is still viewable, but edits won't be saved until you reconnect.
-          </div>
-        )}
-
-        <ContractMinimumBanner job={job} status={minStatus} onJobPatch={patch => setJob(prev => ({ ...prev, ...patch }))} />
-
-        {!isOpportunity(job) && !job.project_number && (
-          <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ fontSize: 13 }}>
-                <b style={{ color: '#c0524f' }}>This job is past Approved but never got a Project Number.</b>
-                <div style={{ color: 'var(--ink-soft)', fontSize: 12, marginTop: 2 }}>That shouldn't happen — click to assign one now.</div>
-              </div>
-              <button className="btn btn-primary btn-sm" onClick={fixMissingProjectNumber}>Assign Project Number Now</button>
-            </div>
-          </div>
-        )}
-
-        {(isMobile || flash || (job.stage === 'lost' && job.loss_reason)) && (
-        <div className="top-actions">
-          <div>
-            {isMobile && (<>
-            <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
-            {job.property_name && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.property_name}</div>}
-            {job.project_address && (
-              <MapLinkMenu
-                address={job.project_address}
-                style={{ fontSize: 12.5, color: 'var(--ink-soft)', textDecoration: 'none', display: 'inline-block', marginBottom: 4 }}
-                onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
-                onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
-              >
-                📍 {job.project_address}
-              </MapLinkMenu>
-            )}
-            <div>
-              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              {flash && <span className="saved-flash">{flash}</span>}
-            </div>
-            </>)}
-            {!isMobile && flash && <div><span className="saved-flash">{flash}</span></div>}
-            {job.stage === 'lost' && job.loss_reason && (
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>Loss reason: {job.loss_reason}</div>
-            )}
-          </div>
+    <>
+      {qaScreen
+        ? <QaPageBar title={qaScreenTitle(tab, shownTabs.find(([k]) => k === tab)?.[1])} jobNumber={job.job_number} onBack={backToQa} onExit={exitQa} />
+        : <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />}
+      {!qaScreen && <div className="page-head job-head">
+        <div className="job-head-main">
+          <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
+          <p className="sub">
+            {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
+            {' · '}{serviceTitle(service) || JOB_TYPES[job.job_type]}
+            {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
+          </p>
         </div>
-        )}
+        <div className="row" style={{ gap: 8 }}>
+          {unassignedVisit && <button type="button" className="assign-btn" onClick={() => setAssignOpen(true)}>Assign Job</button>}
+          {otwVisit && <button type="button" className="primary desktop-only" onClick={() => setOtwOpen(true)}>On the way</button>}
+        </div>
+      </div>}
+      <AssignJobModal open={assignOpen} visit={unassignedVisit} staffList={staffList} onClose={() => setAssignOpen(false)} onDone={load} logEvent={logEvent} />
+      {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
+      {!qaScreen && !isOffice && !visits.some((v) => v.tech_id === staff.id) && <p className="hint" style={{ marginTop: 0 }}>This job is not on your schedule. It is open to you from the Jobs list in case you need it.</p>}
 
-        {isMobile && (
-          <>
-            <button
-              type="button"
-              className="job-fab"
-              aria-label="Quick actions"
-              onClick={() => setFabOpen(true)}
-            >
-              <PlusIcon width={24} height={24} />
+      {!qaScreen && warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
+      {!qaScreen && anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
+      {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
+
+      {!qaScreen && docsMissing && (
+        <div className="banner">Photos, sketches and updates are switched off until migration 007 is run in Supabase (SQL Editor, file supabase/migrations/007_job_documentation.sql).</div>
+      )}
+
+      {fromPhone && (
+        <div className="msg err" role="status">You are looking at a copy saved on this phone (no signal). Photos, notes and sketch changes you make are kept and sent when you have signal. Visit and status buttons need a connection.</div>
+      )}
+      {!qaScreen && shortCount.length > 0 && (
+        <div className="msg err" role="alert">
+          <strong>{shortCount.length} piece{shortCount.length === 1 ? '' : 's'} of equipment {shortCount.length === 1 ? 'is' : 'are'} still marked on site</strong> ({shortCount.slice(0, 8).join(', ')}{shortCount.length > 8 ? ', ...' : ''}). Pick {shortCount.length === 1 ? 'it' : 'them'} up on the {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'} tab, or {shortCount.length === 1 ? 'it' : 'they'} stay on the count.
+          {' '}<button type="button" className="secondary small" onClick={() => openTab(hasFeature(service, 'moistureTab') ? 'moisture' : 'sketch')}>Open {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'}</button>
+        </div>
+      )}
+      {!qaScreen && <div className="tabs" role="tablist">
+        {shownTabs.map(([k, label]) => {
+          const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : k === 'thread' ? countForTarget(chatRows, { jobId: id }) : 0;
+          return (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
+              {label}{n > 0 && <span className="tab-count">{n}</span>}
             </button>
-            <BottomSheet open={fabOpen} onClose={() => setFabOpen(false)} title="Quick actions">
-              {fabItems.map(item => (
-                <button key={item.key} type="button" className="more-sheet-link" disabled={item.disabled} onClick={() => { setFabOpen(false); item.run(); }}>
-                  {item.label}
-                </button>
-              ))}
-            </BottomSheet>
-          </>
-        )}
+          );
+        })}
+      </div>}
 
-        {(role === 'owner' || role === 'estimator') && (
-          <JobRfpsPanel open={rfpPanelOpen} onClose={() => setRfpPanelOpen(false)} jobId={id} session={session} projectAddress={job.project_address} />
-        )}
+      {mobile && tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => { setQaMode(true); setQaLanding(true); setQaOpen(true); }}>Quick actions</button>}
+      {mobile && <QuickActionScreen
+        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={exitQa} job={job} customerName={job.customer.display_name}
+        visitStatus={dockVisit?.status || null} canStart={canStart} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
+        hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }} dayOne={dayOneOn} restoration={restoration} canComplete={canCompleteNow}
+      />}
 
-        <NewEventModal
-          open={scheduleItemOpen}
-          onClose={() => setScheduleItemOpen(false)}
-          title="Add Visit"
-          defaultEventType="site_visit"
-          lockedJobId={id}
-          lockedJobLabel={job.project_address || job.customer_name || formattedProjectNumber(job)}
-        />
+      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} staffId={staff.id} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} restoration={restoration} />}
 
-        {inviteResult && (
-          <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
-            {inviteResult}
-          </div>
-        )}
-        {isMobile && (
-          <>
-            <button type="button" className="job-sections-bar" aria-haspopup="dialog" onClick={() => setSectionsOpen(true)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="14" y2="17" />
-              </svg>
-              <span className="job-sections-bar-text">
-                <span className="job-sections-bar-kicker">SECTIONS</span>
-                <span className="job-sections-bar-value">{locationLabel}</span>
-              </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-            <BottomSheet open={sectionsOpen} onClose={() => setSectionsOpen(false)} title="Sections">
-              {jobNav('sheet', () => setSectionsOpen(false))}
-            </BottomSheet>
-          </>
-        )}
+      {tab === 'overview' && dayOneOn && <DayOneCard rows={waterRows} onOpen={openDayOne} canComplete={canCompleteNow} onComplete={completeJob} completeBusy={completeBusy} completeMsg={completeMsg} />}
+      {dayOneOn && dayOneStep && <WaterDayOne step={dayOneStep} message={dayOneMsg} onClose={() => setDayOneStep(null)} jobId={id} staff={staff} customerName={contactName || job.customer.display_name} rows={waterRows} photoCount={photos.filter((x) => !x.archived_at).length} onReload={loadWater} />}
 
-        {/* Generating the estimate is the primary action for the whole
-            estimating side of Sell, so it is reachable from Scope, Cost
-            and Pricing without hunting for it. */}
-        {tab === 'Sell' && ['scope', 'cost', 'pricing'].includes(section) && (
-          <div className="tab-sections-actions" style={{ marginBottom: 18 }}>
-            <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
-            {job.proposal_sent_at && (
-              <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
-            )}
-          </div>
-        )}
-
-        {tab === 'Overview' && section === 'summary' && (
-          <>
-            <div className="overview-split">
-              <ProjectInfoCard job={job} onSave={saveJob} onNavigate={goDest} />
-              <ProjectMilestonesCard job={job} jobId={id} onNavigate={goDest} />
+      {tab === 'overview' && (
+        <div className="job-overview">
+          <div className="ov-top">
+            <div className="card ov-customer">
+              <div className="card-head">
+                <h2>Customer</h2>
+                {isOffice && !newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
+              </div>
+              <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
+              {contactName && contactName !== job.customer.display_name && <div>{contactName}</div>}
+              <div className="contact-chips">
+                {job.customer.phone && <a className="chip-link" href={telHref(job.customer.phone)}>Call {displayPhone(job.customer.phone)}</a>}
+                {job.customer.email && <a className="chip-link" href={`mailto:${job.customer.email}`}>{job.customer.email}</a>}
+                {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
+              </div>
+              {isOffice && newContact && (
+                <form onSubmit={addContact} className="customer-contacts" style={{ marginTop: 10 }}>
+                  <div className="grid2">
+                    <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
+                    <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
+                    <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
+                    <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
+                  </div>
+                  <div className="row">
+                    <button className="primary">Add and notify</button>
+                    <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
+                  </div>
+                </form>
+              )}
+              {isOffice && (
+                <div className="also-notify">
+                  <h3>Also notify</h3>
+                  {contacts.length > 0 && <p className="hint">Ticked contacts get this job's progress updates.</p>}
+                  {contacts.map((c) => (
+                    <label key={c.id} className="also-notify-row">
+                      <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
+                      <span>{c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span></span>
+                    </label>
+                  ))}
+                  {contacts.length === 0 && <p className="muted" style={{ margin: 0 }}>No extra contacts yet.</p>}
+                </div>
+              )}
             </div>
-            {/* Job Status on the left, Danger Zone on the right (stacked on narrow screens). */}
-            <div className="overview-pair">
-            {(['new', 'inspected', 'proposal_delivered'].includes(job.stage) || job.stage === 'lost') && (
+
+            <div className="ov-side">
               <div className="card">
-                <h3>Job Status</h3>
-                {closingLost ? (
-                  <>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>Reason for loss</div>
-                    <LossReasonPicker value={lossReasonText} onChange={setLossReasonText} />
-                    <div className="section-actions">
-                      <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
-                      <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>
+                <h2>Site</h2>
+                <div className="title"><MapLink address={job.address} /></div>
+                {job.address.gate_code &&<div>Gate code: <strong>{job.address.gate_code}</strong></div>}
+                {job.address.warnings && <div>Pets: <strong>{job.address.warnings}</strong></div>}
+                {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
+              </div>
+
+              {job.loss_summary && (
+                <div className="card">
+                  <h2>Loss summary</h2>
+                  <div>{job.loss_summary}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <ClockCard jobId={id} staff={staff} staffList={staffList} token={token} service={service} jobStatus={job.status} refreshKey={`${visitStatusKey}|${clockTick}`} onChanged={() => setClockTick((n) => n + 1)} />
+
+          <div className="card wide">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+              <h2>Visits</h2>
+              {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
+            </div>
+            {groupVisits(visitsShown).map((g) => {
+              const v = g.lead;
+              const canEditGroup = isOffice && g.members.some((m) => m.status === 'scheduled');
+              const editRow = g.members.find((m) => m.status === 'scheduled') || v;
+              return (
+                <div key={g.key} className="visit-row">
+                  <div className="visit-main">
+                    <div className="title">
+                      {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
+                      {g.solo && <span className="badge off">{VISIT_STATUS[v.status]}</span>}
+                      {g.members.some((m) => flagged.has(m.id) && m.status !== 'cancelled') && <> <span className="badge warn">Double-booked</span></>}
                     </div>
-                  </>
-                ) : (
-                  <>
-                    {['new', 'inspected', 'proposal_delivered'].includes(job.stage) && (
-                      <button className="btn btn-sm" onClick={() => { setClosingLost(true); setLossReasonText(''); }}>Close Lost</button>
+                    {g.solo
+                      ? <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
+                      : g.members.map((m) => (
+                        <div key={m.id} className="visit-member">
+                          <span>{name(m.tech_id)}{m.minutes_out ? ` · ${m.minutes_out} min out` : ''}</span>
+                          <span className="badge off">{VISIT_STATUS[m.status]}</span>
+                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} restoration={restoration} />}
+                        </div>
+                      ))}
+                    {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
+                  </div>
+                  <div className="visit-buttons">
+                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} restoration={restoration} />}
+                    {canEditGroup && (
+                      <>
+                        <button className="secondary small" onClick={() => setVisitEdit(editRow)}>Reschedule</button>
+                        <button className="linklike danger-link" onClick={() => cancelVisit(editRow)}>Cancel</button>
+                      </>
                     )}
-                    {job.stage === 'lost' && (
-                      <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-            <div className="card">
-              <h3>Danger Zone</h3>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-                Permanently deletes this job and everything attached to it. This cannot be undone.
-              </div>
-              <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
-            </div>
-            </div>
-          </>
-        )}
+                  </div>
+                </div>
+              );
+            })}
+            {visitsShown.length === 0 && <p className="muted">No visits scheduled.</p>}
+          </div>
 
-        {/* ------------------- OVERVIEW: CUSTOMER, FINANCIALS ---------------- */}
-        {tab === 'Overview' && section === 'customer' && (
-          <>
-            {/* Details and Portal & Notifications are two views of the same customer. */}
-            <div className="tab-sections" style={{ margin: '0 0 14px' }}>
-              <div className="tab-sections-pills">
-                <button className={`tab-section-btn ${customerView === 'details' ? 'active' : ''}`} onClick={() => goToCustomerView('details')}>Customer Details</button>
-                <button className={`tab-section-btn ${customerView === 'portal' ? 'active' : ''}`} onClick={() => goToCustomerView('portal')}>Portal &amp; Notifications</button>
-              </div>
+          {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
+          {isOffice && ['completed', 'closed'].includes(job.status) && <StreetOffersCard jobId={id} token={token} />}
+          {staff.role === 'owner' && <DeleteJobCard jobId={id} job={job} token={token} />}
+        </div>
+      )}
+
+      {tab === 'details' && (
+        <>
+      {isOffice ? (
+        <form className="card" onSubmit={jobSave.track(saveJob)}>
+          <h2>Job details</h2>
+          <div className="grid2">
+            <div className="field"><label>Status</label>
+              <select value={form.status} onChange={set('status')}>
+                {Object.entries(JOB_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
             </div>
-            {customerView === 'portal' ? (
-              <>
-                <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
-                <NotificationSettingsCard job={job} onSave={saveJob} />
-              </>
-            ) : (
-              <CustomerInfoCard job={job} onSave={saveJob} />
-            )}
-          </>
-        )}
+            <div className="field"><label>Service</label>
+              <select value={form.service} onChange={set('service')}>
+                <option value="">Not set (shows every tool)</option>
+                {Object.entries(SERVICES).map(([k, v]) => <option key={k} value={k}>{v} · {SERVICE_HINTS[k]}</option>)}
+              </select>
+              <div className="note">Decides which tabs and tools this job shows. Anything already saved on the job stays saved if you change it.</div>
+            </div>
+            <div className="field"><label>PO number</label><input value={form.po_number} onChange={set('po_number')} /></div>
+            <div className="field"><label>Billing contact</label>
+              <select value={form.billing_contact_id} onChange={set('billing_contact_id')}>
+                <option value="">Customer ({job.customer.display_name})</option>
+                {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` (${c.role})` : ''}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="field"><label>Loss summary for the tech</label><input value={form.loss_summary} onChange={set('loss_summary')} /></div>
+          <div className="field"><label>Job warning (banner)</label><input value={form.warning} onChange={set('warning')} /></div>
+          <div className="field"><label>Customer-facing notes</label><textarea value={form.customer_notes} onChange={set('customer_notes')} /><div className="note">May appear on estimates and invoices.</div></div>
+          <div className="field"><label>Internal notes</label><textarea value={form.internal_notes} onChange={set('internal_notes')} /><div className="note">Never shown to the customer. For dated notes with photos, use the Updates tab.</div></div>
+          <SaveButton save={jobSave} idle="Save job" className="primary" />
+        </form>
+      ) : (
+        <div className="card">
+          <h2>Notes</h2>
+          {job.po_number && <p>PO: {job.po_number}</p>}
+          {job.loss_summary && <p><strong>Loss summary:</strong> {job.loss_summary}</p>}
+          <p><strong>Customer notes:</strong> {job.customer_notes || 'None'}</p>
+          <p><strong>Internal notes:</strong> {job.internal_notes || 'None'}</p>
+        </div>
+      )}
+        </>
+      )}
 
-        {tab === 'Overview' && section === 'financials' && (
-          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
-        )}
+      {tab === 'photos' && (
+        <PhotosTab
+          photos={photos}
+          isOffice={isOffice}
+          uploader={uploader}
+          onOpen={openViewer}
+          jobId={id}
+          rooms={rooms}
+          authorName={authorName}
+          staffId={staff.id}
+          updates={updates}
+          onTakePhoto={() => openCamera()}
+          onChanged={reloadPhotos}
+          logEvent={logEvent}
+        />
+      )}
 
-        {/* ------------------- STAGE OVERVIEW PAGES -------------------------- */}
-        {['Sell', 'Plan', 'Build', 'Closeout'].includes(tab) && section === 'overview' && (
-          <JobStageOverview
-            stage={tab}
-            job={job}
+      {tab === 'sketch' && (
+        <>
+          <UploadStatus uploader={uploader} />
+          <SketchTab
             jobId={id}
-            currentStageTab={currentStageTab}
-            updates={updates}
-            changeOrders={changeOrders}
-            afterOpportunity={afterOpportunity}
-            inFieldPhase={inFieldPhase}
-            isDone={isDone}
-            onGo={goDest}
-            onCreate={goCreate}
+            sketches={sketches}
+            photos={photos}
+            isOffice={isOffice}
+            staff={staff}
+            staffList={staffList}
+            logEvent={logEvent}
+            onReload={reloadSketches}
+            onAddRoomPhoto={addRoomPhoto}
+            onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
+            startId={sketchId}
+            onActive={setSketchId}
+            service={service}
+            onOpenMoisture={hasFeature(service, 'moveToMoisture') ? () => openTab('moisture') : undefined}
+          />
+        </>
+      )}
+
+      {tab === 'moisture' && (
+        <>
+        <UploadStatus uploader={uploader} />
+        <MoistureTab
+          sketches={sketches}
+          startId={sketchId}
+          onActive={setSketchId}
+          staff={staff}
+          staffList={staffList}
+          onOpenSketch={() => openTab('sketch')}
+          jobId={id}
+          isOffice={isOffice}
+          jobStandards={job.dry_standards}
+          onJobStandards={(std) => setJob((j) => (j ? { ...j, dry_standards: std } : j))}
+          jobInfo={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
+          photos={photos}
+          onAddPhoto={addRoomPhoto}
+          onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
+          command={moistCmd}
+          onCommandDone={() => setMoistCmd(null)}
+          equipGate={equipGate}
+          onEquipBlocked={(g) => openDayOne(g.step, g.reason)}
+        />
+        </>
+      )}
+
+      {tab === 'inspection' && (
+        <InspectionTab customerName={contactName || job.customer.display_name} jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} launch={inspLaunch} />
+      )}
+
+      {tab === 'evalsheet' && (
+        <EvalSheetTab jobId={id} job={job} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} />
+      )}
+
+      {tab === 'updates' && (
+        <UpdatesTab
+          service={service}
+          jobId={id}
+          updates={updates}
+          photos={photos}
+          isOffice={isOffice}
+          staff={staff}
+          token={token}
+          authorName={authorName}
+          logEvent={logEvent}
+          onReload={reloadUpdates}
+          uploader={uploader}
+          onOpenPhotos={openViewer}
+          recipients={updateRecipients(
+            { name: job.customer.display_name, phone: job.customer.phone, email: job.customer.email },
+            contacts.filter((c) => jobContactIds.includes(c.id)),
+          )}
+          baseUrl={typeof window === 'undefined' ? '' : window.location.origin}
+          command={updCmd}
+          onCommandDone={() => setUpdCmd(null)}
+        />
+      )}
+
+      {tab === 'thread' && <ThreadPanel kind="job" refId={id} staff={staff} fill />}
+
+      {tab === 'reports' && (
+        <ReportsTab
+          jobId={id}
+          service={service}
+          photos={photos}
+          rooms={rooms}
+          sketches={sketches}
+          isOffice={isOffice}
+          isOwner={staff.role === 'owner'}
+          jobStandards={job.dry_standards}
+          info={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
+        />
+      )}
+
+      {tab === 'estimate' && (
+        <>
+      <EstimateCard
+        service={service}
+        scope={{ jobId: id }}
+        open={!['closed', 'cancelled'].includes(job.status)}
+        staff={staff}
+        token={token}
+        contact={{ name: job.customer.display_name, phone: job.customer.phone, email: job.customer.email }}
+        onChanged={loadEvents}
+      />
+        </>
+      )}
+
+      {tab === 'invoice' && (
+        <InvoiceTab jobId={id} job={job} photos={photos} staff={staff} token={token} isOffice={isOffice} onChanged={loadEvents} />
+      )}
+
+      {tab === 'costs' && staff.role === 'owner' && (
+        <CostsTab jobId={id} sketches={sketches} staffList={staffList} />
+      )}
+
+      {tab === 'history' && (
+        <div className="card">
+          <h2>History</h2>
+          {events.map((e) => (
+            <div key={e.id} className="list-item">
+              <div className="title">{eventLabel(e)}</div>
+              <div className="meta">{fmtDateTime(e.at)} · {actorName(e, 'system')}</div>
+            </div>
+          ))}
+          {events.length === 0 && <p className="muted">No history yet.</p>}
+        </div>
+      )}
+
+      <PopupModal open={isOffice && !!visitEdit} onClose={() => setVisitEdit(null)} title={visitEdit?.id ? 'Reschedule visit' : 'Add visit'} wide closeOnOverlay={false}>
+        {visitEdit && (
+          <VisitForm
+            jobId={id}
+            visit={visitEdit.id ? visitEdit : null}
+            visits={visits}
+            service={service}
+            staffList={staffList}
+            staff={staff}
+            onDone={() => { setVisitEdit(null); load(); }}
+            onCancel={() => setVisitEdit(null)}
+            logEvent={logEvent}
           />
         )}
+      </PopupModal>
 
-        {/* ------------------------------ SELL ------------------------------ */}
-        {tab === 'Sell' && section === 'scope' && (
-          <>
-            <ScopeCard job={job} jobId={id} onSave={saveJob} />
-            <TermsCard job={job} onSave={saveJob} />
-          </>
-        )}
+      {!qaOpen && !qaScreen && <JobFab items={fabItems} />}
 
-        {tab === 'Sell' && section === 'cost' && (
-          <EstimateTab job={job} jobId={id} section="cost" />
-        )}
+      <input
+        ref={roomInput}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const files = [...e.target.files];
+          e.target.value = '';
+          const t = roomTarget.current;
+          if (files.length && t) uploader.upload(files, { kind: 'during', sketchId: t.sketchId, roomKey: t.roomKey });
+        }}
+      />
 
-        {tab === 'Sell' && section === 'pricing' && (
-          <EstimateTab job={job} jobId={id} section="pricing">
-            <PriceCard job={job} onSave={saveJob} />
-          </EstimateTab>
-        )}
+      <JobCamera camera={camera} onClose={() => setCamera(null)} uploader={uploader} jobId={id} rooms={rooms} />
 
-        {tab === 'Sketch' && (
-          <PlansPanel jobId={id} embedded onDone={loadJob} />
-        )}
-
-        {/* ------------------------------ PLAN ------------------------------ */}
-        {tab === 'Plan' && section === 'budget' && (
-          <BudgetCard jobId={id} job={job} />
-        )}
-
-        {tab === 'Plan' && (section === 'approved' || section === 'all') && (
-          afterOpportunity ? (
-            <JobMaterialSelectionsPanel jobId={id} job={job} section={section} />
-          ) : (
-            <div className="card">
-              <h3>Material Selections</h3>
-              <div className="empty-state">
-                Material selections become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
-            </div>
-          )
-        )}
-
-        {tab === 'Plan' && section === 'work_orders' && (
-          <WorkOrdersCard autoOpen={autoOpen === 'workOrders'} jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
-        )}
-
-        {/* ------------------------------ BUILD ----------------------------- */}
-        {tab === 'Build' && section === 'updates' && (
-          afterOpportunity ? (
-            <UpdatesCard autoOpen={autoOpen === 'updates'} jobId={id} updates={updates} onChanged={loadUpdates} session={session} />
-          ) : (
-            <div className="card">
-              <h3>Project Updates</h3>
-              <div className="empty-state">
-                Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
-            </div>
-          )
-        )}
-
-        {tab === 'Build' && section === 'internal' && (
-          <InternalUpdatesPanel autoOpen={autoOpen === 'internalUpdates'} jobId={id} session={session} />
-        )}
-
-        {tab === 'Build' && section === 'change_orders' && (
-          <ChangeOrdersCard autoOpen={autoOpen === 'changeOrders'} jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
-        )}
-
-        {tab === 'Build' && section === 'job_costs' && (
-          <ReceiptsCard jobId={id} autoOpen={autoOpen === 'jobCosts'} />
-        )}
-
-        {tab === 'Build' && section === 'draws' && (
-          <>
-            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
-              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
-            )}
-            <DrawsCard jobId={id} autoOpen={autoOpen === 'draws'} />
-          </>
-        )}
-
-        {tab === 'Build' && section === 'pay_apps' && (
-          <PayAppsCard jobId={id} job={job} changeOrders={changeOrders} />
-        )}
-
-        {tab === 'Build' && section === 'waivers' && (
-          <LienWaiversCard autoOpen={autoOpen === 'waivers'} jobId={id} job={job} />
-        )}
-
-        {/* ----------------------------- CLOSEOUT --------------------------- */}
-        {tab === 'Closeout' && section === 'punch' && (
-          inFieldPhase ? (
-            <div className="card">
-              <h3>Punch List</h3>
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
-                Final fixes before you close the job. Assign an item to a sub and they update it from their portal; tick &ldquo;show to customer&rdquo; if they should follow along. Open items hold back the review request.
-              </div>
-              <PunchItemsPanel jobId={id} kind="punch" autoOpen={autoOpen === 'punchList'} />
-            </div>
-          ) : (
-            <div className="card">
-              <h3>Punch List</h3>
-              <div className="empty-state">
-                The punch list opens once work is underway (Active or later). This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
-            </div>
-          )
-        )}
-
-        {tab === 'Closeout' && section === 'warranty' && (
-          inFieldPhase ? (
-            <WarrantyCard jobId={id} job={job} />
-          ) : (
-            <div className="card">
-              <h3>Warranty</h3>
-              <div className="empty-state">
-                The warranty period starts when the job is marked Completed. This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
-            </div>
-          )
-        )}
-
-        {tab === 'Closeout' && section === 'invoice' && (
-          <>
-            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
-              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
-            )}
-            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
-              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-            ) : (
-              <div className="card">
-                <h3>Final Invoice</h3>
-                <div className="empty-state">
-                  The final invoice becomes available once this job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
-                </div>
-                <div className="section-actions">
-                  <button className="btn btn-sm" onClick={() => goDest('draws')}>View progress draws →</button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'Closeout' && section === 'review' && (
-          isDone ? (
-            <ReviewRequestCard job={job} onSave={saveJob} />
-          ) : (
-            <div className="card">
-              <h3>Review Request</h3>
-              <div className="empty-state">
-                The review request is available once the job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
-            </div>
-          )
-        )}
-
-        {/* ----------------------- AVAILABLE AT EVERY STAGE ----------------- */}
-        {tab === 'Schedule' && (
-          <>
-            <ScheduleCard job={job} jobId={id} onAddVisit={() => setScheduleItemOpen(true)} />
-            <ScheduleRiskBadge jobId={id} />
-            <ScheduleDelayCard jobId={id} job={job} />
-            <BlackoutDatesCard jobId={id} />
-          </>
-        )}
-
-        {tab === 'Photos' && (
-          <PhotoGallery jobId={id} title="Job Photos" />
-        )}
-
-        {tab === 'Documents' && (
-          <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
-        )}
-
-        {tab === 'Messages' && section === 'messages' && (
-          <JobMessagesCard jobId={id} job={job} />
-        )}
-
-        {tab === 'Messages' && section === 'email' && (
-          <EmailThreadCard jobId={id} job={job} />
-        )}
-      </div>
-    </AppShell>
+      {viewer && viewerList.length > 0 && (
+        <PhotoViewer
+          list={viewerList}
+          startId={viewer.startId}
+          jobId={id}
+          fileBase={`job-${job.job_number}`}
+          authorName={authorName}
+          logEvent={logEvent}
+          onChanged={reloadPhotos}
+          rooms={rooms}
+          allPhotos={photos}
+          token={token}
+          isOffice={isOffice}
+          onTakeAfter={(p) => { setViewer(null); openCamera({ pairOf: p.id, ghostPath: p.thumb_path || p.storage_path, room: p.sketch_id && p.room_key ? `${p.sketch_id}|${p.room_key}` : '' }); }}
+          onAppend={(newId, afterId) => setViewer((v) => {
+            if (!v) return v;
+            const at = v.ids.indexOf(afterId);
+            const ids = [...v.ids];
+            ids.splice(at < 0 ? ids.length : at + 1, 0, newId);
+            return { ...v, ids };
+          })}
+          onClose={() => setViewer(null)}
+        />
+      )}
+    </>
   );
+}
+
+export default function JobPage() {
+  const { id } = useParams();
+  return <AuthGate>{({ staff, token }) => <JobInner id={id} staff={staff} token={token} />}</AuthGate>;
 }
