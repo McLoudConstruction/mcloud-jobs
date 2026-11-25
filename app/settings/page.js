@@ -7,6 +7,7 @@ import { useSettings } from '../../lib/useSettings';
 import AppShell from '../../components/AppShell';
 import StaffUsersPanel from '../../components/StaffUsersPanel';
 import BotKeysPanel from '../../components/BotKeysPanel';
+import ConsultAvailabilityPanel from '../../components/ConsultAvailabilityPanel';
 import AccountPanel from '../../components/AccountPanel';
 import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
 import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
@@ -19,7 +20,7 @@ import { deriveThemeAccents } from '../../lib/deriveAccent';
 import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
 import { settingsHref } from '../../lib/links';
 
-const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Email Templates', 'Communications Log', 'Users', 'Bots', 'Account'];
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Consultations', 'Email Templates', 'Communications Log', 'Users', 'Bots', 'Account'];
 
 // Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
 // provider's login screen. Google & Microsoft power two-way calendar
@@ -613,6 +614,7 @@ function SettingsPageInner() {
         {tab === 'Users' && <StaffUsersPanel session={session} />}
 
         {tab === 'Bots' && <BotKeysPanel />}
+        {tab === 'Consultations' && <ConsultAvailabilityPanel />}
       </div>
     </AppShell>
   );
