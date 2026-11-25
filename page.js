@@ -1,669 +1,644 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { supabase } from '../../../lib/supabaseClient';
-import { useRequireAuth } from '../../../lib/useAuth';
-import AppShell from '../../../components/AppShell';
-import Breadcrumb from '../../../components/Breadcrumb';
-import PhotoGallery from '../../../components/PhotoGallery';
-import InternalUpdatesPanel from '../../../components/InternalUpdatesPanel';
-import JobCostSummary from '../../../components/JobCostSummary';
-import DrawsCard from '../../../components/DrawsCard';
-import ReceiptsCard from '../../../components/ReceiptsCard';
-import WorkOrdersCard from '../../../components/WorkOrdersCard';
-import TradeBreakdownCard from '../../../components/TradeBreakdownCard';
-import PortalAccessCard from '../../../components/PortalAccessCard';
-import EstimateTab from '../../../components/EstimateTab';
-import { assignNextJobNumber } from '../../../lib/assignJobNumber';
-import JobMaterialSelectionsPanel from '../../../components/JobMaterialSelectionsPanel';
-import ProjectMilestonesCard from '../../../components/ProjectMilestonesCard';
-import { cacheJobPatch, getCachedJob } from '../../../lib/offlineDb';
-import MapLinkMenu from '../../../components/MapLinkMenu';
-import { STAGE_ORDER, STAGE_LABELS, phaseForStage, contractPathFor, formattedProjectNumber, isOpportunity } from '../../../lib/constants';
-import {
-  OverviewIcon, PersonIcon, CalculatorIcon, FinanceIcon,
-  PhotosIcon, MaterialSelectionsTabIcon, ProjectFeedIcon, InternalUpdatesIcon, MessagesIcon,
-} from '../../../components/icons';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '../../lib/supabaseClient';
+import { useRequireAuth } from '../../lib/useAuth';
+import { useSettings } from '../../lib/useSettings';
+import AppShell from '../../components/AppShell';
+import StaffUsersPanel from '../../components/StaffUsersPanel';
+import BotKeysPanel from '../../components/BotKeysPanel';
+import ConsultAvailabilityPanel from '../../components/ConsultAvailabilityPanel';
+import AccountPanel from '../../components/AccountPanel';
+import CommunicationsLogPanel from '../../components/CommunicationsLogPanel';
+import BackfillPortalInvitesPanel from '../../components/BackfillPortalInvitesPanel';
+import ColorField from '../../components/ColorField';
+import FeatureSettingsPanels from '../../components/FeatureSettingsPanels';
+import HomeAddressCard from '../../components/HomeAddressCard';
+import EmailLoggingCard from '../../components/EmailLoggingCard';
+import EmailTemplatesCard from '../../components/EmailTemplatesCard';
+import { deriveThemeAccents } from '../../lib/deriveAccent';
+import { DASHBOARD_WIDGET_LABELS, DASHBOARD_ORDER } from '../../lib/dashboardWidgets';
+import { settingsHref } from '../../lib/links';
 
-// Sub-nav restructure Part 2 (Sep 2026): this file used to also define
-// the 12 card components below directly — now each lives in its own
-// file under components/, imported here like everything else. Same
-// behavior, same props, nothing moved data-wise; this just makes it
-// possible to open "the Scope tab" without wading through 1,500+
-// unrelated lines to find it.
-import JobMessagesCard from '../../../components/JobMessagesCard';
-import ReviewRequestCard from '../../../components/ReviewRequestCard';
-import IssuedDocumentsCard from '../../../components/IssuedDocumentsCard';
-import NotificationSettingsCard from '../../../components/NotificationSettingsCard';
-import CustomerInfoCard from '../../../components/CustomerInfoCard';
-import ProjectInfoCard from '../../../components/ProjectInfoCard';
-import ScopeCard from '../../../components/ScopeCard';
-import ScheduleCard from '../../../components/ScheduleCard';
-import PriceCard from '../../../components/PriceCard';
-import TermsCard from '../../../components/TermsCard';
-import ChangeOrdersCard from '../../../components/ChangeOrdersCard';
-import UpdatesCard from '../../../components/UpdatesCard';
-import InvoiceCard from '../../../components/InvoiceCard';
-import ReadyToInvoiceCard from '../../../components/ReadyToInvoiceCard';
-import BudgetCard from '../../../components/BudgetCard';
+const SETTINGS_TABS = ['Cosmetic', 'Dashboard', 'Automation', 'Integrations', 'Consultations', 'Email Templates', 'Communications Log', 'Users', 'Bots', 'Account'];
 
-// Sub-nav restructure (Aug 2026): the old flat 10-tab list mixed things
-// at very different altitudes (a customer contact form next to internal
-// job costing) and showed post-approval content (Financials) on records
-// that are still just Estimates. Tabs now group by what they're actually
-// for, and a tab can offer `sections` for content that's related but
-// distinct enough to want its own toggle rather than being smashed
-// together. `hideWhen(job)` lets a tab stay out of the way until it's
-// actually earned relevance for this job's stage.
-const TABS = [
-  { key: 'Overview', label: 'Overview', icon: OverviewIcon },
-  {
-    key: 'Customer', label: 'Customer', icon: PersonIcon,
-    sections: [
-      { key: 'details', label: 'Details' },
-      { key: 'portal', label: 'Portal & Notifications' },
-    ],
-  },
-  {
-    key: 'Estimate', label: 'Estimate', icon: CalculatorIcon,
-    sections: [
-      { key: 'scope', label: 'Scope' },
-      { key: 'schedule', label: 'Schedule' },
-      { key: 'pricing', label: 'Pricing' },
-    ],
-  },
-  {
-    key: 'Financials', label: 'Financials', icon: FinanceIcon,
-    // Change Orders, Work Orders, Invoicing, and Receipts live here as
-    // sections (Sep 2026, take 2) rather than their own top-level tabs.
-    // They used to be split out specifically to avoid scrolling through
-    // one long stacked page — that's still true here: each section swaps
-    // the whole view instead of stacking, so nothing's lost, but the top
-    // tab row isn't carrying five finance-related entries side by side.
-    hideWhen: (job) => isOpportunity(job),
-    sections: [
-      { key: 'overview', label: 'Overview' },
-      { key: 'budget', label: 'Budget' },
-      { key: 'change_orders', label: 'Change Orders' },
-      { key: 'work_orders', label: 'Work Orders' },
-      { key: 'invoicing', label: 'Invoicing' },
-      { key: 'receipts', label: 'Receipts' },
-    ],
-  },
-  { key: 'Photos', label: 'Photos', icon: PhotosIcon },
-  { key: 'Material Selections', label: 'Material Selections', icon: MaterialSelectionsTabIcon },
-  // Kept in TABS (so goToTab/#? URL params/the "land somewhere valid"
-  // safety effect all still work) but left out of the tab-button row
-  // below — each now has its own quick-access button up in the job
-  // header instead, so showing them again here was pure duplication.
-  { key: 'Project Updates', label: 'Project Updates', icon: ProjectFeedIcon, noTabButton: true },
-  { key: 'Messages', label: 'Messages', icon: MessagesIcon, noTabButton: true },
-  { key: 'Internal Updates', label: 'Internal Updates', icon: InternalUpdatesIcon },
+// Google/Microsoft/QuickBooks: real OAuth — "Connect" opens the
+// provider's login screen. Google & Microsoft power two-way calendar
+// sync; QuickBooks powers invoice sync.
+const OAUTH_INTEGRATIONS = [
+  { key: 'google', name: 'Google Workspace', description: 'Two-way calendar sync (job schedules push out, personal events show as busy time) plus job-tagged Gmail replies get filed onto the matching job automatically.' },
+  { key: 'microsoft', name: 'Microsoft Outlook', description: 'Two-way calendar sync (job schedules push out, personal events show as busy time) plus job-tagged Outlook replies get filed onto the matching job automatically.' },
+  { key: 'quickbooks', name: 'QuickBooks Online', description: 'Log in to your QBO account to sync invoices and payments to your books.' },
 ];
 
-export default function JobDetailPage() {
+// Resend/Weather: no login — just an API key pasted in below.
+const KEY_INTEGRATIONS = [
+  { key: 'resend', name: 'Resend (email)', description: 'Auto-send estimates, contracts, and updates by email through your Resend account. Falls back to your SMTP server if not set up.', fields: [] },
+  { key: 'weather', name: 'Weather', description: 'Powers the dashboard weather widgets and outdoor-phase forecast flagging, via OpenWeatherMap One Call 3.0. Needs a "One Call by Call" subscription active on your OpenWeatherMap account (free at normal volume, requires a card on file with them).', fields: [{ key: 'zip', label: 'Default zip code (used for the dashboard widgets)', placeholder: '64111' }] },
+  { key: 'google_maps', name: 'Google Maps (address autocomplete)', description: 'Powers "start typing a name and pick the real address" on the Properties form and Sales > Create Sales Route. Needs a Google Maps Platform API key with Maps JavaScript API + Places API enabled — see INTEGRATIONS_SETUP.md section 8 for setup and cost. Falls back to plain text address fields if not set up.', fields: [] },
+];
+
+const FONT_OPTIONS = [
+  { value: 'system', label: 'System sans-serif (default)' },
+  { value: 'serif', label: 'Serif' },
+  { value: 'mono', label: 'Monospace' },
+  { value: 'rounded', label: 'Rounded sans-serif' },
+];
+
+
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
+
+function SettingsPageInner() {
   const { session, loading } = useRequireAuth();
-  const { id } = useParams();
+  const { settings, refresh } = useSettings();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [job, setJob] = useState(null);
-  const [updates, setUpdates] = useState([]);
-  const [changeOrders, setChangeOrders] = useState([]);
+  const [form, setForm] = useState(settings);
+  const [tab, setTab] = useState('Cosmetic');
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
-  const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState('');
-  const [closingLost, setClosingLost] = useState(false);
-  const [lossReasonText, setLossReasonText] = useState('');
-  const [notFound, setNotFound] = useState(false);
-  const [offlineViewing, setOfflineViewing] = useState(null); // null | { cachedAt }
-  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    function goOnline() { setIsOnline(true); }
-    function goOffline() { setIsOnline(false); }
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-  const [tab, setTab] = useState('Overview');
-  const [section, setSection] = useState(null);
+  const [integrationStatus, setIntegrationStatus] = useState(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [connecting, setConnecting] = useState(null); // provider key currently redirecting
+  const [keyInputs, setKeyInputs] = useState({ resend: '', weather: '', google_maps: '' });
+  const [zipInput, setZipInput] = useState('');
+  const [savingCred, setSavingCred] = useState(null);
+  const [syncingNow, setSyncingNow] = useState(false);
 
-  // Central place to change tabs so section always lands somewhere valid:
-  // explicit section if given, else that tab's first section, else none.
-  const goToTab = useCallback((tabKey, sectionKey) => {
-    const target = TABS.find(t => t.key === tabKey);
-    if (!target) return;
-    setTab(tabKey);
-    setSection(sectionKey || target.sections?.[0]?.key || null);
-  }, []);
+  useEffect(() => { setForm(settings); }, [settings]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const requestedTab = params.get('tab');
-    const requestedSection = params.get('section');
-    if (requestedTab && TABS.some(t => t.key === requestedTab)) {
-      goToTab(requestedTab, requestedSection);
-    }
-  }, [goToTab]);
+  async function authHeader() {
+    const { data } = await supabase.auth.getSession();
+    return { Authorization: `Bearer ${data?.session?.access_token}` };
+  }
 
-  // A tab can disappear out from under the current selection — e.g. the
-  // job just got approved and Financials was hidden while it was still
-  // an opportunity. Land somewhere valid instead of a blank pane.
-  useEffect(() => {
-    if (!job) return;
-    const visible = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
-    const current = visible.find(t => t.key === tab);
-    if (!current) {
-      goToTab(visible[0]?.key || 'Overview');
-    } else if (current.sections && !current.sections.some(s => s.key === section)) {
-      setSection(current.sections[0].key);
-    }
-  }, [job, tab, section, goToTab]);
-
-  // Financial fields (contract_price, invoice_amount, invoice_status) live
-  // in job_financials, not on jobs itself — split out so RLS can hide them
-  // from field crew while everything else about the job stays visible.
-  // Merged back onto the same job object here so every existing read of
-  // job.contract_price etc. elsewhere in this file keeps working as-is.
-  const FINANCIAL_FIELDS = ['contract_price', 'invoice_amount', 'invoice_status'];
-
-  const loadJob = useCallback(async () => {
+  async function loadIntegrationStatus() {
+    setIntegrationsLoading(true);
     try {
-      const [{ data, error }, { data: financials }] = await Promise.all([
-        supabase.from('jobs').select('*').eq('id', id).single(),
-        supabase.from('job_financials').select('contract_price, invoice_amount, invoice_status').eq('job_id', id).maybeSingle(),
-      ]);
-      if (error || !data) throw error || new Error('Job not found');
-      const merged = { ...data, ...financials };
-      setJob(merged);
-      setOfflineViewing(null);
-      cacheJobPatch(id, { job: merged });
+      const res = await fetch('/api/integrations/status', { headers: await authHeader() });
+      const data = await res.json();
+      if (res.ok) setIntegrationStatus(data);
+      else setError(data.error || 'Failed to load integration status.');
     } catch (err) {
-      // Could be genuinely missing, or could just be offline — a fetch
-      // to Supabase failing outright (no response at all) looks
-      // different from Postgres cleanly saying "no rows," so only fall
-      // back to cache when it looks like a network failure, and only
-      // declare not-found when there's no cache to fall back to either.
-      const cached = await getCachedJob(id);
-      if (cached?.data?.job) {
-        setJob(cached.data.job);
-        setOfflineViewing({ cachedAt: cached.cachedAt });
-      } else {
-        setNotFound(true);
-      }
+      setError(err.message);
+    } finally {
+      setIntegrationsLoading(false);
     }
-  }, [id]);
+  }
 
-  const loadUpdates = useCallback(async () => {
-    const { data } = await supabase.from('job_updates').select('*').eq('job_id', id).eq('is_internal', false).order('update_date', { ascending: false });
-    if (data) setUpdates(data);
-  }, [id]);
-
-  const loadChangeOrders = useCallback(async () => {
-    const { data } = await supabase.from('change_orders').select('*').eq('job_id', id).order('co_date', { ascending: false });
-    if (data) setChangeOrders(data);
-  }, [id]);
-
+  // Land here from an OAuth callback redirect (?connected=google or
+  // ?error=google:...) — surface it once, then clean the URL.
   useEffect(() => {
-    if (!session) return;
-    loadJob();
-    loadUpdates();
-    loadChangeOrders();
+    if (tab !== 'Integrations') return;
+    loadIntegrationStatus();
+    const connected = searchParams.get('connected');
+    const err = searchParams.get('error');
+    if (connected) showFlash(`Connected to ${connected}.`);
+    if (err) setError(err);
+    if (connected || err) router.replace(settingsHref('Integrations'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
-    const channel = supabase
-      .channel(`job-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${id}` }, loadJob)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_financials', filter: `job_id=eq.${id}` }, loadJob)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_updates', filter: `job_id=eq.${id}` }, loadUpdates)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'change_orders', filter: `job_id=eq.${id}` }, loadChangeOrders)
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [session, id, loadJob, loadUpdates, loadChangeOrders]);
-
-  function flashSaved() {
-    setFlash('Saved');
-    setTimeout(() => setFlash(''), 1500);
-  }
-
-  // Recovery path for a job that's already past Approved but somehow
-  // never got a job number — shown as a fix-it banner rather than
-  // something that has to be chased down through the database directly.
-  async function fixMissingJobNumber() {
+  async function connectProvider(provider) {
+    setConnecting(provider);
+    setError('');
     try {
-      // assignNextJobNumber writes the number to this row itself (and
-      // retries if it collides with a number claimed a moment earlier by
-      // someone else) — nothing further to save here.
-      await assignNextJobNumber(id);
-      flashSaved();
+      const res = await fetch(`/api/integrations/${provider}/connect`, { method: 'POST', headers: await authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start connection.');
+      window.location.href = data.url; // full-page redirect to the provider's login
     } catch (err) {
-      setFlash(`Could not assign a job number: ${err.message}`);
-      setTimeout(() => setFlash(''), 8000);
+      setError(err.message);
+      setConnecting(null);
     }
   }
 
-  async function saveJob(patch) {
-    if (!isOnline) {
-      // Deliberately not attempting the network call at all — this isn't
-      // queued anywhere the way Field Log entries are, so a failed save
-      // here would otherwise look identical to a successful one (the
-      // form still shows what you typed either way). Blocking outright
-      // and saying so clearly beats a save that silently doesn't happen.
-      setFlash("You're offline — this can't be saved right now. Your edit is still showing here, but it has NOT been saved. Reconnect and save again.");
-      setTimeout(() => setFlash(''), 10000);
-      return false;
-    }
-
-    const jobPatch = {};
-    const financialsPatch = {};
-    for (const [key, value] of Object.entries(patch)) {
-      (FINANCIAL_FIELDS.includes(key) ? financialsPatch : jobPatch)[key] = value;
-    }
-
-    if (Object.keys(jobPatch).length > 0) {
-      const { error } = await supabase.from('jobs').update(jobPatch).eq('id', id);
-      if (error) {
-        setFlash(`Save failed: ${error.message}`);
-        setTimeout(() => setFlash(''), 6000);
-        return false;
-      }
-    }
-    if (Object.keys(financialsPatch).length > 0) {
-      const { error } = await supabase.from('job_financials').update(financialsPatch).eq('job_id', id);
-      if (error) {
-        setFlash(`Save failed: ${error.message}`);
-        setTimeout(() => setFlash(''), 6000);
-        return false;
-      }
-    }
-    flashSaved();
-    // Merge locally rather than depending solely on the jobs realtime
-    // channel — this is the single most-used save path in the app, so
-    // it's worth not leaving it dependent on realtime at all.
-    setJob(prev => ({ ...prev, ...patch }));
-    return true;
-  }
-
-  async function advanceStage() {
-    const idx = STAGE_ORDER.indexOf(job.stage);
-    if (idx === -1 || idx >= STAGE_ORDER.length - 1) return;
-    const next = STAGE_ORDER[idx + 1];
-    if (!confirm(`Move this job from ${STAGE_LABELS[job.stage]} to ${STAGE_LABELS[next]}?`)) return;
-
-    const patch = { stage: next, ...(next === 'approved' && !job.approved_at ? { approved_at: new Date().toISOString() } : {}) };
-
-    if (next === 'approved' && !job.job_number) {
-      try {
-        // Writes job_number to this row directly (with its own
-        // collision-retry) before we touch stage/approved_at, so we never
-        // move a job to Approved without a number actually attached.
-        await assignNextJobNumber(id);
-      } catch (err) {
-        setFlash(`Could not assign a job number: ${err.message}. Stage was not changed — try again.`);
-        setTimeout(() => setFlash(''), 8000);
-        return; // don't advance the stage without a job number — that's the exact stuck state we're trying to prevent
-      }
-    }
-    await saveJob(patch);
-
-    if (next === 'approved' && job.contract_price) {
-      const { data: existing } = await supabase.from('invoices').select('id').eq('job_id', id).limit(1);
-      if (!existing || existing.length === 0) {
-        const half = Math.round((parseFloat(job.contract_price) / 2) * 100) / 100;
-        await supabase.from('invoices').insert([
-          { job_id: id, description: 'Draw 1 — Deposit', amount: half, status: 'not_sent' },
-          { job_id: id, description: 'Draw 2 — Final Payment', amount: parseFloat(job.contract_price) - half, status: 'not_sent' },
-        ]);
-      }
+  async function disconnectProvider(provider) {
+    if (!confirm(`Disconnect ${provider}?`)) return;
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/disconnect', { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to disconnect.');
+      showFlash(`${provider} disconnected`);
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
     }
   }
 
-  async function invitePortal() {
-    const recipientEmail = job.customer_email || job.billing_email || '';
-    if (!recipientEmail) { setInviteResult('Add a contact email before inviting the customer.'); return; }
-    setInviting(true);
-    setInviteResult('');
-    // Sends via the same working SMTP as every other email in the app —
-    // not supabase.auth.signInWithOtp(), whose built-in email service is
-    // separate infrastructure, heavily rate-limited, and can silently drop
-    // sends without ever reporting an error. See migration/route notes.
-    const { data: { session: adminSession } } = await supabase.auth.getSession();
-    const res = await fetch('/api/portal/send-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken: adminSession?.access_token,
-        email: recipientEmail,
-        customerName: job.customer_name,
-        // Sends new customers into /customerportal (where PortalFeed, the
-        // no-active-project screen, etc. actually live), not the older
-        // standalone /portal/dashboard implementation — see README for the
-        // Closed Lost portal-access feature for why this matters.
-        redirectTo: `${window.location.origin}/customerportal/projects`,
-      }),
+  async function saveCredential(provider) {
+    const apiKey = keyInputs[provider];
+    if (!apiKey || !apiKey.trim()) { setError('Enter an API key first.'); return; }
+    setSavingCred(provider);
+    setError('');
+    try {
+      const config = provider === 'weather' && zipInput ? { zip: zipInput } : {};
+      const res = await fetch('/api/integrations/credentials', {
+        method: 'POST',
+        headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey, config }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save key.');
+      showFlash(`${provider} key saved`);
+      setKeyInputs(prev => ({ ...prev, [provider]: '' }));
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingCred(null);
+    }
+  }
+
+  async function removeCredential(provider) {
+    if (!confirm(`Remove the saved ${provider} key?`)) return;
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/credentials', { method: 'DELETE', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove key.');
+      showFlash(`${provider} key removed`);
+      loadIntegrationStatus();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function syncCalendarNow() {
+    setSyncingNow(true);
+    setError('');
+    try {
+      const res = await fetch('/api/integrations/calendar-sync-now', { method: 'POST', headers: await authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      const total = (data.results || []).reduce((sum, r) => sum + (r.pushed || 0) + (r.pulled || 0), 0);
+      showFlash(`Synced — ${total} events updated`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSyncingNow(false);
+    }
+  }
+
+  function update(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
+
+  function toggleWidget(key) {
+    setForm(prev => {
+      const widgets = { ...(prev.dashboard_widgets || {}) };
+      const currentlyOn = widgets[key] !== false;
+      widgets[key] = !currentlyOn;
+      return { ...prev, dashboard_widgets: widgets };
     });
-    const data = await res.json();
-    setInviting(false);
-    if (!res.ok) {
-      setInviteResult(data.error || 'Failed to send invite.');
-    } else {
-      setInviteResult(`Invite sent to ${recipientEmail}.`);
-      await saveJob({ portal_invited_at: new Date().toISOString() });
+  }
+
+  function showFlash(msg) {
+    setFlash(msg);
+    setTimeout(() => setFlash(''), 2000);
+  }
+
+  async function handleLogoUpload(e, field = 'logo_url') {
+    const file = e.target.files[0];
+    if (!file) return;
+    setError('');
+    setUploading(true);
+
+    try {
+      const ext = file.name.split('.').pop();
+      const prefix = field === 'watermark_logo_url' ? 'watermark' : 'logo';
+      const path = `${prefix}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from('branding').upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('branding').getPublicUrl(path);
+      const { error: updateError } = await supabase.from('app_settings').update({ [field]: urlData.publicUrl }).eq('id', 1);
+      if (updateError) throw updateError;
+
+      showFlash(field === 'watermark_logo_url' ? 'Watermark logo updated' : 'Logo updated');
+      refresh();
+    } catch (err) {
+      setError(err.message || 'Upload failed. Make sure migration 003 (storage bucket) has been run in Supabase.');
+    } finally {
+      setUploading(false);
     }
   }
 
-  async function deleteJob() {
-    if (!confirm('Permanently delete this job? This cannot be undone.')) return;
-    const { error } = await supabase.from('jobs').delete().eq('id', id);
-    if (error) {
-      setFlash(`Delete failed: ${error.message}`);
-      setTimeout(() => setFlash(''), 8000);
-      return;
+  async function saveAll() {
+    setSaving(true);
+    try {
+      const { error: updateError } = await supabase
+        .from('app_settings')
+        .update({
+          brand_color: form.brand_color,
+          header_text_color: form.header_text_color,
+          font_choice: form.font_choice,
+          logo_size_desktop: form.logo_size_desktop,
+          logo_size_mobile: form.logo_size_mobile,
+          signout_bg: form.signout_bg,
+          signout_text: form.signout_text,
+          signout_hover_bg: form.signout_hover_bg,
+          dashboard_widgets: form.dashboard_widgets,
+          proposal_followup_count: form.proposal_followup_count,
+          proposal_followup_interval_days: form.proposal_followup_interval_days,
+          notification_email: form.notification_email || null,
+          timezone: form.timezone || 'America/Chicago',
+          photo_file_prefix: (form.photo_file_prefix || '').trim() || null,
+        })
+        .eq('id', 1);
+      if (updateError) throw updateError;
+      showFlash('Settings saved');
+      refresh();
+    } catch (err) {
+      setError(err.message || 'Save failed. Make sure migration 004 has been run in Supabase.');
+    } finally {
+      setSaving(false);
     }
-    router.push('/jobs');
   }
 
-  // Closing an opportunity as lost before it's ever Approved — a real
-  // terminal stage (with its own DB constraint entry, migration 069)
-  // rather than just hiding the record, so it stays visible/filterable
-  // in the Job Tracker instead of disappearing. Mirrors the same
-  // reason-prompt pattern already used for leads in the Sales pipeline.
-  async function confirmCloseLost() {
-    await saveJob({
-      stage: 'lost',
-      stage_before_lost: job.stage,
-      lost_at: new Date().toISOString(),
-      loss_reason: lossReasonText.trim() || null,
-    });
-    setClosingLost(false);
-    setLossReasonText('');
-  }
-
-  async function reopenLost() {
-    const restoreTo = job.stage_before_lost && STAGE_ORDER.includes(job.stage_before_lost) ? job.stage_before_lost : 'new';
-    if (!confirm(`Reopen this opportunity? It will move back to ${STAGE_LABELS[restoreTo]}.`)) return;
-    await saveJob({ stage: restoreTo, stage_before_lost: null });
+  function resetToDefault() {
+    setForm(prev => ({
+      ...prev,
+      brand_color: '#9b773d',
+      header_text_color: null,
+      font_choice: 'system',
+      logo_size_desktop: 180,
+      logo_size_mobile: 150,
+      signout_bg: 'transparent',
+      signout_text: '#49402a',
+      signout_hover_bg: '#302a1a',
+    }));
   }
 
   if (loading || !session) return null;
-  if (notFound) return <div className="container">Job not found. <Link href="/jobs">Back to Job Tracker</Link></div>;
-  if (!job) return null;
-
-  const visibleTabs = TABS.filter(t => !t.hideWhen || !t.hideWhen(job));
-  const activeTabDef = visibleTabs.find(t => t.key === tab) || visibleTabs[0];
 
   return (
     <AppShell>
       <div className="container">
-        <Breadcrumb href="/jobs" label="Back to Job Tracker" />
-
-        {offlineViewing && (
-          <div className="sync-badge sync-badge-offline">
-            Offline — showing cached data from{' '}
-            {new Date(offlineViewing.cachedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
-            Editing is unavailable until you're back online.
-          </div>
-        )}
-
-        {!offlineViewing && !isOnline && (
-          <div className="sync-badge sync-badge-offline">
-            You're currently offline. Everything on this page is still viewable, but edits won't be saved until you reconnect.
-          </div>
-        )}
-
-        {!isOpportunity(job) && !job.job_number && (
-          <div className="card" style={{ borderColor: '#c0524f', marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ fontSize: 13 }}>
-                <b style={{ color: '#c0524f' }}>This job is past Approved but never got a real Job Number.</b>
-                <div style={{ color: 'var(--ink-soft)', fontSize: 12, marginTop: 2 }}>That shouldn't happen — click to assign one now.</div>
-              </div>
-              <button className="btn btn-primary btn-sm" onClick={fixMissingJobNumber}>Assign Job Number Now</button>
-            </div>
-          </div>
-        )}
-
         <div className="top-actions">
-          <div>
-            <h2 style={{ margin: '0 0 4px', color: 'var(--heading)' }}>{formattedProjectNumber(job)} — {job.customer_name || 'Unnamed customer'}</h2>
-            {job.project_address && (
-              <MapLinkMenu
-                address={job.project_address}
-                style={{ fontSize: 12.5, color: 'var(--ink-soft)', textDecoration: 'none', display: 'inline-block', marginBottom: 4 }}
-                onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
-                onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
-              >
-                📍 {job.project_address}
-              </MapLinkMenu>
-            )}
-            <div>
-              <span className={`badge badge-${job.stage}`}>{STAGE_LABELS[job.stage]}</span>
-              {flash && <span className="saved-flash">{flash}</span>}
-            </div>
-            {job.stage === 'lost' && job.loss_reason && (
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>Loss reason: {job.loss_reason}</div>
-            )}
-          </div>
-          <div className="section-actions">
-            <button className="btn btn-sm" onClick={() => goToTab('Messages')}>
-              <MessagesIcon width={16} height={16} /> Messages
-            </button>
-            <button className="btn btn-sm" onClick={() => goToTab('Project Updates')}>
-              <ProjectFeedIcon width={16} height={16} /> Project Updates
-            </button>
-            <button className="btn btn-sm" onClick={invitePortal} disabled={inviting}>
-              {inviting ? 'Sending…' : job.portal_invited_at ? 'Resend portal invite' : 'Invite to Customer Portal'}
-            </button>
-            {STAGE_ORDER.includes(job.stage) && job.stage !== STAGE_ORDER[STAGE_ORDER.length - 1] && (
-              <button className="btn btn-primary" onClick={advanceStage}>
-                Advance to {STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(job.stage) + 1]]} →
-              </button>
-            )}
-            {['new', 'inspected', 'proposal_delivered'].includes(job.stage) && (
-              <button className="btn btn-sm" onClick={() => { setClosingLost(true); setLossReasonText(''); }}>Close Lost</button>
-            )}
-            {job.stage === 'lost' && (
-              <button className="btn btn-sm" onClick={reopenLost}>Reopen</button>
-            )}
-          </div>
+          <h2 style={{ margin: 0, color: 'var(--heading)' }}>Settings</h2>
+          {flash && <span className="saved-flash">{flash}</span>}
         </div>
-        {inviteResult && (
-          <div style={{ fontSize: 12.5, marginTop: -10, marginBottom: 14, color: inviteResult.startsWith('Invite sent') ? '#3a6b45' : '#a13f3f' }}>
-            {inviteResult}
-          </div>
-        )}
-        {closingLost && (
-          <div className="card">
-            <h3>Reason for loss</h3>
-            <textarea
-              value={lossReasonText}
-              onChange={e => setLossReasonText(e.target.value)}
-              placeholder="e.g. Went with another contractor, budget cut, timeline no longer fits…"
-            />
-            <div className="section-actions">
-              <button className="btn btn-primary btn-sm" onClick={confirmCloseLost}>Save &amp; mark lost</button>
-              <button className="btn btn-sm" onClick={() => setClosingLost(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
-
+        {error && <div className="error-text" style={{ marginBottom: 16 }}>{error}</div>}
 
         <div className="stage-tabs">
-          {TABS.filter(t => (!t.hideWhen || !t.hideWhen(job)) && !t.noTabButton).map(t => (
-            <button key={t.key} className={`stage-tab ${tab === t.key ? 'active' : ''}`} onClick={() => goToTab(t.key)}>
-              {t.icon && <t.icon width={16} height={16} />}
-              {t.label}
-            </button>
+          {SETTINGS_TABS.map(t => (
+            <button key={t} className={`stage-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
           ))}
         </div>
 
-        {activeTabDef?.sections && (
-          <div className="tab-sections">
-            <div className="tab-sections-pills">
-              {activeTabDef.sections.map(s => (
-                <button
-                  key={s.key}
-                  className={`tab-section-btn ${section === s.key ? 'active' : ''}`}
-                  onClick={() => setSection(s.key)}
-                >
-                  {s.label}
-                </button>
-              ))}
+        {tab === 'Account' && <AccountPanel />}
+
+        {tab === 'Cosmetic' && (
+        <>
+        <HomeAddressCard />
+        <div className="card">
+          <h3>Logo</h3>
+          {settings.logo_url && (
+            <div style={{ marginBottom: 14 }}>
+              <img src={settings.logo_url} alt="Current logo" style={{ maxWidth: 220, height: 'auto', display: 'block' }} />
             </div>
-            {/* Centralized (Aug 2026): generating the estimate used to be a card
-                buried in the Pricing sidebar, invisible while on Scope. It's the
-                primary action for this whole tab, so it lives here instead —
-                reachable no matter which section is active. */}
-            {tab === 'Estimate' && (
-              <div className="tab-sections-actions">
-                <Link href={`/jobs/${id}/proposal`} className="btn btn-primary btn-sm">Generate Estimate Document →</Link>
-                {job.proposal_sent_at && (
-                  <Link href={contractPathFor(job)} className="btn btn-sm">View / Send Contract →</Link>
-                )}
+          )}
+          <label htmlFor="logoUpload">Upload a new logo (PNG or SVG, transparent background works best)</label>
+          <input id="logoUpload" type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={handleLogoUpload} disabled={uploading} />
+          {uploading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Uploading…</div>}
+
+          <div className="two-col" style={{ marginTop: 16 }}>
+            <div>
+              <label>Logo height on desktop (px)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="50" max="200" step="1"
+                  value={form.logo_size_desktop ?? 180}
+                  onChange={e => update('logo_size_desktop', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="50" max="200"
+                  value={form.logo_size_desktop ?? 180}
+                  onChange={e => update('logo_size_desktop', parseInt(e.target.value) || 150)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
               </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'Overview' && (
-          <>
-            <div className="overview-split">
-              <ProjectInfoCard job={job} onSave={saveJob} />
-              <ProjectMilestonesCard job={job} jobId={id} onTabChange={goToTab} />
             </div>
-            <div className="card" style={{ marginTop: 20 }}>
-              <h3>Danger Zone</h3>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
-                Permanently deletes this job and everything attached to it. This cannot be undone.
+            <div>
+              <label>Logo height on mobile (px)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="range" min="50" max="200" step="1"
+                  value={form.logo_size_mobile ?? 150}
+                  onChange={e => update('logo_size_mobile', parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number" min="50" max="200"
+                  value={form.logo_size_mobile ?? 150}
+                  onChange={e => update('logo_size_mobile', parseInt(e.target.value) || 150)}
+                  style={{ width: 70, flexShrink: 0 }}
+                />
               </div>
-              <button className="btn btn-danger" onClick={deleteJob}>Delete job</button>
-            </div>
-          </>
-        )}
-
-        {tab === 'Customer' && section === 'details' && (
-          <CustomerInfoCard job={job} onSave={saveJob} />
-        )}
-
-        {tab === 'Customer' && section === 'portal' && (
-          <>
-            <PortalAccessCard job={job} jobId={id} onLinkProperty={(propertyId) => saveJob({ property_id: propertyId })} />
-            <NotificationSettingsCard job={job} onSave={saveJob} />
-          </>
-        )}
-
-        {tab === 'Estimate' && section === 'scope' && (
-          <div className="estimate-grid">
-            <div className="estimate-main">
-              <ScopeCard job={job} jobId={id} onSave={saveJob} />
-              <TermsCard job={job} onSave={saveJob} />
-            </div>
-            <div className="estimate-sidebar">
-              <TradeBreakdownCard jobId={id} />
             </div>
           </div>
+
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+            This size is used everywhere the logo appears — the main app (staff sidebar/topbar), and the
+            customer and subcontractor portal headers now match it automatically, rather than having their
+            own separate size.
+          </div>
+
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 10 }}>
+            The logo image itself is also used on every generated document — estimates, contracts, invoices, change orders, work orders, and updates all pull from this same uploaded logo.
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>Photo watermark</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Stamped onto every photo you upload. Leave this empty to use your main logo above instead.
+          </div>
+          {settings.watermark_logo_url && (
+            <div style={{ marginBottom: 14 }}>
+              <img src={settings.watermark_logo_url} alt="Current watermark logo" style={{ maxWidth: 220, height: 'auto', display: 'block' }} />
+            </div>
+          )}
+          <label htmlFor="watermarkUpload">Upload a watermark logo (PNG with transparent background recommended)</label>
+          <input id="watermarkUpload" type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={e => handleLogoUpload(e, 'watermark_logo_url')} disabled={uploading} />
+          {settings.watermark_logo_url && (
+            <button
+              className="btn btn-sm"
+              style={{ marginTop: 10 }}
+              onClick={async () => {
+                const { error } = await supabase.from('app_settings').update({ watermark_logo_url: null }).eq('id', 1);
+                if (error) { setError('Failed to remove watermark logo: ' + error.message); return; }
+                refresh();
+              }}
+            >
+              Use main logo instead
+            </button>
+          )}
+        </div>
+
+        <div className="card">
+          <h3>Photo file names</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Photos download with your name on them, for example {(form.photo_file_prefix || 'YourCompany').trim().replace(/[^A-Za-z0-9]+/g, '-') || 'YourCompany'}-MC26012-2026-10-27-091422.jpg. This also replaces the text stamped on photos when no watermark logo is set.
+          </div>
+          <label htmlFor="photoFilePrefix">Name prefix</label>
+          <input id="photoFilePrefix" value={form.photo_file_prefix || ''} onChange={e => update('photo_file_prefix', e.target.value)} maxLength={30} placeholder="Company name" />
+        </div>
+
+        <div className="card">
+          <h3>Brand Accent Color</h3>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Page layout, backgrounds, and sidebar now follow Light/Dark mode automatically (toggle at the bottom of the sidebar). Enter one brand color here — buttons, links, and highlights are derived from it automatically, adjusted separately for each mode so it always stays legible.
+          </div>
+          <ColorField label="Brand color" id="brandColor" value={form.brand_color} fallback="#8a3d14" onChange={v => update('brand_color', v)} />
+          <BrandColorPreview hex={form.brand_color} />
+
+          <label htmlFor="fontChoice" style={{ marginTop: 16 }}>Font</label>
+          <select id="fontChoice" value={form.font_choice || 'system'} onChange={e => update('font_choice', e.target.value)}>
+            {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+        </div>
+
+        </>
         )}
 
-        {tab === 'Estimate' && section === 'schedule' && (
-          <ScheduleCard job={job} jobId={id} />
+        {tab === 'Dashboard' && (
+        <div className="card">
+          <h3>Main Dashboard cards</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+            Choose what shows up on your Dashboard page.
+          </div>
+          {DASHBOARD_ORDER.map(key => (
+            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13.5, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto' }}
+                checked={(form.dashboard_widgets || {})[key] !== false}
+                onChange={() => toggleWidget(key)}
+              />
+              {DASHBOARD_WIDGET_LABELS[key]}
+            </label>
+          ))}
+        </div>
         )}
 
-        {tab === 'Estimate' && section === 'pricing' && (
-          <EstimateTab job={job} jobId={id}>
-            <PriceCard job={job} onSave={saveJob} />
-          </EstimateTab>
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Proposal follow-ups</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Once a proposal/estimate has been sent and the job is still waiting on a decision (not yet won or lost),
+            the daily automation sends a gentle follow-up email at this interval, up to this many times, then stops.
+            This is separate from the early-stage lead follow-ups (2 and 4 days after a lead comes in), which aren't
+            configurable here.
+          </div>
+          <div className="two-col">
+            <div>
+              <label>Number of follow-ups</label>
+              <input
+                type="number" min="0" max="10"
+                value={form.proposal_followup_count ?? 3}
+                onChange={e => update('proposal_followup_count', parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div>
+              <label>Days between each follow-up</label>
+              <input
+                type="number" min="1" max="30"
+                value={form.proposal_followup_interval_days ?? 4}
+                onChange={e => update('proposal_followup_interval_days', parseInt(e.target.value) || 1)}
+              />
+            </div>
+          </div>
+        </div>
         )}
 
-        {tab === 'Financials' && section === 'overview' && (
-          <JobCostSummary jobId={id} contractPrice={job.contract_price} projectedCost={job.projected_cost} changeOrders={changeOrders} invoiceAmount={job.invoice_amount} invoiceStatus={job.invoice_status} />
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Timezone</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            What the app treats as "now" for anything with a specific time — right now that's just calendar
+            events created on the Schedule page and pushed to Google/Microsoft Calendar (a job's own scheduled
+            dates and bid walks aren't affected; they're already timezone-correct).
+          </div>
+          <label>Business timezone</label>
+          <select value={form.timezone || 'America/Chicago'} onChange={e => update('timezone', e.target.value)}>
+            <option value="America/New_York">Eastern (New York)</option>
+            <option value="America/Chicago">Central (Chicago)</option>
+            <option value="America/Denver">Mountain (Denver)</option>
+            <option value="America/Phoenix">Mountain, no DST (Phoenix)</option>
+            <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+            <option value="America/Anchorage">Alaska (Anchorage)</option>
+            <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+          </select>
+        </div>
         )}
 
-        {tab === 'Financials' && section === 'budget' && (
-          <BudgetCard jobId={id} job={job} />
+        {tab === 'Automation' && (
+        <div className="card">
+          <h3>Notification emails</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            Where notification-level events (a contract signed, a work order accepted, and similar — anything
+            that already shows up in the bell/Inbox) get emailed the moment they happen. Leave blank to turn
+            these emails off without losing the in-app notifications themselves.
+          </div>
+          <label>Send to</label>
+          <input
+            type="email"
+            value={form.notification_email || ''}
+            onChange={e => update('notification_email', e.target.value)}
+            placeholder="you@example.com"
+          />
+        </div>
         )}
 
-        {tab === 'Financials' && section === 'change_orders' && (
-          <ChangeOrdersCard jobId={id} changeOrders={changeOrders} onChanged={loadChangeOrders} />
+        {tab === 'Automation' && <FeatureSettingsPanels />}
+
+        {tab === 'Email Templates' && <EmailTemplatesCard />}
+
+        {tab !== 'Email Templates' && tab !== 'Bots' && (
+        <div className="section-actions" style={{ marginBottom: 20 }}>
+          <button className="btn btn-primary" onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all settings'}</button>
+          {tab === 'Cosmetic' && <button className="btn" onClick={resetToDefault}>Reset colors to default</button>}
+        </div>
         )}
 
-        {tab === 'Financials' && section === 'work_orders' && (
-          <WorkOrdersCard jobId={id} scopeItems={(job.scope_items || []).map(s => s.text || '').filter(Boolean)} projectAddress={job.project_address} />
-        )}
-
-        {tab === 'Financials' && section === 'invoicing' && (
-          <>
-            {(job.stage === 'active' || job.stage === 'completed') && job.invoice_status !== 'paid' && (
-              <ReadyToInvoiceCard job={job} session={session} onSave={saveJob} />
-            )}
-            <DrawsCard jobId={id} />
-            {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') ? (
-              <InvoiceCard job={job} onSave={saveJob} jobId={id} />
-            ) : (
-              <div className="card">
-                <h3>Invoice</h3>
-                <div className="empty-state">
-                  The final invoice becomes available once this job is Completed. This job is currently {STAGE_LABELS[job.stage]}.
+        {tab === 'Integrations' && (
+        <>
+        <div className="card">
+          <h3>Log in &amp; connect</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 4 }}>
+            Each of these needs a one-time developer app registration before "Connect" will work — see INTEGRATIONS_SETUP.md in the repo for exact steps and the env vars to add in Vercel.
+          </div>
+          {OAUTH_INTEGRATIONS.map(i => {
+            const status = integrationStatus?.[i.key];
+            return (
+              <div key={i.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--line)', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{i.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{i.description}</div>
+                  {status?.connected && (
+                    <div style={{ fontSize: 11.5, color: 'var(--accent, #2e7d32)', marginTop: 4 }}>Connected{status.label ? ` — ${status.label}` : ''}</div>
+                  )}
                 </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'Financials' && section === 'receipts' && (
-          <ReceiptsCard jobId={id} />
-        )}
-
-        {tab === 'Photos' && (
-          <PhotoGallery jobId={id} title="Job Photos" />
-        )}
-
-        {tab === 'Internal Updates' && (
-          <InternalUpdatesPanel jobId={id} session={session} />
-        )}
-
-        {tab === 'Project Updates' && (
-          <>
-            <IssuedDocumentsCard jobId={id} job={job} updates={updates} changeOrders={changeOrders} />
-            {phaseForStage(job.stage) !== 'opportunity' ? (
-              <>
-                <UpdatesCard jobId={id} updates={updates} onChanged={loadUpdates} />
-                {(job.stage === 'completed' || job.stage === 'invoiced' || job.stage === 'paid') && (
-                  <ReviewRequestCard job={job} onSave={saveJob} />
+                {status?.connected ? (
+                  <button className="btn btn-sm" onClick={() => disconnectProvider(i.key)}>Disconnect</button>
+                ) : (
+                  <button className="btn btn-sm btn-primary" disabled={connecting === i.key} onClick={() => connectProvider(i.key)}>
+                    {connecting === i.key ? 'Redirecting…' : 'Connect'}
+                  </button>
                 )}
-              </>
-            ) : (
-              <div className="card">
-                <h3>Project Updates</h3>
-                <div className="empty-state">
-                  Progress updates become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
+              </div>
+            );
+          })}
+          {(integrationStatus?.google?.connected || integrationStatus?.microsoft?.connected) && (
+            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button className="btn btn-sm" onClick={syncCalendarNow} disabled={syncingNow}>{syncingNow ? 'Syncing…' : 'Sync calendar now'}</button>
+              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Calendar and email both also sync automatically once a day.</span>
+            </div>
+          )}
+          {integrationsLoading && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 }}>Loading…</div>}
+        </div>
+
+        <EmailLoggingCard />
+
+        <div className="card">
+          <h3>API keys</h3>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 4 }}>
+            These don't need a login — just an API key from the provider's dashboard.
+          </div>
+          {KEY_INTEGRATIONS.map(i => {
+            const status = integrationStatus?.[i.key];
+            return (
+              <div key={i.key} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{i.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{i.description}</div>
+                    {status?.connected && <div style={{ fontSize: 11.5, color: 'var(--accent, #2e7d32)', marginTop: 4 }}>Key saved</div>}
+                  </div>
+                  {status?.connected && (
+                    <button className="btn btn-sm" onClick={() => removeCredential(i.key)}>Remove</button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <input
+                    type="password"
+                    placeholder={status?.connected ? 'Enter a new key to replace it' : 'API key'}
+                    style={{ maxWidth: 260 }}
+                    value={keyInputs[i.key] || ''}
+                    onChange={e => setKeyInputs(prev => ({ ...prev, [i.key]: e.target.value }))}
+                  />
+                  {i.fields.map(f => (
+                    <input
+                      key={f.key}
+                      placeholder={f.placeholder}
+                      style={{ maxWidth: 140 }}
+                      value={zipInput}
+                      onChange={e => setZipInput(e.target.value)}
+                    />
+                  ))}
+                  <button className="btn btn-sm" disabled={savingCred === i.key} onClick={() => saveCredential(i.key)}>
+                    {savingCred === i.key ? 'Saving…' : 'Save'}
+                  </button>
                 </div>
               </div>
-            )}
-          </>
+            );
+          })}
+        </div>
+        </>
         )}
 
-        {tab === 'Material Selections' && (
-          phaseForStage(job.stage) !== 'opportunity' ? (
-            <JobMaterialSelectionsPanel jobId={id} job={job} />
-          ) : (
+        {tab === 'Communications Log' && (
+          <>
+            <BackfillPortalInvitesPanel />
             <div className="card">
-              <h3>Material Selections</h3>
-              <div className="empty-state">
-                Material selections become available once this job moves past the Opportunity phase (Approved or later). This job is currently {STAGE_LABELS[job.stage]}.
-              </div>
+              <h3>Communications Log</h3>
+              <CommunicationsLogPanel />
             </div>
-          )
+          </>
         )}
 
-        {tab === 'Messages' && (
-          <JobMessagesCard jobId={id} job={job} />
-        )}
+        {tab === 'Users' && <StaffUsersPanel session={session} />}
+
+        {tab === 'Bots' && <BotKeysPanel />}
+        {tab === 'Consultations' && <ConsultAvailabilityPanel />}
       </div>
     </AppShell>
+  );
+}
+
+function BrandColorPreview({ hex }) {
+  const derived = deriveThemeAccents(hex);
+  if (!derived) return null;
+  return (
+    <div style={{ display: 'flex', gap: 20, marginTop: 14 }}>
+      <div>
+        <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 6 }}>On light mode</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentLight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Save</div>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentLightHover, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>hover</div>
+        </div>
+      </div>
+      <div style={{ background: '#1a1a1d', padding: '8px 10px', borderRadius: 6 }}>
+        <div style={{ fontSize: 10.5, color: '#9a968f', marginBottom: 6 }}>On dark mode</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentDark, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Save</div>
+          <div style={{ width: 60, height: 34, borderRadius: 5, background: derived.accentDarkHover, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>hover</div>
+        </div>
+      </div>
+    </div>
   );
 }
